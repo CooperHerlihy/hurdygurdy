@@ -2655,6 +2655,19 @@ void hgArrayAnyDestroy(HgArrayAny* arr)
     hgGpaFree(arr->vals, arr->capacity * arr->width);
 }
 
+HgArrayAny hgArrayAnyTemp(HgArena* arena, u32 width, u32 align, u32 capacity, u32 count)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(count <= capacity);
+
+    HgArrayAny arr{};
+    arr.vals = hgArenaAlloc(arena, capacity * width, align);
+    arr.count = count;
+    arr.capacity = capacity;
+
+    return arr;
+}
+
 void hgArrayAnyResize(HgArrayAny* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
@@ -2685,19 +2698,6 @@ void* hgArrayAnyPush(HgArrayAny* arr)
     return dst;
 }
 
-HgArrayAny hgArrayAnyTemp(HgArena* arena, u32 width, u32 align, u32 capacity, u32 count)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(count <= capacity);
-
-    HgArrayAny arr{};
-    arr.vals = hgArenaAlloc(arena, capacity * width, align);
-    arr.count = count;
-    arr.capacity = capacity;
-
-    return arr;
-}
-
 void hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr, void* val)
 {
     if (arr->count == arr->capacity)
@@ -2718,20 +2718,18 @@ void hgArrayAnyPop(HgArrayAny* arr, void* dst)
         hgMemCopy(dst, (u8*)arr->vals + arr->count * arr->width, arr->width);
 }
 
-template<>
-HgHandlePool<void> hgPoolCreate()
+HgHandlePool hgHandlesCreate()
 {
-    HgHandlePool<void> pool{};
+    HgHandlePool pool{};
     pool.handles = hgArrayCreate<HgHandle>();
     pool.freed = hgArrayCreate<HgHandle>();
 
-    hgPoolAlloc(&pool);
+    hgHandlesAlloc(&pool);
 
     return pool;
 }
 
-template<>
-void hgPoolDestroy(HgHandlePool<void>* pool)
+void hgHandlesDestroy(HgHandlePool* pool)
 {
     hgAssert(pool != nullptr);
 
@@ -2739,19 +2737,17 @@ void hgPoolDestroy(HgHandlePool<void>* pool)
     hgArrayDestroy(&pool->freed);
 }
 
-template<>
-void hgPoolReset(HgHandlePool<void>* pool)
+void hgHandlesReset(HgHandlePool* pool)
 {
     hgAssert(pool != nullptr);
 
     pool->handles.count = 0;
     pool->freed.count = 0;
 
-    hgPoolAlloc(pool);
+    hgHandlesAlloc(pool);
 }
 
-template<>
-HgHandle hgPoolAlloc(HgHandlePool<void>* pool)
+HgHandle hgHandlesAlloc(HgHandlePool* pool)
 {
     hgAssert(pool != nullptr);
 
@@ -2769,8 +2765,7 @@ HgHandle hgPoolAlloc(HgHandlePool<void>* pool)
     }
 }
 
-template<>
-bool hgPoolAlive(HgHandlePool<void>* pool, HgHandle handle)
+bool hgHandlesAlive(HgHandlePool* pool, HgHandle handle)
 {
     hgAssert(pool != nullptr);
 
@@ -2778,11 +2773,10 @@ bool hgPoolAlive(HgHandlePool<void>* pool, HgHandle handle)
     return handle != hgHandleNull && idx < pool->handles.count && pool->handles[idx] == handle;
 }
 
-template<>
-void hgPoolFree(HgHandlePool<void>* pool, HgHandle handle)
+void hgHandlesFree(HgHandlePool* pool, HgHandle handle)
 {
     hgAssert(pool != nullptr);
-    hgAssert(hgPoolAlive(pool, handle));
+    hgAssert(hgHandlesAlive(pool, handle));
     pool->handles[hgHandleIdx(handle)] = hgHandleNull;
     *hgArrayPush(&pool->freed) = hgHandleNextGeneration(handle);
 }
@@ -2790,7 +2784,7 @@ void hgPoolFree(HgHandlePool<void>* pool, HgHandle handle)
 HgEcs hgEcsCreate()
 {
     HgEcs ecs{};
-    ecs.entities = hgPoolCreate<void>();
+    ecs.entities = hgHandlesCreate();
     ecs.components = hgMapCreate<u64, HgComponent>(128);
     hgEcsReset(&ecs);
     return ecs;
@@ -2809,7 +2803,7 @@ void hgEcsDestroy(HgEcs* ecs)
     });
 
     hgMapDestroy(&ecs->components);
-    hgPoolDestroy(&ecs->entities);
+    hgHandlesDestroy(&ecs->entities);
 }
 
 void hgEcsReset(HgEcs* ecs)
@@ -2826,7 +2820,7 @@ void hgEcsReset(HgEcs* ecs)
         system->components.count = 1;
         hgMemClear(system->indices.vals, system->indices.count * sizeof(*system->indices.vals));
     });
-    hgPoolReset(&ecs->entities);
+    hgHandlesReset(&ecs->entities);
 }
 
 void hgEcsRegisterComponent(HgEcs* ecs, HgEcsRegisterComponent* config)
@@ -2878,7 +2872,7 @@ HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId)
 HgEntity hgEcsSpawn(HgEcs* ecs)
 {
     hgAssert(ecs != nullptr);
-    return {hgPoolAlloc(&ecs->entities)};
+    return {hgHandlesAlloc(&ecs->entities)};
 }
 
 void hgEcsDespawn(HgEcs* ecs, HgEntity e)
@@ -2891,13 +2885,13 @@ void hgEcsDespawn(HgEcs* ecs, HgEntity e)
         if (hgEcsHas(ecs, e, *id))
             hgEcsRemove(ecs, e, *id);
     });
-    hgPoolFree(&ecs->entities, e.handle);
+    hgHandlesFree(&ecs->entities, e.handle);
 }
 
 bool hgEcsAlive(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
-    return hgPoolAlive(&ecs->entities, e.handle);
+    return hgHandlesAlive(&ecs->entities, e.handle);
 }
 
 void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)
@@ -3443,7 +3437,7 @@ void hgAssetDeinitDefaults()
 }
 
 template<>
-void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
+void hgAssetLoadImpl(HgAsset<HgBinary>* data)
 {
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
@@ -3464,27 +3458,26 @@ void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
         return;
     }
 
-    data->asset.size = (u32)ftell(fileHandle);
-    data->asset.data = malloc(data->asset.size);
+    data->data.size = (u32)ftell(fileHandle);
+    data->data.data = malloc(data->data.size);
 
     rewind(fileHandle);
-    if (fread(data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
+    if (fread(data->data.data, 1, data->data.size, fileHandle) != data->data.size)
     {
-        free(data->asset.data);
-        data->asset = {};
+        free(data->data.data);
+        data->data = {};
         hgWarn("Failed to read binary from file: %s\n", cpath);
         return;
     }
 }
 
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgBinary>* data)
+void hgAssetUnloadImpl(HgAsset<HgBinary>* data)
 {
-    hgFenceWaitIndefinite(data->isLoaded);
-    free(data->asset.data);
+    free(data->data.data);
 }
 
-void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
+void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence* fence)
 {
     struct Capture {
         HgBinary bin;
@@ -3521,17 +3514,16 @@ void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
 }
 
 template<>
-void hgAssetLoadImpl(HgAssetData<HgJson>* data)
+void hgAssetLoadImpl(HgAsset<HgJson>* data)
 {
-    HgBinaryHandle bin = hgAssetLoad<HgBinary>(data->path);
+    HgBinaryAsset* bin = hgAssetLoad<HgBinary>(data->path);
     hgDefer(hgAssetUnload(bin));
 
     HgArena* scratch = hgScratch();
     u64 head = scratch->head;
     hgDefer(scratch->head = head);
 
-    HgBinary* jsonBin = hgAssetGet(bin);
-    HgStringView jsonStr = {(char*)jsonBin->data, jsonBin->size};
+    HgStringView jsonStr = {(char*)bin->data.data, bin->data.size};
     HgJson parse = hgParseJson(scratch, jsonStr);
 
     HgJsonError* e = parse.errors;
@@ -3541,24 +3533,24 @@ void hgAssetLoadImpl(HgAssetData<HgJson>* data)
         e = e->next;
     }
 
-    data->asset.file = (HgJsonNode*)malloc(scratch->head - head);
+    data->data.file = (HgJsonNode*)malloc(scratch->head - head);
     if (parse.errors != nullptr)
     {
-        data->asset.errors = (HgJsonError*)(
-            (u8*)data->asset.file +
+        data->data.errors = (HgJsonError*)(
+            (u8*)data->data.file +
                 ((uptr)parse.errors - (uptr)parse.file));
     }
     else
     {
-        data->asset.errors = nullptr;
+        data->data.errors = nullptr;
     }
-    hgMemCopy((void*)data->asset.file, (void*)parse.file, scratch->head - head);
+    hgMemCopy((void*)data->data.file, (void*)parse.file, scratch->head - head);
 }
 
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgJson>* data)
+void hgAssetUnloadImpl(HgAsset<HgJson>* data)
 {
-    free(data->asset.file);
+    free(data->data.file);
 }
 
 const HgVec2& HgVec2::operator+=(HgVec2 other)
@@ -4271,33 +4263,32 @@ u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
 }
 
 template<>
-void hgAssetLoadImpl(HgAssetData<HgTexture>* data)
+void hgAssetLoadImpl(HgAsset<HgTexture>* data)
 {
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
     char* cpath = hgCString(scratch, data->path);
 
     int x, y, channels;
-    data->asset.pixels = stbi_load(cpath, &x, &y, &channels, 4);
-    if (data->asset.pixels == nullptr)
+    data->data.pixels = stbi_load(cpath, &x, &y, &channels, 4);
+    if (data->data.pixels == nullptr)
     {
         hgWarn("Could not load image: %s\n", cpath);
         return;
     }
-    data->asset.width = (u32)x;
-    data->asset.height = (u32)y;
-    data->asset.depth = 1;
-    data->asset.format = HgFormat_r8g8b8a8_srgb;
+    data->data.width = (u32)x;
+    data->data.height = (u32)y;
+    data->data.depth = 1;
+    data->data.format = HgFormat_r8g8b8a8_srgb;
 }
 
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgTexture>* data)
+void hgAssetUnloadImpl(HgAsset<HgTexture>* data)
 {
-    hgFenceWaitIndefinite(data->isLoaded);
-    free(data->asset.pixels);
+    free(data->data.pixels);
 }
 
-void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence)
+void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence* fence)
 {
     struct Capture {
         HgTexture tex;
@@ -4329,53 +4320,51 @@ void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence)
 }
 
 template<>
-void hgAssetLoadImpl(HgAssetData<HgGpuTexture>* data)
+void hgAssetLoadImpl(HgAsset<HgGpuTexture>* data)
 {
-    HgTextureHandle texHandle = hgAssetLoad<HgTexture>(data->path);
-    hgDefer(hgAssetUnload(texHandle));
+    HgTextureAsset* tex = hgAssetLoad<HgTexture>(data->path);
+    hgDefer(hgAssetUnload(tex));
 
-    HgTexture* tex = hgAssetGet(texHandle); 
-    if (tex->pixels == nullptr)
+    if (tex->data.pixels == nullptr)
     {
         hgWarn("Could not load image: %.*s\n", (int)data->path.length, data->path.chars);
     }
 
     HgGpuImageCreateEx imageInfo{};
-    imageInfo.format = tex->format;
-    imageInfo.width = tex->width;
-    imageInfo.height = tex->height;
-    imageInfo.depth = tex->depth;
+    imageInfo.format = tex->data.format;
+    imageInfo.width = tex->data.width;
+    imageInfo.height = tex->data.height;
+    imageInfo.depth = tex->data.depth;
     imageInfo.usage = HgGpuImageUsage_transferDst | HgGpuImageUsage_sampled;
 
-    data->asset.image = hgGpuImageCreateEx(&imageInfo);
-    data->asset.view = hgGpuViewCreate(data->asset.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    data->data.image = hgGpuImageCreateEx(&imageInfo);
+    data->data.view = hgGpuViewCreate(data->data.image, HgGpuAspect_color, HgGpuFilter_nearest);
 
-    hgGpuImageWrite(data->asset.view, tex->pixels);
+    hgGpuImageWrite(data->data.view, tex->data.pixels);
 }
 
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgGpuTexture>* data)
+void hgAssetUnloadImpl(HgAsset<HgGpuTexture>* data)
 {
-    hgGpuViewDestroy(data->asset.view);
-    hgGpuImageDestroy(data->asset.image);
+    hgGpuViewDestroy(data->data.view);
+    hgGpuImageDestroy(data->data.image);
 }
 
 template<>
-void hgAssetLoadImpl(HgAssetData<HgMesh>* data)
+void hgAssetLoadImpl(HgAsset<HgMesh>* data)
 {
     (void)data;
     hgError("load gltf file : TODO\n");
 }
 
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgMesh>* data)
+void hgAssetUnloadImpl(HgAsset<HgMesh>* data)
 {
-    hgFenceWaitIndefinite(data->isLoaded);
-    free(data->asset.indices);
-    free(data->asset.vertices);
+    free(data->data.indices);
+    free(data->data.vertices);
 }
 
-void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence fence)
+void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence* fence)
 {
     (void)data;
     (void)path;
@@ -4384,48 +4373,47 @@ void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence fence)
 }
 
 template<>
-void hgAssetLoadImpl(HgAssetData<HgGpuMesh>* data)
+void hgAssetLoadImpl(HgAsset<HgGpuMesh>* data)
 {
-    HgMeshHandle meshHandle = hgAssetLoad<HgMesh>(data->path);
-    hgDefer(hgAssetUnload(meshHandle));
+    HgMeshAsset* mesh = hgAssetLoad<HgMesh>(data->path);
+    hgDefer(hgAssetUnload(mesh));
 
-    HgMesh* mesh = hgAssetGet(meshHandle);
-    if (mesh->vertices == nullptr || mesh->indices == nullptr)
+    if (mesh->data.vertices == nullptr || mesh->data.indices == nullptr)
     {
         hgWarn("Could not load model: %.*s\n", (int)data->path.length, data->path.chars);
         return;
     }
 
-    data->asset.vertexCount = mesh->vertexCount;
-    data->asset.vertexWidth = mesh->vertexWidth;
-    data->asset.indexCount = mesh->indexCount;
+    data->data.vertexCount = mesh->data.vertexCount;
+    data->data.vertexWidth = mesh->data.vertexWidth;
+    data->data.indexCount = mesh->data.indexCount;
 
-    data->asset.vertexBuffer = hgGpuBufferCreate(
-        data->asset.vertexCount * data->asset.vertexWidth,
+    data->data.vertexBuffer = hgGpuBufferCreate(
+        data->data.vertexCount * data->data.vertexWidth,
         HgGpuBufferUsage_storageBuffer | HgGpuBufferUsage_transferDst);
 
-    data->asset.indexBuffer = hgGpuBufferCreate(
-        data->asset.indexCount * sizeof(u32),
+    data->data.indexBuffer = hgGpuBufferCreate(
+        data->data.indexCount * sizeof(u32),
         HgGpuBufferUsage_storageBuffer | HgGpuBufferUsage_transferDst);
 
     hgGpuBufferWrite(
-        data->asset.vertexBuffer,
+        data->data.vertexBuffer,
         0,
-        mesh->vertices,
-        data->asset.vertexCount * data->asset.vertexWidth);
+        mesh->data.vertices,
+        data->data.vertexCount * data->data.vertexWidth);
 
     hgGpuBufferWrite(
-        data->asset.indexBuffer,
+        data->data.indexBuffer,
         0,
-        mesh->indices,
-        data->asset.indexCount * sizeof(u32));
+        mesh->data.indices,
+        data->data.indexCount * sizeof(u32));
 }
 
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgGpuMesh>* data)
+void hgAssetUnloadImpl(HgAsset<HgGpuMesh>* data)
 {
-    hgGpuBufferDestroy(data->asset.vertexBuffer);
-    hgGpuBufferDestroy(data->asset.indexBuffer);
+    hgGpuBufferDestroy(data->data.vertexBuffer);
+    hgGpuBufferDestroy(data->data.indexBuffer);
 }
 
 template<>
@@ -4526,7 +4514,7 @@ struct SpritePipelinePush {
 };
 
 struct SpritePipelineState {
-    HgGpuPipeline pipeline;
+    HgGpuPipeline* pipeline;
     HgGpuTexture defaultTex;
 };
 
@@ -4539,19 +4527,16 @@ void hgSpritesInit(
     hgAssert(colorFormat != HgFormat_undefined);
     hgAssert(depthFormat != HgFormat_undefined);
 
-    HgBinaryHandle spriteVertSpvHandle = hgAssetLoad<HgBinary>("build/sprite.vert.spv");
-    HgBinaryHandle spriteFragSpvHandle = hgAssetLoad<HgBinary>("build/sprite.frag.spv");
-    hgDefer(hgAssetUnload(spriteVertSpvHandle));
-    hgDefer(hgAssetUnload(spriteFragSpvHandle));
-
-    HgBinary* spriteVertSpv = hgAssetGet(spriteVertSpvHandle);
-    HgBinary* spriteFragSpv = hgAssetGet(spriteFragSpvHandle);
+    HgBinaryAsset* spriteVertSpv = hgAssetLoad<HgBinary>("build/sprite.vert.spv");
+    HgBinaryAsset* spriteFragSpv = hgAssetLoad<HgBinary>("build/sprite.frag.spv");
+    hgDefer(hgAssetUnload(spriteVertSpv));
+    hgDefer(hgAssetUnload(spriteFragSpv));
 
     HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = spriteVertSpv->data;
-    pipelineConfig.vertexShaderSize = spriteVertSpv->size;
-    pipelineConfig.fragmentShader = spriteFragSpv->data;
-    pipelineConfig.fragmentShaderSize = spriteFragSpv->size;
+    pipelineConfig.vertexShader = spriteVertSpv->data.data;
+    pipelineConfig.vertexShaderSize = spriteVertSpv->data.size;
+    pipelineConfig.fragmentShader = spriteFragSpv->data.data;
+    pipelineConfig.fragmentShaderSize = spriteFragSpv->data.size;
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
@@ -4599,7 +4584,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSprite* s
     hgSerialize(arena, &obj, "UV Size", &sprite->uvSize);
 }
 
-HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgGpuTextureHandle texture, HgVec2 uvPos, HgVec2 uvSize)
+HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgGpuTextureAsset* texture, HgVec2 uvPos, HgVec2 uvSize)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
@@ -4628,9 +4613,9 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* tf)
     {
-        HgGpuTexture* texture = sprite->texture.handle == hgHandleNull
+        HgGpuTexture* texture = sprite->texture == nullptr
             ? &spritePipeline.defaultTex
-            : hgAssetGet(sprite->texture);
+            : &sprite->texture->data;
 
         SpritePipelinePush push{};
         push.model = tf->mat;
@@ -4651,7 +4636,7 @@ struct SkyboxPipelinePush {
 };
 
 struct SkyboxPipelineState {
-    HgGpuPipeline pipeline;
+    HgGpuPipeline* pipeline;
     HgGpuTexture defaultTex;
 };
 
@@ -4661,19 +4646,16 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
 {
     hgAssert(colorFormat != HgFormat_undefined);
 
-    HgBinaryHandle vertSpvHandle = hgAssetLoad<HgBinary>("build/skybox.vert.spv");
-    HgBinaryHandle fragSpvHandle = hgAssetLoad<HgBinary>("build/skybox.frag.spv");
-    hgDefer(hgAssetUnload(vertSpvHandle));
-    hgDefer(hgAssetUnload(fragSpvHandle));
-
-    HgBinary* vertSpv = hgAssetGet(vertSpvHandle);
-    HgBinary* fragSpv = hgAssetGet(fragSpvHandle);
+    HgBinaryAsset* vertSpv = hgAssetLoad<HgBinary>("build/skybox.vert.spv");
+    HgBinaryAsset* fragSpv = hgAssetLoad<HgBinary>("build/skybox.frag.spv");
+    hgDefer(hgAssetUnload(vertSpv));
+    hgDefer(hgAssetUnload(fragSpv));
 
     HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = vertSpv->data;
-    pipelineConfig.vertexShaderSize = vertSpv->size;
-    pipelineConfig.fragmentShader = fragSpv->data;
-    pipelineConfig.fragmentShaderSize = fragSpv->size;
+    pipelineConfig.vertexShader = vertSpv->data.data;
+    pipelineConfig.vertexShaderSize = vertSpv->data.size;
+    pipelineConfig.fragmentShader = fragSpv->data.data;
+    pipelineConfig.fragmentShaderSize = fragSpv->data.size;
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
@@ -4740,7 +4722,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSkybox* s
     hgSerialize(arena, &obj, "Texture", &skybox->texture);
 }
 
-HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureHandle texture)
+HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureAsset* texture)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
@@ -4763,9 +4745,9 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSkybox>(ecs, [&](HgEntity, HgSkybox* skybox)
     {
-        HgGpuTexture* texture = skybox->texture.handle == hgHandleNull
+        HgGpuTexture* texture = skybox->texture == nullptr
             ? &skyboxPipeline.defaultTex
-            : hgAssetGet(skybox->texture);
+            : &skybox->texture->data;
 
         SkyboxPipelinePush push{};
         push.viewProj = hgGpuBufferUniformDescriptor(hgEcsGet<HgCamera>(ecs, camera)->vpBuffer);
@@ -4838,12 +4820,12 @@ struct ModelPipelinePush {
 };
 
 struct ModelPipelineState {
-    HgGpuPipeline pipeline;
+    HgGpuPipeline* pipeline;
 
-    HgGpuBuffer dirLightBuffer;
+    HgGpuBuffer* dirLightBuffer;
     u32 dirLightCapacity;
 
-    HgGpuBuffer pointLightBuffer;
+    HgGpuBuffer* pointLightBuffer;
     u32 pointLightCapacity;
 
     HgGpuMesh defaultModel;
@@ -4860,19 +4842,16 @@ void hgModelsInit(
     hgAssert(colorFormat != HgFormat_undefined);
     hgAssert(depthFormat != HgFormat_undefined);
 
-    HgBinaryHandle modelVertSpvHandle = hgAssetLoad<HgBinary>("build/model.vert.spv");
-    HgBinaryHandle modelFragSpvHandle = hgAssetLoad<HgBinary>("build/model.frag.spv");
-    hgDefer(hgAssetUnload(modelVertSpvHandle));
-    hgDefer(hgAssetUnload(modelFragSpvHandle));
-
-    HgBinary* modelVertSpv = hgAssetGet(modelVertSpvHandle);
-    HgBinary* modelFragSpv = hgAssetGet(modelFragSpvHandle);
+    HgBinaryAsset* modelVertSpv = hgAssetLoad<HgBinary>("build/model.vert.spv");
+    HgBinaryAsset* modelFragSpv = hgAssetLoad<HgBinary>("build/model.frag.spv");
+    hgDefer(hgAssetUnload(modelVertSpv));
+    hgDefer(hgAssetUnload(modelFragSpv));
 
     HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = modelVertSpv->data;
-    pipelineConfig.vertexShaderSize = modelVertSpv->size;
-    pipelineConfig.fragmentShader = modelFragSpv->data;
-    pipelineConfig.fragmentShaderSize = modelFragSpv->size;
+    pipelineConfig.vertexShader = modelVertSpv->data.data;
+    pipelineConfig.vertexShaderSize = modelVertSpv->data.size;
+    pipelineConfig.fragmentShader = modelFragSpv->data.data;
+    pipelineConfig.fragmentShaderSize = modelFragSpv->data.size;
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
@@ -5006,9 +4985,9 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgModel* mo
 HgModel* hgModelAdd(
     HgEcs* ecs,
     HgEntity e,
-    HgGpuMeshHandle mesh,
-    HgGpuTextureHandle colorMap,
-    HgGpuTextureHandle normalMap)
+    HgGpuMeshAsset* mesh,
+    HgGpuTextureAsset* colorMap,
+    HgGpuTextureAsset* normalMap)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
@@ -5111,17 +5090,17 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* tf)
     {
-        HgGpuTexture* colorMap = model->colorMap.handle == hgHandleNull
+        HgGpuTexture* colorMap = model->colorMap == nullptr
             ? &modelPipeline.defaultColorMap
-            : hgAssetGet(model->colorMap);
+            : &model->colorMap->data;
 
-        HgGpuTexture* normalMap = model->normalMap.handle == hgHandleNull
+        HgGpuTexture* normalMap = model->normalMap == nullptr
             ? &modelPipeline.defaultNormalMap
-            : hgAssetGet(model->normalMap);
+            : &model->normalMap->data;
 
-        HgGpuMesh* gpuModel = model->mesh.handle == hgHandleNull
+        HgGpuMesh* gpuModel = model->mesh == nullptr
             ? &modelPipeline.defaultModel
-            : hgAssetGet(model->mesh);
+            : &model->mesh->data;
 
         ModelPipelinePush push{};
         push.model = tf->mat;
@@ -5219,14 +5198,14 @@ void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
 }
 
 template<>
-void hgAssetLoadImpl(HgAssetData<HgAudio>* data)
+void hgAssetLoadImpl(HgAsset<HgAudio>* data)
 {
     (void)data;
     hgError("Load audio file impl : TODO\n");
 }
 
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgAudio>* data)
+void hgAssetUnloadImpl(HgAsset<HgAudio>* data)
 {
     (void)data;
     hgError("Unload audio file impl : TODO\n");
@@ -5241,7 +5220,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAudioSour
     hgSerialize(arena, &obj, "Repeat", &src->repeat);
 }
 
-HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioHandle audio, bool repeat)
+HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioAsset* audio, bool repeat)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
@@ -5267,7 +5246,7 @@ void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
 {
     hgEcsForEach<HgAudioSource>(ecs, [&](HgEntity e, HgAudioSource* src)
     {
-        HgAudio* audio = hgAssetGet(src->audio);
+        HgAudio* audio = &src->audio->data;
         if (src->position == audio->size && !src->repeat)
             return;
 

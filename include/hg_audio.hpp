@@ -44,9 +44,7 @@ void hgAudioDeinit();
 /**
  * An audio player
  */
-struct HgAudioPlayer {
-    HgHandle handle;
-};
+struct HgAudioPlayer;
 
 /**
  * Audio formats
@@ -87,27 +85,27 @@ u32 hgAudioFormatSize(HgAudioFormat format);
  * - frequency The segments per second to play
  * - channels The number of channels (mono, stereo, etc.)
  */
-HgAudioPlayer hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 channels);
+HgAudioPlayer* hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 channels);
 
 /**
  * Destroy an audio player
  */
-void hgAudioPlayerDestroy(HgAudioPlayer);
+void hgAudioPlayerDestroy(HgAudioPlayer* player);
 
 /**
  * Push data to the audio player
  */
-void hgAudioPlayerPush(HgAudioPlayer player, const void* data, u64 size);
+void hgAudioPlayerPush(HgAudioPlayer* player, const void* data, u64 size);
 
 /**
  * Returns the amount of audio still queued in bytes
  */
-u32 hgAudioPlayerQueuedSize(HgAudioPlayer player);
+u32 hgAudioPlayerQueuedSize(HgAudioPlayer* player);
 
 /**
  * Clear data from the audio player
  */
-void hgAudioPlayerClear(HgAudioPlayer player);
+void hgAudioPlayerClear(HgAudioPlayer* player);
 
 /**
  * Audio data asset
@@ -123,19 +121,19 @@ struct HgAudio {
 /**
  * A handle to an audio asset
  */
-typedef HgAssetHandle<HgAudio> HgAudioHandle;
+typedef HgAsset<HgAudio> HgAudioAsset;
 
 /**
  * HgAudioData asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAssetData<HgAudio>* data);
+void hgAssetLoadImpl(HgAsset<HgAudio>* data);
 
 /**
  * HgAudioData asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgAudio>* data);
+void hgAssetUnloadImpl(HgAsset<HgAudio>* data);
 
 /**
  * An audio source component
@@ -144,11 +142,11 @@ struct HgAudioSource {
     /**
      * The audio player for this source, should not be modified
      */
-    HgAudioPlayer player;
+    HgAudioPlayer* player;
     /**
      * The audio to play from
      */
-    HgAudioHandle audio;
+    HgAudioAsset* audio;
     /**
      * The current position in the audio data
      */
@@ -168,7 +166,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAudioSour
 /**
  * Add an audio source to an entity
  */
-HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioHandle audio, bool repeat);
+HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioAsset* audio, bool repeat);
 
 /**
  * HgAudioSource ecs destructor

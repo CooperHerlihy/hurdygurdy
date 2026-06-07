@@ -7,18 +7,18 @@
 
 #include <emmintrin.h>
 
-static HgWindow window = {};
+static HgWindow* window = nullptr;
 
 static u32 width = 0;
 static u32 height = 0;
 static f32 aspectRatio = 16.0f / 9.0f;
 
-static HgGpuImage renderImage;
-static HgGpuView renderView;
+static HgGpuImage* renderImage;
+static HgGpuView* renderView;
 static void* renderImGuiTex;
 
-static HgGpuImage depthImage;
-static HgGpuView depthView;
+static HgGpuImage* depthImage;
+static HgGpuView* depthView;
 
 static HgEcs* ecs = nullptr;
 static HgEntity root;
@@ -28,7 +28,7 @@ static HgTransform* transform;
 static HgCamera* camera;
 
 static f32 audioData[4000];
-static HgAudioHandle audioHandle;
+static HgAudioAsset* audio;
 
 static bool showEditor = true;
 static bool showRender = true;
@@ -71,13 +71,12 @@ void init(HgArena* arena)
 
     hgImGuiInit(window, hgWindowImageFormat(window));
 
-    audioHandle = hgAssetCreate<HgAudio>();
-    HgAudio* audio = hgAssetGet(audioHandle);
-    audio->data = audioData;
-    audio->size = sizeof(audioData);
-    audio->format = HgAudioFormat_f32;
-    audio->frequency = 8000;
-    audio->channels = 1;
+    audio = hgAssetCreate<HgAudio>();
+    audio->data.data = audioData;
+    audio->data.size = sizeof(audioData);
+    audio->data.format = HgAudioFormat_f32;
+    audio->data.frequency = 8000;
+    audio->data.channels = 1;
 
     hgSpritesInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
@@ -148,7 +147,7 @@ void init(HgArena* arena)
     *hgEcsAdd<Name>(ecs, sound) = {"sound"};
     hgNodeAdd(ecs, sound);
     hgTransformAdd(ecs, sound);
-    hgAudioSourceAdd(ecs, sound, hgAssetCopy(audioHandle), true);
+    hgAudioSourceAdd(ecs, sound, hgAssetCopy(audio), true);
 
     hgNodeAddChild(ecs, root, sound);
     hgNodeAddChild(ecs, root, cube);
@@ -521,7 +520,7 @@ void render()
 {
     HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
     hgClockTick(&cpuClock);
-    if (hgWindowImageView(window).handle != hgHandleNull)
+    if (hgWindowImageView(window) != nullptr)
     {
         HgGpuRenderAttachment renderColorAttachment{};
         renderColorAttachment.image = renderView;
@@ -553,7 +552,7 @@ void render()
         guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
         HgGpuRenderPass guiPass{};
-        guiPass.sampledImages = &renderView;
+        guiPass.sampledImages = renderView;
         guiPass.sampledImageCount = 1;
         guiPass.colorAttachments = &guiColorAttachment;
         guiPass.colorAttachmentCount = 1;
@@ -676,7 +675,7 @@ int main()
     // }
 
     // temporary, trick the OS into thinking we're important
-    hgThreadsCall(HgFence{}, nullptr, [](void*)
+    hgThreadsCall(nullptr, nullptr, [](void*)
     {
         while(!quit)
         {

@@ -10,14 +10,14 @@ int main()
     HgArena* arena = hgScratch();
     hgArenaScope(arena);
 
-    HgWindow window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
+    HgWindow* window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
     u32 width = 0;
     u32 height = 0;
 
-    HgGpuImage depthImage{};
-    HgGpuView depthView{};
+    HgGpuImage* depthImage = nullptr;
+    HgGpuView* depthView = nullptr;
     hgDefer(hgGpuImageDestroy(depthImage));
     hgDefer(hgGpuViewDestroy(depthView));
 
@@ -91,7 +91,7 @@ int main()
         hgTransformUpdate(&ecs, camera);
 
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
-        if (hgWindowImageView(window).handle != hgHandleNull)
+        if (hgWindowImageView(window) != nullptr)
         {
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);

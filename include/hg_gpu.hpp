@@ -381,9 +381,7 @@ typedef u32 HgGpuAccessFlags;
 /**
  * A gpu buffer
  */
-struct HgGpuBuffer {
-    HgHandle handle;
-};
+struct HgGpuBuffer;
 
 /**
  * How a gpu buffer will be used
@@ -447,7 +445,7 @@ enum HgGpuMemoryHostAccess : u32 {
  * - usageFlags How the buffer will be used
  * - access How the buffer should be accessed
  */
-HgGpuBuffer hgGpuBufferCreate(
+HgGpuBuffer* hgGpuBufferCreate(
     u64 size,
     HgGpuBufferUsageFlags usageFlags,
     HgGpuMemoryUsage access = HgGpuMemoryUsage_deviceOnly);
@@ -455,17 +453,17 @@ HgGpuBuffer hgGpuBufferCreate(
 /**
  * Destroy a gpu buffer
  */
-void hgGpuBufferDestroy(HgGpuBuffer buffer);
+void hgGpuBufferDestroy(HgGpuBuffer* buffer);
 
 /**
  * Get the uniform buffer descriptor index from the buffer
  */
-u32 hgGpuBufferUniformDescriptor(HgGpuBuffer buffer);
+u32 hgGpuBufferUniformDescriptor(HgGpuBuffer* buffer);
 
 /**
  * Get the storage buffer descriptor index from the buffer
  */
-u32 hgGpuBufferStorageDescriptor(HgGpuBuffer buffer);
+u32 hgGpuBufferStorageDescriptor(HgGpuBuffer* buffer);
 
 /**
  * Writes to a gpu buffer
@@ -476,7 +474,7 @@ u32 hgGpuBufferStorageDescriptor(HgGpuBuffer buffer);
  * - src The data to write, must not be nullptr
  * - size The size in bytes to write
  */
-void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size);
+void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size);
 
 /**
  * Reads from a Vulkan device local buffer through a staging buffer
@@ -487,14 +485,12 @@ void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size);
  * - offset The offset in bytes into the dst buffer
  * - size The size in bytes to read
  */
-void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size);
+void hgGpuBufferRead(void* dst, HgGpuBuffer* src, u64 offset, u64 size);
 
 /**
  * A gpu image
  */
-struct HgGpuImage {
-    HgHandle handle;
-};
+struct HgGpuImage;
 
 /**
  * How an image will be used
@@ -539,7 +535,7 @@ typedef u32 HgGpuImageConfigFlags;
 /**
  * Create a gpu image assuming most defaults
  */
-HgGpuImage hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage);
+HgGpuImage* hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage);
 
 /**
  * Config for hgGpuImageCreateEx
@@ -590,19 +586,17 @@ struct HgGpuImageCreateEx {
 /**
  * Create a gpu image with extended options
  */
-HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create);
+HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create);
 
 /**
  * Destroy a gpu image
  */
-void hgGpuImageDestroy(HgGpuImage image);
+void hgGpuImageDestroy(HgGpuImage* image);
 
 /**
  * A gpu view
  */
-struct HgGpuView {
-    HgHandle handle;
-};
+struct HgGpuView;
 
 /**
  * The dimensionality of an image
@@ -669,8 +663,8 @@ enum HgGpuSamplerBorder : u32 {
 /**
  * Create a gpu image view
  */
-HgGpuView hgGpuViewCreate(
-    HgGpuImage image,
+HgGpuView* hgGpuViewCreate(
+    HgGpuImage* image,
     HgGpuAspectFlags aspectFlags,
     HgGpuFilter filter = HgGpuFilter_nearest);
 
@@ -678,7 +672,7 @@ HgGpuView hgGpuViewCreate(
  * Config for hgGpuViewCreateEx
  */
 struct HgGpuViewCreateEx {
-    HgGpuImage image;
+    HgGpuImage* image;
     u32 baseMipLevel;
     u32 levelCount;
     u32 baseArrayLayer;
@@ -693,22 +687,22 @@ struct HgGpuViewCreateEx {
 /**
  * Create a gpu image view with extended config
  */
-HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config);
+HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config);
 
 /**
  * Destroy a gpu image view
  */
-void hgGpuViewDestroy(HgGpuView view);
+void hgGpuViewDestroy(HgGpuView* view);
 
 /**
  * Get the image sampler descriptor index from the image view
  */
-u32 hgGpuImageSamplerDescriptor(HgGpuView view);
+u32 hgGpuImageSamplerDescriptor(HgGpuView* view);
 
 /**
  * Get the storage image descriptor index from the image view
  */
-u32 hgGpuImageStorageDescriptor(HgGpuView view);
+u32 hgGpuImageStorageDescriptor(HgGpuView* view);
 
 /**
  * Write to a gpu image
@@ -719,7 +713,7 @@ u32 hgGpuImageStorageDescriptor(HgGpuView view);
  * - dst The image to write to
  * - src The data to read from
  */
-void hgGpuImageWrite(HgGpuView dst, const void* src);
+void hgGpuImageWrite(HgGpuView* dst, const void* src);
 
 /**
  * Write to a gpu image cubemap
@@ -738,7 +732,7 @@ void hgGpuImageWrite(HgGpuView dst, const void* src);
  * - subresource The subresource of the image to write to
  * - src The data to read from
  */
-void hgGpuImageWriteCubemap(HgGpuView dst, const void* src);
+void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src);
 
 /**
  * Read from a gpu image
@@ -750,7 +744,7 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src);
  * - dst The image to read from
  * - subresource The subresource of the image to read from
  */
-void hgGpuImageRead(void* dst, HgGpuView src);
+void hgGpuImageRead(void* dst, HgGpuView* src);
 
 /**
  * Generates mipmaps from the base level
@@ -760,14 +754,12 @@ void hgGpuImageRead(void* dst, HgGpuView src);
  * Parameters
  * - image The image to generate mipmaps for
  */
-void hgGpuImageGenMipmaps(HgGpuView dst);
+void hgGpuImageGenMipmaps(HgGpuView* dst);
 
 /**
  * A gpu pipeline
  */
-struct HgGpuPipeline {
-    HgHandle handle;
-};
+struct HgGpuPipeline;
 
 /**
  * A push constant range in a pipeline
@@ -901,7 +893,7 @@ struct HgCreateGpuGraphicsPipeline {
  * Parameters
  * - config The pipeline configuration
  */
-HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config);
+HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config);
 
 /**
  * Create a compute pipeline
@@ -911,12 +903,12 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
  * - shaderCode The compute shader, must not be nullptr
  * - shaderCodeSize The size in bytes of shaderCode
  */
-HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
+HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
 
 /**
  * Destroy a graphics or compute pipeline
  */
-void hgGpuPipelineDestroy(HgGpuPipeline pipeline);
+void hgGpuPipelineDestroy(HgGpuPipeline* pipeline);
 
 /**
  * A gpu command buffer
@@ -942,7 +934,7 @@ void hgGpuCmdEnd(HgGpuCmd* cmd);
 /**
  * Bind a graphics or compute pipeline
  */
-void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline pipeline);
+void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline);
 
 /**
  * Push constants to the shader
@@ -954,7 +946,7 @@ void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline pipeline);
  * - size The size of the data
  * - push The data to push
  */
-void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline pipeline, u32 offset, void* push, u32 size);
+void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size);
 
 /**
  * Issue a draw call
@@ -986,7 +978,7 @@ struct HgGpuImageBarrier {
     /**
      * The image to sychronize
      */
-    HgGpuView image;
+    HgGpuView* image;
     /**
      * Where the image will be used next
      */
@@ -1008,7 +1000,7 @@ struct HgGpuBufferBarrier {
     /**
      * The buffer to sychronize
      */
-    HgGpuBuffer buffer;
+    HgGpuBuffer* buffer;
     /**
      * Where the image will be used next
      */
@@ -1153,7 +1145,7 @@ struct HgGpuRenderAttachment {
     /**
      * The image attached, must not be nullptr
      */
-    HgGpuView image{};
+    HgGpuView* image = nullptr;
     /**
      * How the image will be loaded
      */

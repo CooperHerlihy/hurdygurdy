@@ -15,14 +15,14 @@ int main()
     HgArena* arena = hgScratch();
     hgArenaScope(arena);
 
-    HgWindow window = hgWindowCreate("Hg Noise Test", 1200, 800, nullptr);
+    HgWindow* window = hgWindowCreate("Hg Noise Test", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
     u32 width = 0;
     u32 height = 0;
 
-    HgGpuImage depthImage{};
-    HgGpuView depthView{};
+    HgGpuImage* depthImage = nullptr;
+    HgGpuView* depthView = nullptr;
     hgDefer(hgGpuImageDestroy(depthImage));
     hgDefer(hgGpuViewDestroy(depthView));
 
@@ -42,23 +42,19 @@ int main()
     hgImGuiInit(window, hgWindowImageFormat(window), HgFormat_d32_sfloat);
     hgDefer(hgImGuiDeinit());
 
-    HgBinaryHandle noiseShaderHandle = hgAssetLoad<HgBinary>("build/noise.comp.spv");
-
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
 
-    HgGpuTextureHandle noiseTexHandle = hgAssetCreate<HgGpuTexture>();
-    HgGpuTexture* noiseTex = hgAssetGet(noiseTexHandle);
+    HgGpuTextureAsset* noiseTex = hgAssetCreate<HgGpuTexture>();
+    hgDefer(hgAssetUnload(noiseTex));
 
-    noiseTex->image = hgGpuImageCreate(
+    noiseTex->data.image = hgGpuImageCreate(
         noiseWidth,
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
-    hgDefer(hgGpuImageDestroy(noiseTex->image));
 
-    noiseTex->view = hgGpuViewCreate(noiseTex->image, HgGpuAspect_color, HgGpuFilter_nearest);
-    hgDefer(hgGpuViewDestroy(noiseTex->view));
+    noiseTex->data.view = hgGpuViewCreate(noiseTex->data.image, HgGpuAspect_color, HgGpuFilter_nearest);
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -75,11 +71,11 @@ int main()
         u32 outImageIdx;
     };
 
-    HgBinary* noiseShaderCode = hgAssetGet(noiseShaderHandle);
-    HgGpuPipeline noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
+    HgBinaryAsset* noiseShaderCode = hgAssetLoad<HgBinary>("build/noise.comp.spv");
+    HgGpuPipeline* noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data.data, noiseShaderCode->data.size);
     hgDefer(hgGpuPipelineDestroy(noisePipeline));
 
-    hgAssetUnload(noiseShaderHandle);
+    hgAssetUnload(noiseShaderCode);
 
     HgEcs ecs = hgEcsCreate();
     hgDefer(hgEcsDestroy(&ecs));
@@ -98,7 +94,7 @@ int main()
 
     HgEntity noiseSquare = hgEcsSpawn(&ecs);
     hgTransformAdd(&ecs, noiseSquare);
-    hgSpriteAdd(&ecs, noiseSquare, hgAssetCopy(noiseTexHandle));
+    hgSpriteAdd(&ecs, noiseSquare, hgAssetCopy(noiseTex));
 
     HgClock gameClock;
     hgClockTick(&gameClock);
@@ -170,7 +166,7 @@ int main()
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
 
         HgGpuComputePass computePass{};
-        computePass.storageImages = &noiseTex->view;
+        computePass.storageImages = noiseTex->data.view;
         computePass.storageImageCount = 1;
 
         hgGpuComputePass(cmd, &computePass);
@@ -184,13 +180,13 @@ int main()
         noisePush.scaleEnd = noiseScaleEnd;
         noisePush.tiling = noiseTiling;
         noisePush.seed = noiseSeed;
-        noisePush.outImageIdx = hgGpuImageStorageDescriptor(noiseTex->view);
+        noisePush.outImageIdx = hgGpuImageStorageDescriptor(noiseTex->data.view);
 
         hgGpuPushConstants(cmd, noisePipeline, 0, &noisePush, sizeof(noisePush));
 
         hgGpuDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
-        if (hgWindowImageView(window).handle != hgHandleNull)
+        if (hgWindowImageView(window) != nullptr)
         {
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);
@@ -203,7 +199,7 @@ int main()
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
             pass.depthAttachment = &depthAttachment;
-            pass.sampledImages = &noiseTex->view;
+            pass.sampledImages = noiseTex->data.view;
             pass.sampledImageCount = 1;
 
             hgGpuRenderPassBegin(cmd, hgWindowWidth(window), hgWindowHeight(window), &pass);

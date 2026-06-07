@@ -42,24 +42,22 @@ void hgConcurrencyDeinit();
 /**
  * A spinlock mutex for basic thread synchronization
  */
-struct HgMutex {
-    HgHandle handle;
-};
+struct HgMutex;
 
 /**
  * Create a new mutex
  */
-HgMutex hgMutexCreate();
+HgMutex* hgMutexCreate();
 
 /**
  * Destroy a mutex
  */
-void hgMutexDestroy(HgMutex mtx);
+void hgMutexDestroy(HgMutex* mtx);
 
 /**
  * Wait until the mutex is acquired
  */
-void hgMutexAcquire(HgMutex mtx);
+void hgMutexAcquire(HgMutex* mtx);
 
 /**
  * Try to acquire the mutex
@@ -68,29 +66,27 @@ void hgMutexAcquire(HgMutex mtx);
  * - true if acquisition succeeded
  * - false if the mutex was already in use
  */
-bool hgMutexTryAcquire(HgMutex mtx);
+bool hgMutexTryAcquire(HgMutex* mtx);
 
 /**
  * Release the mutex lock
  */
-void hgMutexRelease(HgMutex mtx);
+void hgMutexRelease(HgMutex* mtx);
 
 /**
  * A spinlock fence for basic thread synchronization
  */
-struct HgFence {
-    HgHandle handle;
-};
+struct HgFence;
 
 /**
  * Create a new fence
  */
-HgFence hgFenceCreate();
+HgFence* hgFenceCreate();
 
 /**
  * Destroy a fence
  */
-void hgFenceDestroy(HgFence fence);
+void hgFenceDestroy(HgFence* fence);
 
 /**
  * Add more events for the fence to wait on
@@ -99,7 +95,7 @@ void hgFenceDestroy(HgFence fence);
  * - fence The fence to attach to
  * - count The number of added events
  */
-void hgFenceAttach(HgFence fence, u32 count);
+void hgFenceAttach(HgFence* fence, u32 count);
 
 /**
  * Signal that events have completed
@@ -108,12 +104,12 @@ void hgFenceAttach(HgFence fence, u32 count);
  * - fence The fence to signal
  * - count The number of signaled events
  */
-void hgFenceSignal(HgFence fence, u32 count);
+void hgFenceSignal(HgFence* fence, u32 count);
 
 /**
  * Returns whether all work has been completed
  */
-bool hgFenceIsComplete(HgFence fence);
+bool hgFenceIsComplete(HgFence* fence);
 
 /**
  * Spin waits for all work submissions to be completed
@@ -125,12 +121,12 @@ bool hgFenceIsComplete(HgFence fence);
  * Returns
  * - true if the fence was completed, false if the timeout was triggered
  */
-bool hgFenceWait(HgFence fence, f64 timeoutSeconds);
+bool hgFenceWait(HgFence* fence, f64 timeoutSeconds);
 
 /**
  * Spin waits for all work submissions to be completed
  */
-void hgFenceWaitIndefinite(HgFence fence);
+void hgFenceWaitIndefinite(HgFence* fence);
 
 /**
  * Wait on a fence, and help complete work in the meantime
@@ -143,7 +139,7 @@ void hgFenceWaitIndefinite(HgFence fence);
  * - true if the fence was completed
  * - false if the timeout was reached
  */
-bool hgThreadsHelp(HgFence fence, f64 timeout);
+bool hgThreadsHelp(HgFence* fence, f64 timeout);
 
 /**
  * Pushes work to the thread pool queue to be executed
@@ -153,7 +149,7 @@ bool hgThreadsHelp(HgFence fence, f64 timeout);
  * - data The data passed to the function
  * - work The function to be executed
  */
-void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data));
+void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data));
 
 /**
  * Iterates in parallel over a function n times using the thread pool

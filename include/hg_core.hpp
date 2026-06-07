@@ -86,66 +86,6 @@ typedef float_t f32;
  */
 typedef double_t f64;
 
-/**
- * A generation counted handle
- */
-struct HgHandle {
-    /**
-     * The handle id
-     */
-    u32 id;
-};
-
-/**
- * The null handle
- */
-static constexpr HgHandle hgHandleNull = HgHandle{0};
-
-/**
- * Compare handles
- */
-constexpr bool operator==(HgHandle lhs, HgHandle rhs)
-{
-    return lhs.id == rhs.id;
-}
-
-/**
- * Compare handles
- */
-constexpr bool operator!=(HgHandle lhs, HgHandle rhs)
-{
-    return lhs.id != rhs.id;
-}
-
-/**
- * The number of bits in a handle used for the index
- */
-static constexpr u32 hgHandleIdxBits = 24;
-
-/**
- * Get the index from a handle
- */
-constexpr u32 hgHandleIdx(HgHandle handle)
-{
-    return handle.id & ((1 << hgHandleIdxBits) - 1);
-}
-
-/**
- * Get the generation from a handle
- */
-constexpr u32 hgHandleGeneration(HgHandle handle)
-{
-    return handle.id & ~((1 << hgHandleIdxBits) - 1);
-}
-
-/**
- * Returns a new handle at the same index
- */
-constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
-{
-    return {handle.id + (1 << hgHandleIdxBits)};
-}
-
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
 #endif

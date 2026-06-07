@@ -11,111 +11,111 @@
 
 #include <emmintrin.h>
 
-struct HgMutexData {
+struct HgMutex {
     std::atomic_bool acquired;
 };
 
-static HgHandlePool<HgMutexData> mutices{};
+static HgPool<HgMutex> mutices{};
 
-HgMutex hgMutexCreate()
+HgMutex* hgMutexCreate()
 {
-    HgHandle handle = hgPoolAlloc(&mutices);
-    new (hgPoolGet(&mutices, handle)) HgMutexData{false};
-    return {handle};
+    return new (hgPoolAlloc(&mutices)) HgMutex{false};
 }
 
-void hgMutexDestroy(HgMutex mtx)
+void hgMutexDestroy(HgMutex* mtx)
 {
-    hgPoolFree(&mutices, mtx.handle);
+    hgPoolFree(&mutices, mtx);
 }
 
-void hgMutexAcquire(HgMutex mtx)
+void hgMutexAcquire(HgMutex* mtx)
 {
-    hgAssert(hgPoolAlive(&mutices, mtx.handle));
-    HgMutexData* data = hgPoolGet(&mutices, mtx.handle);
+    hgAssert(mtx != nullptr);
+
     bool acquired = false;
-    while (!data->acquired.compare_exchange_weak(acquired, true))
+    while (!mtx->acquired.compare_exchange_weak(acquired, true))
     {
         _mm_pause();
         acquired = false;
     }
 }
 
-bool hgMutexTryAcquire(HgMutex mtx)
+bool hgMutexTryAcquire(HgMutex* mtx)
 {
-    hgAssert(hgPoolAlive(&mutices, mtx.handle));
-    HgMutexData* data = hgPoolGet(&mutices, mtx.handle);
+    hgAssert(mtx != nullptr);
+
     bool acquired = false;
-    return data->acquired.compare_exchange_weak(acquired, true);
+    return mtx->acquired.compare_exchange_weak(acquired, true);
 }
 
-void hgMutexRelease(HgMutex mtx)
+void hgMutexRelease(HgMutex* mtx)
 {
-    hgAssert(hgPoolAlive(&mutices, mtx.handle));
-    HgMutexData* data = hgPoolGet(&mutices, mtx.handle);
-    hgAssert(data->acquired);
-    data->acquired.store(false);
+    hgAssert(mtx != nullptr);
+    hgAssert(mtx->acquired);
+
+    mtx->acquired.store(false);
 }
 
-struct HgFenceData {
-    std::atomic<u32> counter{0};
+struct HgFence {
+    std::atomic<u32> counter;
 };
 
-static HgHandlePool<HgFenceData> fences{};
+static HgPool<HgFence> fences{};
 
-HgFence hgFenceCreate()
+HgFence* hgFenceCreate()
 {
-    HgHandle handle = hgPoolAlloc(&fences);
-    new (hgPoolGet(&fences, handle)) HgFenceData{false};
-    return {handle};
+    return new (hgPoolAlloc(&fences)) HgFence{0};
 }
 
-void hgFenceDestroy(HgFence fence)
+void hgFenceDestroy(HgFence* fence)
 {
-    if (hgPoolAlive(&fences, fence.handle))
-        hgPoolFree(&fences, fence.handle);
+    hgAssert(fence != nullptr);
+    if (fence != nullptr)
+        hgPoolFree(&fences, fence);
 }
 
-void hgFenceAttach(HgFence fence, u32 count)
+void hgFenceAttach(HgFence* fence, u32 count)
 {
-    hgAssert(hgPoolAlive(&fences, fence.handle));
-    hgPoolGet(&fences, fence.handle)->counter.fetch_add(count);
+    hgAssert(fence != nullptr);
+    fence->counter.fetch_add(count);
 }
 
-void hgFenceSignal(HgFence fence, u32 count)
+void hgFenceSignal(HgFence* fence, u32 count)
 {
-    hgAssert(hgPoolAlive(&fences, fence.handle));
-    hgPoolGet(&fences, fence.handle)->counter.fetch_sub(count);
+    hgAssert(fence != nullptr);
+    fence->counter.fetch_sub(count);
 }
 
-bool hgFenceIsComplete(HgFence fence)
+bool hgFenceIsComplete(HgFence* fence)
 {
-    hgAssert(hgPoolAlive(&fences, fence.handle));
-    return hgPoolGet(&fences, fence.handle)->counter.load() == 0;
+    hgAssert(fence != nullptr);
+    return fence->counter.load() == 0;
 }
 
-bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
+bool hgFenceWait(HgFence* fence, f64 timeoutSeconds)
 {
-    hgAssert(hgPoolAlive(&fences, fence.handle));
+    hgAssert(fence != nullptr);
+
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
-    while (hgPoolAlive(&fences, fence.handle) && !hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
+    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
     {
         _mm_pause();
     }
-    return !hgPoolAlive(&fences, fence.handle) || hgFenceIsComplete(fence);
+
+    return hgFenceIsComplete(fence);
 }
 
-void hgFenceWaitIndefinite(HgFence fence)
+void hgFenceWaitIndefinite(HgFence* fence)
 {
-    hgAssert(hgPoolAlive(&fences, fence.handle));
-    while (hgPoolAlive(&fences, fence.handle) && !hgFenceIsComplete(fence))
+    hgAssert(fence != nullptr);
+
+    while (!hgFenceIsComplete(fence))
     {
         _mm_pause();
     }
 }
 
 struct ThreadWork {
-    HgFence fence;
+    HgFence* fence;
     void* data;
     void (*fn)(void*);
 };
@@ -165,12 +165,12 @@ static bool poolExecute()
     hgAssert(work.fn != nullptr);
     work.fn(work.data);
 
-    if (work.fence.handle != hgHandleNull)
+    if (work.fence != nullptr)
         hgFenceSignal(work.fence, 1);
     return true;
 }
 
-bool hgThreadsHelp(HgFence fence, f64 timeout)
+bool hgThreadsHelp(HgFence* fence, f64 timeout)
 {
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
     while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
@@ -181,10 +181,10 @@ bool hgThreadsHelp(HgFence fence, f64 timeout)
     return hgFenceIsComplete(fence);
 }
 
-void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
+void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data))
 {
     hgAssert(fn != nullptr);
-    if (fence.handle != hgHandleNull)
+    if (fence != nullptr)
         hgFenceAttach(fence, 1);
 
     u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
@@ -218,7 +218,7 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
 
     u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)threadPool.threadCount));
 
-    HgFence fence = hgFenceCreate();
+    HgFence* fence = hgFenceCreate();
     hgDefer(hgFenceDestroy(fence));
 
     for (u64 i = begin; i < end; i += chunkSize)
@@ -251,8 +251,8 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
 
 void hgConcurrencyInit()
 {
-    mutices = hgPoolCreate<HgMutexData>();
-    fences = hgPoolCreate<HgFenceData>();
+    mutices = hgPoolCreate<HgMutex>();
+    fences = hgPoolCreate<HgFence>();
 
     threadPool.shouldClose.store(false);
     threadPool.threadCount = hgMax((u32)1, std::thread::hardware_concurrency() - 1);

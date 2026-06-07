@@ -91,6 +91,23 @@ void hgArrayDestroy(HgArray<T>* arr)
 }
 
 /**
+ * Create a temporary array which need not be destroyed, but cannot be resized
+ */
+template<typename T>
+HgArray<T> hgArrayTemp(HgArena* arena, u32 count = 0, u32 capacity = 1024)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(count <= capacity);
+
+    HgArray<T> arr{};
+    arr.vals = hgArenaAlloc<T>(arena, capacity);
+    arr.count = count;
+    arr.capacity = capacity;
+
+    return arr;
+}
+
+/**
  * Resize an array
  */
 template<typename T>
@@ -117,23 +134,6 @@ T* hgArrayPush(HgArray<T>* arr)
         arr->capacity = newCapacity;
     }
     return &arr->vals[arr->count++];
-}
-
-/**
- * Create a temporary array which need not be destroyed, but cannot be resized
- */
-template<typename T>
-HgArray<T> hgArrayTemp(HgArena* arena, u32 count = 0, u32 capacity = 1024)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(count <= capacity);
-
-    HgArray<T> arr{};
-    arr.vals = hgArenaAlloc<T>(arena, capacity);
-    arr.count = count;
-    arr.capacity = capacity;
-
-    return arr;
 }
 
 /**
@@ -194,17 +194,17 @@ struct HgArrayAny {
 };
 
 /**
- * Create an array
+ * Create an array of unknown type
  */
 HgArrayAny hgArrayAnyCreate(u32 width, u32 align, u32 count = 0, u32 capacity = 1024);
 
 /**
- * Destroy an array
+ * Destroy an array of unknown type
  */
 void hgArrayAnyDestroy(HgArrayAny* arr);
 
 /**
- * Resize an array
+ * Resize an array of unknown type
  */
 void hgArrayAnyResize(HgArrayAny* arr, u32 newCount);
 
@@ -874,6 +874,37 @@ constexpr u64 hgHash(HgStringBuilder str)
 }
 
 /**
+ * A generation counted handle
+ */
+struct HgHandle {
+    /**
+     * The handle id
+     */
+    u32 id;
+};
+
+/**
+ * The null handle
+ */
+static constexpr HgHandle hgHandleNull = HgHandle{0};
+
+/**
+ * Compare handles
+ */
+constexpr bool operator==(HgHandle lhs, HgHandle rhs)
+{
+    return lhs.id == rhs.id;
+}
+
+/**
+ * Compare handles
+ */
+constexpr bool operator!=(HgHandle lhs, HgHandle rhs)
+{
+    return lhs.id != rhs.id;
+}
+
+/**
  * Hash map hashing for HgHandle
  */
 template<>
@@ -883,37 +914,58 @@ constexpr u64 hgHash(HgHandle val)
 }
 
 /**
- * A handle pool
+ * The number of bits in a handle used for the index
+ */
+static constexpr u32 hgHandleIdxBits = 24;
+
+/**
+ * Get the index from a handle
+ */
+constexpr u32 hgHandleIdx(HgHandle handle)
+{
+    return handle.id & ((1 << hgHandleIdxBits) - 1);
+}
+
+/**
+ * Get the generation from a handle
+ */
+constexpr u32 hgHandleGeneration(HgHandle handle)
+{
+    return handle.id & ~((1 << hgHandleIdxBits) - 1);
+}
+
+/**
+ * Returns a new handle at the same index
+ */
+constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
+{
+    return {handle.id + (1 << hgHandleIdxBits)};
+}
+
+/**
+ * A pool of objects
  */
 template<typename T>
-struct HgHandlePool {
+struct HgPool {
     /**
-     * The values the handles point to
+     * The free list
      */
-    HgArray<T> vals;
+    HgArray<T*> freeList;
     /**
-     * The currently active handles, or null in vacant slots
+     * The items in the pool
      */
-    HgArray<HgHandle> handles;
-    /**
-     * The freed handles
-     */
-    HgArray<HgHandle> freed;
+    HgArray<T*> itemStores;
 };
 
 /**
- * Create a new object pool
+ * Create an object pool
  */
 template<typename T>
-HgHandlePool<T> hgPoolCreate()
+HgPool<T> hgPoolCreate()
 {
-    HgHandlePool<T> pool{};
-    pool.vals = hgArrayCreate<T>();
-    pool.handles = hgArrayCreate<HgHandle>();
-    pool.freed = hgArrayCreate<HgHandle>();
-
-    hgPoolAlloc(&pool);
-
+    HgPool<T> pool{};
+    pool.freeList = hgArrayCreate<T*>();
+    pool.itemStores = hgArrayCreate<T*>(0, 4);
     return pool;
 }
 
@@ -921,94 +973,63 @@ HgHandlePool<T> hgPoolCreate()
  * Destroy an object pool
  */
 template<typename T>
-void hgPoolDestroy(HgHandlePool<T>* pool)
+void hgPoolDestroy(HgPool<T>* pool)
 {
     hgAssert(pool != nullptr);
 
-    hgArrayDestroy(&pool->vals);
-    hgArrayDestroy(&pool->handles);
-    hgArrayDestroy(&pool->freed);
-}
-
-/**
- * Reset an object pool
- */
-template<typename T>
-void hgPoolReset(HgHandlePool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-
-    pool->vals.count = 0;
-    pool->handles.count = 0;
-    pool->freed.count = 0;
-}
-
-/**
- * Allocate an index from the pool
- */
-template<typename T>
-HgHandle hgPoolAlloc(HgHandlePool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-
-    if (pool->freed.count > 0)
+    for (u32 i = 0; i < pool->itemStores.count; ++i)
     {
-        HgHandle handle = hgArrayPop(&pool->freed);
-        pool->handles[hgHandleIdx(handle)] = handle;
-        return handle;
+        hgGpaFree(pool->itemStores[i], 1024);
     }
-    else
+    hgArrayDestroy(&pool->itemStores);
+    hgArrayDestroy(&pool->freeList);
+}
+
+/**
+ * Increase the number of items in the pool
+ */
+template<typename T>
+void hgPoolRestock(HgPool<T>* pool)
+{
+    hgAssert(pool != nullptr);
+
+    T* store = hgGpaAlloc<T>(1024);
+    for (u32 i = 0; i < 1024; ++i)
     {
-        HgHandle handle = {pool->handles.count};
-        *hgArrayPush(&pool->handles) = handle;
-        hgArrayPush(&pool->vals);
-        return handle;
+        *hgArrayPush(&pool->freeList) = store + i;
     }
+    *hgArrayPush(&pool->itemStores) = store;
 }
 
 /**
- * Returns whether a handle is alive in the pool
+ * Allocate an object from the pool
  */
 template<typename T>
-bool hgPoolAlive(HgHandlePool<T>* pool, HgHandle handle)
+T* hgPoolAlloc(HgPool<T>* pool)
 {
     hgAssert(pool != nullptr);
-    hgAssert(hgHandleIdx(handle) < pool->handles.count);
 
-    return handle != hgHandleNull && pool->handles[hgHandleIdx(handle)] == handle;
+    if (pool->freeList.count == 0)
+        hgPoolRestock(pool);
+
+    return hgArrayPop(&pool->freeList);
 }
 
-
 /**
- * Free an index back into a pool
- *
- * Note, the object handle must be valid and alive
+ * Free an object from the pool
  */
 template<typename T>
-void hgPoolFree(HgHandlePool<T>* pool, HgHandle handle)
+void hgPoolFree(HgPool<T>* pool, T* item)
 {
     hgAssert(pool != nullptr);
-    hgAssert(hgPoolAlive(pool, handle));
-    pool->handles[hgHandleIdx(handle)] = hgHandleNull;
-    *hgArrayPush(&pool->freed) = hgHandleNextGeneration(handle);
+    hgAssert(item != nullptr);
+    *hgArrayPush(&pool->freeList) = item;
 }
 
 /**
- * Get an item from the pool
+ * A handle pool
  */
-template<typename T>
-T* hgPoolGet(HgHandlePool<T>* pool, HgHandle handle)
-{
-    hgAssert(pool != nullptr);
-    hgAssert(hgPoolAlive(pool, handle));
-    return &pool->vals[hgHandleIdx(handle)];
-}
-
-/**
- * A handle pool with no data
- */
-template<>
-struct HgHandlePool<void> {
+struct HgHandlePool {
     /**
      * The currently active handles, or null in vacant slots
      */
@@ -1022,40 +1043,34 @@ struct HgHandlePool<void> {
 /**
  * Create a new object pool
  */
-template<>
-HgHandlePool<void> hgPoolCreate();
+HgHandlePool hgHandlesCreate();
 
 /**
- * Destroy an object pool
+ * Destroy a handle pool
  */
-template<>
-void hgPoolDestroy(HgHandlePool<void>* pool);
+void hgHandlesDestroy(HgHandlePool* pool);
 
 /**
- * Reset an object pool
+ * Reset a handle pool
  */
-template<>
-void hgPoolReset(HgHandlePool<void>* pool);
+void hgHandlesReset(HgHandlePool* pool);
 
 /**
  * Allocate an index from the pool
  */
-template<>
-HgHandle hgPoolAlloc(HgHandlePool<void>* pool);
+HgHandle hgHandlesAlloc(HgHandlePool* pool);
 
 /**
  * Returns whether a handle is alive in the pool
  */
-template<>
-bool hgPoolAlive(HgHandlePool<void>* pool, HgHandle handle);
+bool hgHandlesAlive(HgHandlePool* pool, HgHandle handle);
 
 /**
  * Free an index back into a pool
  *
  * Note, the object handle must be valid and alive
  */
-template<>
-void hgPoolFree(HgHandlePool<void>* pool, HgHandle handle);
+void hgHandlesFree(HgHandlePool* pool, HgHandle handle);
 
 /**
  * An entity in the ecs
@@ -1179,7 +1194,7 @@ struct HgEcs {
     /**
      * The entity pool
      */
-    HgHandlePool<void> entities;
+    HgHandlePool entities;
     /**
      * The component systems
      */

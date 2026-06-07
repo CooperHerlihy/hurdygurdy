@@ -77,21 +77,19 @@ struct HgWindowConfig {
 /**
  * A window
  */
-struct HgWindow {
-    HgHandle handle;
-};
+struct HgWindow;
 
 /**
  * Create a new window
  *
  * Note, width and height are ignored if fullscreen is enabled
  */
-HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindowConfig* config);
+HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindowConfig* config);
 
 /**
  * Destroy a window
  */
-void hgWindowDestroy(HgWindow window);
+void hgWindowDestroy(HgWindow* window);
 
 /**
  * Acquire an image from each swapchain and begin a command buffer
@@ -99,7 +97,7 @@ void hgWindowDestroy(HgWindow window);
  * Returns
  * - The command buffer to record this frame
  */
-HgGpuCmd* hgGpuFrameBegin(HgWindow* windows, u32 windowCount);
+HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount);
 
 /**
  * Finishes recording the command buffer and presents the window images
@@ -112,12 +110,12 @@ void hgGpuFrameEnd(HgGpuCmd* cmd);
 /**
  * Returns the window's current image, or nullptr if it could not be acquired
  */
-HgGpuView hgWindowImageView(HgWindow window);
+HgGpuView* hgWindowImageView(HgWindow* window);
 
 /**
  * Get the window's width in pixels
  */
-HgFormat hgWindowImageFormat(HgWindow window);
+HgFormat hgWindowImageFormat(HgWindow* window);
 
 /**
  * Processes all events since startup or the last call to process events
@@ -290,51 +288,51 @@ bool hgWasQuit();
 /**
  * Returns whether the window was closed
  */
-bool hgWindowWasClosed(HgWindow window);
+bool hgWindowWasClosed(HgWindow* window);
 
 /**
  * Returns whether the mouse is focused on the window
  */
-bool hgWindowIsFocused(HgWindow window);
+bool hgWindowIsFocused(HgWindow* window);
 
 /**
  * Get the window's width in pixels
  */
-u32 hgWindowWidth(HgWindow window);
+u32 hgWindowWidth(HgWindow* window);
 
 /**
  * Get the window's width in pixels
  */
-u32 hgWindowHeight(HgWindow window);
+u32 hgWindowHeight(HgWindow* window);
 
 /**
  * Returns the current x position of the mouse relative to the window
  */
-f32 hgMouseX(HgWindow window);
+f32 hgMouseX(HgWindow* window);
 
 /**
  * Returns the current y position of the mouse relative to the window
  */
-f32 hgMouseY(HgWindow window);
+f32 hgMouseY(HgWindow* window);
 
 /**
  * Returns the change in x position of the mouse relative to the window height
  */
-f32 hgMouseDeltaX(HgWindow window);
+f32 hgMouseDeltaX(HgWindow* window);
 
 /**
  * Returns the change in y position of the mouse relative to the window height
  */
-f32 hgMouseDeltaY(HgWindow window);
+f32 hgMouseDeltaY(HgWindow* window);
 
 /**
  * Returns whether the key is currently down
  */
-bool hgIsButtonDown(HgWindow window, HgButton key);
+bool hgIsButtonDown(HgWindow* window, HgButton key);
 
 /**
  * Get the key events since last event processing
  */
-HgWindowEvent* hgWindowEvents(HgWindow window, u32* count);
+HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count);
 
 #endif // HG_WINDOW_HPP

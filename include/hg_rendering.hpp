@@ -63,24 +63,24 @@ struct HgTexture {
 /**
  * A handle to a texture
  */
-typedef HgAssetHandle<HgTexture> HgTextureHandle;
+typedef HgAsset<HgTexture> HgTextureAsset;
 
 /**
  * HgTexture asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAssetData<HgTexture>* data);
+void hgAssetLoadImpl(HgAsset<HgTexture>* data);
 
 /**
  * HgTexture asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgTexture>* data);
+void hgAssetUnloadImpl(HgAsset<HgTexture>* data);
 
 /**
  * Store an image to disc in the png format
  */
-void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence);
+void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence* fence);
 
 /**
  * A texture asset stored on the gpu
@@ -89,29 +89,29 @@ struct HgGpuTexture {
     /**
      * The image
      */
-    HgGpuImage image;
+    HgGpuImage* image;
     /**
      * The image view
      */
-    HgGpuView view;
+    HgGpuView* view;
 };
 
 /**
  * A handle to a texture asset
  */
-typedef HgAssetHandle<HgGpuTexture> HgGpuTextureHandle;
+typedef HgAsset<HgGpuTexture> HgGpuTextureAsset;
 
 /**
  * HgGpuTexture asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAssetData<HgGpuTexture>* data);
+void hgAssetLoadImpl(HgAsset<HgGpuTexture>* data);
 
 /**
  * HgGpuTexture asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgGpuTexture>* data);
+void hgAssetUnloadImpl(HgAsset<HgGpuTexture>* data);
 
 /**
  * A vertex in a mesh
@@ -168,24 +168,24 @@ struct HgMesh {
 /**
  * A handle to a 3d mesh asset
  */
-typedef HgAssetHandle<HgMesh> HgMeshHandle;
+typedef HgAsset<HgMesh> HgMeshAsset;
 
 /**
  * HgMesh asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAssetData<HgMesh>* data);
+void hgAssetLoadImpl(HgAsset<HgMesh>* data);
 
 /**
  * HgMesh asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgMesh>* data);
+void hgAssetUnloadImpl(HgAsset<HgMesh>* data);
 
 /**
  * Store the model data to disc in gltf format : TODO
  */
-void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence fence);
+void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence* fence);
 
 /**
  * A 3d mesh asset stored on the gpu
@@ -194,11 +194,11 @@ struct HgGpuMesh {
     /**
      * The vertex buffer
      */
-    HgGpuBuffer vertexBuffer;
+    HgGpuBuffer* vertexBuffer;
     /**
      * The index buffer
-     */
-    HgGpuBuffer indexBuffer;
+     **/
+    HgGpuBuffer* indexBuffer;
     /**
      * The number of vertices
      */
@@ -216,19 +216,19 @@ struct HgGpuMesh {
 /**
  * A gpu mesh asset handle
  */
-typedef HgAssetHandle<HgGpuMesh> HgGpuMeshHandle;
+typedef HgAsset<HgGpuMesh> HgGpuMeshAsset;
 
 /**
  * HgGpuMesh asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAssetData<HgGpuMesh>* data);
+void hgAssetLoadImpl(HgAsset<HgGpuMesh>* data);
 
 /**
  * HgGpuMesh asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgGpuMesh>* data);
+void hgAssetUnloadImpl(HgAsset<HgGpuMesh>* data);
 
 /**
  * The types of camera projections
@@ -289,7 +289,7 @@ struct HgCamera {
     /**
      * The gpu view projection data, created/destroyed on add/remove
      */
-    HgGpuBuffer vpBuffer;
+    HgGpuBuffer* vpBuffer;
     /**
      * The type of camera
      */
@@ -347,7 +347,7 @@ struct HgSprite {
     /**
      * The texture to draw from
      */
-    HgGpuTextureHandle texture = {};
+    HgGpuTextureAsset* texture = nullptr;
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
@@ -375,7 +375,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSprite* s
 HgSprite* hgSpriteAdd(
     HgEcs* ecs,
     HgEntity e,
-    HgGpuTextureHandle texture,
+    HgGpuTextureAsset* texture,
     HgVec2 uvPos = HgVec2{0.0f},
     HgVec2 uvSize = HgVec2{1.0f});
 
@@ -416,7 +416,7 @@ struct HgSkybox {
     /**
      * The cubemap texture
      */
-    HgGpuTextureHandle texture;
+    HgGpuTextureAsset* texture;
 };
 
 /**
@@ -433,7 +433,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSkybox* s
  * - e The entity to add to
  * - texture A copy of the skybox's texture
  */
-HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureHandle texture);
+HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureAsset* texture);
 
 /**
  * HgSkybox ecs destructor
@@ -518,15 +518,15 @@ struct HgModel {
     /**
      * The model to render
      */
-    HgGpuMeshHandle mesh;
+    HgGpuMeshAsset* mesh;
     /**
      * The model's color map
      */
-    HgGpuTextureHandle colorMap;
+    HgGpuTextureAsset* colorMap;
     /**
      * The model's normal map
      */
-    HgGpuTextureHandle normalMap;
+    HgGpuTextureAsset* normalMap;
 };
 
 /**
@@ -540,9 +540,9 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgModel* mo
 HgModel* hgModelAdd(
     HgEcs* ecs,
     HgEntity e,
-    HgGpuMeshHandle mesh,
-    HgGpuTextureHandle colorMap,
-    HgGpuTextureHandle normalMap);
+    HgGpuMeshAsset* mesh,
+    HgGpuTextureAsset* colorMap,
+    HgGpuTextureAsset* normalMap);
 
 /**
  * HgModel ecs destructor
@@ -572,7 +572,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
  * - stencilFormat The format the stencil will be in, if used
  */
 void hgImGuiInit(
-    HgWindow window,
+    HgWindow* window,
     HgFormat colorFormat,
     HgFormat depthFormat = HgFormat_undefined,
     HgFormat stencilFormat = HgFormat_undefined);
@@ -585,7 +585,7 @@ void hgImGuiDeinit();
 /**
  * Create an ImGui texture
  */
-void* hgImGuiTextureCreate(HgGpuView view, HgGpuLayout layout);
+void* hgImGuiTextureCreate(HgGpuView* view, HgGpuLayout layout);
 
 /**
  * Create an ImGui texture
