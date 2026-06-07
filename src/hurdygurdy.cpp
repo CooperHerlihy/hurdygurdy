@@ -209,6 +209,715 @@ void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
     hgMemCopy((u8*)bin->data + idx, src, len);
 }
 
+const HgVec2& HgVec2::operator+=(HgVec2 other)
+{
+    x += other.x;
+    y += other.y;
+    return* this;
+}
+
+const HgVec2& HgVec2::operator-=(HgVec2 other)
+{
+    x -= other.x;
+    y -= other.y;
+    return* this;
+}
+
+const HgVec2& HgVec2::operator*=(HgVec2 other)
+{
+    x *= other.x;
+    y *= other.y;
+    return* this;
+}
+
+const HgVec2& HgVec2::operator/=(HgVec2 other)
+{
+    x /= other.x;
+    y /= other.y;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator+=(HgVec3 other)
+{
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator-=(HgVec3 other)
+{
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator*=(HgVec3 other)
+{
+    x *= other.x;
+    y *= other.y;
+    z *= other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator/=(HgVec3 other)
+{
+    x /= other.x;
+    y /= other.y;
+    z /= other.z;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator+=(HgVec4 other)
+{
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    w += other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator-=(HgVec4 other)
+{
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    w -= other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator*=(HgVec4 other)
+{
+    x *= other.x;
+    y *= other.y;
+    z *= other.z;
+    w *= other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator/=(HgVec4 other)
+{
+    x /= other.x;
+    y /= other.y;
+    z /= other.z;
+    w /= other.w;
+    return* this;
+}
+
+const HgMat2& HgMat2::operator+=(const HgMat2& other)
+{
+    x += other.x;
+    y += other.y;
+    return* this;
+}
+
+const HgMat2& HgMat2::operator-=(const HgMat2& other)
+{
+    x -= other.x;
+    y -= other.y;
+    return* this;
+}
+
+const HgMat3& HgMat3::operator+=(const HgMat3& other)
+{
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    return* this;
+}
+
+const HgMat3& HgMat3::operator-=(const HgMat3& other)
+{
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    return* this;
+}
+
+const HgMat4& HgMat4::operator+=(const HgMat4& other)
+{
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    w += other.w;
+    return* this;
+}
+
+const HgMat4& HgMat4::operator-=(const HgMat4& other)
+{
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    w -= other.w;
+    return* this;
+}
+
+void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat)
+{
+    for (u32 i = 0; i < width; ++i)
+    {
+        for (u32 j = 0; j < height; ++j)
+        {
+            dst[j * width + i] = mat[i * height + j];
+        }
+    }
+}
+
+HgMat2 hgMatTranspose2(const HgMat2& mat)
+{
+    HgMat2 ret;
+    hgMatTranspose(2, 2, &ret.x.x, &mat.x.x);
+    return ret;
+}
+
+HgMat3 hgMatTranspose3(const HgMat3& mat)
+{
+    HgMat3 ret;
+    hgMatTranspose(3, 3, &ret.x.x, &mat.x.x);
+    return ret;
+}
+
+HgMat4 hgMatTranspose4(const HgMat4& mat)
+{
+    HgMat4 ret;
+    hgMatTranspose(4, 4, &ret.x.x, &mat.x.x);
+    return ret;
+}
+
+const HgComplex& HgComplex::operator+=(HgComplex other)
+{
+    r += other.r;
+    i += other.i;
+    return* this;
+}
+
+const HgComplex& HgComplex::operator-=(HgComplex other)
+{
+    r -= other.r;
+    i -= other.i;
+    return* this;
+}
+
+const HgQuat& HgQuat::operator+=(HgQuat other)
+{
+    r += other.r;
+    i += other.i;
+    j += other.j;
+    k += other.k;
+    return* this;
+}
+
+const HgQuat& HgQuat::operator-=(HgQuat other)
+{
+    r -= other.r;
+    i -= other.i;
+    j -= other.j;
+    k -= other.k;
+    return* this;
+}
+
+void hgVecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = lhs[i] + rhs[i];
+    }
+}
+
+void hgVecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = lhs[i] - rhs[i];
+    }
+}
+
+void hgVecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = lhs[i] * rhs[i];
+    }
+}
+
+void hgVecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = scalar * vec[i];
+    }
+}
+
+void hgVecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        hgAssert(rhs[i] != 0);
+        dst[i] = lhs[i] / rhs[i];
+    }
+}
+
+void hgVecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    hgAssert(scalar != 0);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = vec[i] / scalar;
+    }
+}
+
+void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    *dst = 0;
+    for (u32 i = 0; i < size; ++i)
+    {
+        *dst += lhs[i] * rhs[i];
+    }
+}
+
+void hgVecLen(u32 size, f32* dst, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    hgVecDot(size, dst, vec, vec);
+    *dst = (f32)sqrt(*dst);
+}
+
+f32 hgVecLen2(HgVec2 vec)
+{
+    return (f32)sqrt(hgVecDot2(vec, vec));
+}
+
+f32 hgVecLen3(HgVec3 vec)
+{
+    return (f32)sqrt(hgVecDot3(vec, vec));
+}
+
+f32 hgVecLen4(HgVec4 vec)
+{
+    return (f32)sqrt(hgVecDot3(vec, vec));
+}
+
+void hgVecNorm(u32 size, f32* dst, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    f32 len;
+    hgVecLen(size, &len, vec);
+    hgAssert(len != 0);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = vec[i] / len;
+    }
+}
+
+HgVec2 hgVecNorm2(HgVec2 vec)
+{
+    f32 len = hgVecLen2(vec);
+    hgAssert(len != 0);
+    return HgVec2{vec.x / len, vec.y / len};
+}
+
+HgVec3 hgVecNorm3(HgVec3 vec)
+{
+    f32 len = hgVecLen3(vec);
+    hgAssert(len != 0);
+    return HgVec3{vec.x / len, vec.y / len, vec.z / len};
+}
+
+HgVec4 hgVecNorm4(HgVec4 vec)
+{
+    f32 len = hgVecLen4(vec);
+    hgAssert(len != 0);
+    return HgVec4{vec.x / len, vec.y / len, vec.z / len, vec.w / len};
+}
+
+void hgVecCross(f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
+    dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
+    dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
+}
+
+HgVec3 hgCross(const HgVec3& lhs, const HgVec3& rhs)
+{
+    return HgVec3{
+        lhs.y * rhs.z - lhs.z * rhs.y,
+        lhs.z * rhs.x - lhs.x * rhs.z,
+        lhs.x * rhs.y - lhs.y * rhs.x
+    };
+}
+
+void hgMatAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < width; ++i)
+    {
+        for (u32 j = 0; j < height; ++j)
+        {
+            dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
+        }
+    }
+}
+
+HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs)
+{
+    HgMat2 result{};
+    hgMatAdd(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs)
+{
+    HgMat3 result{};
+    hgMatAdd(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs)
+{
+    HgMat4 result{};
+    hgMatAdd(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+void hgMatSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < width; ++i)
+    {
+        for (u32 j = 0; j < height; ++j)
+        {
+            dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
+        }
+    }
+}
+
+HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs)
+{
+    HgMat2 result{};
+    hgMatSub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs)
+{
+    HgMat3 result{};
+    hgMatSub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs)
+{
+    HgMat4 result{};
+    hgMatSub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+void hgMatMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
+{
+    hgAssert(hr == wl);
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    (void)hr;
+    for (u32 i = 0; i < wl; ++i)
+    {
+        for (u32 j = 0; j < wr; ++j)
+        {
+            dst[i * wl + j] = 0.0f;
+            for (u32 k = 0; k < hl; ++k)
+            {
+                dst[i * wl + j] += lhs[k * wl + j] * rhs[i * wr + k];
+            }
+        }
+    }
+}
+
+HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs)
+{
+    HgMat2 result{};
+    hgMatMul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
+    return result;
+}
+
+HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs)
+{
+    HgMat3 result{};
+    hgMatMul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
+    return result;
+}
+
+HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs)
+{
+    HgMat4 result{};
+    hgMatMul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
+    return result;
+}
+
+void hgMatMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(mat != nullptr);
+    hgAssert(vec != nullptr);
+    for (u32 i = 0; i < height; ++i)
+    {
+        dst[i] = 0.0f;
+        for (u32 j = 0; j < width; ++j)
+        {
+            dst[i] += mat[j * width + i] * vec[j];
+        }
+    }
+}
+
+HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs)
+{
+    HgVec2 result{};
+    hgMatMulVec(2, 2, &result.x, &lhs.x.x, &rhs.x);
+    return result;
+}
+
+HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs)
+{
+    HgVec3 result{};
+    hgMatMulVec(3, 3, &result.x, &lhs.x.x, &rhs.x);
+    return result;
+}
+
+HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs)
+{
+    HgVec4 result{};
+    hgMatMulVec(4, 4, &result.x, &lhs.x.x, &rhs.x);
+    return result;
+}
+
+HgQuat operator*(HgQuat lhs, HgQuat rhs)
+{
+    return HgQuat{
+        lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
+        lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
+        lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
+        lhs.r * rhs.k + lhs.i * rhs.j - lhs.j * rhs.i + lhs.k * rhs.r,
+    };
+}
+
+HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle)
+{
+    f32 halfAngle = angle * (f32)0.5;
+    f32 sinHalfAngle = (f32)std::sin(halfAngle);
+    return HgQuat{
+        (f32)std::cos(halfAngle),
+        axis.x * sinHalfAngle,
+        axis.y * sinHalfAngle,
+        axis.z * sinHalfAngle,
+    };
+}
+
+HgVec3 hgVecRotate(HgQuat lhs, HgVec3 rhs)
+{
+    HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hgQuatConj(lhs);
+    return HgVec3{q.i, q.j, q.k};
+}
+
+HgMat3 hgMatRotate(HgQuat lhs, HgMat3 rhs)
+{
+    return HgMat3{
+        hgVecRotate(lhs, rhs.x),
+        hgVecRotate(lhs, rhs.y),
+        hgVecRotate(lhs, rhs.z),
+    };
+}
+
+HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation)
+{
+    HgMat2 m2{HgVec2{scale.x, 0.0f}, HgVec2{0.0f, scale.y}};
+    f32 rotSin = (f32)std::sin(rotation);
+    f32 rotCos = (f32)std::cos(rotation);
+    HgMat2 rot{HgVec2{rotCos, rotSin}, HgVec2{-rotSin, rotCos}};
+    HgMat4 m4 = HgMat4{rot * m2};
+    m4.w.x = position.x;
+    m4.w.y = position.y;
+    m4.w.z = position.z;
+    return m4;
+}
+
+HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation)
+{
+    HgMat3 m3{1.0f};
+    m3.x.x = scale.x;
+    m3.y.y = scale.y;
+    m3.z.z = scale.z;
+    m3 = hgMatRotate(rotation, m3);
+    HgMat4 m4 = HgMat4{m3};
+    m4.w.x = position.x;
+    m4.w.y = position.y;
+    m4.w.z = position.z;
+    return m4;
+}
+
+HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation)
+{
+    HgMat4 rot{hgMatRotate(hgQuatConj(rotation), HgMat3{1.0f})};
+    HgMat4 pos{1.0f};
+    pos.x.x = zoom.x;
+    pos.y.y = zoom.y;
+    pos.z.z = zoom.z;
+    pos.w.x = -position.x;
+    pos.w.y = -position.y;
+    pos.w.z = -position.z;
+    return rot * pos;
+}
+
+HgMat4 hgMatModelToView(const HgMat4& model)
+{
+    if (HgVec3{model.x} == HgVec3{0} || HgVec3{model.y} == HgVec3{0} || HgVec3{model.z} == HgVec3{0})
+        return HgMat4{HgMat3{0}};
+
+    HgMat3 inv3 = hgMatTranspose3(HgMat3{
+        hgVecNorm3(HgVec3{model.x}),
+        hgVecNorm3(HgVec3{model.y}),
+        hgVecNorm3(HgVec3{model.z}),
+    });
+    HgMat4 inv4{inv3};
+    inv4.w = HgVec4{HgVec3{inv3 * HgVec3{model.w} * -1}, 1};
+    return inv4;
+}
+
+HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
+{
+    return HgMat4{
+        HgVec4{2.0f / (right - left), 0.0f, 0.0f, 0.0f},
+        HgVec4{0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
+        HgVec4{0.0f, 0.0f, 1.0f / (far - near), 0.0f},
+        HgVec4{-(right + left) / (right - left), -(bottom + top) / (bottom - top), -(near) / (far - near), 1.0f},
+    };
+}
+
+HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
+{
+    hgAssert(near > 0.0f);
+    hgAssert(far > near);
+    f32 scale = 1.0f / (f32)tan(fov * 0.5f);
+    return HgMat4{
+        HgVec4{scale / aspect, 0.0f, 0.0f, 0.0f},
+        HgVec4{0.0f, scale, 0.0f, 0.0f},
+        HgVec4{0.0f, 0.0f, far / (far - near), 1.0f},
+        HgVec4{0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
+    };
+}
+
+u32 hgNoise(u32 seed, u32 pos)
+{
+    u32 ret = (pos + 384521713u) * 955740521u;
+    ret ^= ret >> 13;
+    ret *= seed * 725937977u;
+    ret ^= ret >> 7;
+    ret *= 358166231u;
+    ret ^= ret >> 11;
+    return ret;
+}
+
+u32 hgNoise2D(u32 seed, u32 x, u32 y)
+{
+    return hgNoise(seed, x + (y * 425537443u));
+}
+
+u32 hgNoise3D(u32 seed, u32 x, u32 y, u32 z)
+{
+    return hgNoise(seed, x + y * 425537443u + z * 682607u);
+}
+
+u32 hgNoise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
+{
+    return hgNoise(seed, x + y * 425537443u + z * 682607u + w * 9067);
+}
+
+f32 hgNoiseNorm(u32 seed, f32 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise(seed, Convert{pos}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm2D(u32 seed, HgVec2 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm3D(u32 seed, HgVec3 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm4D(u32 seed, HgVec4 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise4D(
+        seed,
+        Convert{pos.x}.asU32,
+        Convert{pos.y}.asU32,
+        Convert{pos.z}.asU32,
+        Convert{pos.w}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseVec1D(u32 seed, f32 pos)
+{
+    return hgNoiseNorm(seed, pos) * 2.0f - 1.0f;
+}
+
+HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos)
+{
+    f32 rot = 2.0f * (f32)hgPi * hgNoiseNorm2D(seed, pos);
+    return HgVec2(std::cos(rot), std::sin(rot));
+}
+
+u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
+{
+    u32 max = width > height ? width : height;
+    max = max > depth ? max : depth;
+    return max == 0 ? 0 : (u32)log2((f32)max) + 1;
+}
+
 char* hgCString(HgArena* arena, HgStringView str)
 {
     hgAssert(arena != nullptr);
@@ -2655,7 +3364,7 @@ void hgArrayAnyDestroy(HgArrayAny* arr)
     hgGpaFree(arr->vals, arr->capacity * arr->width);
 }
 
-HgArrayAny hgArrayAnyTemp(HgArena* arena, u32 width, u32 align, u32 capacity, u32 count)
+HgArrayAny hgArrayAnyTemp(HgArena* arena, u32 width, u32 align, u32 count, u32 capacity)
 {
     hgAssert(arena != nullptr);
     hgAssert(count <= capacity);
@@ -2664,6 +3373,8 @@ HgArrayAny hgArrayAnyTemp(HgArena* arena, u32 width, u32 align, u32 capacity, u3
     arr.vals = hgArenaAlloc(arena, capacity * width, align);
     arr.count = count;
     arr.capacity = capacity;
+    arr.width = width;
+    arr.align = align;
 
     return arr;
 }
@@ -2694,20 +3405,23 @@ void* hgArrayAnyPush(HgArrayAny* arr)
             arr->align);
         arr->capacity = newCapacity;
     }
-    void* dst = (u8*)arr->vals + arr->count++ * arr->width;
-    return dst;
+    return (u8*)arr->vals + arr->count++ * arr->width;
 }
 
-void hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr, void* val)
+void* hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr)
 {
     if (arr->count == arr->capacity)
+    {
+        u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
         hgArenaRealloc(
             arena,
             arr->vals,
             arr->capacity * arr->width,
             (arr->capacity == 0 ? 16 : arr->capacity * 2) * arr->width,
             arr->align);
-    hgMemCopy((u8*)arr->vals + arr->count++ * arr->width, val, arr->width);
+        arr->capacity = newCapacity;
+    }
+    return (u8*)arr->vals + arr->count++ * arr->width;
 }
 
 void hgArrayAnyPop(HgArrayAny* arr, void* dst)
@@ -3132,17 +3846,16 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs)
     HgSerializer obj = hgSerializeObject(arena, s, name);
 
     HgEntitySerializer ecsSerial{};
-    u32 entityCount;
+    u32 entityCount = 0;
     if (s->writing)
     {
-        ecsSerial.entityToIdx = hgMapTemp<HgEntity, u32>(scratch, ecs->entities.handles.count * 2);
+        ecsSerial.entityToIdx = hgArenaAlloc<u32>(scratch, ecs->entities.handles.count);
         for (u32 i = 1; i < ecs->entities.handles.count; ++i)
         {
             if (ecs->entities.handles[i] != hgHandleNull)
-                hgMapAdd(&ecsSerial.entityToIdx, {ecs->entities.handles[i]}, i);
+                ecsSerial.entityToIdx[hgHandleIdx(ecs->entities.handles[i])] = entityCount++;
         }
 
-        entityCount = ecsSerial.entityToIdx.count;
         hgSerialize(arena, &obj, "Entity Count", &entityCount);
     }
     else
@@ -3199,7 +3912,8 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs)
 
             u32 entityIdx;
             if (s->writing)
-                entityIdx = *hgMapGet(&ecsSerial.entityToIdx, systemData->entities[c + 1]);
+                entityIdx = ecsSerial.entityToIdx[
+                    hgHandleIdx(systemData->entities[c + 1].handle)];
             hgSerialize(arena, &compObj, "Entity Index", &entityIdx);
 
             void* compData;
@@ -3216,7 +3930,7 @@ void hgEntitySerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEnt
 {
     if (s->writing)
     {
-        u32 idx = *val != hgEntityNull ? *hgMapGet(&ecs->entityToIdx, *val) : (u32)-1;
+        u32 idx = *val != hgEntityNull ? ecs->entityToIdx[hgHandleIdx(val->handle)] : (u32)-1;
         hgSerialize(arena, s, name, (i32*)&idx);
     }
     else
@@ -3551,715 +4265,6 @@ template<>
 void hgAssetUnloadImpl(HgAsset<HgJson>* data)
 {
     free(data->data.file);
-}
-
-const HgVec2& HgVec2::operator+=(HgVec2 other)
-{
-    x += other.x;
-    y += other.y;
-    return* this;
-}
-
-const HgVec2& HgVec2::operator-=(HgVec2 other)
-{
-    x -= other.x;
-    y -= other.y;
-    return* this;
-}
-
-const HgVec2& HgVec2::operator*=(HgVec2 other)
-{
-    x *= other.x;
-    y *= other.y;
-    return* this;
-}
-
-const HgVec2& HgVec2::operator/=(HgVec2 other)
-{
-    x /= other.x;
-    y /= other.y;
-    return* this;
-}
-
-const HgVec3& HgVec3::operator+=(HgVec3 other)
-{
-    x += other.x;
-    y += other.y;
-    z += other.z;
-    return* this;
-}
-
-const HgVec3& HgVec3::operator-=(HgVec3 other)
-{
-    x -= other.x;
-    y -= other.y;
-    z -= other.z;
-    return* this;
-}
-
-const HgVec3& HgVec3::operator*=(HgVec3 other)
-{
-    x *= other.x;
-    y *= other.y;
-    z *= other.z;
-    return* this;
-}
-
-const HgVec3& HgVec3::operator/=(HgVec3 other)
-{
-    x /= other.x;
-    y /= other.y;
-    z /= other.z;
-    return* this;
-}
-
-const HgVec4& HgVec4::operator+=(HgVec4 other)
-{
-    x += other.x;
-    y += other.y;
-    z += other.z;
-    w += other.w;
-    return* this;
-}
-
-const HgVec4& HgVec4::operator-=(HgVec4 other)
-{
-    x -= other.x;
-    y -= other.y;
-    z -= other.z;
-    w -= other.w;
-    return* this;
-}
-
-const HgVec4& HgVec4::operator*=(HgVec4 other)
-{
-    x *= other.x;
-    y *= other.y;
-    z *= other.z;
-    w *= other.w;
-    return* this;
-}
-
-const HgVec4& HgVec4::operator/=(HgVec4 other)
-{
-    x /= other.x;
-    y /= other.y;
-    z /= other.z;
-    w /= other.w;
-    return* this;
-}
-
-const HgMat2& HgMat2::operator+=(const HgMat2& other)
-{
-    x += other.x;
-    y += other.y;
-    return* this;
-}
-
-const HgMat2& HgMat2::operator-=(const HgMat2& other)
-{
-    x -= other.x;
-    y -= other.y;
-    return* this;
-}
-
-const HgMat3& HgMat3::operator+=(const HgMat3& other)
-{
-    x += other.x;
-    y += other.y;
-    z += other.z;
-    return* this;
-}
-
-const HgMat3& HgMat3::operator-=(const HgMat3& other)
-{
-    x -= other.x;
-    y -= other.y;
-    z -= other.z;
-    return* this;
-}
-
-const HgMat4& HgMat4::operator+=(const HgMat4& other)
-{
-    x += other.x;
-    y += other.y;
-    z += other.z;
-    w += other.w;
-    return* this;
-}
-
-const HgMat4& HgMat4::operator-=(const HgMat4& other)
-{
-    x -= other.x;
-    y -= other.y;
-    z -= other.z;
-    w -= other.w;
-    return* this;
-}
-
-void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat)
-{
-    for (u32 i = 0; i < width; ++i)
-    {
-        for (u32 j = 0; j < height; ++j)
-        {
-            dst[j * width + i] = mat[i * height + j];
-        }
-    }
-}
-
-HgMat2 hgMatTranspose2(const HgMat2& mat)
-{
-    HgMat2 ret;
-    hgMatTranspose(2, 2, &ret.x.x, &mat.x.x);
-    return ret;
-}
-
-HgMat3 hgMatTranspose3(const HgMat3& mat)
-{
-    HgMat3 ret;
-    hgMatTranspose(3, 3, &ret.x.x, &mat.x.x);
-    return ret;
-}
-
-HgMat4 hgMatTranspose4(const HgMat4& mat)
-{
-    HgMat4 ret;
-    hgMatTranspose(4, 4, &ret.x.x, &mat.x.x);
-    return ret;
-}
-
-const HgComplex& HgComplex::operator+=(HgComplex other)
-{
-    r += other.r;
-    i += other.i;
-    return* this;
-}
-
-const HgComplex& HgComplex::operator-=(HgComplex other)
-{
-    r -= other.r;
-    i -= other.i;
-    return* this;
-}
-
-const HgQuat& HgQuat::operator+=(HgQuat other)
-{
-    r += other.r;
-    i += other.i;
-    j += other.j;
-    k += other.k;
-    return* this;
-}
-
-const HgQuat& HgQuat::operator-=(HgQuat other)
-{
-    r -= other.r;
-    i -= other.i;
-    j -= other.j;
-    k -= other.k;
-    return* this;
-}
-
-void hgVecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] + rhs[i];
-    }
-}
-
-void hgVecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] - rhs[i];
-    }
-}
-
-void hgVecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] * rhs[i];
-    }
-}
-
-void hgVecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = scalar * vec[i];
-    }
-}
-
-void hgVecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        hgAssert(rhs[i] != 0);
-        dst[i] = lhs[i] / rhs[i];
-    }
-}
-
-void hgVecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    hgAssert(scalar != 0);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = vec[i] / scalar;
-    }
-}
-
-void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    *dst = 0;
-    for (u32 i = 0; i < size; ++i)
-    {
-        *dst += lhs[i] * rhs[i];
-    }
-}
-
-void hgVecLen(u32 size, f32* dst, const f32* vec)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    hgVecDot(size, dst, vec, vec);
-    *dst = (f32)sqrt(*dst);
-}
-
-f32 hgVecLen2(HgVec2 vec)
-{
-    return (f32)sqrt(hgVecDot2(vec, vec));
-}
-
-f32 hgVecLen3(HgVec3 vec)
-{
-    return (f32)sqrt(hgVecDot3(vec, vec));
-}
-
-f32 hgVecLen4(HgVec4 vec)
-{
-    return (f32)sqrt(hgVecDot3(vec, vec));
-}
-
-void hgVecNorm(u32 size, f32* dst, const f32* vec)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    f32 len;
-    hgVecLen(size, &len, vec);
-    hgAssert(len != 0);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = vec[i] / len;
-    }
-}
-
-HgVec2 hgVecNorm2(HgVec2 vec)
-{
-    f32 len = hgVecLen2(vec);
-    hgAssert(len != 0);
-    return HgVec2{vec.x / len, vec.y / len};
-}
-
-HgVec3 hgVecNorm3(HgVec3 vec)
-{
-    f32 len = hgVecLen3(vec);
-    hgAssert(len != 0);
-    return HgVec3{vec.x / len, vec.y / len, vec.z / len};
-}
-
-HgVec4 hgVecNorm4(HgVec4 vec)
-{
-    f32 len = hgVecLen4(vec);
-    hgAssert(len != 0);
-    return HgVec4{vec.x / len, vec.y / len, vec.z / len, vec.w / len};
-}
-
-void hgVecCross(f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
-    dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
-    dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
-}
-
-HgVec3 hgCross(const HgVec3& lhs, const HgVec3& rhs)
-{
-    return HgVec3{
-        lhs.y * rhs.z - lhs.z * rhs.y,
-        lhs.z * rhs.x - lhs.x * rhs.z,
-        lhs.x * rhs.y - lhs.y * rhs.x
-    };
-}
-
-void hgMatAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < width; ++i)
-    {
-        for (u32 j = 0; j < height; ++j)
-        {
-            dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
-        }
-    }
-}
-
-HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs)
-{
-    HgMat2 result{};
-    hgMatAdd(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs)
-{
-    HgMat3 result{};
-    hgMatAdd(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs)
-{
-    HgMat4 result{};
-    hgMatAdd(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-void hgMatSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < width; ++i)
-    {
-        for (u32 j = 0; j < height; ++j)
-        {
-            dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
-        }
-    }
-}
-
-HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs)
-{
-    HgMat2 result{};
-    hgMatSub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs)
-{
-    HgMat3 result{};
-    hgMatSub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs)
-{
-    HgMat4 result{};
-    hgMatSub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-void hgMatMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
-{
-    hgAssert(hr == wl);
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    (void)hr;
-    for (u32 i = 0; i < wl; ++i)
-    {
-        for (u32 j = 0; j < wr; ++j)
-        {
-            dst[i * wl + j] = 0.0f;
-            for (u32 k = 0; k < hl; ++k)
-            {
-                dst[i * wl + j] += lhs[k * wl + j] * rhs[i * wr + k];
-            }
-        }
-    }
-}
-
-HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs)
-{
-    HgMat2 result{};
-    hgMatMul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
-    return result;
-}
-
-HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs)
-{
-    HgMat3 result{};
-    hgMatMul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
-    return result;
-}
-
-HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs)
-{
-    HgMat4 result{};
-    hgMatMul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
-    return result;
-}
-
-void hgMatMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(mat != nullptr);
-    hgAssert(vec != nullptr);
-    for (u32 i = 0; i < height; ++i)
-    {
-        dst[i] = 0.0f;
-        for (u32 j = 0; j < width; ++j)
-        {
-            dst[i] += mat[j * width + i] * vec[j];
-        }
-    }
-}
-
-HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs)
-{
-    HgVec2 result{};
-    hgMatMulVec(2, 2, &result.x, &lhs.x.x, &rhs.x);
-    return result;
-}
-
-HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs)
-{
-    HgVec3 result{};
-    hgMatMulVec(3, 3, &result.x, &lhs.x.x, &rhs.x);
-    return result;
-}
-
-HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs)
-{
-    HgVec4 result{};
-    hgMatMulVec(4, 4, &result.x, &lhs.x.x, &rhs.x);
-    return result;
-}
-
-HgQuat operator*(HgQuat lhs, HgQuat rhs)
-{
-    return HgQuat{
-        lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
-        lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
-        lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
-        lhs.r * rhs.k + lhs.i * rhs.j - lhs.j * rhs.i + lhs.k * rhs.r,
-    };
-}
-
-HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle)
-{
-    f32 halfAngle = angle * (f32)0.5;
-    f32 sinHalfAngle = (f32)std::sin(halfAngle);
-    return HgQuat{
-        (f32)std::cos(halfAngle),
-        axis.x * sinHalfAngle,
-        axis.y * sinHalfAngle,
-        axis.z * sinHalfAngle,
-    };
-}
-
-HgVec3 hgVecRotate(HgQuat lhs, HgVec3 rhs)
-{
-    HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hgQuatConj(lhs);
-    return HgVec3{q.i, q.j, q.k};
-}
-
-HgMat3 hgMatRotate(HgQuat lhs, HgMat3 rhs)
-{
-    return HgMat3{
-        hgVecRotate(lhs, rhs.x),
-        hgVecRotate(lhs, rhs.y),
-        hgVecRotate(lhs, rhs.z),
-    };
-}
-
-HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation)
-{
-    HgMat2 m2{HgVec2{scale.x, 0.0f}, HgVec2{0.0f, scale.y}};
-    f32 rotSin = (f32)std::sin(rotation);
-    f32 rotCos = (f32)std::cos(rotation);
-    HgMat2 rot{HgVec2{rotCos, rotSin}, HgVec2{-rotSin, rotCos}};
-    HgMat4 m4 = HgMat4{rot * m2};
-    m4.w.x = position.x;
-    m4.w.y = position.y;
-    m4.w.z = position.z;
-    return m4;
-}
-
-HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation)
-{
-    HgMat3 m3{1.0f};
-    m3.x.x = scale.x;
-    m3.y.y = scale.y;
-    m3.z.z = scale.z;
-    m3 = hgMatRotate(rotation, m3);
-    HgMat4 m4 = HgMat4{m3};
-    m4.w.x = position.x;
-    m4.w.y = position.y;
-    m4.w.z = position.z;
-    return m4;
-}
-
-HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation)
-{
-    HgMat4 rot{hgMatRotate(hgQuatConj(rotation), HgMat3{1.0f})};
-    HgMat4 pos{1.0f};
-    pos.x.x = zoom.x;
-    pos.y.y = zoom.y;
-    pos.z.z = zoom.z;
-    pos.w.x = -position.x;
-    pos.w.y = -position.y;
-    pos.w.z = -position.z;
-    return rot * pos;
-}
-
-HgMat4 hgMatModelToView(const HgMat4& model)
-{
-    if (HgVec3{model.x} == HgVec3{0} || HgVec3{model.y} == HgVec3{0} || HgVec3{model.z} == HgVec3{0})
-        return HgMat4{HgMat3{0}};
-
-    HgMat3 inv3 = hgMatTranspose3(HgMat3{
-        hgVecNorm3(HgVec3{model.x}),
-        hgVecNorm3(HgVec3{model.y}),
-        hgVecNorm3(HgVec3{model.z}),
-    });
-    HgMat4 inv4{inv3};
-    inv4.w = HgVec4{HgVec3{inv3 * HgVec3{model.w} * -1}, 1};
-    return inv4;
-}
-
-HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
-{
-    return HgMat4{
-        HgVec4{2.0f / (right - left), 0.0f, 0.0f, 0.0f},
-        HgVec4{0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
-        HgVec4{0.0f, 0.0f, 1.0f / (far - near), 0.0f},
-        HgVec4{-(right + left) / (right - left), -(bottom + top) / (bottom - top), -(near) / (far - near), 1.0f},
-    };
-}
-
-HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
-{
-    hgAssert(near > 0.0f);
-    hgAssert(far > near);
-    f32 scale = 1.0f / (f32)tan(fov * 0.5f);
-    return HgMat4{
-        HgVec4{scale / aspect, 0.0f, 0.0f, 0.0f},
-        HgVec4{0.0f, scale, 0.0f, 0.0f},
-        HgVec4{0.0f, 0.0f, far / (far - near), 1.0f},
-        HgVec4{0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
-    };
-}
-
-u32 hgNoise(u32 seed, u32 pos)
-{
-    u32 ret = (pos + 384521713u) * 955740521u;
-    ret ^= ret >> 13;
-    ret *= seed * 725937977u;
-    ret ^= ret >> 7;
-    ret *= 358166231u;
-    ret ^= ret >> 11;
-    return ret;
-}
-
-u32 hgNoise2D(u32 seed, u32 x, u32 y)
-{
-    return hgNoise(seed, x + (y * 425537443u));
-}
-
-u32 hgNoise3D(u32 seed, u32 x, u32 y, u32 z)
-{
-    return hgNoise(seed, x + y * 425537443u + z * 682607u);
-}
-
-u32 hgNoise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
-{
-    return hgNoise(seed, x + y * 425537443u + z * 682607u + w * 9067);
-}
-
-f32 hgNoiseNorm(u32 seed, f32 pos)
-{
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return (f32)hgNoise(seed, Convert{pos}.asU32) / (f32)UINT32_MAX;
-}
-
-f32 hgNoiseNorm2D(u32 seed, HgVec2 pos)
-{
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return (f32)hgNoise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32) / (f32)UINT32_MAX;
-}
-
-f32 hgNoiseNorm3D(u32 seed, HgVec3 pos)
-{
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return (f32)hgNoise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32) / (f32)UINT32_MAX;
-}
-
-f32 hgNoiseNorm4D(u32 seed, HgVec4 pos)
-{
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return (f32)hgNoise4D(
-        seed,
-        Convert{pos.x}.asU32,
-        Convert{pos.y}.asU32,
-        Convert{pos.z}.asU32,
-        Convert{pos.w}.asU32) / (f32)UINT32_MAX;
-}
-
-f32 hgNoiseVec1D(u32 seed, f32 pos)
-{
-    return hgNoiseNorm(seed, pos) * 2.0f - 1.0f;
-}
-
-HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos)
-{
-    f32 rot = 2.0f * (f32)hgPi * hgNoiseNorm2D(seed, pos);
-    return HgVec2(std::cos(rot), std::sin(rot));
-}
-
-u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
-{
-    u32 max = width > height ? width : height;
-    max = max > depth ? max : depth;
-    return max == 0 ? 0 : (u32)log2((f32)max) + 1;
 }
 
 template<>

@@ -1,9 +1,10 @@
 #include "hg_core.hpp"
 #include "hg_containers.hpp"
-#include "hg_memory.hpp"
-#include "hg_library.hpp"
-#include "hg_platform.hpp"
 #include "hg_gpu.hpp"
+#include "hg_library.hpp"
+#include "hg_memory.hpp"
+#include "hg_platform.hpp"
+#include "hg_templates.hpp"
 #include "hg_window.hpp"
 #include "hg_audio.hpp"
 

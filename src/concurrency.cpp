@@ -2,6 +2,7 @@
 #include "hg_concurrency.hpp"
 #include "hg_containers.hpp"
 #include "hg_memory.hpp"
+#include "hg_templates.hpp"
 #include "hg_time.hpp"
 
 #include <atomic>

@@ -28,10 +28,10 @@
 #define HG_RENDERING_HPP
 
 #include "hg_assets.hpp"
-#include "hg_containers.hpp"
 #include "hg_core.hpp"
 #include "hg_gpu.hpp"
 #include "hg_math.hpp"
+#include "hg_templates.hpp"
 #include "hg_window.hpp"
 
 /**

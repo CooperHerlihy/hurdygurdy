@@ -175,14 +175,6 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
  * - fn The function to use to iterate, takes the index
  */
 template<typename F>
-void hgThreadsFor(u64 begin, u64 end, F fn)
-{
-    static_assert(std::is_invocable_r_v<void, F, u64>);
-
-    hgThreadsFor(begin, end, &fn, [](void* pfn, u64 idx)
-    {
-        (*(F*)pfn)(idx);
-    });
-}
+void hgThreadsFor(u64 begin, u64 end, F fn);
 
 #endif // HG_CONCURRENCY_HPP

@@ -97,161 +97,61 @@ inline HgAssetManager<T> hgAssets{};
  * Initialize an asset manager
  */
 template<typename T>
-void hgAssetInit()
-{
-    hgAssets<T>.map = hgMapCreate<HgStringView, HgAsset<T>*>();
-    hgAssets<T>.pool = hgPoolCreate<HgAsset<T>>();
-}
+void hgAssetInit();
 
 /**
  * Detsroy an asset manager
  */
 template<typename T>
-void hgAssetDeinit()
-{
-    hgPoolDestroy(&hgAssets<T>.pool);
-    hgMapDestroy(&hgAssets<T>.map);
-}
+void hgAssetDeinit();
 
 /**
  * Load an asset, implemented per asset type, blocking
  */
 template<typename T>
-void hgAssetLoadImpl(HgAsset<T>* data)
-{
-    (void)data;
-    static_assert(false, "Asset type cannot be loaded without implementation");
-}
+void hgAssetLoadImpl(HgAsset<T>* data);
 
 /**
  * Unload an asset, implemented per asset type, blocking
  */
 template<typename T>
-void hgAssetUnloadImpl(HgAsset<T>* data)
-{
-    (void)data;
-    static_assert(false, "Asset type cannot be unloaded without implementation");
-}
+void hgAssetUnloadImpl(HgAsset<T>* data);
 
 /**
  * Create a unique empty asset
  */
 template<typename T>
-HgAsset<T>* hgAssetCreate()
-{
-    HgAsset<T>* asset = hgPoolAlloc(&hgAssets<T>.pool);
-    asset->data = {};
-    asset->refCount = 1;
-    asset->path = {};
-
-    return asset;
-}
+HgAsset<T>* hgAssetCreate();
 
 /**
  * Load an asset (or increment the ref count)
  */
 template<typename T>
-HgAsset<T>* hgAssetLoad(HgStringView path)
-{
-    if (HgAsset<T>** asset = hgMapGet(&hgAssets<T>.map, path);
-        asset != nullptr)
-    {
-        ++(*asset)->refCount;
-        return *asset;
-    }
-
-    HgAsset<T>* asset = hgPoolAlloc(&hgAssets<T>.pool);
-    asset->data = {};
-    asset->refCount = 1;
-    asset->path = hgStringCreate(path);
-
-    if (hgAssets<T>.map.count * 2 > hgAssets<T>.map.capacity)
-        hgMapResize(&hgAssets<T>.map, hgAssets<T>.map.capacity * 2);
-    hgMapAdd(&hgAssets<T>.map, asset->path, asset);
-
-    hgAssetLoadImpl(asset);
-    return asset;
-}
-
-/**
- * Hot reload an asset
- */
-template<typename T>
-void hgAssetReload(HgAsset<T>* asset)
-{
-    hgAssert(asset != nullptr);
-
-    hgAssetUnloadImpl(asset);
-    hgAssetLoadImpl(asset);
-}
-
-/**
- * Hot reload an asset asynchronously
- */
-template<typename T>
-void hgAssetReloadAsync(HgAsset<T>* asset, HgFence* fence)
-{
-    hgAssert(asset != nullptr);
-
-    hgThreadsCall(fence, asset, [](void* passet)
-    {
-        HgAsset<T>* asset = (HgAsset<T>*)passet;
-        hgAssetUnloadImpl(asset);
-        hgAssetLoadImpl(asset);
-    });
-}
+HgAsset<T>* hgAssetLoad(HgStringView path);
 
 /**
  * Destroy an asset and unload it (or decrement the ref count)
  */
 template<typename T>
-void hgAssetUnload(HgAsset<T>* asset)
-{
-    if (asset != nullptr && --asset->refCount == 0)
-    {
-        hgAssetUnloadImpl(asset);
+void hgAssetUnload(HgAsset<T>* asset);
 
-        if (asset->path != nullptr)
-        {
-            hgMapRemove(&hgAssets<T>.map, asset->path);
-            hgStringDestroy(&asset->path);
-        }
-        hgPoolFree(&hgAssets<T>.pool, asset);
-    }
-}
+/**
+ * Hot reload an asset
+ */
+template<typename T>
+void hgAssetReload(HgAsset<T>* asset);
 
 /**
  * Increment the asset's reference count
  */
 template<typename T>
-HgAsset<T>* hgAssetCopy(HgAsset<T>* asset)
-{
-    hgAssert(asset != nullptr);
-    ++asset->refCount;
-    return asset;
-}
+HgAsset<T>* hgAssetCopy(HgAsset<T>* asset);
 
 /**
  * HgAssetHandle serialization
  */
 template<typename T>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAsset<T>* asset)
-{
-    if (s->writing)
-    {
-        HgStringView path = asset->path;
-        hgSerialize(arena, s, name, &path);
-    }
-    else
-    {
-        HgStringView path;
-        hgSerialize(hgScratch(), s, name, &path);
-        if (path != "")
-            *asset = hgAssetLoad<T>(path);
-        else
-            *asset = {};
-    }
-}
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAsset<T>* asset);
 
 /**
  * A binary file asset handle

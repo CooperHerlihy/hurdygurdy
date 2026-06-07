@@ -67,6 +67,60 @@ void hgTest()
         }
     }
 
+    // HgMat
+    {
+        HgMat2 mat{
+            HgVec2{1.0f, 0.0f},
+            HgVec2{1.0f, 0.0f},
+        };
+        HgVec2 vec{1.0f, 1.0f};
+
+        HgMat2 identity{
+            HgVec2{1.0f, 0.0f},
+            HgVec2{0.0f, 1.0f},
+        };
+        hgAssert(identity * mat == mat);
+        hgAssert(identity * vec == vec);
+
+        HgMat2 matRotated{
+            HgVec2{0.0f, 1.0f},
+            HgVec2{0.0f, 1.0f},
+        };
+        HgVec2 vecRotated{-1.0f, 1.0f};
+
+        HgMat2 rotation{
+            HgVec2{0.0f, 1.0f},
+            HgVec2{-1.0f, 0.0f},
+        };
+        hgAssert(rotation * mat == matRotated);
+        hgAssert(rotation * vec == vecRotated);
+
+        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
+        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
+        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
+        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
+    }
+
+    // HgQuat
+    {
+        HgMat3 identityMat = HgMat3{1.0f};
+        HgVec3 upVec{0.0f, -1.0f, 0.0f};
+        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
+
+        HgVec3 rotatedVec = hgVecRotate(rotation, upVec);
+        HgMat3 rotatedMat = hgMatRotate(rotation, identityMat);
+
+        HgVec3 matRotatedVec = rotatedMat * upVec;
+
+        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
+
+        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
+    }
+
     // HgString
     {
         HgArena* arena = hgScratch();
@@ -1396,16 +1450,175 @@ void hgTest()
         }
     }
 
-    // HgArray : TODO
+    // HgArray
     {
+        HgArray<u32> arr = hgArrayCreate<u32>(0, 2);
+        hgDefer(hgArrayDestroy(&arr));
+
+        hgAssert(arr.count == 0);
+        hgAssert(arr.capacity >= 2);
+
+        *hgArrayPush(&arr) = 10;
+        *hgArrayPush(&arr) = 20;
+
+        hgAssert(arr.count == 2);
+        hgAssert(arr[0] == 10);
+        hgAssert(arr[1] == 20);
+
+        hgArrayResize(&arr, 4);
+
+        hgAssert(arr.count == 4);
+
+        arr[2] = 30;
+        arr[3] = 40;
+
+        hgAssert(arr[2] == 30);
+        hgAssert(arr[3] == 40);
+
+        u32 popped = hgArrayPop(&arr);
+
+        hgAssert(popped == 40);
+        hgAssert(arr.count == 3);
+
+        hgArrayResize(&arr, 1);
+
+        hgAssert(arr.count == 1);
+        hgAssert(arr[0] == 10);
+
+        HgArena* arena = hgScratch();
+        hgArenaScope(arena);
+
+        HgArray<u32> temp = hgArrayTemp<u32>(arena, 0, 4);
+
+        *hgArrayPushTemp(arena, &temp) = 123;
+        *hgArrayPushTemp(arena, &temp) = 456;
+
+        hgAssert(temp.count == 2);
+        hgAssert(temp[0] == 123);
+        hgAssert(temp[1] == 456);
     }
 
-    // HgArrayAny : TODO
+    // HgArrayAny
     {
+        HgArrayAny arr = hgArrayAnyCreate(sizeof(u32), alignof(u32), 0, 2);
+        hgDefer(hgArrayAnyDestroy(&arr));
+
+        hgAssert(arr.count == 0);
+        hgAssert(arr.capacity >= 2);
+        hgAssert(arr.width == sizeof(u32));
+        hgAssert(arr.align == alignof(u32));
+
+        *(u32*)hgArrayAnyPush(&arr) = 10;
+        *(u32*)hgArrayAnyPush(&arr) = 20;
+
+        hgAssert(arr.count == 2);
+        hgAssert(*(u32*)arr[0] == 10);
+        hgAssert(*(u32*)arr[1] == 20);
+
+        hgArrayAnyResize(&arr, 4);
+
+        hgAssert(arr.count == 4);
+
+        *(u32*)arr[2] = 30;
+        *(u32*)arr[3] = 40;
+
+        hgAssert(*(u32*)arr[2] == 30);
+        hgAssert(*(u32*)arr[3] == 40);
+
+        u32 popped = 0;
+        hgArrayAnyPop(&arr, &popped);
+
+        hgAssert(popped == 40);
+        hgAssert(arr.count == 3);
+
+        hgArrayAnyResize(&arr, 1);
+
+        hgAssert(arr.count == 1);
+        hgAssert(*(u32*)arr[0] == 10);
+
+        HgArena* arena = hgScratch();
+        hgArenaScope(arena);
+
+        HgArrayAny temp = hgArrayAnyTemp(arena, sizeof(u32), alignof(u32), 0, 2);
+
+        *(u32*)hgArrayAnyPushTemp(arena, &temp) = 123;
+        *(u32*)hgArrayAnyPushTemp(arena, &temp) = 456;
+
+        hgAssert(temp.count == 2);
+        hgAssert(*(u32*)temp[0] == 123);
+        hgAssert(*(u32*)temp[1] == 456);
+
+        hgArrayAnyPushTemp(arena, &temp);
+
+        hgAssert(temp.count == 3);
     }
 
-    // HgQueue : TODO
+    // HgQueue
     {
+        HgQueue<u32> queue = hgQueueCreate<u32>(4);
+
+        hgAssert(queue.count == 0);
+        hgAssert(queue.capacity >= 4);
+
+        hgQueuePushBack(&queue, 1);
+        hgQueuePushBack(&queue, 2);
+        hgQueuePushBack(&queue, 3);
+        hgQueuePushBack(&queue, 4);
+
+        hgAssert(queue.count == 4);
+
+        hgAssert(hgQueuePopFront(&queue) == 1);
+        hgAssert(hgQueuePopFront(&queue) == 2);
+
+        hgAssert(queue.count == 2);
+
+        hgQueuePushBack(&queue, 5);
+        hgQueuePushBack(&queue, 6);
+
+        hgAssert(queue.count == 4);
+
+        hgQueuePushBack(&queue, 7);
+        hgQueuePushBack(&queue, 8);
+
+        hgAssert(queue.count == 6);
+        hgAssert(queue.capacity >= 6);
+
+        hgAssert(hgQueuePopFront(&queue) == 3);
+        hgAssert(hgQueuePopFront(&queue) == 4);
+        hgAssert(hgQueuePopFront(&queue) == 5);
+        hgAssert(hgQueuePopFront(&queue) == 6);
+        hgAssert(hgQueuePopFront(&queue) == 7);
+        hgAssert(hgQueuePopFront(&queue) == 8);
+
+        hgAssert(queue.count == 0);
+
+        hgQueuePushFront(&queue, 10);
+        hgQueuePushFront(&queue, 20);
+        hgQueuePushFront(&queue, 30);
+
+        hgAssert(queue.count == 3);
+
+        hgAssert(hgQueuePopFront(&queue) == 30);
+        hgAssert(hgQueuePopFront(&queue) == 20);
+        hgAssert(hgQueuePopFront(&queue) == 10);
+
+        hgAssert(queue.count == 0);
+
+        hgQueuePushBack(&queue, 1);
+        hgQueuePushBack(&queue, 2);
+        hgQueuePushFront(&queue, 0);
+        hgQueuePushFront(&queue, -1);
+
+        hgAssert(queue.count == 4);
+
+        hgAssert(hgQueuePopBack(&queue) == 2);
+        hgAssert(hgQueuePopBack(&queue) == 1);
+        hgAssert(hgQueuePopBack(&queue) == 0);
+        hgAssert(hgQueuePopBack(&queue) == (u32)-1);
+
+        hgAssert(queue.count == 0);
+
+        hgQueueDestroy(&queue);
     }
 
     // HgSet
@@ -1843,8 +2056,70 @@ void hgTest()
         }
     }
 
-    // HgPool : TODO
+    // HgPool
     {
+        HgPool<u32> pool = hgPoolCreate<u32>();
+        hgDefer(hgPoolDestroy(&pool));
+
+        u32* a = hgPoolAlloc(&pool);
+        u32* b = hgPoolAlloc(&pool);
+        u32* c = hgPoolAlloc(&pool);
+
+        hgAssert(a != nullptr);
+        hgAssert(b != nullptr);
+        hgAssert(c != nullptr);
+
+        *a = 1;
+        *b = 2;
+        *c = 3;
+
+        hgAssert(*a == 1);
+        hgAssert(*b == 2);
+        hgAssert(*c == 3);
+
+        hgPoolFree(&pool, b);
+        hgPoolFree(&pool, c);
+
+        u32* d = hgPoolAlloc(&pool);
+        u32* e = hgPoolAlloc(&pool);
+
+        hgAssert(d == c);
+        hgAssert(e == b);
+
+        *d = 40;
+        *e = 50;
+
+        hgAssert(*d == 40);
+        hgAssert(*e == 50);
+
+        constexpr u32 n = 1500;
+
+        HgArena* scratch = hgScratch();
+        hgArenaScope(scratch);
+
+        HgArray<u32*> ptrs = hgArrayTemp<u32*>(scratch, 0, n);
+
+        for (u32 i = 0; i < n; ++i)
+        {
+            u32* p = hgPoolAlloc(&pool);
+            *hgArrayPush(&ptrs) = p;
+            hgAssert(p != nullptr);
+        }
+
+        hgAssert(pool.itemStores.count >= 2);
+
+        for (u32 i = 0; i < ptrs.count; ++i)
+        {
+            for (u32 j = i + 1; j < ptrs.count; ++j)
+            {
+                hgAssert(ptrs[i] != ptrs[j]);
+            }
+        }
+
+        for (u32 i = 0; i < ptrs.count; ++i)
+        {
+            hgPoolFree(&pool, ptrs[i]);
+        }
     }
 
     // HgHandlePool
@@ -2516,60 +2791,6 @@ void hgTest()
             hgAssetUnload(newBin);
             hgAssetUnload(newBin2);
         }
-    }
-
-    // HgMat
-    {
-        HgMat2 mat{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{1.0f, 0.0f},
-        };
-        HgVec2 vec{1.0f, 1.0f};
-
-        HgMat2 identity{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{0.0f, 1.0f},
-        };
-        hgAssert(identity * mat == mat);
-        hgAssert(identity * vec == vec);
-
-        HgMat2 matRotated{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{0.0f, 1.0f},
-        };
-        HgVec2 vecRotated{-1.0f, 1.0f};
-
-        HgMat2 rotation{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{-1.0f, 0.0f},
-        };
-        hgAssert(rotation * mat == matRotated);
-        hgAssert(rotation * vec == vecRotated);
-
-        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
-        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
-        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
-        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
-    }
-
-    // HgQuat
-    {
-        HgMat3 identityMat = HgMat3{1.0f};
-        HgVec3 upVec{0.0f, -1.0f, 0.0f};
-        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
-
-        HgVec3 rotatedVec = hgVecRotate(rotation, upVec);
-        HgMat3 rotatedMat = hgMatRotate(rotation, identityMat);
-
-        HgVec3 matRotatedVec = rotatedMat * upVec;
-
-        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
-                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
-                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
-
-        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
-                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
-                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
     }
 
     // HgImage

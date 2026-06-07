@@ -32,6 +32,7 @@
 #include "hg_concurrency.hpp"
 #include "hg_containers.hpp"
 #include "hg_core.hpp"
+#include "hg_ecs.hpp"
 #include "hg_gpu.hpp"
 #include "hg_library.hpp"
 #include "hg_math.hpp"
