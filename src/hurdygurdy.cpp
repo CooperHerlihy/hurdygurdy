@@ -2718,18 +2718,18 @@ void hgArrayAnyPop(HgArrayAny* arr, void* dst)
         hgMemCopy(dst, (u8*)arr->vals + arr->count * arr->width, arr->width);
 }
 
-HgHandlePool hgHandlesCreate()
+HgHandlePool hgHandlePoolCreate()
 {
-    HgHandlePool pool{};
-    pool.handles = hgArrayCreate<HgHandle>();
-    pool.freed = hgArrayCreate<HgHandle>();
+    HgHandlePool handles{};
+    handles.handles = hgArrayCreate<HgHandle>();
+    handles.freed = hgArrayCreate<HgHandle>();
 
-    hgHandlesAlloc(&pool);
+    hgHandlePoolAlloc(&handles);
 
-    return pool;
+    return handles;
 }
 
-void hgHandlesDestroy(HgHandlePool* pool)
+void hgHandlePoolDestroy(HgHandlePool* pool)
 {
     hgAssert(pool != nullptr);
 
@@ -2737,17 +2737,17 @@ void hgHandlesDestroy(HgHandlePool* pool)
     hgArrayDestroy(&pool->freed);
 }
 
-void hgHandlesReset(HgHandlePool* pool)
+void hgHandlePoolReset(HgHandlePool* pool)
 {
     hgAssert(pool != nullptr);
 
     pool->handles.count = 0;
     pool->freed.count = 0;
 
-    hgHandlesAlloc(pool);
+    hgHandlePoolAlloc(pool);
 }
 
-HgHandle hgHandlesAlloc(HgHandlePool* pool)
+HgHandle hgHandlePoolAlloc(HgHandlePool* pool)
 {
     hgAssert(pool != nullptr);
 
@@ -2765,7 +2765,7 @@ HgHandle hgHandlesAlloc(HgHandlePool* pool)
     }
 }
 
-bool hgHandlesAlive(HgHandlePool* pool, HgHandle handle)
+bool hgHandlePoolAlive(HgHandlePool* pool, HgHandle handle)
 {
     hgAssert(pool != nullptr);
 
@@ -2773,10 +2773,10 @@ bool hgHandlesAlive(HgHandlePool* pool, HgHandle handle)
     return handle != hgHandleNull && idx < pool->handles.count && pool->handles[idx] == handle;
 }
 
-void hgHandlesFree(HgHandlePool* pool, HgHandle handle)
+void hgHandlePoolFree(HgHandlePool* pool, HgHandle handle)
 {
     hgAssert(pool != nullptr);
-    hgAssert(hgHandlesAlive(pool, handle));
+    hgAssert(hgHandlePoolAlive(pool, handle));
     pool->handles[hgHandleIdx(handle)] = hgHandleNull;
     *hgArrayPush(&pool->freed) = hgHandleNextGeneration(handle);
 }
@@ -2784,7 +2784,7 @@ void hgHandlesFree(HgHandlePool* pool, HgHandle handle)
 HgEcs hgEcsCreate()
 {
     HgEcs ecs{};
-    ecs.entities = hgHandlesCreate();
+    ecs.entities = hgHandlePoolCreate();
     ecs.components = hgMapCreate<u64, HgComponent>(128);
     hgEcsReset(&ecs);
     return ecs;
@@ -2803,7 +2803,7 @@ void hgEcsDestroy(HgEcs* ecs)
     });
 
     hgMapDestroy(&ecs->components);
-    hgHandlesDestroy(&ecs->entities);
+    hgHandlePoolDestroy(&ecs->entities);
 }
 
 void hgEcsReset(HgEcs* ecs)
@@ -2820,7 +2820,7 @@ void hgEcsReset(HgEcs* ecs)
         system->components.count = 1;
         hgMemClear(system->indices.vals, system->indices.count * sizeof(*system->indices.vals));
     });
-    hgHandlesReset(&ecs->entities);
+    hgHandlePoolReset(&ecs->entities);
 }
 
 void hgEcsRegisterComponent(HgEcs* ecs, HgEcsRegisterComponent* config)
@@ -2872,7 +2872,7 @@ HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId)
 HgEntity hgEcsSpawn(HgEcs* ecs)
 {
     hgAssert(ecs != nullptr);
-    return {hgHandlesAlloc(&ecs->entities)};
+    return {hgHandlePoolAlloc(&ecs->entities)};
 }
 
 void hgEcsDespawn(HgEcs* ecs, HgEntity e)
@@ -2885,13 +2885,13 @@ void hgEcsDespawn(HgEcs* ecs, HgEntity e)
         if (hgEcsHas(ecs, e, *id))
             hgEcsRemove(ecs, e, *id);
     });
-    hgHandlesFree(&ecs->entities, e.handle);
+    hgHandlePoolFree(&ecs->entities, e.handle);
 }
 
 bool hgEcsAlive(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
-    return hgHandlesAlive(&ecs->entities, e.handle);
+    return hgHandlePoolAlive(&ecs->entities, e.handle);
 }
 
 void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)

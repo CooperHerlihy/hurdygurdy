@@ -228,7 +228,121 @@ void hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr, void* val = nullptr);
  */
 void hgArrayAnyPop(HgArrayAny* arr, void* dst);
 
-// queue : TODO
+/**
+ * A double ended ring buffer queue
+ */
+template<typename T>
+struct HgQueue {
+    T* vals;
+    u32 front;
+    u32 back;
+    u32 count;
+    u32 capacity;
+};
+
+/**
+ * Create a new empty queue
+ */
+template<typename T>
+HgQueue<T> hgQueueCreate(u32 capacity = 1024)
+{
+    HgQueue<T> queue{};
+    queue.vals = hgGpaAlloc<T>(capacity);
+    queue.front = 0;
+    queue.back = 0;
+    queue.count = 0;
+    queue.capacity = capacity;
+    return queue;
+}
+
+/**
+ * Destroy a queue
+ */
+template<typename T>
+void hgQueueDestroy(HgQueue<T>* queue)
+{
+    if (queue != nullptr)
+    {
+        hgGpaFree(queue->vals, queue->capacity);
+    }
+}
+
+/**
+ * Push a value to the front of the queue
+ */
+template<typename T>
+void hgQueuePushFront(HgQueue<T>* queue, T val)
+{
+    hgAssert(queue != nullptr);
+
+    ++queue->count;
+
+    if (queue->count == queue->capacity)
+    {
+        u32 newCapacity = queue->capacity * 2;
+        queue->vals = hgGpaRealloc(queue->vals, queue->capacity, newCapacity);
+
+        if (queue->back < queue->front)
+            hgMemCopy(queue->vals, queue->vals + queue->capacity, queue->back);
+
+        queue->capacity = newCapacity;
+    }
+
+    queue->front = (queue->front == 0 ? queue->capacity : queue->front) - 1;
+    queue->vals[queue->front] = val;
+}
+
+/**
+ * Push a value to the back of the queue
+ */
+template<typename T>
+void hgQueuePushBack(HgQueue<T>* queue, T val)
+{
+    hgAssert(queue != nullptr);
+
+    ++queue->count;
+
+    if (queue->count == queue->capacity)
+    {
+        u32 newCapacity = queue->capacity * 2;
+        queue->vals = hgGpaRealloc(queue->vals, queue->capacity, newCapacity);
+
+        if (queue->back < queue->front)
+            hgMemCopy(queue->vals, queue->vals + queue->capacity, queue->back);
+
+        queue->capacity = newCapacity;
+    }
+
+    queue->vals[queue->back] = val;
+    queue->back = (queue->back + 1) % queue->capacity;
+}
+
+/**
+ * Pop a value from the front of the queue
+ */
+template<typename T>
+T hgQueuePopFront(HgQueue<T>* queue)
+{
+    hgAssert(queue->count > 0);
+    --queue->count;
+
+    T ret = queue->vals[queue->front];
+    queue->front = (queue->front + 1) % queue->capacity;
+    return ret;
+}
+
+/**
+ * Pop a value from the back of the queue
+ */
+template<typename T>
+T hgQueuePopBack(HgQueue<T>* queue)
+{
+    hgAssert(queue->count > 0);
+    --queue->count;
+
+    queue->back = (queue->back == 0 ? queue->capacity : queue->front) - 1;
+    return queue->vals[queue->back];
+}
 
 /**
  * The hash template
@@ -872,6 +986,89 @@ constexpr u64 hgHash(HgStringBuilder str)
 {
     return hgHash(HgStringView{str});
 }
+/**
+ * A pool of objects
+ */
+template<typename T>
+struct HgPool {
+    /**
+     * The free list
+     */
+    HgQueue<T*> freeList;
+    /**
+     * The items in the pool
+     */
+    HgArray<T*> itemStores;
+};
+
+/**
+ * Create an object pool
+ */
+template<typename T>
+HgPool<T> hgPoolCreate()
+{
+    HgPool<T> pool{};
+    pool.freeList = hgQueueCreate<T*>();
+    pool.itemStores = hgArrayCreate<T*>(0, 4);
+    return pool;
+}
+
+/**
+ * Destroy an object pool
+ */
+template<typename T>
+void hgPoolDestroy(HgPool<T>* pool)
+{
+    hgAssert(pool != nullptr);
+
+    for (u32 i = 0; i < pool->itemStores.count; ++i)
+    {
+        hgGpaFree(pool->itemStores[i], 1024);
+    }
+    hgArrayDestroy(&pool->itemStores);
+    hgQueueDestroy(&pool->freeList);
+}
+
+/**
+ * Increase the number of items in the pool
+ */
+template<typename T>
+void hgPoolRestock(HgPool<T>* pool)
+{
+    hgAssert(pool != nullptr);
+
+    T* store = hgGpaAlloc<T>(1024);
+    for (u32 i = 0; i < 1024; ++i)
+    {
+        hgQueuePushBack(&pool->freeList, store + i);
+    }
+    *hgArrayPush(&pool->itemStores) = store;
+}
+
+/**
+ * Allocate an object from the pool
+ */
+template<typename T>
+T* hgPoolAlloc(HgPool<T>* pool)
+{
+    hgAssert(pool != nullptr);
+
+    if (pool->freeList.count == 0)
+        hgPoolRestock(pool);
+
+    return hgQueuePopFront(&pool->freeList);
+}
+
+/**
+ * Free an object from the pool
+ */
+template<typename T>
+void hgPoolFree(HgPool<T>* pool, T* item)
+{
+    hgAssert(pool != nullptr);
+    hgAssert(item != nullptr);
+    hgQueuePushFront(&pool->freeList, item);
+}
 
 /**
  * A generation counted handle
@@ -943,90 +1140,6 @@ constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
 }
 
 /**
- * A pool of objects
- */
-template<typename T>
-struct HgPool {
-    /**
-     * The free list
-     */
-    HgArray<T*> freeList;
-    /**
-     * The items in the pool
-     */
-    HgArray<T*> itemStores;
-};
-
-/**
- * Create an object pool
- */
-template<typename T>
-HgPool<T> hgPoolCreate()
-{
-    HgPool<T> pool{};
-    pool.freeList = hgArrayCreate<T*>();
-    pool.itemStores = hgArrayCreate<T*>(0, 4);
-    return pool;
-}
-
-/**
- * Destroy an object pool
- */
-template<typename T>
-void hgPoolDestroy(HgPool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-
-    for (u32 i = 0; i < pool->itemStores.count; ++i)
-    {
-        hgGpaFree(pool->itemStores[i], 1024);
-    }
-    hgArrayDestroy(&pool->itemStores);
-    hgArrayDestroy(&pool->freeList);
-}
-
-/**
- * Increase the number of items in the pool
- */
-template<typename T>
-void hgPoolRestock(HgPool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-
-    T* store = hgGpaAlloc<T>(1024);
-    for (u32 i = 0; i < 1024; ++i)
-    {
-        *hgArrayPush(&pool->freeList) = store + i;
-    }
-    *hgArrayPush(&pool->itemStores) = store;
-}
-
-/**
- * Allocate an object from the pool
- */
-template<typename T>
-T* hgPoolAlloc(HgPool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-
-    if (pool->freeList.count == 0)
-        hgPoolRestock(pool);
-
-    return hgArrayPop(&pool->freeList);
-}
-
-/**
- * Free an object from the pool
- */
-template<typename T>
-void hgPoolFree(HgPool<T>* pool, T* item)
-{
-    hgAssert(pool != nullptr);
-    hgAssert(item != nullptr);
-    *hgArrayPush(&pool->freeList) = item;
-}
-
-/**
  * A handle pool
  */
 struct HgHandlePool {
@@ -1043,34 +1156,34 @@ struct HgHandlePool {
 /**
  * Create a new object pool
  */
-HgHandlePool hgHandlesCreate();
+HgHandlePool hgHandlePoolCreate();
 
 /**
  * Destroy a handle pool
  */
-void hgHandlesDestroy(HgHandlePool* pool);
+void hgHandlePoolDestroy(HgHandlePool* pool);
 
 /**
  * Reset a handle pool
  */
-void hgHandlesReset(HgHandlePool* pool);
+void hgHandlePoolReset(HgHandlePool* pool);
 
 /**
  * Allocate an index from the pool
  */
-HgHandle hgHandlesAlloc(HgHandlePool* pool);
+HgHandle hgHandlePoolAlloc(HgHandlePool* pool);
 
 /**
  * Returns whether a handle is alive in the pool
  */
-bool hgHandlesAlive(HgHandlePool* pool, HgHandle handle);
+bool hgHandlePoolAlive(HgHandlePool* pool, HgHandle handle);
 
 /**
  * Free an index back into a pool
  *
  * Note, the object handle must be valid and alive
  */
-void hgHandlesFree(HgHandlePool* pool, HgHandle handle);
+void hgHandlePoolFree(HgHandlePool* pool, HgHandle handle);
 
 /**
  * An entity in the ecs

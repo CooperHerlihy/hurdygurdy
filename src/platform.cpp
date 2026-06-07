@@ -1185,7 +1185,7 @@ void hgGpuInit()
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vk.descriptorPools[i] = hgHandlesCreate();
+        vk.descriptorPools[i] = hgHandlePoolCreate();
     }
 
     vk.buffers = hgPoolCreate<HgGpuBuffer>();
@@ -1222,7 +1222,7 @@ void hgGpuDeinit()
     {
         vkDestroySampler(vk.device, *sampler, nullptr);
     });
-    hgMapReset(&vk.samplers);
+    hgMapDestroy(&vk.samplers);
 
     hgPoolDestroy(&vk.pipelines);
     hgPoolDestroy(&vk.views);
@@ -1231,7 +1231,7 @@ void hgGpuDeinit()
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        hgHandlesDestroy(&vk.descriptorPools[i]);
+        hgHandlePoolDestroy(&vk.descriptorPools[i]);
     }
 
     vkDestroyDescriptorSetLayout(vk.device, vk.bindlessLayout, nullptr);
@@ -1317,7 +1317,7 @@ static Descriptor descriptorCreate(
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    Descriptor desc = hgHandlesAlloc(&vk.descriptorPools[type]);
+    Descriptor desc = hgHandlePoolAlloc(&vk.descriptorPools[type]);
 
     VkDescriptorBufferInfo bufferVkInfo = bufferInfo != nullptr
         ? VkDescriptorBufferInfo{bufferInfo->buffer->buffer, bufferInfo->offset, bufferInfo->range}
@@ -1351,7 +1351,7 @@ static void descriptorDestroy(Descriptor desc, DescriptorType type)
 {
     if (desc != hgHandleNull)
     {
-        hgHandlesFree(&vk.descriptorPools[type], desc);
+        hgHandlePoolFree(&vk.descriptorPools[type], desc);
     }
 }
 
@@ -1428,14 +1428,14 @@ void hgGpuBufferDestroy(HgGpuBuffer* buffer)
 u32 hgGpuBufferUniformDescriptor(HgGpuBuffer* buffer)
 {
     Descriptor desc = buffer->uniformDesc;
-    hgAssert(hgHandlesAlive(&vk.descriptorPools[DescriptorType_uniformBuffer], desc));
+    hgAssert(hgHandlePoolAlive(&vk.descriptorPools[DescriptorType_uniformBuffer], desc));
     return hgHandleIdx(desc);
 }
 
 u32 hgGpuBufferStorageDescriptor(HgGpuBuffer* buffer)
 {
     Descriptor desc = buffer->storageDesc;
-    hgAssert(hgHandlesAlive(&vk.descriptorPools[DescriptorType_storageBuffer], desc));
+    hgAssert(hgHandlePoolAlive(&vk.descriptorPools[DescriptorType_storageBuffer], desc));
     return hgHandleIdx(desc);
 }
 
@@ -1692,14 +1692,14 @@ void hgGpuViewDestroy(HgGpuView* view)
 u32 hgGpuImageSamplerDescriptor(HgGpuView* view)
 {
     Descriptor desc = view->samplerDesc;
-    hgAssert(hgHandlesAlive(&vk.descriptorPools[DescriptorType_combinedImageSampler], desc));
+    hgAssert(hgHandlePoolAlive(&vk.descriptorPools[DescriptorType_combinedImageSampler], desc));
     return hgHandleIdx(desc);
 }
 
 u32 hgGpuImageStorageDescriptor(HgGpuView* view)
 {
     Descriptor desc = view->storageDesc;
-    hgAssert(hgHandlesAlive(&vk.descriptorPools[DescriptorType_storageImage], desc));
+    hgAssert(hgHandlePoolAlive(&vk.descriptorPools[DescriptorType_storageImage], desc));
     return hgHandleIdx(desc);
 }
 
@@ -3264,6 +3264,8 @@ HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindo
 
 void hgWindowDestroy(HgWindow* window)
 {
+    hgArrayDestroy(&window->events);
+
     for (u32 i = 0; i < window->images.count; ++i)
     {
         vkDestroySemaphore(vk.device, window->readyToPresent[i], nullptr);
@@ -3726,6 +3728,8 @@ void hgAudioInit()
 
 void hgAudioDeinit()
 {
+    hgPoolDestroy(&audio.players);
+
     SDL_CloseAudioDevice(audio.device);
 }
 

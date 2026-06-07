@@ -159,7 +159,7 @@ void init(HgArena* arena)
 
 void deinit()
 {
-    hgEcsReset(ecs);
+    hgEcsDestroy(ecs);
 
     hgModelsDeinit();
     hgSpritesDeinit();

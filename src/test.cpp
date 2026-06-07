@@ -18,7 +18,7 @@ void hgTest()
 {
     printf("HurdyGurdy: Tests Begun\n");
 
-    HgClock timer;
+    HgClock timer{};
     hgClockTick(&timer);
 
     // HgArena
@@ -65,469 +65,6 @@ void hgTest()
 
             arena.head = 0;
         }
-    }
-
-    // HgSet
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        constexpr u32 count = 128;
-
-        HgSet<u32> set = hgSetTemp<u32>(arena, count);
-
-        for (u32 i = 0; i < 3; ++i)
-        {
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 0));
-            hgAssert(!hgSetHas(&set, 1));
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 42));
-            hgAssert(!hgSetHas(&set, 100000));
-
-            hgSetAdd(&set, 1);
-            hgAssert(set.count == 1);
-            hgAssert(hgSetHas(&set, 1));
-
-            hgSetRemove(&set, 1);
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 1));
-
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
-
-            hgSetAdd(&set, 12);
-            hgAssert(set.count == 1);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
-
-            hgSetAdd(&set, 12 + count);
-            hgAssert(set.count == 2);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
-
-            hgSetAdd(&set, 12 + count * 2);
-            hgAssert(set.count == 3);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
-            hgAssert(hgSetHas(&set, 12 + count * 2));
-
-            hgSetRemove(&set, 12);
-            hgAssert(set.count == 2);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
-
-            hgSetAdd(&set, 42);
-            hgAssert(set.count == 3);
-            hgAssert(hgSetHas(&set, 42));
-
-            hgSetRemove(&set, 12 + count);
-            hgAssert(set.count == 2);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
-
-            hgSetRemove(&set, 42);
-            hgAssert(set.count == 1);
-            hgAssert(!hgSetHas(&set, 42));
-
-            hgSetRemove(&set, 12 + count * 2);
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
-            hgAssert(!hgSetHas(&set, 12 + count * 2));
-
-            hgSetReset(&set);
-        }
-
-        {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
-            using StrHash = u64;
-
-            HgSet<StrHash> set = hgSetTemp<StrHash>(arena, 128);
-
-            StrHash a = hgHash("a");
-            StrHash b = hgHash("b");
-            StrHash ab = hgHash("ab");
-            StrHash scf = hgHash("supercalifragilisticexpialidocious");
-
-            hgAssert(!hgSetHas(&set, a));
-            hgAssert(!hgSetHas(&set, b));
-            hgAssert(!hgSetHas(&set, ab));
-            hgAssert(!hgSetHas(&set, scf));
-
-            hgSetAdd(&set, a);
-            hgSetAdd(&set, b);
-            hgSetAdd(&set, ab);
-            hgSetAdd(&set, scf);
-
-            hgAssert(hgSetHas(&set, a));
-            hgAssert(hgSetHas(&set, b));
-            hgAssert(hgSetHas(&set, ab));
-            hgAssert(hgSetHas(&set, scf));
-
-            hgSetRemove(&set, a);
-            hgSetRemove(&set, b);
-            hgSetRemove(&set, ab);
-            hgSetRemove(&set, scf);
-
-            hgAssert(!hgSetHas(&set, a));
-            hgAssert(!hgSetHas(&set, b));
-            hgAssert(!hgSetHas(&set, ab));
-            hgAssert(!hgSetHas(&set, scf));
-        }
-
-        {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
-            HgSet<const char*> set = hgSetTemp<const char*>(arena, 128);
-
-            const char* a = "a";
-            const char* b = "b";
-            const char* ab = "ab";
-            const char* scf = "supercalifragilisticexpialidocious";
-
-            hgAssert(!hgSetHas(&set, a));
-            hgAssert(!hgSetHas(&set, b));
-            hgAssert(!hgSetHas(&set, ab));
-            hgAssert(!hgSetHas(&set, scf));
-
-            hgSetAdd(&set, a);
-            hgSetAdd(&set, b);
-            hgSetAdd(&set, ab);
-            hgSetAdd(&set, scf);
-
-            hgAssert(hgSetHas(&set, a));
-            hgAssert(hgSetHas(&set, b));
-            hgAssert(hgSetHas(&set, ab));
-            hgAssert(hgSetHas(&set, scf));
-
-            hgSetRemove(&set, a);
-            hgSetRemove(&set, b);
-            hgSetRemove(&set, ab);
-            hgSetRemove(&set, scf);
-
-            hgAssert(!hgSetHas(&set, a));
-            hgAssert(!hgSetHas(&set, b));
-            hgAssert(!hgSetHas(&set, ab));
-            hgAssert(!hgSetHas(&set, scf));
-        }
-
-        {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
-            HgSet<HgStringBuilder> set = hgSetTemp<HgStringBuilder>(arena, 128);
-
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "a")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "b")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "ab")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
-
-            hgSetAdd(&set, hgStringCopy(arena, "a"));
-            hgSetAdd(&set, hgStringCopy(arena, "b"));
-            hgSetAdd(&set, hgStringCopy(arena, "ab"));
-            hgSetAdd(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
-
-            hgAssert(hgSetHas(&set, hgStringCopy(arena, "a")));
-            hgAssert(hgSetHas(&set, hgStringCopy(arena, "b")));
-            hgAssert(hgSetHas(&set, hgStringCopy(arena, "ab")));
-            hgAssert(hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
-
-            hgSetRemove(&set, hgStringCopy(arena, "a"));
-            hgSetRemove(&set, hgStringCopy(arena, "b"));
-            hgSetRemove(&set, hgStringCopy(arena, "ab"));
-            hgSetRemove(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
-
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "a")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "b")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "ab")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
-        }
-
-        {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
-            HgSet<HgStringView> set = hgSetTemp<HgStringView>(arena, 128);
-
-            hgAssert(!hgSetHas(&set, "a"));
-            hgAssert(!hgSetHas(&set, "b"));
-            hgAssert(!hgSetHas(&set, "ab"));
-            hgAssert(!hgSetHas(&set, "supercalifragilisticexpialidocious"));
-
-            hgSetAdd(&set, "a");
-            hgSetAdd(&set, "b");
-            hgSetAdd(&set, "ab");
-            hgSetAdd(&set, "supercalifragilisticexpialidocious");
-
-            hgAssert(hgSetHas(&set, "a"));
-            hgAssert(hgSetHas(&set, "b"));
-            hgAssert(hgSetHas(&set, "ab"));
-            hgAssert(hgSetHas(&set, "supercalifragilisticexpialidocious"));
-
-            hgSetRemove(&set, "a");
-            hgSetRemove(&set, "b");
-            hgSetRemove(&set, "ab");
-            hgSetRemove(&set, "supercalifragilisticexpialidocious");
-
-            hgAssert(!hgSetHas(&set, "a"));
-            hgAssert(!hgSetHas(&set, "b"));
-            hgAssert(!hgSetHas(&set, "ab"));
-            hgAssert(!hgSetHas(&set, "supercalifragilisticexpialidocious"));
-        }
-    }
-
-    // HgMap
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        constexpr u32 count = 128;
-
-        HgMap<u32, u32> map = hgMapTemp<u32, u32>(arena, count);
-
-        for (u32 i = 0; i < 3; ++i)
-        {
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 0) == nullptr);
-            hgAssert(hgMapGet(&map, 1) == nullptr);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 42) == nullptr);
-            hgAssert(hgMapGet(&map, 100000) == nullptr);
-
-            hgMapAdd(&map, 1, 1);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 1) != nullptr);
-            hgAssert(*hgMapGet(&map, 1) == 1);
-
-            hgMapRemove(&map, 1);
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 1) == nullptr);
-
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
-
-            hgMapAdd(&map, 12, 42);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
-
-            hgMapAdd(&map, 12 + count, 100);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
-
-            hgMapAdd(&map, 12 + count * 2, 200);
-            hgAssert(map.count == 3);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
-            hgAssert(hgMapGet(&map, 12 + count * 2) != nullptr && *hgMapGet(&map, 12 + count * 2) == 200);
-
-            hgMapRemove(&map, 12);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
-
-            hgMapAdd(&map, 42, 12);
-            hgAssert(map.count == 3);
-            hgAssert(hgMapGet(&map, 42) != nullptr && *hgMapGet(&map, 42) == 12);
-
-            hgMapRemove(&map, 12 + count);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
-
-            hgMapRemove(&map, 42);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 42) == nullptr);
-
-            hgMapRemove(&map, 12 + count * 2);
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count * 2) == nullptr);
-
-            hgMapReset(&map);
-        }
-
-        {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
-            using StrHash = u64;
-
-            HgMap<StrHash, u32> map = hgMapTemp<StrHash, u32>(arena, 128);
-
-            StrHash a = hgHash("a");
-            StrHash b = hgHash("b");
-            StrHash ab = hgHash("ab");
-            StrHash scf = hgHash("supercalifragilisticexpialidocious");
-
-            hgAssert(hgMapGet(&map, a) == nullptr);
-            hgAssert(hgMapGet(&map, b) == nullptr);
-            hgAssert(hgMapGet(&map, ab) == nullptr);
-            hgAssert(hgMapGet(&map, scf) == nullptr);
-
-            hgMapAdd(&map, a, 1);
-            hgMapAdd(&map, b, 2);
-            hgMapAdd(&map, ab, 3);
-            hgMapAdd(&map, scf, 4);
-
-            hgAssert(hgMapGet(&map, a) != nullptr && *hgMapGet(&map, a) == 1);
-            hgAssert(hgMapGet(&map, b) != nullptr && *hgMapGet(&map, b) == 2);
-            hgAssert(hgMapGet(&map, ab) != nullptr && *hgMapGet(&map, ab) == 3);
-            hgAssert(hgMapGet(&map, scf) != nullptr && *hgMapGet(&map, scf) == 4);
-
-            hgMapRemove(&map, a);
-            hgMapRemove(&map, b);
-            hgMapRemove(&map, ab);
-            hgMapRemove(&map, scf);
-
-            hgAssert(hgMapGet(&map, a) == nullptr);
-            hgAssert(hgMapGet(&map, b) == nullptr);
-            hgAssert(hgMapGet(&map, ab) == nullptr);
-            hgAssert(hgMapGet(&map, scf) == nullptr);
-        }
-
-        {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
-            HgMap<const char*, u32> map = hgMapTemp<const char*, u32>(arena, 128);
-
-            const char* a = "a";
-            const char* b = "b";
-            const char* ab = "ab";
-            const char* scf = "supercalifragilisticexpialidocious";
-
-            hgAssert(hgMapGet(&map, a) == nullptr);
-            hgAssert(hgMapGet(&map, b) == nullptr);
-            hgAssert(hgMapGet(&map, ab) == nullptr);
-            hgAssert(hgMapGet(&map, scf) == nullptr);
-
-            hgMapAdd(&map, a, 1);
-            hgMapAdd(&map, b, 2);
-            hgMapAdd(&map, ab, 3);
-            hgMapAdd(&map, scf, 4);
-
-            hgAssert(hgMapGet(&map, a) != nullptr && *hgMapGet(&map, a) == 1);
-            hgAssert(hgMapGet(&map, b) != nullptr && *hgMapGet(&map, b) == 2);
-            hgAssert(hgMapGet(&map, ab) != nullptr && *hgMapGet(&map, ab) == 3);
-            hgAssert(hgMapGet(&map, scf) != nullptr && *hgMapGet(&map, scf) == 4);
-
-            hgMapRemove(&map, a);
-            hgMapRemove(&map, b);
-            hgMapRemove(&map, ab);
-            hgMapRemove(&map, scf);
-
-            hgAssert(hgMapGet(&map, a) == nullptr);
-            hgAssert(hgMapGet(&map, b) == nullptr);
-            hgAssert(hgMapGet(&map, ab) == nullptr);
-            hgAssert(hgMapGet(&map, scf) == nullptr);
-        }
-
-        {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
-            HgMap<HgStringBuilder, u32> map = hgMapTemp<HgStringBuilder, u32>(arena, 128);
-
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
-
-            hgMapAdd(&map, hgStringCopy(arena, "a"), 1);
-            hgMapAdd(&map, hgStringCopy(arena, "b"), 2);
-            hgMapAdd(&map, hgStringCopy(arena, "ab"), 3);
-            hgMapAdd(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious"), 4);
-
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) != nullptr);
-            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "a")) == 1);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) != nullptr);
-            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "b")) == 2);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) != nullptr);
-            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "ab")) == 3);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) != nullptr);
-            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == 4);
-
-            hgMapRemove(&map, hgStringCopy(arena, "a"));
-            hgMapRemove(&map, hgStringCopy(arena, "b"));
-            hgMapRemove(&map, hgStringCopy(arena, "ab"));
-            hgMapRemove(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
-
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
-        }
-
-        {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
-            HgMap<HgStringView, u32> map = hgMapTemp<HgStringView, u32>(arena, 6);
-
-            hgAssert(hgMapGet(&map, "a") == nullptr);
-            hgAssert(hgMapGet(&map, "b") == nullptr);
-            hgAssert(hgMapGet(&map, "ab") == nullptr);
-            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
-
-            hgMapAdd(&map, "a", 1);
-            hgMapAdd(&map, "b", 2);
-            hgMapAdd(&map, "ab", 3);
-            hgMapAdd(&map, "supercalifragilisticexpialidocious", 4);
-
-            hgAssert(hgMapGet(&map, "a") != nullptr);
-            hgAssert(*hgMapGet(&map, "a") == 1);
-            hgAssert(hgMapGet(&map, "b") != nullptr);
-            hgAssert(*hgMapGet(&map, "b") == 2);
-            hgAssert(hgMapGet(&map, "ab") != nullptr);
-            hgAssert(*hgMapGet(&map, "ab") == 3);
-            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") != nullptr);
-            hgAssert(*hgMapGet(&map, "supercalifragilisticexpialidocious") == 4);
-
-            hgMapRemove(&map, "a");
-            hgMapRemove(&map, "b");
-            hgMapRemove(&map, "ab");
-            hgMapRemove(&map, "supercalifragilisticexpialidocious");
-
-            hgAssert(hgMapGet(&map, "a") == nullptr);
-            hgAssert(hgMapGet(&map, "b") == nullptr);
-            hgAssert(hgMapGet(&map, "ab") == nullptr);
-            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
-        }
-    }
-
-    // HgHandle and HgPool
-    {
-        HgHandlePool pool = hgHandlesCreate();
-        hgDefer(hgHandlesDestroy(&pool));
-
-        HgHandle u1 = hgHandlesAlloc(&pool);
-        hgAssert(hgHandlesAlive(&pool, u1));
-        hgAssert(u1.id == 1);
-
-        HgHandle u2 = hgHandlesAlloc(&pool);
-        hgAssert(hgHandlesAlive(&pool, u2));
-        hgAssert(u2.id == 2);
-
-        hgHandlesFree(&pool, u1);
-        hgAssert(!hgHandlesAlive(&pool, u1));
-
-        HgHandle u12 = hgHandlesAlloc(&pool);
-        hgAssert(hgHandlesAlive(&pool, u12));
-        hgAssert(!hgHandlesAlive(&pool, u1));
-        hgAssert(u12.id != 1);
-        hgAssert(hgHandleIdx(u12) == 1);
-
-        hgHandlesReset(&pool);
-        hgAssert(!hgHandlesAlive(&pool, u1));
-        hgAssert(!hgHandlesAlive(&pool, u2));
-        hgAssert(!hgHandlesAlive(&pool, u12));
     }
 
     // HgString
@@ -964,60 +501,6 @@ void hgTest()
         hgAssert(c.count == 1000000);
     }
 
-    // HgMat
-    {
-        HgMat2 mat{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{1.0f, 0.0f},
-        };
-        HgVec2 vec{1.0f, 1.0f};
-
-        HgMat2 identity{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{0.0f, 1.0f},
-        };
-        hgAssert(identity * mat == mat);
-        hgAssert(identity * vec == vec);
-
-        HgMat2 matRotated{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{0.0f, 1.0f},
-        };
-        HgVec2 vecRotated{-1.0f, 1.0f};
-
-        HgMat2 rotation{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{-1.0f, 0.0f},
-        };
-        hgAssert(rotation * mat == matRotated);
-        hgAssert(rotation * vec == vecRotated);
-
-        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
-        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
-        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
-        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
-    }
-
-    // HgQuat
-    {
-        HgMat3 identityMat = HgMat3{1.0f};
-        HgVec3 upVec{0.0f, -1.0f, 0.0f};
-        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
-
-        HgVec3 rotatedVec = hgVecRotate(rotation, upVec);
-        HgMat3 rotatedMat = hgMatRotate(rotation, identityMat);
-
-        HgVec3 matRotatedVec = rotatedMat * upVec;
-
-        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
-                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
-                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
-
-        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
-                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
-                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
-    }
-
     // Serialization
     {
         struct PlainOldData {
@@ -1028,13 +511,14 @@ void hgTest()
             u32 e[3];
         };
 
-        PlainOldData pod = {
-            -12,
-            42,
-            2.5f,
-            true,
-            {2, 4, 6},
-        };
+        PlainOldData pod{};
+        pod.a = -12,
+        pod.b = 42,
+        pod.c = 2.5f,
+        pod.d = true,
+        pod.e[0] = {2};
+        pod.e[1] = {4};
+        pod.e[2] = {6};
 
         {
             HgArena* arena = hgScratch();
@@ -1094,14 +578,15 @@ void hgTest()
             HgStringView f;
         };
 
-        Data data = {
-            -12,
-            42,
-            2.5f,
-            true,
-            {2, 4, 6},
-            "hello"
-        };
+        Data data{};
+        data.a = -12,
+        data.b = 42,
+        data.c = 2.5f,
+        data.d = true,
+        data.e[0] = {2};
+        data.e[1] = {4};
+        data.e[2] = {6};
+        data.f = "hello";
 
         auto serializeData = [](HgArena* arena, HgSerializer* s, HgStringView name, Data* val)
         {
@@ -1911,109 +1396,484 @@ void hgTest()
         }
     }
 
-    // HgAssetManager and HgBinary
+    // HgArray : TODO
     {
+    }
+
+    // HgArrayAny : TODO
+    {
+    }
+
+    // HgQueue : TODO
+    {
+    }
+
+    // HgSet
+    {
+        HgArena* arena = hgScratch();
+        hgArenaScope(arena);
+
+        constexpr u32 count = 128;
+
+        HgSet<u32> set = hgSetTemp<u32>(arena, count);
+
+        for (u32 i = 0; i < 3; ++i)
         {
-            HgBinaryAsset* bin1 = hgAssetCreate<HgBinary>();
-            hgAssert(bin1 != nullptr);
-            hgAssert(bin1->path == "");
+            hgAssert(set.count == 0);
+            hgAssert(!hgSetHas(&set, 0));
+            hgAssert(!hgSetHas(&set, 1));
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 42));
+            hgAssert(!hgSetHas(&set, 100000));
 
-            HgBinaryAsset* bin2 = hgAssetCreate<HgBinary>();
-            hgAssert(bin2 != nullptr);
-            hgAssert(bin2->path == "");
-            hgAssert(bin2 != bin1);
+            hgSetAdd(&set, 1);
+            hgAssert(set.count == 1);
+            hgAssert(hgSetHas(&set, 1));
 
-            hgAssetUnload(bin1);
-            hgAssetUnload(bin2);
+            hgSetRemove(&set, 1);
+            hgAssert(set.count == 0);
+            hgAssert(!hgSetHas(&set, 1));
+
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 12 + count));
+
+            hgSetAdd(&set, 12);
+            hgAssert(set.count == 1);
+            hgAssert(hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 12 + count));
+
+            hgSetAdd(&set, 12 + count);
+            hgAssert(set.count == 2);
+            hgAssert(hgSetHas(&set, 12));
+            hgAssert(hgSetHas(&set, 12 + count));
+
+            hgSetAdd(&set, 12 + count * 2);
+            hgAssert(set.count == 3);
+            hgAssert(hgSetHas(&set, 12));
+            hgAssert(hgSetHas(&set, 12 + count));
+            hgAssert(hgSetHas(&set, 12 + count * 2));
+
+            hgSetRemove(&set, 12);
+            hgAssert(set.count == 2);
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(hgSetHas(&set, 12 + count));
+
+            hgSetAdd(&set, 42);
+            hgAssert(set.count == 3);
+            hgAssert(hgSetHas(&set, 42));
+
+            hgSetRemove(&set, 12 + count);
+            hgAssert(set.count == 2);
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 12 + count));
+
+            hgSetRemove(&set, 42);
+            hgAssert(set.count == 1);
+            hgAssert(!hgSetHas(&set, 42));
+
+            hgSetRemove(&set, 12 + count * 2);
+            hgAssert(set.count == 0);
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 12 + count));
+            hgAssert(!hgSetHas(&set, 12 + count * 2));
+
+            hgSetReset(&set);
         }
 
         {
-            HgBinaryAsset* bin = hgAssetLoad<HgBinary>("file_does_not_exist.bin");
-            hgAssert(bin->data.data == nullptr);
-            hgAssert(bin->data.size == 0);
-            hgAssetUnload(bin);
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            using StrHash = u64;
+
+            HgSet<StrHash> set = hgSetTemp<StrHash>(arena, 128);
+
+            StrHash a = hgHash("a");
+            StrHash b = hgHash("b");
+            StrHash ab = hgHash("ab");
+            StrHash scf = hgHash("supercalifragilisticexpialidocious");
+
+            hgAssert(!hgSetHas(&set, a));
+            hgAssert(!hgSetHas(&set, b));
+            hgAssert(!hgSetHas(&set, ab));
+            hgAssert(!hgSetHas(&set, scf));
+
+            hgSetAdd(&set, a);
+            hgSetAdd(&set, b);
+            hgSetAdd(&set, ab);
+            hgSetAdd(&set, scf);
+
+            hgAssert(hgSetHas(&set, a));
+            hgAssert(hgSetHas(&set, b));
+            hgAssert(hgSetHas(&set, ab));
+            hgAssert(hgSetHas(&set, scf));
+
+            hgSetRemove(&set, a);
+            hgSetRemove(&set, b);
+            hgSetRemove(&set, ab);
+            hgSetRemove(&set, scf);
+
+            hgAssert(!hgSetHas(&set, a));
+            hgAssert(!hgSetHas(&set, b));
+            hgAssert(!hgSetHas(&set, ab));
+            hgAssert(!hgSetHas(&set, scf));
         }
 
-        u32 saveData[]{12, 42, 100, 128};
-
-        HgFence* fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
         {
-            HgBinary bin{saveData, sizeof(saveData)};
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
 
-            hgBinaryStore(&bin, "dir/does/not/exist.bin", fence);
-            hgAssert(hgFenceWait(fence, 2.0));
+            HgSet<const char*> set = hgSetTemp<const char*>(arena, 128);
 
-            FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
-            hgAssert(fileHandle == nullptr);
+            const char* a = "a";
+            const char* b = "b";
+            const char* ab = "ab";
+            const char* scf = "supercalifragilisticexpialidocious";
+
+            hgAssert(!hgSetHas(&set, a));
+            hgAssert(!hgSetHas(&set, b));
+            hgAssert(!hgSetHas(&set, ab));
+            hgAssert(!hgSetHas(&set, scf));
+
+            hgSetAdd(&set, a);
+            hgSetAdd(&set, b);
+            hgSetAdd(&set, ab);
+            hgSetAdd(&set, scf);
+
+            hgAssert(hgSetHas(&set, a));
+            hgAssert(hgSetHas(&set, b));
+            hgAssert(hgSetHas(&set, ab));
+            hgAssert(hgSetHas(&set, scf));
+
+            hgSetRemove(&set, a);
+            hgSetRemove(&set, b);
+            hgSetRemove(&set, ab);
+            hgSetRemove(&set, scf);
+
+            hgAssert(!hgSetHas(&set, a));
+            hgAssert(!hgSetHas(&set, b));
+            hgAssert(!hgSetHas(&set, ab));
+            hgAssert(!hgSetHas(&set, scf));
         }
 
         {
-            HgBinary bin{saveData, sizeof(saveData)};
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
 
-            HgStringView filePath = "hg_test_dir/file_bin_test.bin";
+            HgSet<HgStringBuilder> set = hgSetTemp<HgStringBuilder>(arena, 128);
 
-            hgBinaryStore(&bin, filePath, fence);
-            hgAssert(hgFenceWait(fence, 2.0));
+            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "a")));
+            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "b")));
+            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "ab")));
+            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
 
-            HgBinaryAsset* newBin = hgAssetLoad<HgBinary>(filePath);
+            hgSetAdd(&set, hgStringCopy(arena, "a"));
+            hgSetAdd(&set, hgStringCopy(arena, "b"));
+            hgSetAdd(&set, hgStringCopy(arena, "ab"));
+            hgSetAdd(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
 
-            hgAssert(newBin->data.data != nullptr);
-            hgAssert(newBin->data.data != saveData);
-            hgAssert(newBin->data.size == sizeof(saveData));
-            hgAssert(hgMemEqual(saveData, newBin->data.data, newBin->data.size));
+            hgAssert(hgSetHas(&set, hgStringCopy(arena, "a")));
+            hgAssert(hgSetHas(&set, hgStringCopy(arena, "b")));
+            hgAssert(hgSetHas(&set, hgStringCopy(arena, "ab")));
+            hgAssert(hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
 
-            HgBinaryAsset* newBin2 = hgAssetLoad<HgBinary>(filePath);
-            hgAssert(newBin2 == newBin);
+            hgSetRemove(&set, hgStringCopy(arena, "a"));
+            hgSetRemove(&set, hgStringCopy(arena, "b"));
+            hgSetRemove(&set, hgStringCopy(arena, "ab"));
+            hgSetRemove(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
 
-            hgAssetUnload(newBin);
-            hgAssetUnload(newBin2);
+            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "a")));
+            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "b")));
+            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "ab")));
+            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgSet<HgStringView> set = hgSetTemp<HgStringView>(arena, 128);
+
+            hgAssert(!hgSetHas(&set, "a"));
+            hgAssert(!hgSetHas(&set, "b"));
+            hgAssert(!hgSetHas(&set, "ab"));
+            hgAssert(!hgSetHas(&set, "supercalifragilisticexpialidocious"));
+
+            hgSetAdd(&set, "a");
+            hgSetAdd(&set, "b");
+            hgSetAdd(&set, "ab");
+            hgSetAdd(&set, "supercalifragilisticexpialidocious");
+
+            hgAssert(hgSetHas(&set, "a"));
+            hgAssert(hgSetHas(&set, "b"));
+            hgAssert(hgSetHas(&set, "ab"));
+            hgAssert(hgSetHas(&set, "supercalifragilisticexpialidocious"));
+
+            hgSetRemove(&set, "a");
+            hgSetRemove(&set, "b");
+            hgSetRemove(&set, "ab");
+            hgSetRemove(&set, "supercalifragilisticexpialidocious");
+
+            hgAssert(!hgSetHas(&set, "a"));
+            hgAssert(!hgSetHas(&set, "b"));
+            hgAssert(!hgSetHas(&set, "ab"));
+            hgAssert(!hgSetHas(&set, "supercalifragilisticexpialidocious"));
         }
     }
 
-    // HgImage
+    // HgMap
     {
-        struct color {
-            u8 r, g, b, a;
+        HgArena* arena = hgScratch();
+        hgArenaScope(arena);
 
-            operator u32() { return *(u32*)this; }
-        };
+        constexpr u32 count = 128;
 
-        u32 red =    color{0xff, 0x00, 0x00, 0xff};
-        u32 green =  color{0x00, 0xff, 0x00, 0xff};
-        u32 blue =   color{0x00, 0x00, 0xff, 0xff};
-        u32 yellow = color{0xff, 0xff, 0x00, 0xff};
+        HgMap<u32, u32> map = hgMapTemp<u32, u32>(arena, count);
 
-        u32 saveData[2][2]{
-            {red, green},
-            {blue, yellow},
-        };
-
-        HgStringView path = "hg_test_dir/image_test.png";
-
-        HgTexture testImage{};
-        testImage.width = 2;
-        testImage.height = 2;
-        testImage.depth = 1;
-        testImage.format = HgFormat_r8g8b8a8_srgb;
-        testImage.pixels = saveData;
-
-        HgFence* fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
+        for (u32 i = 0; i < 3; ++i)
         {
-            hgTextureStorePng(&testImage, path, fence);
-            hgAssert(hgFenceWait(fence, 2.0));
+            hgAssert(map.count == 0);
+            hgAssert(hgMapGet(&map, 0) == nullptr);
+            hgAssert(hgMapGet(&map, 1) == nullptr);
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 42) == nullptr);
+            hgAssert(hgMapGet(&map, 100000) == nullptr);
 
-            HgTextureAsset* image = hgAssetLoad<HgTexture>(path);
-            hgDefer(hgAssetUnload(image));
-            hgAssert(image->data.width == testImage.width);
-            hgAssert(image->data.height == testImage.height);
-            hgAssert(hgMemEqual(image->data.pixels, saveData, sizeof(saveData)));
+            hgMapAdd(&map, 1, 1);
+            hgAssert(map.count == 1);
+            hgAssert(hgMapGet(&map, 1) != nullptr);
+            hgAssert(*hgMapGet(&map, 1) == 1);
+
+            hgMapRemove(&map, 1);
+            hgAssert(map.count == 0);
+            hgAssert(hgMapGet(&map, 1) == nullptr);
+
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+
+            hgMapAdd(&map, 12, 42);
+            hgAssert(map.count == 1);
+            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+
+            hgMapAdd(&map, 12 + count, 100);
+            hgAssert(map.count == 2);
+            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+
+            hgMapAdd(&map, 12 + count * 2, 200);
+            hgAssert(map.count == 3);
+            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+            hgAssert(hgMapGet(&map, 12 + count * 2) != nullptr && *hgMapGet(&map, 12 + count * 2) == 200);
+
+            hgMapRemove(&map, 12);
+            hgAssert(map.count == 2);
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+
+            hgMapAdd(&map, 42, 12);
+            hgAssert(map.count == 3);
+            hgAssert(hgMapGet(&map, 42) != nullptr && *hgMapGet(&map, 42) == 12);
+
+            hgMapRemove(&map, 12 + count);
+            hgAssert(map.count == 2);
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+
+            hgMapRemove(&map, 42);
+            hgAssert(map.count == 1);
+            hgAssert(hgMapGet(&map, 42) == nullptr);
+
+            hgMapRemove(&map, 12 + count * 2);
+            hgAssert(map.count == 0);
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count * 2) == nullptr);
+
+            hgMapReset(&map);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            using StrHash = u64;
+
+            HgMap<StrHash, u32> map = hgMapTemp<StrHash, u32>(arena, 128);
+
+            StrHash a = hgHash("a");
+            StrHash b = hgHash("b");
+            StrHash ab = hgHash("ab");
+            StrHash scf = hgHash("supercalifragilisticexpialidocious");
+
+            hgAssert(hgMapGet(&map, a) == nullptr);
+            hgAssert(hgMapGet(&map, b) == nullptr);
+            hgAssert(hgMapGet(&map, ab) == nullptr);
+            hgAssert(hgMapGet(&map, scf) == nullptr);
+
+            hgMapAdd(&map, a, 1);
+            hgMapAdd(&map, b, 2);
+            hgMapAdd(&map, ab, 3);
+            hgMapAdd(&map, scf, 4);
+
+            hgAssert(hgMapGet(&map, a) != nullptr && *hgMapGet(&map, a) == 1);
+            hgAssert(hgMapGet(&map, b) != nullptr && *hgMapGet(&map, b) == 2);
+            hgAssert(hgMapGet(&map, ab) != nullptr && *hgMapGet(&map, ab) == 3);
+            hgAssert(hgMapGet(&map, scf) != nullptr && *hgMapGet(&map, scf) == 4);
+
+            hgMapRemove(&map, a);
+            hgMapRemove(&map, b);
+            hgMapRemove(&map, ab);
+            hgMapRemove(&map, scf);
+
+            hgAssert(hgMapGet(&map, a) == nullptr);
+            hgAssert(hgMapGet(&map, b) == nullptr);
+            hgAssert(hgMapGet(&map, ab) == nullptr);
+            hgAssert(hgMapGet(&map, scf) == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgMap<const char*, u32> map = hgMapTemp<const char*, u32>(arena, 128);
+
+            const char* a = "a";
+            const char* b = "b";
+            const char* ab = "ab";
+            const char* scf = "supercalifragilisticexpialidocious";
+
+            hgAssert(hgMapGet(&map, a) == nullptr);
+            hgAssert(hgMapGet(&map, b) == nullptr);
+            hgAssert(hgMapGet(&map, ab) == nullptr);
+            hgAssert(hgMapGet(&map, scf) == nullptr);
+
+            hgMapAdd(&map, a, 1);
+            hgMapAdd(&map, b, 2);
+            hgMapAdd(&map, ab, 3);
+            hgMapAdd(&map, scf, 4);
+
+            hgAssert(hgMapGet(&map, a) != nullptr && *hgMapGet(&map, a) == 1);
+            hgAssert(hgMapGet(&map, b) != nullptr && *hgMapGet(&map, b) == 2);
+            hgAssert(hgMapGet(&map, ab) != nullptr && *hgMapGet(&map, ab) == 3);
+            hgAssert(hgMapGet(&map, scf) != nullptr && *hgMapGet(&map, scf) == 4);
+
+            hgMapRemove(&map, a);
+            hgMapRemove(&map, b);
+            hgMapRemove(&map, ab);
+            hgMapRemove(&map, scf);
+
+            hgAssert(hgMapGet(&map, a) == nullptr);
+            hgAssert(hgMapGet(&map, b) == nullptr);
+            hgAssert(hgMapGet(&map, ab) == nullptr);
+            hgAssert(hgMapGet(&map, scf) == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgMap<HgStringBuilder, u32> map = hgMapTemp<HgStringBuilder, u32>(arena, 128);
+
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) == nullptr);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) == nullptr);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) == nullptr);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
+
+            hgMapAdd(&map, hgStringCopy(arena, "a"), 1);
+            hgMapAdd(&map, hgStringCopy(arena, "b"), 2);
+            hgMapAdd(&map, hgStringCopy(arena, "ab"), 3);
+            hgMapAdd(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious"), 4);
+
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) != nullptr);
+            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "a")) == 1);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) != nullptr);
+            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "b")) == 2);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) != nullptr);
+            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "ab")) == 3);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) != nullptr);
+            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == 4);
+
+            hgMapRemove(&map, hgStringCopy(arena, "a"));
+            hgMapRemove(&map, hgStringCopy(arena, "b"));
+            hgMapRemove(&map, hgStringCopy(arena, "ab"));
+            hgMapRemove(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
+
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) == nullptr);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) == nullptr);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) == nullptr);
+            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgMap<HgStringView, u32> map = hgMapTemp<HgStringView, u32>(arena, 6);
+
+            hgAssert(hgMapGet(&map, "a") == nullptr);
+            hgAssert(hgMapGet(&map, "b") == nullptr);
+            hgAssert(hgMapGet(&map, "ab") == nullptr);
+            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
+
+            hgMapAdd(&map, "a", 1);
+            hgMapAdd(&map, "b", 2);
+            hgMapAdd(&map, "ab", 3);
+            hgMapAdd(&map, "supercalifragilisticexpialidocious", 4);
+
+            hgAssert(hgMapGet(&map, "a") != nullptr);
+            hgAssert(*hgMapGet(&map, "a") == 1);
+            hgAssert(hgMapGet(&map, "b") != nullptr);
+            hgAssert(*hgMapGet(&map, "b") == 2);
+            hgAssert(hgMapGet(&map, "ab") != nullptr);
+            hgAssert(*hgMapGet(&map, "ab") == 3);
+            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") != nullptr);
+            hgAssert(*hgMapGet(&map, "supercalifragilisticexpialidocious") == 4);
+
+            hgMapRemove(&map, "a");
+            hgMapRemove(&map, "b");
+            hgMapRemove(&map, "ab");
+            hgMapRemove(&map, "supercalifragilisticexpialidocious");
+
+            hgAssert(hgMapGet(&map, "a") == nullptr);
+            hgAssert(hgMapGet(&map, "b") == nullptr);
+            hgAssert(hgMapGet(&map, "ab") == nullptr);
+            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
         }
     }
 
-    hgWarn("HgMesh test : TODO\n");
+    // HgPool : TODO
+    {
+    }
+
+    // HgHandlePool
+    {
+        HgHandlePool pool = hgHandlePoolCreate();
+        hgDefer(hgHandlePoolDestroy(&pool));
+
+        HgHandle u1 = hgHandlePoolAlloc(&pool);
+        hgAssert(hgHandlePoolAlive(&pool, u1));
+        hgAssert(u1.id == 1);
+
+        HgHandle u2 = hgHandlePoolAlloc(&pool);
+        hgAssert(hgHandlePoolAlive(&pool, u2));
+        hgAssert(u2.id == 2);
+
+        hgHandlePoolFree(&pool, u1);
+        hgAssert(!hgHandlePoolAlive(&pool, u1));
+
+        HgHandle u12 = hgHandlePoolAlloc(&pool);
+        hgAssert(hgHandlePoolAlive(&pool, u12));
+        hgAssert(!hgHandlePoolAlive(&pool, u1));
+        hgAssert(u12.id != 1);
+        hgAssert(hgHandleIdx(u12) == 1);
+
+        hgHandlePoolReset(&pool);
+        hgAssert(!hgHandlePoolAlive(&pool, u1));
+        hgAssert(!hgHandlePoolAlive(&pool, u2));
+        hgAssert(!hgHandlePoolAlive(&pool, u12));
+    }
 
     // HgEcs basics
     {
@@ -2596,6 +2456,164 @@ void hgTest()
             hgEcsDespawn(&ecs, b);
         }
     }
+
+    // HgAssetManager and HgBinary
+    {
+        {
+            HgBinaryAsset* bin1 = hgAssetCreate<HgBinary>();
+            hgAssert(bin1 != nullptr);
+            hgAssert(bin1->path == "");
+
+            HgBinaryAsset* bin2 = hgAssetCreate<HgBinary>();
+            hgAssert(bin2 != nullptr);
+            hgAssert(bin2->path == "");
+            hgAssert(bin2 != bin1);
+
+            hgAssetUnload(bin1);
+            hgAssetUnload(bin2);
+        }
+
+        {
+            HgBinaryAsset* bin = hgAssetLoad<HgBinary>("file_does_not_exist.bin");
+            hgAssert(bin->data.data == nullptr);
+            hgAssert(bin->data.size == 0);
+            hgAssetUnload(bin);
+        }
+
+        u32 saveData[]{12, 42, 100, 128};
+
+        HgFence* fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
+
+        {
+            HgBinary bin{saveData, sizeof(saveData)};
+
+            hgBinaryStore(&bin, "dir/does/not/exist.bin", fence);
+            hgAssert(hgFenceWait(fence, 2.0));
+
+            FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
+            hgAssert(fileHandle == nullptr);
+        }
+
+        {
+            HgBinary bin{saveData, sizeof(saveData)};
+
+            HgStringView filePath = "hg_test_dir/file_bin_test.bin";
+
+            hgBinaryStore(&bin, filePath, fence);
+            hgAssert(hgFenceWait(fence, 2.0));
+
+            HgBinaryAsset* newBin = hgAssetLoad<HgBinary>(filePath);
+
+            hgAssert(newBin->data.data != nullptr);
+            hgAssert(newBin->data.data != saveData);
+            hgAssert(newBin->data.size == sizeof(saveData));
+            hgAssert(hgMemEqual(saveData, newBin->data.data, newBin->data.size));
+
+            HgBinaryAsset* newBin2 = hgAssetLoad<HgBinary>(filePath);
+            hgAssert(newBin2 == newBin);
+
+            hgAssetUnload(newBin);
+            hgAssetUnload(newBin2);
+        }
+    }
+
+    // HgMat
+    {
+        HgMat2 mat{
+            HgVec2{1.0f, 0.0f},
+            HgVec2{1.0f, 0.0f},
+        };
+        HgVec2 vec{1.0f, 1.0f};
+
+        HgMat2 identity{
+            HgVec2{1.0f, 0.0f},
+            HgVec2{0.0f, 1.0f},
+        };
+        hgAssert(identity * mat == mat);
+        hgAssert(identity * vec == vec);
+
+        HgMat2 matRotated{
+            HgVec2{0.0f, 1.0f},
+            HgVec2{0.0f, 1.0f},
+        };
+        HgVec2 vecRotated{-1.0f, 1.0f};
+
+        HgMat2 rotation{
+            HgVec2{0.0f, 1.0f},
+            HgVec2{-1.0f, 0.0f},
+        };
+        hgAssert(rotation * mat == matRotated);
+        hgAssert(rotation * vec == vecRotated);
+
+        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
+        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
+        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
+        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
+    }
+
+    // HgQuat
+    {
+        HgMat3 identityMat = HgMat3{1.0f};
+        HgVec3 upVec{0.0f, -1.0f, 0.0f};
+        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
+
+        HgVec3 rotatedVec = hgVecRotate(rotation, upVec);
+        HgMat3 rotatedMat = hgMatRotate(rotation, identityMat);
+
+        HgVec3 matRotatedVec = rotatedMat * upVec;
+
+        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
+
+        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
+    }
+
+    // HgImage
+    {
+        struct color {
+            u8 r, g, b, a;
+
+            operator u32() { return *(u32*)this; }
+        };
+
+        u32 red =    color{0xff, 0x00, 0x00, 0xff};
+        u32 green =  color{0x00, 0xff, 0x00, 0xff};
+        u32 blue =   color{0x00, 0x00, 0xff, 0xff};
+        u32 yellow = color{0xff, 0xff, 0x00, 0xff};
+
+        u32 saveData[2][2]{
+            {red, green},
+            {blue, yellow},
+        };
+
+        HgStringView path = "hg_test_dir/image_test.png";
+
+        HgTexture testImage{};
+        testImage.width = 2;
+        testImage.height = 2;
+        testImage.depth = 1;
+        testImage.format = HgFormat_r8g8b8a8_srgb;
+        testImage.pixels = saveData;
+
+        HgFence* fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
+        {
+            hgTextureStorePng(&testImage, path, fence);
+            hgAssert(hgFenceWait(fence, 2.0));
+
+            HgTextureAsset* image = hgAssetLoad<HgTexture>(path);
+            hgDefer(hgAssetUnload(image));
+            hgAssert(image->data.width == testImage.width);
+            hgAssert(image->data.height == testImage.height);
+            hgAssert(hgMemEqual(image->data.pixels, saveData, sizeof(saveData)));
+        }
+    }
+
+    hgWarn("HgMesh test : TODO\n");
 
     printf("HurdyGurdy: Tests Complete in %fms\n", hgClockTick(&timer) * 1000.0f);
 }
