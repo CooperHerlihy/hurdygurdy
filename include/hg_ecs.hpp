@@ -106,9 +106,9 @@ union HgEntitySerializer {
  * The default serialization for a component, should be overridden
  */
 template<typename T>
-void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, T* val, HgEntitySerializer* entities)
+void hgEcsSerializeImpl(HgSerializer* s, T* val, HgEntitySerializer* entities)
 {
-    hgSerialize(arena, s, name, val);
+    hgSerializeImpl(s, val);
     (void)entities;
 }
 
@@ -140,13 +140,11 @@ struct HgComponent {
      * The function called on serializing the component
      *
      * Parameters
-     * - arena The arena to allocate from
      * - s The serializer
-     * - name The name of the field
      * - The value to serialize
      * - ecs The ecs serializer data, if needed
      */
-    void (*serialize)(HgArena* arena, HgSerializer* s, HgStringView name, void* val, HgEntitySerializer* ecs);
+    void (*serialize)(HgSerializer* s, void* val, HgEntitySerializer* ecs);
 };
 
 /**
@@ -182,12 +180,22 @@ void hgEcsReset(HgEcs* ecs);
  * HgEcs serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs);
+void hgSerializeImpl(HgSerializer* s, HgEcs* ecs);
 
 /**
  * HgEntity ecs serialization
  */
-void hgEntitySerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEntity* val, HgEntitySerializer* ecs);
+void hgEntitySerializeImpl(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs);
+
+/**
+ * Serialize an entity in an element
+ */
+void hgEntitySerializeElement(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs);
+
+/**
+ * Serialize an entity in a field
+ */
+void hgEntitySerializeField(HgSerializer* s, HgStringView name, HgEntity* val, HgEntitySerializer* ecs);
 
 /**
  * The config to register a component
@@ -214,7 +222,7 @@ struct HgEcsRegisterComponent {
     /**
      * The function called on serializing the component
      */
-    void (*serialize)(HgArena* arena, HgSerializer* s, HgStringView name, void* val, HgEntitySerializer* ecs);
+    void (*serialize)(HgSerializer* s, void* val, HgEntitySerializer* ecs);
 };
 
 /**
@@ -237,13 +245,11 @@ void hgEcsRegisterComponent(HgEcs* ecs, HgEcsRegisterComponent* config);
             hgEcsDtor<T>((T*)component); \
         }; \
         registerComponent_##T.serialize = []( \
-            HgArena* arena, \
             HgSerializer* s, \
-            HgStringView name, \
             void* val, \
             HgEntitySerializer* entities) \
         { \
-            hgEcsSerialize<T>(arena, s, name, (T*)val, entities); \
+            hgEcsSerializeImpl<T>(s, (T*)val, entities); \
         }; \
         hgEcsRegisterComponent(ecs, &registerComponent_##T); \
     } while (0)
@@ -538,7 +544,7 @@ struct HgNode {
  * HgNode serialization implementation
  */
 template<>
-void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgNode* node, HgEntitySerializer* ecs);
+void hgEcsSerializeImpl(HgSerializer* s, HgNode* node, HgEntitySerializer* ecs);
 
 /**
  * Add an empty node to an entity
@@ -605,7 +611,7 @@ struct HgTransform {
  * HgTransform serialization impl
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgTransform* node);
+void hgSerializeImpl(HgSerializer* s, HgTransform* node);
 
 /**
  * Add an identity transform to an entity

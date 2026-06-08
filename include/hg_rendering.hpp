@@ -278,7 +278,7 @@ struct HgCameraPerspective {
  * HgCameraPerspective serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCameraPerspective* camera);
+void hgSerializeImpl(HgSerializer* s, HgCameraPerspective* camera);
 
 /**
  * An orthographic camera
@@ -294,7 +294,7 @@ struct HgCameraOrthographic {
  * HgCameraOrthographic serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCameraOrthographic* camera);
+void hgSerializeImpl(HgSerializer* s, HgCameraOrthographic* camera);
 
 /**
  * A camera component
@@ -322,7 +322,7 @@ struct HgCamera {
  * HgCamera serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCamera* camera);
+void hgSerializeImpl(HgSerializer* s, HgCamera* camera);
 
 /**
  * HgCamera ecs add implementation
@@ -376,7 +376,7 @@ struct HgSprite {
  * HgSprite serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSprite* sprite);
+void hgSerializeImpl(HgSerializer* s, HgSprite* sprite);
 
 /**
  * Add a sprite to an entity
@@ -437,7 +437,7 @@ struct HgSkybox {
  * HgSkybox serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSkybox* skybox);
+void hgSerializeImpl(HgSerializer* s, HgSkybox* skybox);
 
 /**
  * Add a skybox to an entity
@@ -483,7 +483,7 @@ struct HgDirLight {
  * HgDirLight serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgDirLight* light);
+void hgSerializeImpl(HgSerializer* s, HgDirLight* light);
 
 /**
  * Add a directional light to an entity
@@ -504,7 +504,7 @@ struct HgPointLight {
  * HgPointLight serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgPointLight* light);
+void hgSerializeImpl(HgSerializer* s, HgPointLight* light);
 
 /**
  * Add a point light to an entity
@@ -546,7 +546,8 @@ struct HgModel {
 /**
  * HgModel serialization
  */
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgModel* model);
+template<>
+void hgSerializeImpl(HgSerializer* s, HgModel* model);
 
 /**
  * Add a model to an entity

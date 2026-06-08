@@ -525,12 +525,12 @@ void hgTest()
             hgArenaScope(arena);
 
             HgSerializer writer = hgSerialWriter(arena);
-            hgSerialize(arena, &writer, "data", &pod);
+            hgSerializeImpl(&writer, &pod);
 
             PlainOldData podCopy{};
 
-            HgSerializer reader = hgSerialReader(writer.current);
-            hgSerialize(arena, &reader, "data", &podCopy);
+            HgSerializer reader = hgSerialReader(arena, writer.current);
+            hgSerializeImpl(&reader, &podCopy);
 
             hgAssert(hgMemEqual(&podCopy, &pod, sizeof(pod)));
         }
@@ -540,14 +540,14 @@ void hgTest()
             hgArenaScope(arena);
 
             HgSerializer writer = hgSerialWriter(arena);
-            hgSerialize(arena, &writer, "data", &pod);
+            hgSerializeImpl(&writer, &pod);
 
-            HgBinary bin = hgBinaryWriteSerial(arena, writer);
+            HgBinary bin = hgBinaryWriteSerial(arena, &writer);
 
             PlainOldData podCopy{};
 
-            HgSerializer reader = hgBinaryReadSerial(arena, bin);
-            hgSerialize(arena, &reader, "data", &podCopy);
+            HgSerializer reader = hgBinaryReadSerial(arena, &bin);
+            hgSerializeImpl(&reader, &podCopy);
 
             hgAssert(hgMemEqual(&podCopy, &pod, sizeof(pod)));
         }
@@ -588,23 +588,26 @@ void hgTest()
         data.e[2] = {6};
         data.f = "hello";
 
-        auto serializeData = [](HgArena* arena, HgSerializer* s, HgStringView name, Data* val)
+        auto serializeData = [](HgSerializer* s, Data* val)
         {
-            HgSerializer data = hgSerializeObject(arena, s, name);
+            hgSerializeObjectBegin(s);
 
-            hgSerialize(arena, &data, "a", &val->a);
-            hgSerialize(arena, &data, "b", &val->b);
-            hgSerialize(arena, &data, "c", &val->c);
-            hgSerialize(arena, &data, "d", &val->d);
+            hgSerializeField(s, "a", &val->a);
+            hgSerializeField(s, "b", &val->b);
+            hgSerializeField(s, "c", &val->c);
+            hgSerializeField(s, "d", &val->d);
 
             u32 eSize = (u32)hgArrayCount(val->e);
-            HgSerializer eArr = hgSerializeArray(arena, &data, "e", &eSize);
+            hgSerializeFieldArrayBegin(s, "e", &eSize);
             for (u32 i = 0; i < eSize; ++i)
             {
-                hgSerialize(arena, &eArr, "", &val->e[i]);
+                hgSerializeElement(s, &val->e[i]);
             }
+            hgSerializeArrayEnd(s);
 
-            hgSerialize(arena, &data, "f", &val->f);
+            hgSerializeField(s, "f", &val->f);
+
+            hgSerializeObjectEnd(s);
         };
 
         {
@@ -612,12 +615,12 @@ void hgTest()
             hgArenaScope(arena);
 
             HgSerializer writer = hgSerialWriter(arena);
-            serializeData(arena, &writer, "data", &data);
+            serializeData(&writer, &data);
 
             Data dataCopy{};
 
-            HgSerializer reader = hgSerialReader(writer.current);
-            serializeData(arena, &reader, "data", &dataCopy);
+            HgSerializer reader = hgSerialReader(arena, writer.current);
+            serializeData(&reader, &dataCopy);
 
             hgAssert(!hgMemEqual(&dataCopy, &data, sizeof(data)));
             hgAssert(data.a == dataCopy.a);
@@ -635,14 +638,14 @@ void hgTest()
             hgArenaScope(arena);
 
             HgSerializer writer = hgSerialWriter(arena);
-            serializeData(arena, &writer, "data", &data);
+            serializeData(&writer, &data);
 
-            HgBinary bin = hgBinaryWriteSerial(arena, writer);
+            HgBinary bin = hgBinaryWriteSerial(arena, &writer);
 
             Data dataCopy{};
 
-            HgSerializer reader = hgBinaryReadSerial(arena, bin);
-            serializeData(arena, &reader, "data", &dataCopy);
+            HgSerializer reader = hgBinaryReadSerial(arena, &bin);
+            serializeData(&reader, &dataCopy);
 
             hgAssert(!hgMemEqual(&dataCopy, &data, sizeof(data)));
             hgAssert(data.a == dataCopy.a);
@@ -655,48 +658,46 @@ void hgTest()
             hgAssert(data.f == dataCopy.f);
         }
 
-//         {
-//             HgArena* arena = hgScratch();
-//             hgArenaScope(arena);
-//
-//             HgSerializer writer = hgSerialWriter(arena);
-//             serializeData(arena, &writer, "data", &data);
-//
-//             HgStringView json = hgJsonWriteSerial(arena, writer);
-//
-//             hgDebug("json: %.*s\n", (int)json.length, json.chars);
-//             hgAssert(json ==
-// R"({
-//     "data" : {
-//         "a" : -12,
-//         "b" : 42,
-//         "c" : 2.500000,
-//         "d" : true,
-//         "e" : [
-//             2,
-//             4,
-//             6
-//         ],
-//         "f" : "hello"
-//     }
-// }
-// )");
-//
-//             Data dataCopy{};
-//
-//             HgSerializer reader = hgJsonReadSerial(arena, json);
-//             serializeData(arena, &reader, "data", &dataCopy);
-//
-//             hgAssert(!hgMemEqual(&dataCopy, &data, sizeof(data)));
-//             hgAssert(data.a == dataCopy.a);
-//             hgAssert(data.b == dataCopy.b);
-//             hgAssert(data.c == dataCopy.c);
-//             hgAssert(data.d == dataCopy.d);
-//             hgAssert(data.e[0] == dataCopy.e[0]);
-//             hgAssert(data.e[1] == dataCopy.e[1]);
-//             hgAssert(data.e[2] == dataCopy.e[2]);
-//             hgAssert(data.f == dataCopy.f);
-//         }
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgSerializer writer = hgSerialWriter(arena);
+            serializeData(&writer, &data);
+
+            HgStringView json = hgJsonWriteSerial(arena, &writer);
+
+            hgDebug("json: %.*s\n", (int)json.length, json.chars);
+            hgAssert(json ==
+R"({
+    "a" : -12,
+    "b" : 42,
+    "c" : 2.500000,
+    "d" : true,
+    "e" : [
+        2,
+        4,
+        6
+    ],
+    "f" : "hello"
+}
+)");
+
+            // Data dataCopy{};
+            //
+            // HgSerializer reader = hgJsonReadSerial(arena, json);
+            // serializeData(arena, &reader, "data", &dataCopy);
+            //
+            // hgAssert(!hgMemEqual(&dataCopy, &data, sizeof(data)));
+            // hgAssert(data.a == dataCopy.a);
+            // hgAssert(data.b == dataCopy.b);
+            // hgAssert(data.c == dataCopy.c);
+            // hgAssert(data.d == dataCopy.d);
+            // hgAssert(data.e[0] == dataCopy.e[0]);
+            // hgAssert(data.e[1] == dataCopy.e[1]);
+            // hgAssert(data.e[2] == dataCopy.e[2]);
+            // hgAssert(data.f == dataCopy.f);
+        }
     }
 
     // HgJson
@@ -2702,7 +2703,7 @@ void hgTest()
             hgNodeAddChild(&ecs, root, a);
 
             HgSerializer s = hgSerialWriter(arena);
-            hgSerialize(arena, &s, "Ecs", &ecs);
+            hgSerializeImpl(&s, &ecs);
             scene = s.current;
         }
 
@@ -2713,8 +2714,8 @@ void hgTest()
             hgEcsRegisterType(&ecs, HgNode);
             hgEcsRegisterType(&ecs, u32);
 
-            HgSerializer s = hgSerialReader(scene);
-            hgSerialize(arena, &s, "Ecs", &ecs);
+            HgSerializer s = hgSerialReader(arena, scene);
+            hgSerializeImpl(&s, &ecs);
 
             HgEntity root = hgEcsEntities<HgNode>(&ecs)[0];
 

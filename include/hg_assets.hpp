@@ -152,7 +152,7 @@ HgAsset<T>* hgAssetCopy(HgAsset<T>* asset);
  * HgAssetHandle serialization
  */
 template<typename T>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAsset<T>* asset);
+void hgSerialize(HgSerializer* s, HgAsset<T>** asset);
 
 /**
  * A binary file asset handle

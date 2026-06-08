@@ -164,7 +164,7 @@ struct HgAudioSource {
  * HgAudioSource serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAudioSource* src);
+void hgSerializeImpl(HgSerializer* s, HgAudioSource* src);
 
 /**
  * Add an audio source to an entity

@@ -45,6 +45,22 @@ void hgThreadsFor(u64 begin, u64 end, F fn)
 }
 
 template<typename T>
+void hgSerializeImpl(HgSerializer* s, T* val)
+{
+    HgStringView data = {(char*)val, sizeof(T)};
+    if (s->writing)
+    {
+        hgSerializeImpl(s, &data);
+    }
+    else
+    {
+        hgArenaScope(s->arena);
+        hgSerializeImpl(s, &data);
+        hgMemCopy(val, data.chars, sizeof(T));
+    }
+}
+
+template<typename T>
 void hgAssetInit()
 {
     hgAssets<T>.map = hgMapCreate<HgStringView, HgAsset<T>*>();
@@ -140,21 +156,22 @@ HgAsset<T>* hgAssetCopy(HgAsset<T>* asset)
 }
 
 template<typename T>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAsset<T>* asset)
+void hgSerialize(HgSerializer* s, HgAsset<T>** asset)
 {
     if (s->writing)
     {
-        HgStringView path = asset->path;
-        hgSerialize(arena, s, name, &path);
+        HgStringView path = (*asset)->path;
+        hgSerializeImpl(s, &path);
     }
     else
     {
+        hgArenaScope(s->arena);
         HgStringView path;
-        hgSerialize(hgScratch(), s, name, &path);
+        hgSerializeImpl(s, &path);
         if (path != "")
             *asset = hgAssetLoad<T>(path);
         else
-            *asset = {};
+            *asset = nullptr;
     }
 }
 

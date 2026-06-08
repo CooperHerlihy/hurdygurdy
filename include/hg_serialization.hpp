@@ -39,7 +39,7 @@ enum HgSerialType : u32 {
     /**
      * No value
      */
-    HgSerialType_null,
+    HgSerialType_null = 0,
     /**
      * An array of values
      */
@@ -74,74 +74,52 @@ const char* hgSerialTypeToString(HgSerialType s);
 /**
  * A serialized data node
  */
-struct HgSerialNode;
-
-/**
- * A serialized data field in an object
- */
-struct HgSerialField;
-
-/**
- * A serialized array
- */
-struct HgSerialArray {
-    /**
-     * The number of elements
-     */
-    u32 elemCount;
-    /**
-     * The elements
-     */
-    HgSerialNode* elems;
-};
-
-/**
- * A serialized object
- */
-struct HgSerialObject {
-    /**
-     * The number of fields
-     */
-    u32 fieldCount;
-    /**
-     * The fields
-     */
-    HgSerialField* fields;
-};
-
-/**
- * A serialized data node
- */
 struct HgSerialNode {
+    /**
+     * The parent object or array
+     */
+    HgSerialNode* parent;
+    /**
+     * The next node in the object or array
+     */
+    HgSerialNode* next;
+    /**
+     * The field name, if in an object
+     */
+    HgStringView name;
     /**
      * The type of data
      */
     HgSerialType type;
     /**
+     * The number of fields or elements
+     */
+    u32 count;
+    /**
      * The data
      */
     union {
-        HgSerialArray array;
-        HgSerialObject object;
+        /**
+         * The elements of an array or fields of an object
+         */
+        HgSerialNode* children;
+        /**
+         * String data
+         */
         HgStringView string;
+        /**
+         * Integer value
+         */
         i64 integer;
+        /**
+         * Floating point value
+         */
         f64 floating;
+        /**
+         * Boolean value
+         */
         bool boolean;
     };
-};
-
-/**
- * A serialized data field
- */
-struct HgSerialField {
-    /**
-     * The name of the field
-     */
-    HgStringView name;
-    /**
-     * The field's data
-     */
-    HgSerialNode data;
 };
 
 /**
@@ -149,17 +127,21 @@ struct HgSerialField {
  */
 struct HgSerializer {
     /**
+     * The arena to allocate from
+     */
+    HgArena* arena;
+    /**
+     * The current array/object
+     */
+    HgSerialNode* parent;
+    /**
+     * The current data node
+     */
+    HgSerialNode* current;
+    /**
      * Whether the serializer is reading or writing
      */
     bool writing;
-    /**
-     * The current field/elem index
-     */
-    u32 idx;
-    /**
-     * The current node begin read from or written to
-     */
-    HgSerialNode* current;
 };
 
 /**
@@ -170,203 +152,236 @@ HgSerializer hgSerialWriter(HgArena* arena);
 /**
  * Begin a serial reader
  */
-HgSerializer hgSerialReader(HgSerialNode* begin);
-
-/**
- * Check whether the current serial object is null
- */
-bool hgSerializerIsNull(HgSerializer s);
+HgSerializer hgSerialReader(HgArena* arena, HgSerialNode* begin);
 
 /**
  * Begin serializing an array
  */
-HgSerializer hgSerializeArray(HgArena* arena, HgSerializer* s, HgStringView name, u32* length);
+void hgSerializeArrayBegin(HgSerializer* s, u32* length);
+
+/**
+ * End serializing an array
+ */
+void hgSerializeArrayEnd(HgSerializer* s);
+
+/**
+ * Start a new array element
+ */
+void hgSerializeEmptyElement(HgSerializer* s);
 
 /**
  * Begin serializing an object
  */
-HgSerializer hgSerializeObject(HgArena* arena, HgSerializer* s, HgStringView name);
+void hgSerializeObjectBegin(HgSerializer* s);
 
 /**
- * Serialize a null object
+ * Begin serializing an object
  */
-void hgSerializeNull(HgArena* arena, HgSerializer* s, HgStringView name);
+void hgSerializeObjectEnd(HgSerializer* s);
 
 /**
- * Serialize arbitrary data
+ * Start a new field with a name
  */
-void hgSerializeBinary(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* binary);
+void hgSerializeEmptyField(HgSerializer* s, HgStringView name);
 
 /**
  * Default serialization, should be overridden
  */
 template<typename T>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, T* val)
+void hgSerializeImpl(HgSerializer* s, T* val);
+
+/**
+ * Serialize a field with a name
+ */
+template<typename T>
+void hgSerializeElement(HgSerializer* s, T* val)
 {
-    HgBinary bin = {val, sizeof(T)};
-    if (s->writing)
-    {
-        hgSerializeBinary(arena, s, name, &bin);
-    }
-    else
-    {
-        hgSerializeBinary(hgScratch(), s, name, &bin);
-        hgMemCopy(val, bin.data, sizeof(T));
-    }
+    hgSerializeEmptyElement(s);
+    hgSerializeImpl(s, val);
 }
+
+/**
+ * Begin serializing an array in an element
+ */
+void hgSerializeElementArrayBegin(HgSerializer* s, u32* count);
+
+/**
+ * Begin serializing an object in an element
+ */
+void hgSerializeElementObjectBegin(HgSerializer* s);
+
+/**
+ * Serialize a field with a name
+ */
+template<typename T>
+void hgSerializeField(HgSerializer* s, HgStringView name, T* val)
+{
+    hgSerializeEmptyField(s, name);
+    hgSerializeImpl(s, val);
+}
+
+/**
+ * Begin serializing an array in a field
+ */
+void hgSerializeFieldArrayBegin(HgSerializer* s, HgStringView name, u32* count);
+
+/**
+ * Begin serializing an object in a field
+ */
+void hgSerializeFieldObjectBegin(HgSerializer* s);
 
 /**
  * HgBinary serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* val);
+void hgSerializeImpl(HgSerializer* s, HgBinary* val);
 
 /**
  * HgStringView serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringView* val);
+void hgSerializeImpl(HgSerializer* s, HgStringView* val);
 
 /**
  * HgStringOwner serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringOwner* val);
+void hgSerializeImpl(HgSerializer* s, HgStringOwner* val);
 
 /**
  * HgStringBuilder serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* val);
+void hgSerializeImpl(HgSerializer* s, HgStringBuilder* val);
 
 /**
  * u8 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, u8* val);
+void hgSerializeImpl(HgSerializer* s, u8* val);
 
 /**
  * u16 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, u16* val);
+void hgSerializeImpl(HgSerializer* s, u16* val);
 
 /**
  * u32 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, u32* val);
+void hgSerializeImpl(HgSerializer* s, u32* val);
 
 /**
  * u64 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, u64* val);
+void hgSerializeImpl(HgSerializer* s, u64* val);
 
 /**
  * i8 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, i8* val);
+void hgSerializeImpl(HgSerializer* s, i8* val);
 
 /**
  * i16 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, i16* val);
+void hgSerializeImpl(HgSerializer* s, i16* val);
 
 /**
  * i32 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, i32* val);
+void hgSerializeImpl(HgSerializer* s, i32* val);
 
 /**
  * i64 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, i64* val);
+void hgSerializeImpl(HgSerializer* s, i64* val);
 
 /**
  * f32 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, f32* val);
+void hgSerializeImpl(HgSerializer* s, f32* val);
 
 /**
  * f64 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, f64* val);
+void hgSerializeImpl(HgSerializer* s, f64* val);
 
 /**
  * bool serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, bool* val);
+void hgSerializeImpl(HgSerializer* s, bool* val);
 
 /**
  * HgVec2 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec2* val);
+void hgSerializeImpl(HgSerializer* s, HgVec2* val);
 
 /**
  * HgVec3 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec3* val);
+void hgSerializeImpl(HgSerializer* s, HgVec3* val);
 
 /**
  * HgVec4 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec4* val);
+void hgSerializeImpl(HgSerializer* s, HgVec4* val);
 
 /**
  * HgMat2 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat2* val);
+void hgSerializeImpl(HgSerializer* s, HgMat2* val);
 
 /**
  * HgMat3 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat3* val);
+void hgSerializeImpl(HgSerializer* s, HgMat3* val);
 
 /**
  * HgMat4 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat4* val);
+void hgSerializeImpl(HgSerializer* s, HgMat4* val);
 
 /**
  * HgComplex serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgComplex* val);
+void hgSerializeImpl(HgSerializer* s, HgComplex* val);
 
 /**
  * HgQuat serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgQuat* val);
+void hgSerializeImpl(HgSerializer* s, HgQuat* val);
 
 /**
  * Write serialized data in a binary format
  */
-HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer serial);
+HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer* data);
 
 /**
  * Read binary data to be deserialized
  */
-HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin);
+HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary* bin);
 
 /**
  * Write serialized data as json
  */
-HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer serial);
+HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer* data);
 
 // /**
 //  * Read json data to be deserialized : TODO
