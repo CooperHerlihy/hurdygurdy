@@ -577,25 +577,29 @@ hgFractalNoise2DFunctionDef(hgFractalPerlin2D, hgPerlin2D)
  * A vertex
  */
 struct HgVertex {
-    vec4 position; // vec3 position, float uvU
-    vec4 normal; // vec3 normal, float uvV
+    vec3 position;
+    float uvU;
+    vec3 normal;
+    float uvV;
     vec4 tangent;
 };
 
 /**
  * Transform a vertex, keeping its normal and tangent intact
  */
-HgVertex hgTransformVertex(HgVertex vertex, mat4 matrix)
+HgVertex hgTransformVertex(mat4 matrix, HgVertex vertex)
 {
-    vec4 position = matrix * vec4(vertex.position.xyz, 1.0);
+    vec3 position = (matrix * vec4(vertex.position, 1.0)).xyz;
 
     mat3 imatrix = transpose(inverse(mat3(matrix)));
-    vec3 normal = imatrix * vertex.normal.xyz;
+    vec3 normal = imatrix * vertex.normal;
     vec4 tangent = vec4(imatrix * vertex.tangent.xyz, vertex.tangent.w);
 
     return HgVertex(
-        vec4(position.xyz, vertex.position.w),
-        vec4(normal.xyz, vertex.normal.w),
+        position,
+        vertex.uvU,
+        normal,
+        vertex.uvV,
         tangent);
 }
 

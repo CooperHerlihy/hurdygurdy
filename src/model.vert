@@ -39,7 +39,7 @@ void main()
     mat4 mv = uniformBuffers[push.viewProj].view * push.model;
     mat4 p = uniformBuffers[push.viewProj].proj;
 
-    vOut.vertex = hgTransformVertex(vert, mv);
-    gl_Position = p * vec4(vOut.vertex.position.xyz, 1.0);
+    vOut.vertex = hgTransformVertex(mv, vert);
+    gl_Position = p * vec4(vOut.vertex.position, 1.0);
 }
 
