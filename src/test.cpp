@@ -590,24 +590,13 @@ void hgTest()
 
         auto serializeData = [](HgSerializer* s, Data* val)
         {
-            hgSerializeBegin(s);
-
-            hgSerialize(s, &val->a);
-            hgSerialize(s, &val->b);
-            hgSerialize(s, &val->c);
-            hgSerialize(s, &val->d);
-
-            u32 eSize = (u32)hgArrayCount(val->e);
-            hgSerializeBegin(s, &eSize);
-            for (u32 i = 0; i < eSize; ++i)
-            {
-                hgSerialize(s, &val->e[i]);
-            }
-            hgSerializeEnd(s);
-
-            hgSerialize(s, &val->f);
-
-            hgSerializeEnd(s);
+            hgSerializeObject(s,
+                &val->a,
+                &val->b,
+                &val->c,
+                &val->d,
+                &val->e,
+                &val->f);
         };
 
         {
@@ -616,6 +605,9 @@ void hgTest()
 
             HgSerializer writer = hgSerialWriter(arena);
             serializeData(&writer, &data);
+
+            // HgStringView json = hgJsonWriteSerial(arena, &writer);
+            // hgDebug("json: %.*s\n", (int)json.length, json.chars);
 
             Data dataCopy{};
 

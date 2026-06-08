@@ -147,14 +147,24 @@ HgSerializer hgSerialWriter(HgArena* arena);
 HgSerializer hgSerialReader(HgArena* arena, HgSerialNode* begin);
 
 /**
- * Begin serializing an object
+ * The preamble to serializing a node, generally not needed
+ */
+void hgSerializeNodeStart(HgSerializer* s);
+
+/**
+ * Begin serializing an object or array
  */
 void hgSerializeBegin(HgSerializer* s, u32* size = nullptr);
 
 /**
- * Begin serializing an object
+ * Begin serializing an object or array
  */
 void hgSerializeEnd(HgSerializer* s);
+
+/**
+ * Serialize a value of unknown type
+ */
+void hgSerializeVoid(HgSerializer* s, void* val, u32 size);
 
 /**
  * Serialize a value, should be overridden
@@ -166,12 +176,13 @@ void hgSerialize(HgSerializer* s, T* val);
  * Serialize an object conveniently
  */
 template<typename... Ts>
-void hgSerializeObject(HgSerializer* s, Ts*... vals)
-{
-    hgSerializeBegin(s);
-    (hgSerialize(s, vals), ...);
-    hgSerializeEnd(s);
-}
+void hgSerializeObject(HgSerializer* s, Ts*... vals);
+
+/**
+ * Serialize an array of values
+ */
+template<typename T, u64 N>
+void hgSerialize(HgSerializer* s, T (*arr)[N]);
 
 /**
  * HgBinary serialization

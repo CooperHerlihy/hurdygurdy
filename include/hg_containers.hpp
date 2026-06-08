@@ -29,6 +29,7 @@
 
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
+#include "hg_serialization.hpp"
 #include "hg_strings.hpp"
 
 /**
@@ -59,6 +60,12 @@ struct HgArray {
         return vals[idx];
     }
 };
+
+/**
+ * HgArray serialization
+ */
+template<typename T>
+void hgSerialize(HgSerializer* s, HgArray<T>* arr);
 
 /**
  * Create an array
@@ -137,6 +144,12 @@ struct HgArrayAny {
         return (u8*)vals + idx * width;
     }
 };
+
+/**
+ * HgArrayAny serialization
+ */
+template<>
+void hgSerialize(HgSerializer* s, HgArrayAny* arr);
 
 /**
  * Create an array of unknown type
@@ -255,6 +268,12 @@ struct HgSet {
 };
 
 /**
+ * HgSet serialization
+ */
+template<typename V>
+void hgSerialize(HgSerializer* s, HgSet<V>* set);
+
+/**
  * Creates a new hash set
  *
  * Parameters
@@ -341,6 +360,12 @@ struct HgMap {
      */
     u32 count;
 };
+
+/**
+ * HgMap serialization
+ */
+template<typename K, typename V>
+void hgSerialize(HgSerializer* s, HgMap<K, V>* set);
 
 /**
  * Create a new hash map

@@ -47,17 +47,26 @@ void hgThreadsFor(u64 begin, u64 end, F fn)
 template<typename T>
 void hgSerialize(HgSerializer* s, T* val)
 {
-    HgStringView data = {(char*)val, sizeof(T)};
-    if (s->writing)
+    hgSerializeVoid(s, val, sizeof(*val));
+}
+
+template<typename... Ts>
+void hgSerializeObject(HgSerializer* s, Ts*... vals)
+{
+    hgSerializeBegin(s);
+    (hgSerialize(s, vals), ...);
+    hgSerializeEnd(s);
+}
+
+template<typename T, u64 N>
+void hgSerialize(HgSerializer* s, T (*arr)[N])
+{
+    hgSerializeBegin(s);
+    for (u64 i = 0; i < N; ++i)
     {
-        hgSerialize(s, &data);
+        hgSerialize(s, &(*arr)[i]);
     }
-    else
-    {
-        hgArenaScope(s->arena);
-        hgSerialize(s, &data);
-        hgMemCopy(val, data.chars, sizeof(T));
-    }
+    hgSerializeEnd(s);
 }
 
 template<typename T>
@@ -173,6 +182,21 @@ void hgSerialize(HgSerializer* s, HgAsset<T>** asset)
         else
             *asset = nullptr;
     }
+}
+
+template<typename T>
+void hgSerialize(HgSerializer* s, HgArray<T>* arr)
+{
+    hgSerializeBegin(s);
+    hgSerialize(s, &arr->count);
+    hgSerialize(s, &arr->capacity);
+    if (!s->writing)
+        arr->vals = hgGpaAlloc<T>(arr->capacity);
+    for (u32 i = 0; i < arr->count; ++i)
+    {
+        hgSerialize(s, &arr[i]);
+    }
+    hgSerializeEnd(s);
 }
 
 template<typename T>
@@ -341,6 +365,36 @@ T hgQueuePopBack(HgQueue<T>* queue)
 }
 
 template<typename V>
+void hgSerialize(HgSerializer* s, HgSet<V>* set)
+{
+    hgSerializeBegin(s);
+
+    hgSerialize(s, &set->count);
+    hgSerialize(s, &set->capacity);
+
+    if (s->writing)
+    {
+        hgSetForEach(set, [&](V* val)
+        {
+            hgSerialize(s, val);
+        });
+    }
+    else
+    {
+        u32 count = set->count;
+        *set = hgSetCreate(set->capacity);
+        for (u32 i = 0; i < count; ++i)
+        {
+            V val;
+            hgSerialize(s, &val);
+            hgSetAdd(set, val);
+        }
+    }
+
+    hgSerializeEnd(s);
+}
+
+template<typename V>
 HgSet<V> hgSetCreate(u32 slotCount)
 {
     hgAssert(slotCount > 0);
@@ -496,6 +550,37 @@ void hgSetForEach(HgSet<V>* set, F fn)
         if (set->hasVal[i])
             fn(&set->vals[i]);
     }
+}
+
+template<typename K, typename V>
+void hgSerialize(HgSerializer* s, HgMap<K, V>* map)
+{
+    hgSerializeBegin(s);
+
+    hgSerialize(s, &map->count);
+    hgSerialize(s, &map->capacity);
+
+    if (s->writing)
+    {
+        hgMapForEach(map, [&](K* key, V* val)
+        {
+            hgSerializeObject(s, key, val);
+        });
+    }
+    else
+    {
+        u32 count = map->count;
+        *map = hgMapCreate(map->capacity);
+        for (u32 i = 0; i < count; ++i)
+        {
+            K key;
+            V val;
+            hgSerializeObject(s, &key, &val);
+            hgMapAdd(map, key, val);
+        }
+    }
+
+    hgSerializeEnd(s);
 }
 
 template<typename K, typename V>

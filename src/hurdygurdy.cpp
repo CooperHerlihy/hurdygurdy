@@ -666,7 +666,7 @@ HgSerializer hgSerialReader(HgArena* arena, HgSerialNode* begin)
     return s;
 }
 
-static void serializeNodeStart(HgSerializer* s)
+void hgSerializeNodeStart(HgSerializer* s)
 {
     if (s->writing)
     {
@@ -719,7 +719,7 @@ static void serializeNodeStart(HgSerializer* s)
 
 void hgSerializeBegin(HgSerializer* s, u32* size)
 {
-    serializeNodeStart(s);
+    hgSerializeNodeStart(s);
 
     if (s->writing)
     {
@@ -745,9 +745,33 @@ void hgSerializeEnd(HgSerializer* s)
     s->parent = s->parent->parent;
 }
 
-static void serializeString(HgSerializer* s, HgStringView* val)
+void hgSerializeVoid(HgSerializer* s, void* val, u32 size)
 {
-    serializeNodeStart(s);
+    hgSerializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->type = HgSerialType_string;
+        s->current->string = hgStringCopy(s->arena, {(char*)val, size});
+    }
+    else
+    {
+        hgAssert(s->current->type == HgSerialType_string);
+        hgAssert(s->current->string.length == size);
+        hgMemCopy(val, s->current->string.chars, size);
+    }
+}
+
+template<>
+void hgSerialize(HgSerializer* s, HgBinary* val)
+{
+    hgSerialize(s, (HgStringView*)val);
+}
+
+template<>
+void hgSerialize(HgSerializer* s, HgStringView* val)
+{
+    hgSerializeNodeStart(s);
 
     if (s->writing)
     {
@@ -762,27 +786,9 @@ static void serializeString(HgSerializer* s, HgStringView* val)
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgBinary* val)
-{
-    hgSerialize(s, (HgStringView*)val);
-}
-
-template<>
-void hgSerialize(HgSerializer* s, HgStringView* val)
-{
-    serializeString(s, val);
-}
-
-template<>
-void hgSerialize(HgSerializer* s, HgStringBuilder* val)
-{
-    hgSerialize(s, (HgStringView*)val);
-}
-
-template<>
 void hgSerialize(HgSerializer* s, HgStringOwner* val)
 {
-    serializeNodeStart(s);
+    hgSerializeNodeStart(s);
 
     if (s->writing)
     {
@@ -796,10 +802,16 @@ void hgSerialize(HgSerializer* s, HgStringOwner* val)
     }
 }
 
+template<>
+void hgSerialize(HgSerializer* s, HgStringBuilder* val)
+{
+    hgSerialize(s, (HgStringView*)val);
+}
+
 template<typename T>
 static void serializeInt(HgSerializer* s, T* val)
 {
-    serializeNodeStart(s);
+    hgSerializeNodeStart(s);
 
     if (s->writing)
     {
@@ -864,7 +876,7 @@ void hgSerialize(HgSerializer* s, i64* val)
 template<typename T>
 static void serializeFloat(HgSerializer* s, T* val)
 {
-    serializeNodeStart(s);
+    hgSerializeNodeStart(s);
 
     if (s->writing)
     {
@@ -893,7 +905,7 @@ void hgSerialize(HgSerializer* s, f64* val)
 template<>
 void hgSerialize(HgSerializer* s, bool* val)
 {
-    serializeNodeStart(s);
+    hgSerializeNodeStart(s);
 
     if (s->writing)
     {
@@ -2065,6 +2077,20 @@ template<>
 void hgAssetUnloadImpl(HgAsset<HgJson>* data)
 {
     free(data->data.file);
+}
+
+template<>
+void hgSerialize(HgSerializer* s, HgArrayAny* arr)
+{
+    hgSerializeBegin(s);
+    hgSerialize(s, &arr->width);
+    hgSerialize(s, &arr->align);
+    hgSerialize(s, &arr->count);
+    hgSerialize(s, &arr->capacity);
+    if (!s->writing)
+        arr->vals = hgGpaAlloc(arr->capacity * arr->width, arr->align);
+    hgSerializeVoid(s, arr->vals, arr->count * arr->width);
+    hgSerializeEnd(s);
 }
 
 HgArrayAny hgArrayAnyCreate(u32 width, u32 align, u32 count, u32 capacity)
