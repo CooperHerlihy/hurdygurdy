@@ -30,9 +30,7 @@
 #include "hg_assets.hpp"
 #include "hg_core.hpp"
 #include "hg_ecs.hpp"
-#include "hg_memory.hpp"
 #include "hg_serialization.hpp"
-#include "hg_strings.hpp"
 
 /**
  * Initialize the audio subsystem

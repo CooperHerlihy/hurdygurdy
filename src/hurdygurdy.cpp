@@ -3145,12 +3145,11 @@ struct VPUniform {
     HgMat4 view;
 };
 
-HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e)
+HgCamera hgCameraCreate()
 {
-    HgCamera* camera = hgEcsAdd<HgCamera>(ecs, e);
-    *camera = {};
+    HgCamera camera{};
 
-    camera->vpBuffer = hgGpuBufferCreate(
+    camera.vpBuffer = hgGpuBufferCreate(
         sizeof(VPUniform),
         HgGpuBufferUsage_uniformBuffer,
         HgGpuMemoryUsage_frequentUpdate);
@@ -3158,10 +3157,22 @@ HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e)
     return camera;
 }
 
+void hgCameraDestroy(HgCamera* camera)
+{
+    hgGpuBufferDestroy(camera->vpBuffer);
+}
+
+HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e)
+{
+    HgCamera* camera = hgEcsAdd<HgCamera>(ecs, e);
+    *camera = hgCameraCreate();
+    return camera;
+}
+
 template<>
 void hgEcsDtor(HgCamera* camera)
 {
-    hgGpuBufferDestroy(camera->vpBuffer);
+    hgCameraDestroy(camera);
 }
 
 void hgCameraUpdate(HgEcs* ecs, HgEntity e)
@@ -3230,12 +3241,10 @@ void hgSpritesInit(
     pipelineConfig.vertexShaderSize = spriteVertSpv->data.size;
     pipelineConfig.fragmentShader = spriteFragSpv->data.data;
     pipelineConfig.fragmentShaderSize = spriteFragSpv->data.size;
+    pipelineConfig.pushConstantSize = sizeof(SpritePipelinePush);
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    HgGpuPushRange push{0, sizeof(SpritePipelinePush)};
-    pipelineConfig.pushRanges = &push;
-    pipelineConfig.pushRangeCount = 1;
     pipelineConfig.enableDepthRead = true;
     pipelineConfig.enableDepthWrite = true;
     bool enableColorBlend = true;
@@ -3349,12 +3358,10 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
     pipelineConfig.vertexShaderSize = vertSpv->data.size;
     pipelineConfig.fragmentShader = fragSpv->data.data;
     pipelineConfig.fragmentShaderSize = fragSpv->data.size;
+    pipelineConfig.pushConstantSize = sizeof(SkyboxPipelinePush);
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    HgGpuPushRange push{0, sizeof(SkyboxPipelinePush)};
-    pipelineConfig.pushRanges = &push;
-    pipelineConfig.pushRangeCount = 1;
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
@@ -3545,12 +3552,10 @@ void hgModelsInit(
     pipelineConfig.vertexShaderSize = modelVertSpv->data.size;
     pipelineConfig.fragmentShader = modelFragSpv->data.data;
     pipelineConfig.fragmentShaderSize = modelFragSpv->data.size;
+    pipelineConfig.pushConstantSize = sizeof(ModelPipelinePush);
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    HgGpuPushRange push{0, sizeof(ModelPipelinePush)};
-    pipelineConfig.pushRanges = &push;
-    pipelineConfig.pushRangeCount = 1;
     pipelineConfig.cullMode = HgGpuCull_back;
     pipelineConfig.enableDepthRead = true;
     pipelineConfig.enableDepthWrite = true;

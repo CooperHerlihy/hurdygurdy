@@ -2103,20 +2103,16 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    VkPushConstantRange* pushRanges = hgArenaAlloc<VkPushConstantRange>(scratch, config->pushRangeCount);
-    for (u32 i = 0; i < config->pushRangeCount; ++i)
-    {
-        pushRanges[i].stageFlags = VK_SHADER_STAGE_ALL;
-        pushRanges[i].offset = config->pushRanges[i].offset;
-        pushRanges[i].size = config->pushRanges[i].size;
-    }
-
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 1;
     layoutInfo.pSetLayouts = &vk.bindlessLayout;
-    layoutInfo.pushConstantRangeCount = config->pushRangeCount;
-    layoutInfo.pPushConstantRanges = pushRanges;
+    VkPushConstantRange pushRange{VK_SHADER_STAGE_ALL, 0, config->pushConstantSize};
+    if (config->pushConstantSize > 0)
+    {
+        layoutInfo.pushConstantRangeCount = 1;
+        layoutInfo.pPushConstantRanges = &pushRange;
+    }
 
     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
@@ -2608,7 +2604,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 }
 
-void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRenderPass* pass)
+void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
 {
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
@@ -2873,7 +2869,9 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     VkRenderingInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = {width, height};
+    renderingInfo.renderArea.extent = {
+        pass->colorAttachments[0].image->image->width,
+        pass->colorAttachments[0].image->image->height};
     renderingInfo.layerCount = pass->layerCount;
     renderingInfo.colorAttachmentCount = pass->colorAttachmentCount;
     renderingInfo.pColorAttachments = colorAttachments;
@@ -2885,11 +2883,6 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
         : nullptr;
 
     vkCmdBeginRendering((VkCommandBuffer)cmd, &renderingInfo);
-
-    VkViewport viewport{0.0f, 0.0f, (f32)width, (f32)height, 0.0f, 1.0f};
-    vkCmdSetViewport((VkCommandBuffer)cmd, 0, 1, &viewport);
-    VkRect2D scissor{{0, 0}, {width, height}};
-    vkCmdSetScissor((VkCommandBuffer)cmd, 0, 1, &scissor);
 }
 
 static VkPresentModeKHR hgPresentModeToVk(HgGpuPresentMode mode)
@@ -2900,6 +2893,18 @@ static VkPresentModeKHR hgPresentModeToVk(HgGpuPresentMode mode)
 void hgGpuRenderPassEnd(HgGpuCmd* cmd)
 {
     vkCmdEndRendering((VkCommandBuffer)cmd);
+}
+
+void hgGpuSetViewport(HgGpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near, f32 far)
+{
+    VkViewport viewport{x, y, width, height, near, far};
+    vkCmdSetViewport((VkCommandBuffer)cmd, 0, 1, &viewport);
+}
+
+void hgGpuSetScissor(HgGpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
+{
+    VkRect2D scissor{{x, y}, {width, height}};
+    vkCmdSetScissor((VkCommandBuffer)cmd, 0, 1, &scissor);
 }
 
 static void resizeWindowSwapchain(HgWindow* window)

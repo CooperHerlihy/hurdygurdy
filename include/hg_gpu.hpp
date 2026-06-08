@@ -830,6 +830,10 @@ struct HgCreateGpuGraphicsPipeline {
      */
     u64 fragmentShaderSize = 0;
     /**
+     * The size of the push constant
+     */
+    u32 pushConstantSize = 0;
+    /**
      * The format of the color attachments, none can be UNDEFINED
      */
     const HgFormat* colorAttachmentFormats = nullptr;
@@ -845,14 +849,6 @@ struct HgCreateGpuGraphicsPipeline {
      * The format of the stencil attachment, no stencil attachment if UNDEFINED
      */
     HgFormat stencilAttachmentFormat = HgFormat_undefined;
-    /**
-     * The push constant ranges, if any
-     */
-    const HgGpuPushRange* pushRanges = nullptr;
-    /**
-     * The number of push constant ranges
-     */
-    u32 pushRangeCount;
     /**
      * How to interpret vertices into topology
      */
@@ -1223,11 +1219,9 @@ struct HgGpuRenderPass {
  *
  * Parameters
  * - cmd The command buffer
- * - width The width of the render area
- * - height The height of the render area
  * - pass The render pass description
  */
-void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRenderPass* pass);
+void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass);
 
 /**
  * Ends the render pass
@@ -1236,5 +1230,15 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
  * - cmd The command buffer
  */
 void hgGpuRenderPassEnd(HgGpuCmd* cmd);
+
+/**
+ * Set the rendering viewport, should be called after hgGpuRenderPassBegin
+ */
+void hgGpuSetViewport(HgGpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near = 0.0f, f32 far = 1.0f);
+
+/**
+ * Set the rendering scissor, should be called after hgGpuRenderPassBegin
+ */
+void hgGpuSetScissor(HgGpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
 
 #endif // HG_GPU_HPP

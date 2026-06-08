@@ -202,7 +202,10 @@ int main()
             pass.sampledImages = noiseTex->data.view;
             pass.sampledImageCount = 1;
 
-            hgGpuRenderPassBegin(cmd, hgWindowWidth(window), hgWindowHeight(window), &pass);
+            hgGpuRenderPassBegin(cmd, &pass);
+
+            hgGpuSetViewport(cmd, 0, 0, (f32)hgWindowWidth(window), (f32)hgWindowHeight(window));
+            hgGpuSetScissor(cmd, 0, 0, hgWindowWidth(window), hgWindowHeight(window));
 
             hgCameraUpdate(&ecs, camera);
             hgSpritesDraw(&ecs, camera, cmd);

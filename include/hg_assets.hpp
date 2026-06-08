@@ -30,7 +30,6 @@
 #include "hg_concurrency.hpp"
 #include "hg_containers.hpp"
 #include "hg_core.hpp"
-#include "hg_memory.hpp"
 #include "hg_serialization.hpp"
 #include "hg_strings.hpp"
 

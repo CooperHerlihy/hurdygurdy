@@ -33,7 +33,6 @@
 #include "hg_ecs.hpp"
 #include "hg_gpu.hpp"
 #include "hg_math.hpp"
-#include "hg_memory.hpp"
 #include "hg_serialization.hpp"
 #include "hg_strings.hpp"
 #include "hg_window.hpp"
@@ -323,6 +322,16 @@ struct HgCamera {
  */
 template<>
 void hgSerialize(HgSerializer* s, HgCamera* camera);
+
+/**
+ * Create a camera
+ */
+HgCamera hgCameraCreate();
+
+/**
+ * Destroy a camera
+ */
+void hgCameraDestroy(HgCamera* camera);
 
 /**
  * HgCamera ecs add implementation
