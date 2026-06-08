@@ -278,7 +278,7 @@ struct HgCameraPerspective {
  * HgCameraPerspective serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgCameraPerspective* camera);
+void hgSerialize(HgSerializer* s, HgCameraPerspective* camera);
 
 /**
  * An orthographic camera
@@ -294,7 +294,7 @@ struct HgCameraOrthographic {
  * HgCameraOrthographic serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgCameraOrthographic* camera);
+void hgSerialize(HgSerializer* s, HgCameraOrthographic* camera);
 
 /**
  * A camera component
@@ -322,7 +322,7 @@ struct HgCamera {
  * HgCamera serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgCamera* camera);
+void hgSerialize(HgSerializer* s, HgCamera* camera);
 
 /**
  * HgCamera ecs add implementation
@@ -376,7 +376,7 @@ struct HgSprite {
  * HgSprite serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgSprite* sprite);
+void hgSerialize(HgSerializer* s, HgSprite* sprite);
 
 /**
  * Add a sprite to an entity
@@ -437,7 +437,7 @@ struct HgSkybox {
  * HgSkybox serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgSkybox* skybox);
+void hgSerialize(HgSerializer* s, HgSkybox* skybox);
 
 /**
  * Add a skybox to an entity
@@ -483,7 +483,7 @@ struct HgDirLight {
  * HgDirLight serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgDirLight* light);
+void hgSerialize(HgSerializer* s, HgDirLight* light);
 
 /**
  * Add a directional light to an entity
@@ -504,7 +504,7 @@ struct HgPointLight {
  * HgPointLight serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgPointLight* light);
+void hgSerialize(HgSerializer* s, HgPointLight* light);
 
 /**
  * Add a point light to an entity
@@ -547,7 +547,7 @@ struct HgModel {
  * HgModel serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgModel* model);
+void hgSerialize(HgSerializer* s, HgModel* model);
 
 /**
  * Add a model to an entity

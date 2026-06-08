@@ -106,11 +106,16 @@ union HgEntitySerializer {
  * The default serialization for a component, should be overridden
  */
 template<typename T>
-void hgEcsSerializeImpl(HgSerializer* s, T* val, HgEntitySerializer* entities)
+void hgEcsSerialize(HgSerializer* s, T* val, HgEntitySerializer* entities)
 {
-    hgSerializeImpl(s, val);
+    hgSerialize(s, val);
     (void)entities;
 }
+
+/**
+ * HgEntity ecs serialization
+ */
+void hgEntitySerialize(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs);
 
 /**
  * A system of components
@@ -180,22 +185,7 @@ void hgEcsReset(HgEcs* ecs);
  * HgEcs serialization
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgEcs* ecs);
-
-/**
- * HgEntity ecs serialization
- */
-void hgEntitySerializeImpl(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs);
-
-/**
- * Serialize an entity in an element
- */
-void hgEntitySerializeElement(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs);
-
-/**
- * Serialize an entity in a field
- */
-void hgEntitySerializeField(HgSerializer* s, HgStringView name, HgEntity* val, HgEntitySerializer* ecs);
+void hgSerialize(HgSerializer* s, HgEcs* ecs);
 
 /**
  * The config to register a component
@@ -249,7 +239,7 @@ void hgEcsRegisterComponent(HgEcs* ecs, HgEcsRegisterComponent* config);
             void* val, \
             HgEntitySerializer* entities) \
         { \
-            hgEcsSerializeImpl<T>(s, (T*)val, entities); \
+            hgEcsSerialize<T>(s, (T*)val, entities); \
         }; \
         hgEcsRegisterComponent(ecs, &registerComponent_##T); \
     } while (0)
@@ -544,7 +534,7 @@ struct HgNode {
  * HgNode serialization implementation
  */
 template<>
-void hgEcsSerializeImpl(HgSerializer* s, HgNode* node, HgEntitySerializer* ecs);
+void hgEcsSerialize(HgSerializer* s, HgNode* node, HgEntitySerializer* ecs);
 
 /**
  * Add an empty node to an entity
@@ -611,7 +601,7 @@ struct HgTransform {
  * HgTransform serialization impl
  */
 template<>
-void hgSerializeImpl(HgSerializer* s, HgTransform* node);
+void hgSerialize(HgSerializer* s, HgTransform* node);
 
 /**
  * Add an identity transform to an entity

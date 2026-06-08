@@ -627,12 +627,8 @@ const char* hgSerialTypeToString(HgSerialType s)
 {
     switch (s)
     {
-        case HgSerialType_null:
-            return "HgSerialType_null";
         case HgSerialType_object:
             return "HgSerialType_object";
-        case HgSerialType_array:
-            return "HgSerialType_array";
         case HgSerialType_string:
             return "HgSerialType_string";
         case HgSerialType_integer:
@@ -650,9 +646,11 @@ HgSerializer hgSerialWriter(HgArena* arena)
 {
     HgSerializer s{};
     s.arena = arena;
+    s.root = hgArenaAlloc<HgSerialNode>(arena, 1);
+    s.root->parent = nullptr;
+    s.root->next = nullptr;
     s.parent = nullptr;
-    s.current = hgArenaAlloc<HgSerialNode>(arena, 1);
-    *s.current = {};
+    s.current = nullptr;
     s.writing = true;
     return s;
 }
@@ -661,177 +659,95 @@ HgSerializer hgSerialReader(HgArena* arena, HgSerialNode* begin)
 {
     HgSerializer s{};
     s.arena = arena;
+    s.root = begin;
     s.parent = nullptr;
-    s.current = begin;
+    s.current = nullptr;
     s.writing = false;
     return s;
 }
 
-void hgSerializeArrayBegin(HgSerializer* s, u32* length)
+static void serializeNodeStart(HgSerializer* s)
 {
-    hgAssert(s->current != nullptr);
-
     if (s->writing)
     {
-        s->current->type = HgSerialType_array;
-        s->current->count = 0;
-        s->current->children = nullptr;
-    }
-    else
-    {
-        hgAssert(s->current->type == HgSerialType_array);
-        *length = s->current->count;
-    }
-    s->parent = s->current;
-    s->current = nullptr;
-}
-
-void hgSerializeArrayEnd(HgSerializer* s)
-{
-    hgAssert(s->parent != nullptr);
-    hgAssert(s->current != nullptr);
-
-    s->current = s->parent;
-    s->parent = s->parent->parent;
-}
-
-void hgSerializeEmptyElement(HgSerializer* s)
-{
-    hgAssert(s->parent != nullptr);
-    hgAssert(s->parent->type == HgSerialType_array);
-
-    if (s->writing)
-    {
-        if (s->current == nullptr)
-        {
-            s->current = hgArenaAlloc<HgSerialNode>(s->arena, 1);
-            s->parent->children = s->current;
-        }
-        else
+        if (s->current != nullptr)
         {
             s->current->next = hgArenaAlloc<HgSerialNode>(s->arena, 1);
             s->current = s->current->next;
+            s->current->parent = s->parent;
+            s->current->next = nullptr;
         }
-
-        s->current->parent = s->parent;
-        s->current->next = nullptr;
-        s->current->name = "";
-        s->current->type = HgSerialType_null;
+        else
+        {
+            if (s->parent != nullptr)
+            {
+                s->current = hgArenaAlloc<HgSerialNode>(s->arena, 1);
+                s->parent->children = s->current;
+                s->current->parent = s->parent;
+                s->current->next = nullptr;
+            }
+            else
+            {
+                hgAssert(s->root != nullptr);
+                s->current = s->root;
+            }
+        }
 
         if (s->parent != nullptr)
             ++s->parent->count;
     }
     else
     {
-        if (s->current == nullptr)
-        {
-            s->current = s->parent->children;
-        }
-        else
+        if (s->current != nullptr)
         {
             s->current = s->current->next;
         }
-
-        hgAssert(s->current != nullptr);
+        else
+        {
+            if (s->parent != nullptr)
+            {
+                s->current = s->parent->children;
+            }
+            else
+            {
+                hgAssert(s->root != nullptr);
+                s->current = s->root;
+            }
+        }
     }
 }
 
-void hgSerializeObjectBegin(HgSerializer* s)
+void hgSerializeBegin(HgSerializer* s, u32* size)
 {
-    hgAssert(s->current != nullptr);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
-        s->current->count = 0;
         s->current->type = HgSerialType_object;
+        s->current->count = 0;
         s->current->children = nullptr;
     }
     else
     {
-        hgAssert(s->current->type == HgSerialType_object);
+        if (size != nullptr)
+            *size = s->current->count;
     }
+
     s->parent = s->current;
     s->current = nullptr;
 }
 
-void hgSerializeObjectEnd(HgSerializer* s)
+void hgSerializeEnd(HgSerializer* s)
 {
     hgAssert(s->parent != nullptr);
-    hgAssert(s->current != nullptr);
 
     s->current = s->parent;
     s->parent = s->parent->parent;
-}
-
-void hgSerializeEmptyField(HgSerializer* s, HgStringView name)
-{
-    hgAssert(s->parent != nullptr);
-    hgAssert(s->parent->type == HgSerialType_object);
-
-    if (s->writing)
-    {
-        if (s->current == nullptr)
-        {
-            s->current = hgArenaAlloc<HgSerialNode>(s->arena, 1);
-            s->parent->children = s->current;
-        }
-        else
-        {
-            s->current->next = hgArenaAlloc<HgSerialNode>(s->arena, 1);
-            s->current = s->current->next;
-        }
-
-        s->current->parent = s->parent;
-        s->current->next = nullptr;
-        s->current->name = hgStringCopy(s->arena, name);
-        s->current->count = 0;
-        s->current->type = HgSerialType_null;
-
-        if (s->parent != nullptr)
-            ++s->parent->count;
-    }
-    else
-    {
-        if (s->current == nullptr)
-        {
-            s->current = s->parent->children;
-        }
-        else
-        {
-            s->current = s->current->next;
-        }
-
-        hgAssert(s->current != nullptr);
-    }
-}
-
-void hgSerializeElementArrayBegin(HgSerializer* s, u32* count)
-{
-    hgSerializeEmptyElement(s);
-    hgSerializeArrayBegin(s, count);
-}
-
-void hgSerializeElementObjectBegin(HgSerializer* s)
-{
-    hgSerializeEmptyElement(s);
-    hgSerializeObjectBegin(s);
-}
-
-void hgSerializeFieldArrayBegin(HgSerializer* s, HgStringView name, u32* count)
-{
-    hgSerializeEmptyField(s, name);
-    hgSerializeArrayBegin(s, count);
-}
-
-void hgSerializeFieldObjectBegin(HgSerializer* s, HgStringView name)
-{
-    hgSerializeEmptyField(s, name);
-    hgSerializeObjectBegin(s);
 }
 
 static void serializeString(HgSerializer* s, HgStringView* val)
 {
-    hgAssert(s->current != nullptr);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
@@ -846,21 +762,27 @@ static void serializeString(HgSerializer* s, HgStringView* val)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgBinary* val)
+void hgSerialize(HgSerializer* s, HgBinary* val)
 {
-    hgSerializeImpl(s, (HgStringView*)val);
+    hgSerialize(s, (HgStringView*)val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgStringView* val)
+void hgSerialize(HgSerializer* s, HgStringView* val)
 {
     serializeString(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgStringOwner* val)
+void hgSerialize(HgSerializer* s, HgStringBuilder* val)
 {
-    hgAssert(s->current != nullptr);
+    hgSerialize(s, (HgStringView*)val);
+}
+
+template<>
+void hgSerialize(HgSerializer* s, HgStringOwner* val)
+{
+    serializeNodeStart(s);
 
     if (s->writing)
     {
@@ -874,16 +796,10 @@ void hgSerializeImpl(HgSerializer* s, HgStringOwner* val)
     }
 }
 
-template<>
-void hgSerializeImpl(HgSerializer* s, HgStringBuilder* val)
-{
-    hgSerializeImpl(s, (HgStringView*)val);
-}
-
 template<typename T>
 static void serializeInt(HgSerializer* s, T* val)
 {
-    hgAssert(s->current != nullptr);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
@@ -898,49 +814,49 @@ static void serializeInt(HgSerializer* s, T* val)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, u8* val)
+void hgSerialize(HgSerializer* s, u8* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, u16* val)
+void hgSerialize(HgSerializer* s, u16* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, u32* val)
+void hgSerialize(HgSerializer* s, u32* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, u64* val)
+void hgSerialize(HgSerializer* s, u64* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, i8* val)
+void hgSerialize(HgSerializer* s, i8* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, i16* val)
+void hgSerialize(HgSerializer* s, i16* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, i32* val)
+void hgSerialize(HgSerializer* s, i32* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, i64* val)
+void hgSerialize(HgSerializer* s, i64* val)
 {
     serializeInt(s, val);
 }
@@ -948,7 +864,7 @@ void hgSerializeImpl(HgSerializer* s, i64* val)
 template<typename T>
 static void serializeFloat(HgSerializer* s, T* val)
 {
-    hgAssert(s->current != nullptr);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
@@ -963,21 +879,21 @@ static void serializeFloat(HgSerializer* s, T* val)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, f32* val)
+void hgSerialize(HgSerializer* s, f32* val)
 {
     serializeFloat(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, f64* val)
+void hgSerialize(HgSerializer* s, f64* val)
 {
     serializeFloat(s, val);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, bool* val)
+void hgSerialize(HgSerializer* s, bool* val)
 {
-    hgAssert(s->current != nullptr);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
@@ -992,91 +908,75 @@ void hgSerializeImpl(HgSerializer* s, bool* val)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgVec2* val)
+void hgSerialize(HgSerializer* s, HgVec2* val)
 {
-    u32 size = 2;
-    hgSerializeArrayBegin(s, &size);
-    hgSerializeElement(s, &val->x);
-    hgSerializeElement(s, &val->y);
-    hgSerializeArrayEnd(s);
+    hgSerializeObject(s,
+        &val->x,
+        &val->y);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgVec3* val)
+void hgSerialize(HgSerializer* s, HgVec3* val)
 {
-    u32 size = 3;
-    hgSerializeArrayBegin(s, &size);
-    hgSerializeElement(s, &val->x);
-    hgSerializeElement(s, &val->y);
-    hgSerializeElement(s, &val->z);
-    hgSerializeArrayEnd(s);
+    hgSerializeObject(s,
+        &val->x,
+        &val->y,
+        &val->z);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgVec4* val)
+void hgSerialize(HgSerializer* s, HgVec4* val)
 {
-    u32 size = 4;
-    hgSerializeArrayBegin(s, &size);
-    hgSerializeElement(s, &val->x);
-    hgSerializeElement(s, &val->y);
-    hgSerializeElement(s, &val->z);
-    hgSerializeElement(s, &val->w);
-    hgSerializeArrayEnd(s);
+    hgSerializeObject(s,
+        &val->x,
+        &val->y,
+        &val->z,
+        &val->w);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgMat2* val)
+void hgSerialize(HgSerializer* s, HgMat2* val)
 {
-    u32 size = 2;
-    hgSerializeArrayBegin(s, &size);
-    hgSerializeElement(s, &val->x);
-    hgSerializeElement(s, &val->y);
-    hgSerializeArrayEnd(s);
+    hgSerializeObject(s,
+        &val->x,
+        &val->y);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgMat3* val)
+void hgSerialize(HgSerializer* s, HgMat3* val)
 {
-    u32 size = 3;
-    hgSerializeArrayBegin(s, &size);
-    hgSerializeElement(s, &val->x);
-    hgSerializeElement(s, &val->y);
-    hgSerializeElement(s, &val->z);
-    hgSerializeArrayEnd(s);
+    hgSerializeObject(s,
+        &val->x,
+        &val->y,
+        &val->z);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgMat4* val)
+void hgSerialize(HgSerializer* s, HgMat4* val)
 {
-    u32 size = 4;
-    hgSerializeArrayBegin(s, &size);
-    hgSerializeElement(s, &val->x);
-    hgSerializeElement(s, &val->y);
-    hgSerializeElement(s, &val->z);
-    hgSerializeElement(s, &val->w);
-    hgSerializeArrayEnd(s);
+    hgSerializeObject(s,
+        &val->x,
+        &val->y,
+        &val->z,
+        &val->w);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgComplex* val)
+void hgSerialize(HgSerializer* s, HgComplex* val)
 {
-    u32 size = 2;
-    hgSerializeArrayBegin(s, &size);
-    hgSerializeElement(s, &val->r);
-    hgSerializeElement(s, &val->i);
-    hgSerializeArrayEnd(s);
+    hgSerializeObject(s,
+        &val->r,
+        &val->i);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgQuat* val)
+void hgSerialize(HgSerializer* s, HgQuat* val)
 {
-    u32 size = 4;
-    hgSerializeArrayBegin(s, &size);
-    hgSerializeElement(s, &val->r);
-    hgSerializeElement(s, &val->i);
-    hgSerializeElement(s, &val->j);
-    hgSerializeElement(s, &val->k);
-    hgSerializeArrayEnd(s);
+    hgSerializeObject(s,
+        &val->r,
+        &val->i,
+        &val->j,
+        &val->k);
 }
 
 static constexpr char serialBinTag[] = "HgData";
@@ -1093,14 +993,8 @@ struct SerialBinHeader {
     u32 nodeBegin;
 };
 
-struct SerialBinArray {
-    u32 elemCount;
-    u32 elemsBegin;
-};
-
 struct SerialBinObject {
     u32 fieldCount;
-    u32 namesBegin;
     u32 fieldsBegin;
 };
 
@@ -1112,7 +1006,6 @@ struct SerialBinString {
 struct SerialBinNode {
     HgSerialType type;
     union {
-        SerialBinArray array;
         SerialBinObject object;
         SerialBinString string;
         i64 integer;
@@ -1122,13 +1015,6 @@ struct SerialBinNode {
 };
 
 static void serialBinWriteNode(HgArena* arena, HgBinary* bin, u32 idx, HgSerialNode* node);
-
-static void serialBinWriteNull(HgBinary* bin, u32 idx)
-{
-    SerialBinNode node{};
-    node.type = HgSerialType_null;
-    hgBinaryOverwrite(bin, idx, node);
-}
 
 static void serialBinWriteString(HgArena* arena, HgBinary* bin, u32 idx, HgStringView string)
 {
@@ -1168,33 +1054,11 @@ static void serialBinWriteBoolean(HgBinary* bin, u32 idx, bool boolean)
     hgBinaryOverwrite(bin, idx, node);
 }
 
-static void serialBinWriteArray(HgArena* arena, HgBinary* bin, u32 idx, HgSerialNode* array)
-{
-    SerialBinNode node{};
-    node.type = HgSerialType_array;
-    node.array.elemCount = array->count;
-
-    node.array.elemsBegin = (u32)bin->size;
-    hgBinaryResize(arena, bin, bin->size + array->count * sizeof(SerialBinNode));
-
-    hgBinaryOverwrite(bin, idx, node);
-
-    HgSerialNode* data = array->children;
-    for (u32 i = 0; i < array->count; ++i)
-    {
-        serialBinWriteNode(arena, bin, node.array.elemsBegin + i * (u32)sizeof(SerialBinNode), data);
-        data = data->next;
-    }
-}
-
 static void serialBinWriteObject(HgArena* arena, HgBinary* bin, u32 idx, HgSerialNode* object)
 {
     SerialBinNode node{};
     node.type = HgSerialType_object;
     node.object.fieldCount = object->count;
-
-    node.object.namesBegin = (u32)bin->size;
-    hgBinaryResize(arena, bin, bin->size + object->count * sizeof(SerialBinString));
 
     node.object.fieldsBegin = (u32)bin->size;
     hgBinaryResize(arena, bin, bin->size + object->count * sizeof(SerialBinNode));
@@ -1204,13 +1068,6 @@ static void serialBinWriteObject(HgArena* arena, HgBinary* bin, u32 idx, HgSeria
     HgSerialNode* data = object->children;
     for (u32 i = 0; i < object->count; ++i)
     {
-        SerialBinString name{};
-        name.begin = (u32)bin->size;
-        name.length = (u32)data->name.length;
-        hgBinaryResize(arena, bin, bin->size + name.length);
-        hgBinaryOverwrite(bin, name.begin, data->name.chars, data->name.length);
-        hgBinaryOverwrite(bin, node.object.namesBegin + i * (u32)sizeof(SerialBinString), name);
-
         serialBinWriteNode(arena, bin, node.object.fieldsBegin + i * (u32)sizeof(SerialBinNode), data);
         data = data->next;
     }
@@ -1220,12 +1077,6 @@ static void serialBinWriteNode(HgArena* arena, HgBinary* bin, u32 idx, HgSerialN
 {
     switch (node->type)
     {
-        case HgSerialType_null:
-            serialBinWriteNull(bin, idx);
-            return;
-        case HgSerialType_array:
-            serialBinWriteArray(arena, bin, idx, node);
-            return;
         case HgSerialType_object:
             serialBinWriteObject(arena, bin, idx, node);
             return;
@@ -1270,33 +1121,20 @@ HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer* serial)
 
 static void serialBinReadNode(HgBinary* bin, u32 idx, HgSerializer* s);
 
-static void serialBinReadArray(HgBinary* bin, SerialBinArray array, HgSerializer* s)
-{
-    hgSerializeArrayBegin(s, &array.elemCount);
-    for (u32 i = 0; i < array.elemCount; ++i)
-    {
-        hgSerializeEmptyElement(s);
-        serialBinReadNode(bin, array.elemsBegin + i * (u32)sizeof(SerialBinNode), s);
-    }
-    hgSerializeArrayEnd(s);
-}
-
 static void serialBinReadObject(HgBinary* bin, SerialBinObject object, HgSerializer* s)
 {
-    hgSerializeObjectBegin(s);
+    hgSerializeBegin(s);
     for (u32 i = 0; i < object.fieldCount; ++i)
     {
-        SerialBinString name = hgBinaryRead<SerialBinString>(bin, object.namesBegin + i * sizeof(SerialBinString));
-        hgSerializeEmptyField(s, {(char*)bin->data + name.begin, name.length});
         serialBinReadNode(bin, object.fieldsBegin + i * (u32)sizeof(SerialBinNode), s);
     }
-    hgSerializeObjectEnd(s);
+    hgSerializeEnd(s);
 }
 
 static void serialBinReadString(HgBinary* bin, SerialBinString string, HgSerializer* s)
 {
     HgStringView val = {(char*)bin->data + string.begin, string.length};
-    hgSerializeImpl(s, &val);
+    hgSerialize(s, &val);
 }
 
 static void serialBinReadNode(HgBinary* bin, u32 idx, HgSerializer* s)
@@ -1304,11 +1142,6 @@ static void serialBinReadNode(HgBinary* bin, u32 idx, HgSerializer* s)
     SerialBinNode node = hgBinaryRead<SerialBinNode>(bin, idx);
     switch (node.type)
     {
-        case HgSerialType_null:
-            return;
-        case HgSerialType_array:
-            serialBinReadArray(bin, node.array, s);
-            return;
         case HgSerialType_object:
             serialBinReadObject(bin, node.object, s);
             return;
@@ -1316,13 +1149,13 @@ static void serialBinReadNode(HgBinary* bin, u32 idx, HgSerializer* s)
             serialBinReadString(bin, node.string, s);
             return;
         case HgSerialType_integer:
-            hgSerializeImpl(s, &node.integer);
+            hgSerialize(s, &node.integer);
             return;
         case HgSerialType_floating:
-            hgSerializeImpl(s, &node.floating);
+            hgSerialize(s, &node.floating);
             return;
         case HgSerialType_boolean:
-            hgSerializeImpl(s, &node.boolean);
+            hgSerialize(s, &node.boolean);
             return;
         default:
             hgError("Invalid HgSerialType: %s\n", hgSerialTypeToString(node.type));
@@ -1432,63 +1265,57 @@ static void serialJsonWriteArray(HgArena* arena, HgStringBuilder* str, u32 inden
     }
 }
 
-static void serialJsonWriteObject(HgArena* arena, HgStringBuilder* str, u32 indentation, HgSerialNode* node)
-{
-    if (node->count > 0)
-    {
-        hgStringAppend(arena, str, "{\n");
-
-        HgSerialNode* field = node->children;
-
-        for (u32 i = 0; i < indentation + 1; ++i)
-        {
-            hgStringAppend(arena, str, "    ");
-        }
-        serialJsonWriteString(arena, str, field->name);
-        hgStringAppend(arena, str, " : ");
-        serialJsonWriteNode(arena, str, indentation + 1, field);
-
-        field = field->next;
-
-        for (u32 i = 1; i < node->count; ++i)
-        {
-            hgStringAppend(arena, str, ",\n");
-            for (u32 i = 0; i < indentation + 1; ++i)
-            {
-                hgStringAppend(arena, str, "    ");
-            }
-            serialJsonWriteString(arena, str, field->name);
-            hgStringAppend(arena, str, " : ");
-            serialJsonWriteNode(arena, str, indentation + 1, field);
-
-            field = field->next;
-        }
-
-        hgStringAppendC(arena, str, '\n');
-        for (u32 i = 0; i < indentation; ++i)
-        {
-            hgStringAppend(arena, str, "    ");
-        }
-        hgStringAppendC(arena, str, '}');
-    }
-    else
-    {
-        hgStringAppend(arena, str, "{}");
-    }
-}
+// static void serialJsonWriteObject(HgArena* arena, HgStringBuilder* str, u32 indentation, HgSerialNode* node)
+// {
+//     if (node->count > 0)
+//     {
+//         hgStringAppend(arena, str, "{\n");
+//
+//         HgSerialNode* field = node->children;
+//
+//         for (u32 i = 0; i < indentation + 1; ++i)
+//         {
+//             hgStringAppend(arena, str, "    ");
+//         }
+//         serialJsonWriteString(arena, str, field->name);
+//         hgStringAppend(arena, str, " : ");
+//         serialJsonWriteNode(arena, str, indentation + 1, field);
+//
+//         field = field->next;
+//
+//         for (u32 i = 1; i < node->count; ++i)
+//         {
+//             hgStringAppend(arena, str, ",\n");
+//             for (u32 i = 0; i < indentation + 1; ++i)
+//             {
+//                 hgStringAppend(arena, str, "    ");
+//             }
+//             serialJsonWriteString(arena, str, field->name);
+//             hgStringAppend(arena, str, " : ");
+//             serialJsonWriteNode(arena, str, indentation + 1, field);
+//
+//             field = field->next;
+//         }
+//
+//         hgStringAppendC(arena, str, '\n');
+//         for (u32 i = 0; i < indentation; ++i)
+//         {
+//             hgStringAppend(arena, str, "    ");
+//         }
+//         hgStringAppendC(arena, str, '}');
+//     }
+//     else
+//     {
+//         hgStringAppend(arena, str, "{}");
+//     }
+// }
 
 static void serialJsonWriteNode(HgArena* arena, HgStringBuilder* str, u32 indentation, HgSerialNode* node)
 {
     switch (node->type)
     {
-        case HgSerialType_null:
-            hgStringAppend(arena, str, "null");
-            return;
-        case HgSerialType_array:
-            serialJsonWriteArray(arena, str, indentation, node);
-            return;
         case HgSerialType_object:
-            serialJsonWriteObject(arena, str, indentation, node);
+            serialJsonWriteArray(arena, str, indentation, node);
             return;
         case HgSerialType_string:
             serialJsonWriteString(arena, str, node->string);
@@ -3257,37 +3084,34 @@ void hgAssetUnloadImpl(HgAsset<HgGpuMesh>* data)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgCameraPerspective* camera)
+void hgSerialize(HgSerializer* s, HgCameraPerspective* camera)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Field of View", &camera->fov);
-    hgSerializeField(s, "Aspect Ratio", &camera->aspect);
-    hgSerializeField(s, "Near Plane", &camera->near);
-    hgSerializeField(s, "Far Plane", &camera->far);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &camera->fov,
+        &camera->aspect,
+        &camera->near,
+        &camera->far);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgCameraOrthographic* camera)
+void hgSerialize(HgSerializer* s, HgCameraOrthographic* camera)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Left", &camera->left);
-    hgSerializeField(s, "Right", &camera->right);
-    hgSerializeField(s, "Top", &camera->top);
-    hgSerializeField(s, "Bottom", &camera->bottom);
-    hgSerializeField(s, "Near", &camera->near);
-    hgSerializeField(s, "Far", &camera->far);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &camera->left,
+        &camera->right,
+        &camera->top,
+        &camera->bottom,
+        &camera->near,
+        &camera->far);
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgCamera* camera)
+void hgSerialize(HgSerializer* s, HgCamera* camera)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Type", &camera->type);
-    hgSerializeField(s, "Orthographic", &camera->orthographic);
-    hgSerializeField(s, "Perspective", &camera->perspective);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &camera->type,
+        &camera->orthographic,
+        &camera->perspective);
 }
 
 struct VPUniform {
@@ -3419,13 +3243,12 @@ void hgSpritesDeinit()
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgSprite* sprite)
+void hgSerialize(HgSerializer* s, HgSprite* sprite)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Texture", &sprite->texture);
-    hgSerializeField(s, "UV Position", &sprite->uvPos);
-    hgSerializeField(s, "UV Size", &sprite->uvSize);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &sprite->texture,
+        &sprite->uvPos,
+        &sprite->uvSize);
 }
 
 HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgGpuTextureAsset* texture, HgVec2 uvPos, HgVec2 uvSize)
@@ -3560,11 +3383,10 @@ void hgSkyboxDeinit()
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgSkybox* skybox)
+void hgSerialize(HgSerializer* s, HgSkybox* skybox)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Texture", &skybox->texture);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &skybox->texture);
 }
 
 HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureAsset* texture)
@@ -3605,12 +3427,11 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgDirLight* light)
+void hgSerialize(HgSerializer* s, HgDirLight* light)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Direction", &light->dir);
-    hgSerializeField(s, "Color", &light->color);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &light->dir,
+        &light->color);
 }
 
 HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color)
@@ -3625,11 +3446,10 @@ HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgPointLight* light)
+void hgSerialize(HgSerializer* s, HgPointLight* light)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Color", &light->color);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &light->color);
 }
 
 HgPointLight* hgPointLightAdd(HgEcs* ecs, HgEntity e, HgVec4 color)
@@ -3822,13 +3642,12 @@ void hgModelsDeinit()
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgModel* model)
+void hgSerialize(HgSerializer* s, HgModel* model)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Mesh", &model->mesh);
-    hgSerializeField(s, "Color Map", &model->colorMap);
-    hgSerializeField(s, "Normal Map", &model->normalMap);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &model->mesh,
+        &model->colorMap,
+        &model->normalMap);
 }
 
 HgModel* hgModelAdd(
@@ -3984,13 +3803,12 @@ void hgAssetUnloadImpl(HgAsset<HgAudio>* data)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgAudioSource* src)
+void hgSerialize(HgSerializer* s, HgAudioSource* src)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Audio", &src->audio);
-    hgSerializeField(s, "Position", &src->position);
-    hgSerializeField(s, "Repeat", &src->repeat);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &src->audio,
+        &src->position,
+        &src->repeat);
 }
 
 HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioAsset* audio, bool repeat)
@@ -4456,7 +4274,7 @@ void hgEcsSort(
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgEcs* ecs)
+void hgSerialize(HgSerializer* s, HgEcs* ecs)
 {
     hgAssert(s != nullptr);
     hgAssert(ecs != nullptr);
@@ -4464,8 +4282,8 @@ void hgSerializeImpl(HgSerializer* s, HgEcs* ecs)
     HgArena* scratch = hgScratch(&s->arena, 1);
     hgArenaScope(scratch);
 
-    hgSerializeObjectBegin(s);
-    hgDefer(hgSerializeObjectEnd(s));
+    hgSerializeBegin(s);
+    hgDefer(hgSerializeEnd(s));
 
     HgEntitySerializer ecsSerial{};
     u32 entityCount = 0;
@@ -4478,11 +4296,11 @@ void hgSerializeImpl(HgSerializer* s, HgEcs* ecs)
                 ecsSerial.entityToIdx[hgHandleIdx(ecs->entities.handles[i])] = entityCount++;
         }
 
-        hgSerializeField(s, "Entity Count", &entityCount);
+        hgSerialize(s, &entityCount);
     }
     else
     {
-        hgSerializeField(s, "Entity Count", &entityCount);
+        hgSerialize(s, &entityCount);
 
         ecsSerial.idxToEntity = hgArenaAlloc<HgEntity>(scratch, entityCount);
         for (u32 i = 0; i < entityCount; ++i)
@@ -4494,14 +4312,14 @@ void hgSerializeImpl(HgSerializer* s, HgEcs* ecs)
     u32 systemCount;
     if (s->writing)
         systemCount = ecs->components.count;
-    hgSerializeFieldArrayBegin(s, "Components", &systemCount);
-    hgDefer(hgSerializeArrayEnd(s));
+    hgSerializeBegin(s, &systemCount);
+    hgDefer(hgSerializeEnd(s));
 
     u32 systemIdx = (u32)-1;
     for (u32 i = 0; i < systemCount; ++i)
     {
-        hgSerializeElementObjectBegin(s);
-        hgDefer(hgSerializeObjectEnd(s));
+        hgSerializeBegin(s);
+        hgDefer(hgSerializeEnd(s));
 
         u64 systemId = (u64)-1;
         HgComponent* system;
@@ -4514,12 +4332,12 @@ void hgSerializeImpl(HgSerializer* s, HgEcs* ecs)
             }
             systemId = ecs->components.keys[systemIdx];
             system = &ecs->components.vals[systemIdx];
-            hgSerializeField(s, "Name", &system->name);
+            hgSerialize(s, &system->name);
         }
         else
         {
             HgStringView compName;
-            hgSerializeField(s, "Name", &compName);
+            hgSerialize(s, &compName);
             systemId = hgHash(compName);
             system = hgMapGet(&ecs->components, systemId);
         }
@@ -4527,66 +4345,53 @@ void hgSerializeImpl(HgSerializer* s, HgEcs* ecs)
         u32 compCount;
         if (s->writing)
             compCount = system->entities.count - 1;
-        hgSerializeFieldArrayBegin(s, "Data", &compCount);
-        hgDefer(hgSerializeArrayEnd(s));
+        hgSerializeBegin(s, &compCount);
+        hgDefer(hgSerializeEnd(s));
 
         for (u32 c = 0; c < compCount; ++c)
         {
-            hgSerializeElementObjectBegin(s);
-            hgDefer(hgSerializeObjectEnd(s));
+            hgSerializeBegin(s);
+            hgDefer(hgSerializeEnd(s));
 
             u32 entityIdx;
             if (s->writing)
                 entityIdx = ecsSerial.entityToIdx[hgHandleIdx(system->entities[c + 1].handle)];
-            hgSerializeField(s, "Entity Index", &entityIdx);
+            hgSerialize(s, &entityIdx);
 
             void* compData;
             if (s->writing)
                 compData = system->components[c + 1];
             else
                 compData = hgEcsAdd(ecs, ecsSerial.idxToEntity[entityIdx], systemId);
-            hgSerializeEmptyField(s, "Component");
             system->serialize(s, compData, &ecsSerial);
         }
     }
 }
 
-void hgEntitySerializeImpl(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs)
+void hgEntitySerialize(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs)
 {
     if (s->writing)
     {
         u32 idx = *val != hgEntityNull ? ecs->entityToIdx[hgHandleIdx(val->handle)] : (u32)-1;
-        hgSerializeImpl(s, (i32*)&idx);
+        hgSerialize(s, (i32*)&idx);
     }
     else
     {
         u32 idx = (u32)-1;
-        hgSerializeImpl(s, (i32*)&idx);
+        hgSerialize(s, (i32*)&idx);
         *val = idx != (u32)-1 ? ecs->idxToEntity[idx] : hgEntityNull;
     }
 }
 
-void hgEntitySerializeElement(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs)
-{
-    hgSerializeEmptyElement(s);
-    hgEntitySerializeImpl(s, val, ecs);
-}
-
-void hgEntitySerializeField(HgSerializer* s, HgStringView name, HgEntity* val, HgEntitySerializer* ecs)
-{
-    hgSerializeEmptyField(s, name);
-    hgEntitySerializeImpl(s, val, ecs);
-}
-
 template<>
-void hgEcsSerializeImpl(HgSerializer* s, HgNode* node, HgEntitySerializer* ecs)
+void hgEcsSerialize(HgSerializer* s, HgNode* node, HgEntitySerializer* ecs)
 {
-    hgSerializeObjectBegin(s);
-    hgEntitySerializeField(s, "Parent", &node->parent, ecs);
-    hgEntitySerializeField(s, "Next Sibling", &node->nextSibling, ecs);
-    hgEntitySerializeField(s, "Previous Sibling", &node->prevSibling, ecs);
-    hgEntitySerializeField(s, "First Child", &node->firstChild, ecs);
-    hgSerializeObjectEnd(s);
+    hgSerializeBegin(s);
+    hgEntitySerialize(s, &node->parent, ecs);
+    hgEntitySerialize(s, &node->nextSibling, ecs);
+    hgEntitySerialize(s, &node->prevSibling, ecs);
+    hgEntitySerialize(s, &node->firstChild, ecs);
+    hgSerializeEnd(s);
 }
 
 HgNode* hgNodeAdd(HgEcs* ecs, HgEntity e)
@@ -4693,13 +4498,12 @@ void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
 }
 
 template<>
-void hgSerializeImpl(HgSerializer* s, HgTransform* node)
+void hgSerialize(HgSerializer* s, HgTransform* node)
 {
-    hgSerializeObjectBegin(s);
-    hgSerializeField(s, "Position", &node->position);
-    hgSerializeField(s, "Scale", &node->scale);
-    hgSerializeField(s, "Rotation", &node->rotation);
-    hgSerializeObjectEnd(s);
+    hgSerializeObject(s,
+        &node->position,
+        &node->scale,
+        &node->rotation);
 }
 
 HgTransform* hgTransformAdd(HgEcs* ecs, HgEntity e, HgVec3 position, HgVec3 scale, HgQuat rotation)
