@@ -3174,11 +3174,11 @@ void hgCameraSetPerspective(HgCamera* camera, f32 aspect, f32 fov, f32 near, f32
 void hgCameraSetOrthographic(HgCamera* camera, f32 aspect)
 {
     camera->type = HgCameraType_orthographic;
-    camera->orthographic.left = -aspect;
+    camera->orthographic.left = 0;
     camera->orthographic.right = aspect;
-    camera->orthographic.top = -1;
+    camera->orthographic.top = 0;
     camera->orthographic.bottom = 1;
-    camera->orthographic.near = -1;
+    camera->orthographic.near = 0;
     camera->orthographic.far = 1;
 }
 
@@ -3331,21 +3331,27 @@ HgLayer2D hgLayerCreate2D()
 
 void hgLayerDestroy2D(HgLayer2D* layer)
 {
+    hgAssert(layer != nullptr);
+
     hgGpuBufferDestroy(layer->instanceBuffer);
     hgArrayDestroy(&layer->instances);
 }
 
 void hgLayerClear2D(HgLayer2D* layer)
 {
+    hgAssert(layer != nullptr);
+
     layer->instances.count = 0;
     layer->changed = true;
 }
 
-void hgDrawRect2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgVec4 color)
+void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect2D dst)
 {
+    hgAssert(layer != nullptr);
+
     HgInstance2D instance{};
-    instance.rect.pos = position;
-    instance.rect.size = size;
+    instance.rect.pos = dst.pos;
+    instance.rect.size = dst.size;
     instance.rect.type = HgVertexType2D_color;
     instance.rect.color = color;
 
@@ -3354,66 +3360,91 @@ void hgDrawRect2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgVec4 color)
     layer->changed = true;
 }
 
-void hgDrawSprite2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgSprite2D* sprite)
+void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect2D dst)
 {
+    hgAssert(layer != nullptr);
+    hgAssert(sprite != nullptr);
+
     HgTexture* texture = sprite->texture == nullptr
         ? &render2D.defaultTex
         : &sprite->texture->data;
 
     HgInstance2D instance{};
-    instance.sprite.pos = position;
-    instance.sprite.size = size;
+    instance.sprite.pos = dst.pos;
+    instance.sprite.size = dst.size;
     instance.sprite.type = HgVertexType2D_texture;
     instance.sprite.tex = hgGpuImageSamplerDescriptor(texture->view);
-    instance.sprite.uvPos = sprite->uv;
-    instance.sprite.uvSize = sprite->size;
+    instance.sprite.uvPos = sprite->uv.pos;
+    instance.sprite.uvSize = sprite->uv.size;
 
     *hgArrayPush(&layer->instances) = instance;
 
     layer->changed = true;
 }
 
-HgTileset2D hgTilesetCreate2D(HgTextureAsset* texture, u32 pixelWidth, u32 pixelHeight)
+HgAtlas2D hgAtlasCreate2D(HgTextureAsset* texture)
 {
-    HgTileset2D set{};
+    hgAssert(texture != nullptr);
 
-    f32 texPixelWidth = (f32)hgGpuImageWidth(texture->data.image);
-    f32 texPixelHeight = (f32)hgGpuImageHeight(texture->data.image);
-
-    set.texWidth = (u32)(texPixelWidth / (f32)pixelWidth);
-    set.texHeight = (u32)(texPixelHeight / (f32)pixelHeight);
-
-    set.tileSize = HgVec2{
-        (f32)pixelWidth / texPixelHeight,
-        (f32)pixelHeight / texPixelHeight,
-    };
-
-    return set;
+    HgAtlas2D atlas{};
+    atlas.texture = texture;
+    atlas.sprites = hgArrayCreate<HgRect2D>();
+    return atlas;
 }
 
-HgSprite2D hgTilesetGet2D(HgTileset2D* tileset, u32 tileIdx)
+void hgAtlasDestroy2D(HgAtlas2D* atlas)
 {
-    hgAssert(tileIdx < tileset->texWidth * tileset->texHeight);
-
-    HgSprite2D sprite{};
-    sprite.texture = tileset->texture;
-    sprite.uv = tileset->tileSize * HgVec2{
-        (f32)(tileIdx % tileset->texWidth),
-        std::floor((f32)tileIdx / (f32)tileset->texWidth),
-    };
-    sprite.size = tileset->tileSize;
-    return sprite;
+    hgAssert(atlas != nullptr);
+    hgArrayDestroy(&atlas->sprites);
 }
 
-HgTilemap2D hgTilemapCreate2D(HgTileset2D* tileset, u32 width, u32 height)
+u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect2D sprite)
 {
+    hgAssert(atlas != nullptr);
+
+    u32 idx = atlas->sprites.count;
+    *hgArrayPush(&atlas->sprites) = sprite;
+    return idx;
+}
+
+u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect2D grid, u32 width, u32 height)
+{
+    hgAssert(atlas != nullptr);
+
+    u32 idx = atlas->sprites.count;
+
+    HgVec2 spriteSize = grid.size / HgVec2{(f32)width, (f32)height};
+    HgVec2 pos = grid.pos;
+    for (u32 y = 0; y < height; ++y)
+    {
+        pos.x = grid.pos.x;
+        for (u32 x = 0; x < width; ++x)
+        {
+            *hgArrayPush(&atlas->sprites) = {pos, spriteSize};
+            pos.x += spriteSize.x;
+        }
+        pos.y += spriteSize.y;
+    }
+
+    return idx;
+}
+
+HgSprite2D hgAtlasGet2D(HgAtlas2D* atlas, u32 idx)
+{
+    hgAssert(atlas != nullptr);
+
+    return {atlas->texture, atlas->sprites[idx]};
+}
+
+HgTilemap2D hgTilemapCreate2D(HgAtlas2D* atlas, u32 width, u32 height)
+{
+    hgAssert(atlas != nullptr);
+
     HgTilemap2D tilemap{};
-
-    tilemap.tileset = *tileset;
+    tilemap.atlas = atlas;
+    tilemap.tiles = hgGpaAlloc<u32>(width * height);
     tilemap.width = width;
     tilemap.height = height;
-    tilemap.tiles = hgGpaAlloc<u32>(width * height);
-
     for (u32 i = 0; i < width * height; ++i)
     {
         tilemap.tiles[i] = (u32)-1;
@@ -3422,45 +3453,55 @@ HgTilemap2D hgTilemapCreate2D(HgTileset2D* tileset, u32 width, u32 height)
     return tilemap;
 }
 
-void hgTilemapDestroy2D(HgTilemap2D* tilemap)
+void hgTilemapCreate2D(HgTilemap2D* tilemap)
 {
-    if (tilemap != nullptr)
-    {
-        hgGpaFree(tilemap->tiles, tilemap->width * tilemap->height);
-    }
+    hgAssert(tilemap != nullptr);
+    hgGpaFree(tilemap->tiles, tilemap->width * tilemap->height);
 }
 
 u32 hgTilemapGet2D(HgTilemap2D* tilemap, u32 x, u32 y)
 {
-    return tilemap->tiles[y * tilemap->tileset.texWidth + x];
+    hgAssert(tilemap != nullptr);
+    return tilemap->tiles[y * tilemap->width + x];
 }
 
 void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile)
 {
-    tilemap->tiles[y * tilemap->tileset.texWidth + x] = tile;
+    hgAssert(tilemap != nullptr);
+    tilemap->tiles[y * tilemap->width + x] = tile;
 }
 
-void hgDrawTilemap2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgTilemap2D* tilemap)
+void hgDrawTilemap2D(HgLayer2D* layer, HgTilemap2D* tilemap, HgRect2D dst)
 {
-    HgVec2 rowPos = pos - size * HgVec2{(f32)tilemap->width, (f32)tilemap->height} / 2.0f;
+    hgAssert(layer != nullptr);
+    hgAssert(tilemap != nullptr);
+
+    HgVec2 pos = dst.pos;
+    HgVec2 size = dst.size / HgVec2{(f32)tilemap->width, (f32)tilemap->height};
     for (u32 y = 0; y < tilemap->width; ++y)
     {
-        HgVec2 colPos = pos;
+        pos.x = dst.pos.x;
         for (u32 x = 0; x < tilemap->height; ++x)
         {
             u32 tile = hgTilemapGet2D(tilemap, x, y);
-            HgSprite2D sprite = hgTilesetGet2D(&tilemap->tileset, tile);
-            hgDrawSprite2D(layer, colPos, size, &sprite);
-            colPos.x += size.x;
+            HgSprite2D sprite = hgAtlasGet2D(tilemap->atlas, tile);
+            hgDrawSprite2D(layer, &sprite, {pos, size});
+            pos.x += size.x;
         }
-        rowPos.y += size.y;
+        pos.y += size.y;
     }
 }
 
 void hgRender2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D** layers, u32 layerCount)
 {
+    hgAssert(cmd != nullptr);
+    hgAssert(camera != nullptr);
+
     for (u32 i = 0; i < layerCount; ++i)
     {
+        hgAssert(layers != nullptr);
+        hgAssert(layers[i] != nullptr);
+
         HgLayer2D* layer = layers[i];
 
         if (layer->changed)

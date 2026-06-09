@@ -377,9 +377,23 @@ void hgLayerDestroy2D(HgLayer2D* layer);
 void hgLayerClear2D(HgLayer2D* layer);
 
 /**
+ * A 2D rectangle
+ */
+struct HgRect2D {
+    /**
+     * The upper left position
+     */
+    HgVec2 pos;
+    /**
+     * The extension in each dimension
+     */
+    HgVec2 size;
+};
+
+/**
  * Draw a rectangle on the layer
  */
-void hgDrawRect2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgVec4 color);
+void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect2D dst);
 
 /**
  * A 2D sprite which can be drawn
@@ -390,65 +404,76 @@ struct HgSprite2D {
      */
     HgTextureAsset* texture;
     /**
-     * The uv coord in the texture
+     * The uv coords in the texture
      */
-    HgVec2 uv;
-    /**
-     * The size in the texture
-     */
-    HgVec2 size;
+    HgRect2D uv;
 };
 
 /**
  *  Draw the sprite on the layer
  */
-void hgDrawSprite2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgSprite2D* sprite);
+void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect2D dst);
 
 /**
- * A tileset of a texture
+ * A texture atlas
  */
-struct HgTileset2D {
+struct HgAtlas2D {
     /**
      * The texture
      */
     HgTextureAsset* texture;
     /**
-     * The number of tiles in each row
+     * The sprites
      */
-    u32 texWidth;
-    /**
-     * The number of tiles in each column
-     */
-    u32 texHeight;
-    /**
-     * The size of each tile
-     */
-    HgVec2 tileSize;
+    HgArray<HgRect2D> sprites;
 };
 
 /**
- * Create a new tileset
- *
- * Parameters
- * - texture The texture to tile
- * - tileWidth The width of each tile in pixels
- * - tileHeight The height of each tile in pixels
+ * Create a new texture atlas
  */
-HgTileset2D hgTilesetCreate2D(HgTextureAsset* texture, u32 tileWidth, u32 tileHeight);
+HgAtlas2D hgAtlasCreate2D(HgTextureAsset* texture);
 
 /**
- * Get a sprite from a tileset
+ * Destroy a texture atlas
  */
-HgSprite2D hgTilesetGet2D(HgTileset2D* tileset, u32 tile);
+void hgAtlasDestroy2D(HgAtlas2D* atlas);
+
+/**
+ * Add a sprite to the atlas
+ */
+u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect2D sprite);
+
+/**
+ * Add a grid of sprites to the atlas
+ *
+ * Parameters
+ * - atlas The atlas to add to
+ * - grid The uv coords of the grid
+ * - width The number of horizontal subdivisions
+ * - height The number of vertical subdivisions
+ *
+ * Returns
+ * - The first sprite index
+ */
+u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect2D grid, u32 width, u32 height);
+
+/**
+ * Get a sprite from the atlas
+ */
+HgSprite2D hgAtlasGet2D(HgAtlas2D* atlas, u32 idx);
 
 /**
  * A world map of tiles
  */
 struct HgTilemap2D {
     /**
-     * The tileset
+     * The texture atlas
      */
-    HgTileset2D tileset;
+    HgAtlas2D* atlas;
+    /**
+     * The tilemap data
+     */
+    u32* tiles;
     /**
      * The width of the tilemap in tiles
      */
@@ -457,21 +482,17 @@ struct HgTilemap2D {
      * The height of the tilemap in tiles
      */
     u32 height;
-    /**
-     * The tilemap data
-     */
-    u32* tiles;
 };
 
 /**
- * Create a new empty tilemap
+ * Create an empty tilemap
  */
-HgTilemap2D hgTilemapCreate2D(HgTileset2D* tileset, u32 width, u32 height);
+HgTilemap2D hgTilemapCreate2D(HgAtlas2D* atlas, u32 width, u32 height);
 
 /**
  * Destroy a tilemap
  */
-void hgTilemapDestroy2D(HgTilemap2D* tilemap);
+void hgTilemapCreate2D(HgTilemap2D* tilemap);
 
 /**
  * Get the value of a tile in a tilemap
@@ -486,7 +507,7 @@ void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile);
 /**
  * Draw a tilemap to the layer
  */
-void hgDrawTilemap2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgTilemap2D* tilemap);
+void hgDrawTilemap2D(HgLayer2D* layer, HgTilemap2D* tilemap, HgRect2D dst);
 
 /**
  * Issue draw commands for a 2D scene

@@ -82,7 +82,7 @@ void main()
         vOut.texUV = positions[gl_VertexIndex] * spriteVert.uvSize + spriteVert.uvPos;
     }
 
-    vec2 pos = rectVert.pos + rectVert.size * (positions[gl_VertexIndex] - vec2(0.5));
+    vec2 pos = rectVert.pos + rectVert.size * positions[gl_VertexIndex];
 
     gl_Position = proj * view * push.model * vec4(pos, 0.0, 1.0);
 }

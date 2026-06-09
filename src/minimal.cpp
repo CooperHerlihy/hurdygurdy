@@ -10,8 +10,13 @@ int main()
     HgWindow* window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
+    hgProcessEvents();
+
     hgInit2D(hgWindowImageFormat(window));
     hgDefer(hgDeinit2D());
+
+    u32 width = hgWindowWidth(window);
+    u32 height = hgWindowHeight(window);
 
     HgCamera camera = hgCameraCreate();
     hgDefer(hgCameraDestroy(&camera));
@@ -20,13 +25,16 @@ int main()
     hgDefer(hgLayerDestroy2D(&background));
 
     hgLayerClear2D(&background);
-    hgDrawRect2D(&background, HgVec2{0, 0}, HgVec2{1, 1}, HgVec4{.002f, 0, .012f, 1});
+    hgDrawRect2D(&background,
+        HgVec4{.002f, 0, .012f, 1},
+        {HgVec2{(f32)width / (f32)height - 0.5f, 0.5f} / 2.0f, HgVec2{0.5f}});
 
     HgLayer2D spriteLayer = hgLayerCreate2D();
     hgDefer(hgLayerDestroy2D(&spriteLayer));
 
-    HgSprite2D sprite = {nullptr, HgVec2{0}, HgVec2{1}};
-    HgVec2 spritePos{0, 0};
+    HgSprite2D sprite = {nullptr, {HgVec2{0}, HgVec2{1}}};
+    HgVec2 spriteSize{0.1f, 0.1f};
+    HgVec2 spritePos = (HgVec2{(f32)width / (f32)height, 1} - spriteSize) / 2.0f;
 
     HgClock gameClock;
     hgClockTick(&gameClock);
@@ -38,14 +46,14 @@ int main()
         if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
 
-        u32 width = hgWindowWidth(window);
-        u32 height = hgWindowHeight(window);
+        width = hgWindowWidth(window);
+        height = hgWindowHeight(window);
 
         hgCameraSetOrthographic(&camera, (f32)width / (f32)height);
 
         if (hgIsButtonDown(window, HgButton_lmouse))
         {
-            f32 moveSpeed = 1.5f;
+            f32 moveSpeed = 1.0f;
             camera.position.x -= hgMouseDeltaX(window) * moveSpeed;
             camera.position.y -= hgMouseDeltaY(window) * moveSpeed;
         }
@@ -58,13 +66,13 @@ int main()
         };
         if (spriteMove != HgVec2{0.0f})
         {
-            f32 moveSpeed = 0.8f;
+            f32 moveSpeed = 0.4f;
             spritePos += hgVecNorm2(spriteMove) * moveSpeed * (f32)delta;
         }
 
         hgLayerClear2D(&spriteLayer);
 
-        hgDrawSprite2D(&spriteLayer, spritePos, HgVec2{.2f}, &sprite);
+        hgDrawSprite2D(&spriteLayer, &sprite, {spritePos, spriteSize});
 
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
         if (hgWindowImageView(window) != nullptr)
