@@ -1945,20 +1945,20 @@ HgJson hgParseJson(HgArena* arena, HgStringView text)
 void hgAssetInitDefaults()
 {
     hgAssetInit<HgBinary>();
+    hgAssetInit<HgTextureData>();
     hgAssetInit<HgTexture>();
-    hgAssetInit<HgGpuTexture>();
+    hgAssetInit<HgMeshData>();
     hgAssetInit<HgMesh>();
-    hgAssetInit<HgGpuMesh>();
     hgAssetInit<HgAudio>();
 }
 
 void hgAssetDeinitDefaults()
 {
     hgAssetDeinit<HgAudio>();
-    hgAssetDeinit<HgGpuMesh>();
     hgAssetDeinit<HgMesh>();
-    hgAssetDeinit<HgGpuTexture>();
+    hgAssetDeinit<HgMeshData>();
     hgAssetDeinit<HgTexture>();
+    hgAssetDeinit<HgTextureData>();
     hgAssetDeinit<HgBinary>();
 }
 
@@ -2956,7 +2956,7 @@ u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgTexture>* data)
+void hgAssetLoadImpl(HgAsset<HgTextureData>* data)
 {
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
@@ -2976,15 +2976,15 @@ void hgAssetLoadImpl(HgAsset<HgTexture>* data)
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgTexture>* data)
+void hgAssetUnloadImpl(HgAsset<HgTextureData>* data)
 {
     free(data->data.pixels);
 }
 
-void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence* fence)
+void hgTextureStorePng(HgTextureData* texture, HgStringView path, HgFence* fence)
 {
     struct Capture {
-        HgTexture tex;
+        HgTextureData tex;
         HgStringOwner path;
     };
     Capture* c = (Capture*)malloc(sizeof(*c));
@@ -3013,9 +3013,9 @@ void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence* fence)
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgGpuTexture>* data)
+void hgAssetLoadImpl(HgAsset<HgTexture>* data)
 {
-    HgTextureAsset* tex = hgAssetLoad<HgTexture>(data->path);
+    HgTextureDataAsset* tex = hgAssetLoad<HgTextureData>(data->path);
     hgDefer(hgAssetUnload(tex));
 
     if (tex->data.pixels == nullptr)
@@ -3037,27 +3037,27 @@ void hgAssetLoadImpl(HgAsset<HgGpuTexture>* data)
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgGpuTexture>* data)
+void hgAssetUnloadImpl(HgAsset<HgTexture>* data)
 {
     hgGpuViewDestroy(data->data.view);
     hgGpuImageDestroy(data->data.image);
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgMesh>* data)
+void hgAssetLoadImpl(HgAsset<HgMeshData>* data)
 {
     (void)data;
     hgError("load gltf file : TODO\n");
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgMesh>* data)
+void hgAssetUnloadImpl(HgAsset<HgMeshData>* data)
 {
     free(data->data.indices);
     free(data->data.vertices);
 }
 
-void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence* fence)
+void hgMeshStoreGltf(HgMeshData* data, HgStringView path, HgFence* fence)
 {
     (void)data;
     (void)path;
@@ -3066,9 +3066,9 @@ void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence* fence)
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgGpuMesh>* data)
+void hgAssetLoadImpl(HgAsset<HgMesh>* data)
 {
-    HgMeshAsset* mesh = hgAssetLoad<HgMesh>(data->path);
+    HgMeshDataAsset* mesh = hgAssetLoad<HgMeshData>(data->path);
     hgDefer(hgAssetUnload(mesh));
 
     if (mesh->data.vertices == nullptr || mesh->data.indices == nullptr)
@@ -3103,41 +3103,38 @@ void hgAssetLoadImpl(HgAsset<HgGpuMesh>* data)
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgGpuMesh>* data)
+void hgAssetUnloadImpl(HgAsset<HgMesh>* data)
 {
     hgGpuBufferDestroy(data->data.vertexBuffer);
     hgGpuBufferDestroy(data->data.indexBuffer);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgCameraPerspective* camera)
-{
-    hgSerializeObject(s,
-        &camera->fov,
-        &camera->aspect,
-        &camera->near,
-        &camera->far);
-}
-
-template<>
-void hgSerialize(HgSerializer* s, HgCameraOrthographic* camera)
-{
-    hgSerializeObject(s,
-        &camera->left,
-        &camera->right,
-        &camera->top,
-        &camera->bottom,
-        &camera->near,
-        &camera->far);
-}
-
-template<>
 void hgSerialize(HgSerializer* s, HgCamera* camera)
 {
-    hgSerializeObject(s,
-        &camera->type,
-        &camera->orthographic,
-        &camera->perspective);
+    hgSerializeBegin(s);
+    hgSerialize(s, &camera->rotation);
+    hgSerialize(s, &camera->position);
+    hgSerialize(s, &camera->type);
+    if (camera->type == HgCameraType_perspective)
+    {
+        hgSerializeObject(s,
+            &camera->perspective.aspect,
+            &camera->perspective.fov,
+            &camera->perspective.near,
+            &camera->perspective.far);
+    }
+    else
+    {
+        hgSerializeObject(s,
+            &camera->orthographic.left,
+            &camera->orthographic.right,
+            &camera->orthographic.top,
+            &camera->orthographic.bottom,
+            &camera->orthographic.near,
+            &camera->orthographic.far);
+    }
+    hgSerializeEnd(s);
 }
 
 struct VPUniform {
@@ -3154,12 +3151,61 @@ HgCamera hgCameraCreate()
         HgGpuBufferUsage_uniformBuffer,
         HgGpuMemoryUsage_frequentUpdate);
 
+    camera.rotation = HgQuat{1.0f};
+    camera.position = HgVec3{0.0f};
+
     return camera;
 }
 
 void hgCameraDestroy(HgCamera* camera)
 {
     hgGpuBufferDestroy(camera->vpBuffer);
+}
+
+void hgCameraSetPerspective(HgCamera* camera, f32 aspect, f32 fov, f32 near, f32 far)
+{
+    camera->type = HgCameraType_perspective;
+    camera->perspective.aspect = aspect;
+    camera->perspective.fov = fov;
+    camera->perspective.near = near;
+    camera->perspective.far = far;
+}
+
+void hgCameraSetOrthographic(HgCamera* camera, f32 aspect)
+{
+    camera->type = HgCameraType_orthographic;
+    camera->orthographic.left = -aspect;
+    camera->orthographic.right = aspect;
+    camera->orthographic.top = -1;
+    camera->orthographic.bottom = 1;
+    camera->orthographic.near = -1;
+    camera->orthographic.far = 1;
+}
+
+void hgCameraUpdate(HgCamera* camera)
+{
+    VPUniform vp{};
+    vp.view = hgMatView(camera->position, HgVec3{1.0f}, camera->rotation);
+    if (camera->type == HgCameraType_perspective)
+    {
+        vp.proj = hgMatPerspective(
+            camera->perspective.fov,
+            camera->perspective.aspect,
+            camera->perspective.near,
+            camera->perspective.far);
+    }
+    else
+    {
+        vp.proj = hgMatOrthographic(
+            camera->orthographic.left,
+            camera->orthographic.right,
+            camera->orthographic.top,
+            camera->orthographic.bottom,
+            camera->orthographic.near,
+            camera->orthographic.far);
+    }
+
+    hgGpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
 }
 
 HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e)
@@ -3175,7 +3221,7 @@ void hgEcsDtor(HgCamera* camera)
     hgCameraDestroy(camera);
 }
 
-void hgCameraUpdate(HgEcs* ecs, HgEntity e)
+void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsHas<HgCamera>(ecs, e));
@@ -3211,7 +3257,7 @@ void hgCameraUpdate(HgEcs* ecs, HgEntity e)
 
 struct Render2dState {
     HgGpuPipeline* pipeline;
-    HgGpuTexture defaultTex;
+    HgTexture defaultTex;
 };
 
 static Render2dState render2d;
@@ -3223,7 +3269,7 @@ struct Render2dPush {
     u32 indexIdx;
 };
 
-void hg2dInit(HgFormat colorFormat)
+void hgInit2D(HgFormat colorFormat)
 {
     HgBinaryAsset* vertSpv = hgAssetLoad<HgBinary>("build/render2d.vert.spv");
     HgBinaryAsset* fragSpv = hgAssetLoad<HgBinary>("build/render2d.frag.spv");
@@ -3263,21 +3309,21 @@ void hg2dInit(HgFormat colorFormat)
     hgGpuImageWrite(render2d.defaultTex.view, defaultColors);
 }
 
-void hg2dDeinit()
+void hgDeinit2D()
 {
     hgGpuViewDestroy(render2d.defaultTex.view);
     hgGpuImageDestroy(render2d.defaultTex.image);
     hgGpuPipelineDestroy(render2d.pipeline);
 }
 
-Hg2dLayer hg2dLayerCreate()
+HgLayer2D hgLayerCreate2D()
 {
-    Hg2dLayer layer{};
+    HgLayer2D layer{};
 
-    layer.vertices = hgArrayCreate<Hg2dVertex>();
+    layer.vertices = hgArrayCreate<HgVertex2D>();
     layer.indices = hgArrayCreate<u32>();
 
-    layer.vertexBuffer = hgGpuBufferCreate(layer.vertices.capacity * sizeof(Hg2dVertex),
+    layer.vertexBuffer = hgGpuBufferCreate(layer.vertices.capacity * sizeof(HgVertex2D),
         HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
 
     layer.indexBuffer = hgGpuBufferCreate(layer.indices.capacity * sizeof(u32),
@@ -3292,7 +3338,7 @@ Hg2dLayer hg2dLayerCreate()
     return layer;
 }
 
-void hg2dLayerDestroy(Hg2dLayer* layer)
+void hgLayerDestroy2D(HgLayer2D* layer)
 {
     hgGpuBufferDestroy(layer->indexBuffer);
     hgGpuBufferDestroy(layer->vertexBuffer);
@@ -3300,7 +3346,7 @@ void hg2dLayerDestroy(Hg2dLayer* layer)
     hgArrayDestroy(&layer->vertices);
 }
 
-void hg2dLayerClear(Hg2dLayer* layer)
+void hgLayerClear2D(HgLayer2D* layer)
 {
     layer->vertices.count = 0;
     layer->indices.count = 0;
@@ -3308,7 +3354,7 @@ void hg2dLayerClear(Hg2dLayer* layer)
     layer->changed = true;
 }
 
-void hg2dRectDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, HgVec4 color)
+void hgRect2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgVec4 color)
 {
     u32 idx = layer->vertices.count;
     *hgArrayPush(&layer->indices) = idx + 0;
@@ -3318,8 +3364,8 @@ void hg2dRectDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, HgVec4 color)
     *hgArrayPush(&layer->indices) = idx + 3;
     *hgArrayPush(&layer->indices) = idx + 0;
 
-    Hg2dVertex vert{};
-    vert.type = Hg2dVertexType_color;
+    HgVertex2D vert{};
+    vert.type = HgVertexType2D_color;
     vert.color = color;
 
     vert.pos = position;
@@ -3337,7 +3383,7 @@ void hg2dRectDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, HgVec4 color)
     layer->changed = true;
 }
 
-void hg2dSpriteDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, Hg2dSprite* sprite)
+void hgSprite2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgSprite2D* sprite)
 {
     u32 idx = layer->vertices.count;
     *hgArrayPush(&layer->indices) = idx + 0;
@@ -3347,34 +3393,34 @@ void hg2dSpriteDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, Hg2dSprite* 
     *hgArrayPush(&layer->indices) = idx + 3;
     *hgArrayPush(&layer->indices) = idx + 0;
 
-    HgGpuTexture* texture = sprite->texture == nullptr
+    HgTexture* texture = sprite->texture == nullptr
         ? &render2d.defaultTex
         : &sprite->texture->data;
 
-    Hg2dVertex vert{};
-    vert.type = Hg2dVertexType_texture;
+    HgVertex2D vert{};
+    vert.type = HgVertexType2D_texture;
     vert.texIdx = hgGpuImageSamplerDescriptor(texture->view);
 
     vert.pos = position;
-    vert.texUV = sprite->texPos;
+    vert.texUV = HgVec2{sprite->u, sprite->v};
     *hgArrayPush(&layer->vertices) = vert;
 
     vert.pos = position + HgVec2{size.x, 0};
-    vert.texUV = sprite->texPos + HgVec2{sprite->texSize.x, 0};
+    vert.texUV = HgVec2{sprite->u + sprite->width, sprite->v};
     *hgArrayPush(&layer->vertices) = vert;
 
     vert.pos = position + size;
-    vert.texUV = sprite->texPos + sprite->texSize;
+    vert.texUV = HgVec2{sprite->u + sprite->width, sprite->v + sprite->height};
     *hgArrayPush(&layer->vertices) = vert;
 
     vert.pos = position + HgVec2{0, size.y};
-    vert.texUV = sprite->texPos + HgVec2{0, sprite->texSize.y};
+    vert.texUV = HgVec2{sprite->u, sprite->v + sprite->height};
     *hgArrayPush(&layer->vertices) = vert;
 
     layer->changed = true;
 }
 
-void hg2dDraw(HgGpuCmd* cmd, HgCamera* camera, Hg2dLayer* layer)
+void hgDraw2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
 {
     if (layer->changed)
     {
@@ -3383,7 +3429,7 @@ void hg2dDraw(HgGpuCmd* cmd, HgCamera* camera, Hg2dLayer* layer)
             hgGpuWaitIdle();
             hgGpuBufferDestroy(layer->vertexBuffer);
 
-            layer->vertexBuffer = hgGpuBufferCreate(layer->vertices.capacity * sizeof(Hg2dVertex),
+            layer->vertexBuffer = hgGpuBufferCreate(layer->vertices.capacity * sizeof(HgVertex2D),
                 HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
             layer->vertexBufferCapacity = layer->vertices.capacity;
         }
@@ -3398,7 +3444,7 @@ void hg2dDraw(HgGpuCmd* cmd, HgCamera* camera, Hg2dLayer* layer)
             layer->indexBufferCapacity = layer->indices.capacity;
         }
 
-        hgGpuBufferWrite(layer->vertexBuffer, 0, layer->vertices.vals, layer->vertices.count * sizeof(Hg2dVertex));
+        hgGpuBufferWrite(layer->vertexBuffer, 0, layer->vertices.vals, layer->vertices.count * sizeof(HgVertex2D));
         hgGpuBufferWrite(layer->indexBuffer, 0, layer->indices.vals, layer->indices.count * sizeof(u32));
 
         layer->changed = false;
@@ -3427,7 +3473,7 @@ struct SpritePipelinePush {
 
 struct SpritePipelineState {
     HgGpuPipeline* pipeline;
-    HgGpuTexture defaultTex;
+    HgTexture defaultTex;
 };
 
 static SpritePipelineState spritePipeline{};
@@ -3494,7 +3540,7 @@ void hgSerialize(HgSerializer* s, HgSprite* sprite)
         &sprite->uvSize);
 }
 
-HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgGpuTextureAsset* texture, HgVec2 uvPos, HgVec2 uvSize)
+HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgTextureAsset* texture, HgVec2 uvPos, HgVec2 uvSize)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
@@ -3523,7 +3569,7 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* tf)
     {
-        HgGpuTexture* texture = sprite->texture == nullptr
+        HgTexture* texture = sprite->texture == nullptr
             ? &spritePipeline.defaultTex
             : &sprite->texture->data;
 
@@ -3547,7 +3593,7 @@ struct SkyboxPipelinePush {
 
 struct SkyboxPipelineState {
     HgGpuPipeline* pipeline;
-    HgGpuTexture defaultTex;
+    HgTexture defaultTex;
 };
 
 static SkyboxPipelineState skyboxPipeline{};
@@ -3630,7 +3676,7 @@ void hgSerialize(HgSerializer* s, HgSkybox* skybox)
         &skybox->texture);
 }
 
-HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureAsset* texture)
+HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgTextureAsset* texture)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
@@ -3653,7 +3699,7 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSkybox>(ecs, [&](HgEntity, HgSkybox* skybox)
     {
-        HgGpuTexture* texture = skybox->texture == nullptr
+        HgTexture* texture = skybox->texture == nullptr
             ? &skyboxPipeline.defaultTex
             : &skybox->texture->data;
 
@@ -3736,9 +3782,9 @@ struct ModelPipelineState {
     HgGpuBuffer* pointLightBuffer;
     u32 pointLightCapacity;
 
-    HgGpuMesh defaultModel;
-    HgGpuTexture defaultColorMap;
-    HgGpuTexture defaultNormalMap;
+    HgMesh defaultModel;
+    HgTexture defaultColorMap;
+    HgTexture defaultNormalMap;
 };
 
 static ModelPipelineState modelPipeline{};
@@ -3892,9 +3938,9 @@ void hgSerialize(HgSerializer* s, HgModel* model)
 HgModel* hgModelAdd(
     HgEcs* ecs,
     HgEntity e,
-    HgGpuMeshAsset* mesh,
-    HgGpuTextureAsset* colorMap,
-    HgGpuTextureAsset* normalMap)
+    HgMeshAsset* mesh,
+    HgTextureAsset* colorMap,
+    HgTextureAsset* normalMap)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
@@ -3997,15 +4043,15 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* tf)
     {
-        HgGpuTexture* colorMap = model->colorMap == nullptr
+        HgTexture* colorMap = model->colorMap == nullptr
             ? &modelPipeline.defaultColorMap
             : &model->colorMap->data;
 
-        HgGpuTexture* normalMap = model->normalMap == nullptr
+        HgTexture* normalMap = model->normalMap == nullptr
             ? &modelPipeline.defaultNormalMap
             : &model->normalMap->data;
 
-        HgGpuMesh* gpuModel = model->mesh == nullptr
+        HgMesh* gpuModel = model->mesh == nullptr
             ? &modelPipeline.defaultModel
             : &model->mesh->data;
 

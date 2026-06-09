@@ -12,37 +12,26 @@ int main()
 
     hgTest();
 
-    HgArena* arena = hgScratch();
-    hgArenaScope(arena);
-
     HgWindow* window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
-    HgCamera cameraC = hgCameraCreate();
-    hgDefer(hgCameraDestroy(&cameraC));
+    hgInit2D(hgWindowImageFormat(window));
+    hgDefer(hgDeinit2D());
 
-    // cameraC.type = HgCameraType_perspective;
-    // cameraC.type = HgCameraType_orthographic;
+    HgCamera camera = hgCameraCreate();
+    hgDefer(hgCameraDestroy(&camera));
 
-    cameraC.perspective.fov = (f32)hgPi * 0.5f;
-    cameraC.perspective.near = 0.1f;
-    cameraC.perspective.far = 1000.0f;
+    HgLayer2D background = hgLayerCreate2D();
+    hgDefer(hgLayerDestroy2D(&background));
 
-    cameraC.orthographic.left = -1;
-    cameraC.orthographic.right = 1;
-    cameraC.orthographic.top = -1;
-    cameraC.orthographic.bottom = 1;
-    cameraC.orthographic.near = 0;
-    cameraC.orthographic.far = 10;
+    hgLayerClear2D(&background);
+    hgRect2D(&background, HgVec2{-.5f, -.5f}, HgVec2{1, 1}, HgVec4{.002f, 0, .012f, 1});
 
-    HgTransform cameraTf = {};
-    cameraTf.position = HgVec3{0, 0, -1};
+    HgLayer2D spriteLayer = hgLayerCreate2D();
+    hgDefer(hgLayerDestroy2D(&spriteLayer));
 
-    hg2dInit(hgWindowImageFormat(window));
-    hgDefer(hg2dDeinit());
-
-    Hg2dLayer layer = hg2dLayerCreate();
-    hgDefer(hg2dLayerDestroy(&layer));
+    HgSprite2D sprite = {nullptr, 0, 0, 1, 1};
+    HgVec2 spritePos{-0.1f, -0.1f};
 
     HgClock gameClock;
     hgClockTick(&gameClock);
@@ -54,36 +43,33 @@ int main()
         if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
 
-        cameraC.perspective.aspect = (f32)hgWindowWidth(window) / (f32)hgWindowHeight(window);
+        u32 width = hgWindowWidth(window);
+        u32 height = hgWindowHeight(window);
+
+        hgCameraSetOrthographic(&camera, (f32)width / (f32)height);
 
         if (hgIsButtonDown(window, HgButton_lmouse))
         {
-            f32 rotSpeed = 2.0f;
-            HgQuat rotX = hgQuatAxisAngle(HgVec3{ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
-            HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
-            cameraTf.rotation = rotX * cameraTf.rotation * rotY;
-        }
-
-        HgVec3 movement = HgVec3{
-            (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a)),
-            (f32)(hgIsButtonDown(window, HgButton_lshift) - hgIsButtonDown(window, HgButton_space)),
-            (f32)(hgIsButtonDown(window, HgButton_w) - hgIsButtonDown(window, HgButton_s)),
-        };
-        if (movement != HgVec3{0.0f})
-        {
             f32 moveSpeed = 1.5f;
-            HgVec3 rotated = hgVecRotate(cameraTf.rotation, HgVec3{movement.x, 0.0f, movement.z});
-            cameraTf.position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
+            camera.position.x -= hgMouseDeltaX(window) * moveSpeed;
+            camera.position.y -= hgMouseDeltaY(window) * moveSpeed;
         }
 
-        cameraTf.mat = hgMatModel3D(cameraTf.position, cameraTf.scale, cameraTf.rotation);
+        hgCameraUpdate(&camera);
 
-        hg2dLayerClear(&layer);
+        HgVec2 spriteMove = HgVec2{
+            (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a)),
+            (f32)(hgIsButtonDown(window, HgButton_s) - hgIsButtonDown(window, HgButton_w)),
+        };
+        if (spriteMove != HgVec2{0.0f})
+        {
+            f32 moveSpeed = 0.8f;
+            spritePos += hgVecNorm2(spriteMove) * moveSpeed * (f32)delta;
+        }
 
-        Hg2dSprite sprite = {nullptr, HgVec2{0}, HgVec2{1}};
-        hg2dSpriteDraw(&layer, HgVec2{0, 0}, HgVec2{1, 1}, &sprite);
+        hgLayerClear2D(&spriteLayer);
 
-        hg2dRectDraw(&layer, HgVec2{-1, -1}, HgVec2{1, 1}, HgVec4{1, 0, 0, 1});
+        hgSprite2D(&spriteLayer, spritePos, HgVec2{.2f}, &sprite);
 
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
         if (hgWindowImageView(window) != nullptr)
@@ -97,34 +83,11 @@ int main()
 
             hgGpuRenderPassBegin(cmd, &pass);
 
-            hgGpuSetViewport(cmd, 0, 0, (f32)hgWindowWidth(window), (f32)hgWindowHeight(window));
-            hgGpuSetScissor(cmd, 0, 0, hgWindowWidth(window), hgWindowHeight(window));
+            hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
+            hgGpuSetScissor(cmd, 0, 0, width, height);
 
-            VPUniform vp{};
-            vp.view = hgMatModelToView(cameraTf.mat);
-
-            // vp.proj = hgMatOrthographic(
-            //     cameraC.orthographic.left,
-            //     cameraC.orthographic.right,
-            //     cameraC.orthographic.top,
-            //     cameraC.orthographic.bottom,
-            //     cameraC.orthographic.near,
-            //     cameraC.orthographic.far);
-
-            vp.proj = hgMatPerspective(
-                cameraC.perspective.fov,
-                cameraC.perspective.aspect,
-                cameraC.perspective.near,
-                cameraC.perspective.far);
-
-            // VPUniform vp{};
-            // vp.view = HgMat4{1};
-            // vp.proj = HgMat4{1};
-            // hgGpuBufferWrite(cameraC.vpBuffer, 0, &vp, sizeof(vp));
-
-            hgGpuBufferWrite(cameraC.vpBuffer, 0, &vp, sizeof(vp));
-
-            hg2dDraw(cmd, &cameraC, &layer);
+            hgDraw2D(cmd, &camera, &background);
+            hgDraw2D(cmd, &camera, &spriteLayer);
 
             hgGpuRenderPassEnd(cmd);
 

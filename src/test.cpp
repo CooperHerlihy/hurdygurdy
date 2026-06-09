@@ -2228,7 +2228,7 @@ void hgTest()
 
         HgStringView path = "hg_test_dir/image_test.png";
 
-        HgTexture testImage{};
+        HgTextureData testImage{};
         testImage.width = 2;
         testImage.height = 2;
         testImage.depth = 1;
@@ -2241,7 +2241,7 @@ void hgTest()
             hgTextureStorePng(&testImage, path, fence);
             hgAssert(hgFenceWait(fence, 2.0));
 
-            HgTextureAsset* image = hgAssetLoad<HgTexture>(path);
+            HgTextureDataAsset* image = hgAssetLoad<HgTextureData>(path);
             hgDefer(hgAssetUnload(image));
             hgAssert(image->data.width == testImage.width);
             hgAssert(image->data.height == testImage.height);

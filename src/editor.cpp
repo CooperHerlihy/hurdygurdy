@@ -107,16 +107,11 @@ void init(HgArena* arena)
     hgNodeAdd(ecs, player);
     transform = hgTransformAdd(ecs, player, HgVec3{0, 0, -1});
     camera = hgCameraAdd(ecs, player);
+
     camera->type = HgCameraType_perspective;
     camera->perspective.fov = (f32)hgPi * 0.5f;
     camera->perspective.near = 0.01f;
     camera->perspective.far = 1000.0f;
-    camera->orthographic.left = -1;
-    camera->orthographic.right = 1;
-    camera->orthographic.top = -1;
-    camera->orthographic.bottom = 1;
-    camera->orthographic.near = 0;
-    camera->orthographic.far = 10;
 
     HgEntity skybox = hgEcsSpawn(ecs);
     *hgEcsAdd<Name>(ecs, skybox) = {"skybox"};
@@ -365,7 +360,10 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
             if (c->type == HgCameraType_perspective)
             {
                 if (ImGui::Button("Perspective"))
+                {
                     c->type = HgCameraType_orthographic;
+                    hgCameraSetOrthographic(c, (f32)width / (f32)height);
+                }
                 ImGui::DragFloat("FoV", &c->perspective.fov, 0.01f);
                 ImGui::DragFloat("Aspect", &c->perspective.aspect, 0.01f);
                 ImGui::DragFloat("Near", &c->perspective.near, 0.01f, 0.01f);
@@ -374,7 +372,10 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
             else if (c->type == HgCameraType_orthographic)
             {
                 if (ImGui::Button("Orthographic"))
+                {
                     c->type = HgCameraType_perspective;
+                    hgCameraSetPerspective(c, (f32)width / (f32)height);
+                }
                 ImGui::DragFloat2("Left, Right", &c->orthographic.left);
                 ImGui::DragFloat2("Top, Bottom", &c->orthographic.top);
                 ImGui::DragFloat2("Near, Far", &c->orthographic.near);
@@ -542,7 +543,7 @@ void render()
         hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
         hgGpuSetScissor(cmd, 0, 0, width, height);
 
-        hgCameraUpdate(ecs, player);
+        hgCameraUpdateEcs(ecs, player);
         hgSkyboxDraw(ecs, player, cmd);
         hgSpritesDraw(ecs, player, cmd);
         hgModelsDraw(ecs, player, cmd);

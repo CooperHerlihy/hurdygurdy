@@ -40,7 +40,7 @@
 /**
  * A texture asset
  */
-struct HgTexture {
+struct HgTextureData {
     /**
      * The width of the texture in pixels
      */
@@ -66,29 +66,29 @@ struct HgTexture {
 /**
  * A handle to a texture
  */
-typedef HgAsset<HgTexture> HgTextureAsset;
+typedef HgAsset<HgTextureData> HgTextureDataAsset;
 
 /**
  * HgTexture asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgTexture>* data);
+void hgAssetLoadImpl(HgAsset<HgTextureData>* data);
 
 /**
  * HgTexture asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgTexture>* data);
+void hgAssetUnloadImpl(HgAsset<HgTextureData>* data);
 
 /**
  * Store an image to disc in the png format
  */
-void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence* fence);
+void hgTextureStorePng(HgTextureData* texture, HgStringView path, HgFence* fence);
 
 /**
  * A texture asset stored on the gpu
  */
-struct HgGpuTexture {
+struct HgTexture {
     /**
      * The image
      */
@@ -102,19 +102,292 @@ struct HgGpuTexture {
 /**
  * A handle to a texture asset
  */
-typedef HgAsset<HgGpuTexture> HgGpuTextureAsset;
+typedef HgAsset<HgTexture> HgTextureAsset;
 
 /**
  * HgGpuTexture asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgGpuTexture>* data);
+void hgAssetLoadImpl(HgAsset<HgTexture>* data);
 
 /**
  * HgGpuTexture asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgGpuTexture>* data);
+void hgAssetUnloadImpl(HgAsset<HgTexture>* data);
+/**
+ * The types of camera projections
+ */
+enum HgCameraType : u32 {
+    HgCameraType_perspective,
+    HgCameraType_orthographic,
+};
+
+/**
+ * A perspective camera
+ */
+struct HgCameraPerspective {
+    /**
+     * The aspect ratio
+     */
+    f32 aspect;
+    /**
+     * The field of view
+     */
+    f32 fov;
+    /**
+     * The near clipping plane
+     */
+    f32 near;
+    /**
+     * The far clipping plane
+     */
+    f32 far;
+};
+
+/**
+ * An orthographic camera
+ */
+struct HgCameraOrthographic {
+    /**
+     * The clipping planes in each direction
+     */
+    f32 left, right, top, bottom, near, far;
+};
+
+/**
+ * A camera component
+ */
+struct HgCamera {
+    /**
+     * The gpu view projection data, created/destroyed on add/remove
+     */
+    HgGpuBuffer* vpBuffer;
+    /**
+     * The current rotation
+     */
+    HgQuat rotation;
+    /**
+     * The current position
+     */
+    HgVec3 position;
+    /**
+     * The type of projection
+     */
+    HgCameraType type;
+    /**
+     * The projection data
+     */
+    union {
+        /**
+         * An orthographic camera
+         */
+        HgCameraOrthographic orthographic;
+        /**
+         * A perspective camera
+         */
+        HgCameraPerspective perspective;
+    };
+};
+
+/**
+ * HgCamera serialization
+ */
+template<>
+void hgSerialize(HgSerializer* s, HgCamera* camera);
+
+/**
+ * Create a camera
+ */
+HgCamera hgCameraCreate();
+
+/**
+ * Destroy a camera
+ */
+void hgCameraDestroy(HgCamera* camera);
+
+/**
+ * The the camera to a perspective projection
+ */
+void hgCameraSetPerspective(HgCamera* camera, f32 aspect, f32 fov = (f32)hgPi / 2.0f, f32 near = 0.01f, f32 far = 1000.0f);
+
+/**
+ * The the camera to an orthographic projection using reasonable defaults
+ */
+void hgCameraSetOrthographic(HgCamera* camera, f32 aspect);
+
+/**
+ * Update the camera's gpu side data
+ */
+void hgCameraUpdate(HgCamera* camera);
+
+/**
+ * HgCamera ecs add implementation
+ */
+HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e);
+
+/**
+ * HgCamera ecs destructor
+ */
+template<>
+void hgEcsDtor(HgCamera* camera);
+
+/**
+ * Update the camera's gpu side data, must have a camera and transform
+ */
+void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e);
+
+/**
+ * Initialize the 2D renderer
+ */
+void hgInit2D(HgFormat colorFormat);
+
+/**
+ * Deinitialize the 2D renderer
+ */
+void hgDeinit2D();
+
+/**
+ * The 2D vertex types
+ */
+enum HgVertexType2D : u32 {
+    /**
+     * A vertex with a color value
+     */
+    HgVertexType2D_color = 0,
+    /**
+     * A vertex with a pointer to a texture
+     */
+    HgVertexType2D_texture = 1,
+};
+
+/**
+ * A vertex in a 2D layer
+ */
+struct HgVertex2D {
+    /**
+     * The color, if a color vertex
+     */
+    HgVec4 color;
+    /**
+     * The vertex position
+     */
+    HgVec2 pos;
+    /**
+     * The texture uv coord, if a texture vertex
+     */
+    HgVec2 texUV;
+    /**
+     * The texture descriptor index, if a texture vertex
+     */
+    u32 texIdx;
+    /**
+     * The type of vertex
+     */
+    HgVertexType2D type;
+    /**
+     * Padding to match glsl
+     */
+    u32 pad0;
+    /**
+     * Padding to match glsl
+     */
+    u32 pad1;
+};
+
+/**
+ * A 2D render layer
+ */
+struct HgLayer2D {
+    /**
+     * The gpu vertex buffer
+     */
+    HgGpuBuffer* vertexBuffer;
+    /**
+     * The gpu index buffer
+     */
+    HgGpuBuffer* indexBuffer;
+    /**
+     * The current capacity of the vertex buffer
+     */
+    u32 vertexBufferCapacity;
+    /**
+     * The current capacity of the index buffer
+     */
+    u32 indexBufferCapacity;
+    /**
+     * The vertex data
+     */
+    HgArray<HgVertex2D> vertices;
+    /**
+     * The index data
+     */
+    HgArray<u32> indices;
+    /**
+     * The transform, does not affect changed
+     */
+    HgMat4 transform;
+    /**
+     * Whether the gpu data needs to be updated
+     */
+    bool changed;
+};
+
+/**
+ * Create a 2D render layer
+ */
+HgLayer2D hgLayerCreate2D();
+
+/**
+ * Destroy a 2D render layer
+ */
+void hgLayerDestroy2D(HgLayer2D* layer);
+
+/**
+ * Remove all drawings from the layer
+ */
+void hgLayerClear2D(HgLayer2D* layer);
+
+/**
+ * Draw a rectangle on the layer
+ */
+void hgRect2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgVec4 color);
+
+/**
+ * A 2D sprite which can be drawn
+ */
+struct HgSprite2D {
+    /**
+     * The sprite's texture
+     */
+    HgTextureAsset* texture;
+    /**
+     * The u coord in the texture
+     */
+    f32 u;
+    /**
+     * The v coord in the texture
+     */
+    f32 v;
+    /**
+     * The width in the texture
+     */
+    f32 width;
+    /**
+     * The height in the texture
+     */
+    f32 height;
+};
+
+/**
+ *  Draw the sprite on the layer
+ */
+void hgSprite2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgSprite2D* sprite);
+
+/**
+ * Issue draw commands for a 2D scene
+ */
+void hgDraw2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
 
 /**
  * A vertex in a mesh
@@ -151,7 +424,7 @@ struct HgMeshVertex {
 /**
  * A 3d mesh asset
  */
-struct HgMesh {
+struct HgMeshData {
     /**
      * The file index of the first vertex
      */
@@ -181,29 +454,29 @@ struct HgMesh {
 /**
  * A handle to a 3d mesh asset
  */
-typedef HgAsset<HgMesh> HgMeshAsset;
+typedef HgAsset<HgMeshData> HgMeshDataAsset;
 
 /**
  * HgMesh asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgMesh>* data);
+void hgAssetLoadImpl(HgAsset<HgMeshData>* data);
 
 /**
  * HgMesh asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgMesh>* data);
+void hgAssetUnloadImpl(HgAsset<HgMeshData>* data);
 
 /**
  * Store the model data to disc in gltf format : TODO
  */
-void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence* fence);
+void hgMeshStoreGltf(HgMeshData* data, HgStringView path, HgFence* fence);
 
 /**
  * A 3d mesh asset stored on the gpu
  */
-struct HgGpuMesh {
+struct HgMesh {
     /**
      * The vertex buffer
      */
@@ -229,269 +502,20 @@ struct HgGpuMesh {
 /**
  * A gpu mesh asset handle
  */
-typedef HgAsset<HgGpuMesh> HgGpuMeshAsset;
+typedef HgAsset<HgMesh> HgMeshAsset;
 
 /**
  * HgGpuMesh asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgGpuMesh>* data);
+void hgAssetLoadImpl(HgAsset<HgMesh>* data);
 
 /**
  * HgGpuMesh asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgGpuMesh>* data);
+void hgAssetUnloadImpl(HgAsset<HgMesh>* data);
 
-/**
- * The types of camera projections
- */
-enum HgCameraType : u32 {
-    HgCameraType_perspective,
-    HgCameraType_orthographic,
-};
-
-/**
- * A perspective camera
- */
-struct HgCameraPerspective {
-    /**
-     * The field of view
-     */
-    f32 fov;
-    /**
-     * The aspect ratio
-     */
-    f32 aspect;
-    /**
-     * The near clipping plane
-     */
-    f32 near;
-    /**
-     * The far clipping plane
-     */
-    f32 far;
-};
-
-/**
- * HgCameraPerspective serialization
- */
-template<>
-void hgSerialize(HgSerializer* s, HgCameraPerspective* camera);
-
-/**
- * An orthographic camera
- */
-struct HgCameraOrthographic {
-    /**
-     * The clipping planes in each direction
-     */
-    f32 left, right, top, bottom, near, far;
-};
-
-/**
- * HgCameraOrthographic serialization
- */
-template<>
-void hgSerialize(HgSerializer* s, HgCameraOrthographic* camera);
-
-/**
- * A camera component
- */
-struct HgCamera {
-    /**
-     * The gpu view projection data, created/destroyed on add/remove
-     */
-    HgGpuBuffer* vpBuffer;
-    /**
-     * The type of camera
-     */
-    HgCameraType type;
-    /**
-     * An orthographic camera
-     */
-    HgCameraOrthographic orthographic;
-    /**
-     * A perspective camera
-     */
-    HgCameraPerspective perspective;
-};
-
-/**
- * HgCamera serialization
- */
-template<>
-void hgSerialize(HgSerializer* s, HgCamera* camera);
-
-/**
- * Create a camera
- */
-HgCamera hgCameraCreate();
-
-/**
- * Destroy a camera
- */
-void hgCameraDestroy(HgCamera* camera);
-
-/**
- * HgCamera ecs add implementation
- */
-HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e);
-
-/**
- * HgCamera ecs destructor
- */
-template<>
-void hgEcsDtor(HgCamera* camera);
-
-/**
- * Update the camera's gpu side data, must have a camera and transform
- */
-void hgCameraUpdate(HgEcs* ecs, HgEntity e);
-
-/**
- * The 2D vertex types
- */
-enum Hg2dVertexType : u32 {
-    /**
-     * A vertex with a color value
-     */
-    Hg2dVertexType_color = 0,
-    /**
-     * A vertex with a pointer to a texture
-     */
-    Hg2dVertexType_texture = 1,
-};
-
-/**
- * A vertex in a 2D layer
- */
-struct Hg2dVertex {
-    /**
-     * The color, if a color vertex
-     */
-    HgVec4 color;
-    /**
-     * The vertex position
-     */
-    HgVec2 pos;
-    /**
-     * The texture uv coord, if a texture vertex
-     */
-    HgVec2 texUV;
-    /**
-     * The texture descriptor index, if a texture vertex
-     */
-    u32 texIdx;
-    /**
-     * The type of vertex
-     */
-    Hg2dVertexType type;
-    /**
-     * Padding to match glsl
-     */
-    u32 pad0;
-    /**
-     * Padding to match glsl
-     */
-    u32 pad1;
-};
-
-/**
- * A 2D render layer
- */
-struct Hg2dLayer {
-    /**
-     * The gpu vertex buffer
-     */
-    HgGpuBuffer* vertexBuffer;
-    /**
-     * The gpu index buffer
-     */
-    HgGpuBuffer* indexBuffer;
-    /**
-     * The current capacity of the vertex buffer
-     */
-    u32 vertexBufferCapacity;
-    /**
-     * The current capacity of the index buffer
-     */
-    u32 indexBufferCapacity;
-    /**
-     * The vertex data
-     */
-    HgArray<Hg2dVertex> vertices;
-    /**
-     * The index data
-     */
-    HgArray<u32> indices;
-    /**
-     * The transform, does not affect changed
-     */
-    HgMat4 transform;
-    /**
-     * Whether the gpu data needs to be updated
-     */
-    bool changed;
-};
-
-/**
- * Initialize the 2d layer renderer
- */
-void hg2dInit(HgFormat colorFormat);
-
-/**
- * Deinitialize the 2d layer renderer
- */
-void hg2dDeinit();
-
-/**
- * Create a 2D render layer
- */
-Hg2dLayer hg2dLayerCreate();
-
-/**
- * Destroy a 2D render layer
- */
-void hg2dLayerDestroy(Hg2dLayer* layer);
-
-/**
- * Remove all drawings from the layer
- */
-void hg2dLayerClear(Hg2dLayer* layer);
-
-/**
- * Draw a rectangle on the layer
- */
-void hg2dRectDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, HgVec4 color);
-
-/**
- * A 2D sprite which can be drawn
- */
-struct Hg2dSprite {
-    /**
-     * The sprite's texture
-     */
-    HgGpuTextureAsset* texture;
-    /**
-     * Where in the texture
-     */
-    HgVec2 texPos;
-    /**
-     * The size in the texture
-     */
-    HgVec2 texSize;
-};
-
-/**
- *  Draw the sprite on the layer
- */
-void hg2dSpriteDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, Hg2dSprite* sprite);
-
-/**
- * Issue draw commands for a 2D scene
- */
-void hg2dDraw(HgGpuCmd* cmd, HgCamera* camera, Hg2dLayer* layer);
 
 /**
  * Initialize the sprite pipeline
@@ -514,7 +538,7 @@ struct HgSprite {
     /**
      * The texture to draw from
      */
-    HgGpuTextureAsset* texture = nullptr;
+    HgTextureAsset* texture = nullptr;
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
@@ -542,7 +566,7 @@ void hgSerialize(HgSerializer* s, HgSprite* sprite);
 HgSprite* hgSpriteAdd(
     HgEcs* ecs,
     HgEntity e,
-    HgGpuTextureAsset* texture,
+    HgTextureAsset* texture,
     HgVec2 uvPos = HgVec2{0.0f},
     HgVec2 uvSize = HgVec2{1.0f});
 
@@ -583,7 +607,7 @@ struct HgSkybox {
     /**
      * The cubemap texture
      */
-    HgGpuTextureAsset* texture;
+    HgTextureAsset* texture;
 };
 
 /**
@@ -600,7 +624,7 @@ void hgSerialize(HgSerializer* s, HgSkybox* skybox);
  * - e The entity to add to
  * - texture A copy of the skybox's texture
  */
-HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureAsset* texture);
+HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgTextureAsset* texture);
 
 /**
  * HgSkybox ecs destructor
@@ -685,15 +709,15 @@ struct HgModel {
     /**
      * The model to render
      */
-    HgGpuMeshAsset* mesh;
+    HgMeshAsset* mesh;
     /**
      * The model's color map
      */
-    HgGpuTextureAsset* colorMap;
+    HgTextureAsset* colorMap;
     /**
      * The model's normal map
      */
-    HgGpuTextureAsset* normalMap;
+    HgTextureAsset* normalMap;
 };
 
 /**
@@ -708,9 +732,9 @@ void hgSerialize(HgSerializer* s, HgModel* model);
 HgModel* hgModelAdd(
     HgEcs* ecs,
     HgEntity e,
-    HgGpuMeshAsset* mesh,
-    HgGpuTextureAsset* colorMap,
-    HgGpuTextureAsset* normalMap);
+    HgMeshAsset* mesh,
+    HgTextureAsset* colorMap,
+    HgTextureAsset* normalMap);
 
 /**
  * HgModel ecs destructor

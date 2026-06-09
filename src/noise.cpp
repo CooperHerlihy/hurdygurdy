@@ -45,7 +45,7 @@ int main()
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
 
-    HgGpuTextureAsset* noiseTex = hgAssetCreate<HgGpuTexture>();
+    HgTextureAsset* noiseTex = hgAssetCreate<HgTexture>();
     hgDefer(hgAssetUnload(noiseTex));
 
     noiseTex->data.image = hgGpuImageCreate(
@@ -207,7 +207,7 @@ int main()
             hgGpuSetViewport(cmd, 0, 0, (f32)hgWindowWidth(window), (f32)hgWindowHeight(window));
             hgGpuSetScissor(cmd, 0, 0, hgWindowWidth(window), hgWindowHeight(window));
 
-            hgCameraUpdate(&ecs, camera);
+            hgCameraUpdateEcs(&ecs, camera);
             hgSpritesDraw(&ecs, camera, cmd);
 
             hgImGuiDraw(cmd);
