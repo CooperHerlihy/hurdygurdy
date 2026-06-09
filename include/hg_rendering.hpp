@@ -264,7 +264,23 @@ enum HgVertexType2D : u32 {
 /**
  * A rectangle vertex
  */
-struct HgVertexRect2D {
+struct HgInstanceRect2D {
+    /**
+     * The vertex position
+     */
+    HgVec2 pos;
+    /**
+     * The instance size
+     */
+    HgVec2 size;
+    /**
+     * The vertex type
+     */
+    u32 type;
+    /**
+     * Padding for 16 byte alignment
+     */
+    u32 pad[3];
     /**
      * The rectangle fill color
      */
@@ -274,29 +290,15 @@ struct HgVertexRect2D {
 /**
  * A sprite vertex
  */
-struct HgVertexSprite2D {
+struct HgInstanceSprite2D {
     /**
-     * The texture uv coordinates
-     */
-    HgVec2 uv;
-    /**
-     * The texture index
-     */
-    u32 tex;
-    /**
-     * Padding for 16 byte alignment
-     */
-    u32 pad;
-};
-
-/**
- * A vertex in a 2D layer
- */
-struct HgVertex2D {
-    /**
-     * The vertex position
+     * The instance position
      */
     HgVec2 pos;
+    /**
+     * The instance size
+     */
+    HgVec2 size;
     /**
      * The vertex type
      */
@@ -304,20 +306,33 @@ struct HgVertex2D {
     /**
      * Padding for 16 byte alignment
      */
-    u32 pad;
+    u32 pad[2];
     /**
-     * The vertex data
+     * The texture index
      */
-    union {
-        /**
-         * The rectangle data
-         */
-        HgVertexRect2D rect;
-        /**
-         * The sprite data
-         */
-        HgVertexSprite2D sprite;
-    };
+    u32 tex;
+    /**
+     * The texture uv coordinates
+     */
+    HgVec2 uvPos;
+    /**
+     * The texture uv coordinates
+     */
+    HgVec2 uvSize;
+};
+
+/**
+ * An instance in a 2D layer
+ */
+union HgInstance2D {
+    /**
+     * The rectangle data
+     */
+    HgInstanceRect2D rect;
+    /**
+     * The sprite data
+     */
+    HgInstanceSprite2D sprite;
 };
 
 /**
@@ -325,33 +340,21 @@ struct HgVertex2D {
  */
 struct HgLayer2D {
     /**
-     * The gpu vertex buffer
-     */
-    HgGpuBuffer* vertexBuffer;
-    /**
-     * The gpu index buffer
-     */
-    HgGpuBuffer* indexBuffer;
-    /**
-     * The current capacity of the vertex buffer
-     */
-    u32 vertexBufferCapacity;
-    /**
-     * The current capacity of the index buffer
-     */
-    u32 indexBufferCapacity;
-    /**
-     * The vertex data
-     */
-    HgArray<HgVertex2D> vertices;
-    /**
-     * The index data
-     */
-    HgArray<u32> indices;
-    /**
      * The transform, does not affect changed
      */
     HgMat4 transform;
+    /**
+     * The instance data
+     */
+    HgArray<HgInstance2D> instances;
+    /**
+     * The gpu side instance buffer
+     */
+    HgGpuBuffer* instanceBuffer;
+    /**
+     * The capacity of the instance buffer
+     */
+    u32 instanceCapacity;
     /**
      * Whether the gpu data needs to be updated
      */
@@ -387,21 +390,13 @@ struct HgSprite2D {
      */
     HgTextureAsset* texture;
     /**
-     * The u coord in the texture
+     * The uv coord in the texture
      */
-    f32 u;
+    HgVec2 uv;
     /**
-     * The v coord in the texture
+     * The size in the texture
      */
-    f32 v;
-    /**
-     * The width in the texture
-     */
-    f32 width;
-    /**
-     * The height in the texture
-     */
-    f32 height;
+    HgVec2 size;
 };
 
 /**

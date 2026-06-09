@@ -3265,8 +3265,7 @@ static RenderState2D render2D;
 struct RenderPush2D {
     HgMat4 model;
     u32 vpIdx;
-    u32 vertIdx;
-    u32 indexIdx;
+    u32 instIdx;
 };
 
 void hgInit2D(HgFormat colorFormat)
@@ -3320,102 +3319,56 @@ HgLayer2D hgLayerCreate2D()
 {
     HgLayer2D layer{};
 
-    layer.vertices = hgArrayCreate<HgVertex2D>();
-    layer.indices = hgArrayCreate<u32>();
-
-    layer.vertexBuffer = hgGpuBufferCreate(layer.vertices.capacity * sizeof(HgVertex2D),
+    layer.instances = hgArrayCreate<HgInstance2D>();
+    layer.instanceBuffer = hgGpuBufferCreate(layer.instances.capacity * sizeof(HgInstance2D),
         HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
-
-    layer.indexBuffer = hgGpuBufferCreate(layer.indices.capacity * sizeof(u32),
-        HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
-
-    layer.vertexBufferCapacity = layer.vertices.capacity;
-    layer.indexBufferCapacity = layer.indices.capacity;
-
+    layer.instanceCapacity = layer.instances.capacity;
     layer.transform = HgMat4{1.0f};
-
     layer.changed = true;
+
     return layer;
 }
 
 void hgLayerDestroy2D(HgLayer2D* layer)
 {
-    hgGpuBufferDestroy(layer->indexBuffer);
-    hgGpuBufferDestroy(layer->vertexBuffer);
-    hgArrayDestroy(&layer->indices);
-    hgArrayDestroy(&layer->vertices);
+    hgGpuBufferDestroy(layer->instanceBuffer);
+    hgArrayDestroy(&layer->instances);
 }
 
 void hgLayerClear2D(HgLayer2D* layer)
 {
-    layer->vertices.count = 0;
-    layer->indices.count = 0;
-
+    layer->instances.count = 0;
     layer->changed = true;
 }
 
 void hgRect2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgVec4 color)
 {
-    u32 idx = layer->vertices.count;
-    *hgArrayPush(&layer->indices) = idx + 0;
-    *hgArrayPush(&layer->indices) = idx + 1;
-    *hgArrayPush(&layer->indices) = idx + 2;
-    *hgArrayPush(&layer->indices) = idx + 2;
-    *hgArrayPush(&layer->indices) = idx + 3;
-    *hgArrayPush(&layer->indices) = idx + 0;
+    HgInstance2D instance{};
+    instance.rect.pos = position;
+    instance.rect.size = size;
+    instance.rect.type = HgVertexType2D_color;
+    instance.rect.color = color;
 
-    HgVertex2D vert{};
-    vert.type = HgVertexType2D_color;
-    vert.rect.color = color;
-
-    vert.pos = position;
-    *hgArrayPush(&layer->vertices) = vert;
-
-    vert.pos = position + HgVec2{size.x, 0};
-    *hgArrayPush(&layer->vertices) = vert;
-
-    vert.pos = position + size;
-    *hgArrayPush(&layer->vertices) = vert;
-
-    vert.pos = position + HgVec2{0, size.y};
-    *hgArrayPush(&layer->vertices) = vert;
+    *hgArrayPush(&layer->instances) = instance;
 
     layer->changed = true;
 }
 
 void hgSprite2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgSprite2D* sprite)
 {
-    u32 idx = layer->vertices.count;
-    *hgArrayPush(&layer->indices) = idx + 0;
-    *hgArrayPush(&layer->indices) = idx + 1;
-    *hgArrayPush(&layer->indices) = idx + 2;
-    *hgArrayPush(&layer->indices) = idx + 2;
-    *hgArrayPush(&layer->indices) = idx + 3;
-    *hgArrayPush(&layer->indices) = idx + 0;
-
     HgTexture* texture = sprite->texture == nullptr
         ? &render2D.defaultTex
         : &sprite->texture->data;
 
-    HgVertex2D vert{};
-    vert.type = HgVertexType2D_texture;
-    vert.sprite.tex = hgGpuImageSamplerDescriptor(texture->view);
+    HgInstance2D instance{};
+    instance.sprite.pos = position;
+    instance.sprite.size = size;
+    instance.sprite.type = HgVertexType2D_texture;
+    instance.sprite.tex = hgGpuImageSamplerDescriptor(texture->view);
+    instance.sprite.uvPos = sprite->uv;
+    instance.sprite.uvSize = sprite->size;
 
-    vert.pos = position;
-    vert.sprite.uv = HgVec2{sprite->u, sprite->v};
-    *hgArrayPush(&layer->vertices) = vert;
-
-    vert.pos = position + HgVec2{size.x, 0};
-    vert.sprite.uv = HgVec2{sprite->u + sprite->width, sprite->v};
-    *hgArrayPush(&layer->vertices) = vert;
-
-    vert.pos = position + size;
-    vert.sprite.uv = HgVec2{sprite->u + sprite->width, sprite->v + sprite->height};
-    *hgArrayPush(&layer->vertices) = vert;
-
-    vert.pos = position + HgVec2{0, size.y};
-    vert.sprite.uv = HgVec2{sprite->u, sprite->v + sprite->height};
-    *hgArrayPush(&layer->vertices) = vert;
+    *hgArrayPush(&layer->instances) = instance;
 
     layer->changed = true;
 }
@@ -3424,28 +3377,17 @@ void hgDraw2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
 {
     if (layer->changed)
     {
-        if (layer->vertices.capacity > layer->vertexBufferCapacity)
+        if (layer->instances.capacity > layer->instanceCapacity)
         {
             hgGpuWaitIdle();
-            hgGpuBufferDestroy(layer->vertexBuffer);
+            hgGpuBufferDestroy(layer->instanceBuffer);
 
-            layer->vertexBuffer = hgGpuBufferCreate(layer->vertices.capacity * sizeof(HgVertex2D),
+            layer->instanceBuffer = hgGpuBufferCreate(layer->instances.capacity * sizeof(HgInstance2D),
                 HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
-            layer->vertexBufferCapacity = layer->vertices.capacity;
+            layer->instanceCapacity = layer->instances.capacity;
         }
 
-        if (layer->indices.capacity > layer->indexBufferCapacity)
-        {
-            hgGpuWaitIdle();
-            hgGpuBufferDestroy(layer->indexBuffer);
-
-            layer->indexBuffer = hgGpuBufferCreate(layer->indices.capacity * sizeof(u32),
-                HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
-            layer->indexBufferCapacity = layer->indices.capacity;
-        }
-
-        hgGpuBufferWrite(layer->vertexBuffer, 0, layer->vertices.vals, layer->vertices.count * sizeof(HgVertex2D));
-        hgGpuBufferWrite(layer->indexBuffer, 0, layer->indices.vals, layer->indices.count * sizeof(u32));
+        hgGpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(HgInstance2D));
 
         layer->changed = false;
     }
@@ -3455,12 +3397,11 @@ void hgDraw2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
     RenderPush2D push{};
     push.model = layer->transform;
     push.vpIdx = hgGpuBufferUniformDescriptor(camera->vpBuffer);
-    push.vertIdx = hgGpuBufferStorageDescriptor(layer->vertexBuffer);
-    push.indexIdx = hgGpuBufferStorageDescriptor(layer->indexBuffer);
+    push.instIdx = hgGpuBufferStorageDescriptor(layer->instanceBuffer);
 
     hgGpuPushConstants(cmd, render2D.pipeline, &push, sizeof(push));
 
-    hgGpuDraw(cmd, 0, layer->indices.count, 0, 1);
+    hgGpuDraw(cmd, 0, 6, 0, layer->instances.capacity);
 }
 
 struct SpritePipelinePush {

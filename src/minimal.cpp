@@ -25,13 +25,13 @@ int main()
     hgDefer(hgLayerDestroy2D(&background));
 
     hgLayerClear2D(&background);
-    hgRect2D(&background, HgVec2{-.5f, -.5f}, HgVec2{1, 1}, HgVec4{.002f, 0, .012f, 1});
+    hgRect2D(&background, HgVec2{0, 0}, HgVec2{1, 1}, HgVec4{.002f, 0, .012f, 1});
 
     HgLayer2D spriteLayer = hgLayerCreate2D();
     hgDefer(hgLayerDestroy2D(&spriteLayer));
 
-    HgSprite2D sprite = {nullptr, 0, 0, 1, 1};
-    HgVec2 spritePos{-0.1f, -0.1f};
+    HgSprite2D sprite = {nullptr, HgVec2{0}, HgVec2{1}};
+    HgVec2 spritePos{0, 0};
 
     HgClock gameClock;
     hgClockTick(&gameClock);
