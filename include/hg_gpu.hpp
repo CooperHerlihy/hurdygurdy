@@ -594,6 +594,16 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create);
 void hgGpuImageDestroy(HgGpuImage* image);
 
 /**
+ * Get the width of an image
+ */
+u32 hgGpuImageWidth(HgGpuImage* image);
+
+/**
+ * Get the height of an image
+ */
+u32 hgGpuImageHeight(HgGpuImage* image);
+
+/**
  * A gpu view
  */
 struct HgGpuView;
@@ -693,6 +703,16 @@ HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config);
  * Destroy a gpu image view
  */
 void hgGpuViewDestroy(HgGpuView* view);
+
+/**
+ * Get the width of an image
+ */
+u32 hgGpuViewWidth(HgGpuView* view);
+
+/**
+ * Get the height of an image
+ */
+u32 hgGpuViewHeight(HgGpuView* view);
 
 /**
  * Get the image sampler descriptor index from the image view

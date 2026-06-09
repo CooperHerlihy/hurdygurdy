@@ -379,7 +379,7 @@ void hgLayerClear2D(HgLayer2D* layer);
 /**
  * Draw a rectangle on the layer
  */
-void hgRect2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgVec4 color);
+void hgDrawRect2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgVec4 color);
 
 /**
  * A 2D sprite which can be drawn
@@ -402,12 +402,96 @@ struct HgSprite2D {
 /**
  *  Draw the sprite on the layer
  */
-void hgSprite2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgSprite2D* sprite);
+void hgDrawSprite2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgSprite2D* sprite);
+
+/**
+ * A tileset of a texture
+ */
+struct HgTileset2D {
+    /**
+     * The texture
+     */
+    HgTextureAsset* texture;
+    /**
+     * The number of tiles in each row
+     */
+    u32 texWidth;
+    /**
+     * The number of tiles in each column
+     */
+    u32 texHeight;
+    /**
+     * The size of each tile
+     */
+    HgVec2 tileSize;
+};
+
+/**
+ * Create a new tileset
+ *
+ * Parameters
+ * - texture The texture to tile
+ * - tileWidth The width of each tile in pixels
+ * - tileHeight The height of each tile in pixels
+ */
+HgTileset2D hgTilesetCreate2D(HgTextureAsset* texture, u32 tileWidth, u32 tileHeight);
+
+/**
+ * Get a sprite from a tileset
+ */
+HgSprite2D hgTilesetGet2D(HgTileset2D* tileset, u32 tile);
+
+/**
+ * A world map of tiles
+ */
+struct HgTilemap2D {
+    /**
+     * The tileset
+     */
+    HgTileset2D tileset;
+    /**
+     * The width of the tilemap in tiles
+     */
+    u32 width;
+    /**
+     * The height of the tilemap in tiles
+     */
+    u32 height;
+    /**
+     * The tilemap data
+     */
+    u32* tiles;
+};
+
+/**
+ * Create a new empty tilemap
+ */
+HgTilemap2D hgTilemapCreate2D(HgTileset2D* tileset, u32 width, u32 height);
+
+/**
+ * Destroy a tilemap
+ */
+void hgTilemapDestroy2D(HgTilemap2D* tilemap);
+
+/**
+ * Get the value of a tile in a tilemap
+ */
+u32 hgTilemapGet2D(HgTilemap2D* tilemap, u32 x, u32 y);
+
+/**
+ * Set the value of a tile in a tilemap
+ */
+void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile);
+
+/**
+ * Draw a tilemap to the layer
+ */
+void hgDrawTilemap2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgTilemap2D* tilemap);
 
 /**
  * Issue draw commands for a 2D scene
  */
-void hgDraw2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
+void hgRender2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D** layers, u32 layerCount);
 
 /**
  * A vertex in a mesh

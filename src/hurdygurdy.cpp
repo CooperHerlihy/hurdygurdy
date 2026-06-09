@@ -3341,7 +3341,7 @@ void hgLayerClear2D(HgLayer2D* layer)
     layer->changed = true;
 }
 
-void hgRect2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgVec4 color)
+void hgDrawRect2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgVec4 color)
 {
     HgInstance2D instance{};
     instance.rect.pos = position;
@@ -3354,7 +3354,7 @@ void hgRect2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgVec4 color)
     layer->changed = true;
 }
 
-void hgSprite2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgSprite2D* sprite)
+void hgDrawSprite2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgSprite2D* sprite)
 {
     HgTexture* texture = sprite->texture == nullptr
         ? &render2D.defaultTex
@@ -3373,35 +3373,124 @@ void hgSprite2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgSprite2D* spri
     layer->changed = true;
 }
 
-void hgDraw2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
+HgTileset2D hgTilesetCreate2D(HgTextureAsset* texture, u32 pixelWidth, u32 pixelHeight)
 {
-    if (layer->changed)
+    HgTileset2D set{};
+
+    f32 texPixelWidth = (f32)hgGpuImageWidth(texture->data.image);
+    f32 texPixelHeight = (f32)hgGpuImageHeight(texture->data.image);
+
+    set.texWidth = (u32)(texPixelWidth / (f32)pixelWidth);
+    set.texHeight = (u32)(texPixelHeight / (f32)pixelHeight);
+
+    set.tileSize = HgVec2{
+        (f32)pixelWidth / texPixelHeight,
+        (f32)pixelHeight / texPixelHeight,
+    };
+
+    return set;
+}
+
+HgSprite2D hgTilesetGet2D(HgTileset2D* tileset, u32 tileIdx)
+{
+    hgAssert(tileIdx < tileset->texWidth * tileset->texHeight);
+
+    HgSprite2D sprite{};
+    sprite.texture = tileset->texture;
+    sprite.uv = tileset->tileSize * HgVec2{
+        (f32)(tileIdx % tileset->texWidth),
+        std::floor((f32)tileIdx / (f32)tileset->texWidth),
+    };
+    sprite.size = tileset->tileSize;
+    return sprite;
+}
+
+HgTilemap2D hgTilemapCreate2D(HgTileset2D* tileset, u32 width, u32 height)
+{
+    HgTilemap2D tilemap{};
+
+    tilemap.tileset = *tileset;
+    tilemap.width = width;
+    tilemap.height = height;
+    tilemap.tiles = hgGpaAlloc<u32>(width * height);
+
+    for (u32 i = 0; i < width * height; ++i)
     {
-        if (layer->instances.capacity > layer->instanceCapacity)
-        {
-            hgGpuWaitIdle();
-            hgGpuBufferDestroy(layer->instanceBuffer);
-
-            layer->instanceBuffer = hgGpuBufferCreate(layer->instances.capacity * sizeof(HgInstance2D),
-                HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
-            layer->instanceCapacity = layer->instances.capacity;
-        }
-
-        hgGpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(HgInstance2D));
-
-        layer->changed = false;
+        tilemap.tiles[i] = (u32)-1;
     }
 
-    hgGpuBindPipeline(cmd, render2D.pipeline);
+    return tilemap;
+}
 
-    RenderPush2D push{};
-    push.model = layer->transform;
-    push.vpIdx = hgGpuBufferUniformDescriptor(camera->vpBuffer);
-    push.instIdx = hgGpuBufferStorageDescriptor(layer->instanceBuffer);
+void hgTilemapDestroy2D(HgTilemap2D* tilemap)
+{
+    if (tilemap != nullptr)
+    {
+        hgGpaFree(tilemap->tiles, tilemap->width * tilemap->height);
+    }
+}
 
-    hgGpuPushConstants(cmd, render2D.pipeline, &push, sizeof(push));
+u32 hgTilemapGet2D(HgTilemap2D* tilemap, u32 x, u32 y)
+{
+    return tilemap->tiles[y * tilemap->tileset.texWidth + x];
+}
 
-    hgGpuDraw(cmd, 0, 6, 0, layer->instances.capacity);
+void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile)
+{
+    tilemap->tiles[y * tilemap->tileset.texWidth + x] = tile;
+}
+
+void hgDrawTilemap2D(HgLayer2D* layer, HgVec2 pos, HgVec2 size, HgTilemap2D* tilemap)
+{
+    HgVec2 rowPos = pos - size * HgVec2{(f32)tilemap->width, (f32)tilemap->height} / 2.0f;
+    for (u32 y = 0; y < tilemap->width; ++y)
+    {
+        HgVec2 colPos = pos;
+        for (u32 x = 0; x < tilemap->height; ++x)
+        {
+            u32 tile = hgTilemapGet2D(tilemap, x, y);
+            HgSprite2D sprite = hgTilesetGet2D(&tilemap->tileset, tile);
+            hgDrawSprite2D(layer, colPos, size, &sprite);
+            colPos.x += size.x;
+        }
+        rowPos.y += size.y;
+    }
+}
+
+void hgRender2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D** layers, u32 layerCount)
+{
+    for (u32 i = 0; i < layerCount; ++i)
+    {
+        HgLayer2D* layer = layers[i];
+
+        if (layer->changed)
+        {
+            if (layer->instances.capacity > layer->instanceCapacity)
+            {
+                hgGpuWaitIdle();
+                hgGpuBufferDestroy(layer->instanceBuffer);
+
+                layer->instanceBuffer = hgGpuBufferCreate(layer->instances.capacity * sizeof(HgInstance2D),
+                    HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
+                layer->instanceCapacity = layer->instances.capacity;
+            }
+
+            hgGpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(HgInstance2D));
+
+            layer->changed = false;
+        }
+
+        hgGpuBindPipeline(cmd, render2D.pipeline);
+
+        RenderPush2D push{};
+        push.model = layer->transform;
+        push.vpIdx = hgGpuBufferUniformDescriptor(camera->vpBuffer);
+        push.instIdx = hgGpuBufferStorageDescriptor(layer->instanceBuffer);
+
+        hgGpuPushConstants(cmd, render2D.pipeline, &push, sizeof(push));
+
+        hgGpuDraw(cmd, 0, 6, 0, layer->instances.capacity);
+    }
 }
 
 struct SpritePipelinePush {

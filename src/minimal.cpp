@@ -1,10 +1,5 @@
 #include "hurdygurdy.hpp"
 
-struct VPUniform {
-    HgMat4 proj;
-    HgMat4 view;
-};
-
 int main()
 {
     hgInit();
@@ -25,7 +20,7 @@ int main()
     hgDefer(hgLayerDestroy2D(&background));
 
     hgLayerClear2D(&background);
-    hgRect2D(&background, HgVec2{0, 0}, HgVec2{1, 1}, HgVec4{.002f, 0, .012f, 1});
+    hgDrawRect2D(&background, HgVec2{0, 0}, HgVec2{1, 1}, HgVec4{.002f, 0, .012f, 1});
 
     HgLayer2D spriteLayer = hgLayerCreate2D();
     hgDefer(hgLayerDestroy2D(&spriteLayer));
@@ -69,7 +64,7 @@ int main()
 
         hgLayerClear2D(&spriteLayer);
 
-        hgSprite2D(&spriteLayer, spritePos, HgVec2{.2f}, &sprite);
+        hgDrawSprite2D(&spriteLayer, spritePos, HgVec2{.2f}, &sprite);
 
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
         if (hgWindowImageView(window) != nullptr)
@@ -86,8 +81,8 @@ int main()
             hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
             hgGpuSetScissor(cmd, 0, 0, width, height);
 
-            hgDraw2D(cmd, &camera, &background);
-            hgDraw2D(cmd, &camera, &spriteLayer);
+            HgLayer2D* layers[] = {&background, &spriteLayer};
+            hgRender2D(cmd, &camera, layers, (u32)hgArrayCount(layers));
 
             hgGpuRenderPassEnd(cmd);
 

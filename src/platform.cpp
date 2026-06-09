@@ -1594,6 +1594,16 @@ void hgGpuImageDestroy(HgGpuImage* image)
     }
 }
 
+u32 hgGpuImageWidth(HgGpuImage* image)
+{
+    return image->width;
+}
+
+u32 hgGpuImageHeight(HgGpuImage* image)
+{
+    return image->height;
+}
+
 static VkSampler samplerCreate(SamplerInfo* desc)
 {
     VkSamplerCreateInfo info{};
@@ -1708,6 +1718,16 @@ void hgGpuViewDestroy(HgGpuView* view)
         vkDestroyImageView(vk.device, view->view, nullptr);
         hgPoolFree(&vk.views, view);
     }
+}
+
+u32 hgGpuViewWidth(HgGpuView* view)
+{
+    return view->image->width;
+}
+
+u32 hgGpuViewHeight(HgGpuView* view)
+{
+    return view->image->height;
 }
 
 u32 hgGpuImageSamplerDescriptor(HgGpuView* view)
