@@ -3255,14 +3255,14 @@ void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e)
     hgGpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
 }
 
-struct Render2dState {
+struct RenderState2D {
     HgGpuPipeline* pipeline;
     HgTexture defaultTex;
 };
 
-static Render2dState render2d;
+static RenderState2D render2D;
 
-struct Render2dPush {
+struct RenderPush2D {
     HgMat4 model;
     u32 vpIdx;
     u32 vertIdx;
@@ -3281,7 +3281,7 @@ void hgInit2D(HgFormat colorFormat)
     pipelineConfig.vertexShaderSize = vertSpv->data.size;
     pipelineConfig.fragmentShader = fragSpv->data.data;
     pipelineConfig.fragmentShaderSize = fragSpv->data.size;
-    pipelineConfig.pushConstantSize = sizeof(Render2dPush);
+    pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = HgFormat_d32_sfloat;
@@ -3290,7 +3290,7 @@ void hgInit2D(HgFormat colorFormat)
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
-    render2d.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+    render2D.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
 
     struct Color {
         u8 r, g, b, a;
@@ -3300,20 +3300,20 @@ void hgInit2D(HgFormat colorFormat)
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    render2d.defaultTex.image = hgGpuImageCreate(2, 2, HgFormat_r8g8b8a8_srgb,
+    render2D.defaultTex.image = hgGpuImageCreate(2, 2, HgFormat_r8g8b8a8_srgb,
         HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
 
-    render2d.defaultTex.view = hgGpuViewCreate(
-        render2d.defaultTex.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    render2D.defaultTex.view = hgGpuViewCreate(
+        render2D.defaultTex.image, HgGpuAspect_color, HgGpuFilter_nearest);
 
-    hgGpuImageWrite(render2d.defaultTex.view, defaultColors);
+    hgGpuImageWrite(render2D.defaultTex.view, defaultColors);
 }
 
 void hgDeinit2D()
 {
-    hgGpuViewDestroy(render2d.defaultTex.view);
-    hgGpuImageDestroy(render2d.defaultTex.image);
-    hgGpuPipelineDestroy(render2d.pipeline);
+    hgGpuViewDestroy(render2D.defaultTex.view);
+    hgGpuImageDestroy(render2D.defaultTex.image);
+    hgGpuPipelineDestroy(render2D.pipeline);
 }
 
 HgLayer2D hgLayerCreate2D()
@@ -3366,7 +3366,7 @@ void hgRect2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgVec4 color)
 
     HgVertex2D vert{};
     vert.type = HgVertexType2D_color;
-    vert.color = color;
+    vert.rect.color = color;
 
     vert.pos = position;
     *hgArrayPush(&layer->vertices) = vert;
@@ -3394,27 +3394,27 @@ void hgSprite2D(HgLayer2D* layer, HgVec2 position, HgVec2 size, HgSprite2D* spri
     *hgArrayPush(&layer->indices) = idx + 0;
 
     HgTexture* texture = sprite->texture == nullptr
-        ? &render2d.defaultTex
+        ? &render2D.defaultTex
         : &sprite->texture->data;
 
     HgVertex2D vert{};
     vert.type = HgVertexType2D_texture;
-    vert.texIdx = hgGpuImageSamplerDescriptor(texture->view);
+    vert.sprite.tex = hgGpuImageSamplerDescriptor(texture->view);
 
     vert.pos = position;
-    vert.texUV = HgVec2{sprite->u, sprite->v};
+    vert.sprite.uv = HgVec2{sprite->u, sprite->v};
     *hgArrayPush(&layer->vertices) = vert;
 
     vert.pos = position + HgVec2{size.x, 0};
-    vert.texUV = HgVec2{sprite->u + sprite->width, sprite->v};
+    vert.sprite.uv = HgVec2{sprite->u + sprite->width, sprite->v};
     *hgArrayPush(&layer->vertices) = vert;
 
     vert.pos = position + size;
-    vert.texUV = HgVec2{sprite->u + sprite->width, sprite->v + sprite->height};
+    vert.sprite.uv = HgVec2{sprite->u + sprite->width, sprite->v + sprite->height};
     *hgArrayPush(&layer->vertices) = vert;
 
     vert.pos = position + HgVec2{0, size.y};
-    vert.texUV = HgVec2{sprite->u, sprite->v + sprite->height};
+    vert.sprite.uv = HgVec2{sprite->u, sprite->v + sprite->height};
     *hgArrayPush(&layer->vertices) = vert;
 
     layer->changed = true;
@@ -3450,15 +3450,15 @@ void hgDraw2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
         layer->changed = false;
     }
 
-    hgGpuBindPipeline(cmd, render2d.pipeline);
+    hgGpuBindPipeline(cmd, render2D.pipeline);
 
-    Render2dPush push{};
+    RenderPush2D push{};
     push.model = layer->transform;
     push.vpIdx = hgGpuBufferUniformDescriptor(camera->vpBuffer);
     push.vertIdx = hgGpuBufferStorageDescriptor(layer->vertexBuffer);
     push.indexIdx = hgGpuBufferStorageDescriptor(layer->indexBuffer);
 
-    hgGpuPushConstants(cmd, render2d.pipeline, &push, sizeof(push));
+    hgGpuPushConstants(cmd, render2D.pipeline, &push, sizeof(push));
 
     hgGpuDraw(cmd, 0, layer->indices.count, 0, 1);
 }

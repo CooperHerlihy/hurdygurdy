@@ -262,37 +262,62 @@ enum HgVertexType2D : u32 {
 };
 
 /**
+ * A rectangle vertex
+ */
+struct HgVertexRect2D {
+    /**
+     * The rectangle fill color
+     */
+    HgVec4 color;
+};
+
+/**
+ * A sprite vertex
+ */
+struct HgVertexSprite2D {
+    /**
+     * The texture uv coordinates
+     */
+    HgVec2 uv;
+    /**
+     * The texture index
+     */
+    u32 tex;
+    /**
+     * Padding for 16 byte alignment
+     */
+    u32 pad;
+};
+
+/**
  * A vertex in a 2D layer
  */
 struct HgVertex2D {
-    /**
-     * The color, if a color vertex
-     */
-    HgVec4 color;
     /**
      * The vertex position
      */
     HgVec2 pos;
     /**
-     * The texture uv coord, if a texture vertex
+     * The vertex type
      */
-    HgVec2 texUV;
+    u32 type;
     /**
-     * The texture descriptor index, if a texture vertex
+     * Padding for 16 byte alignment
      */
-    u32 texIdx;
+    u32 pad;
     /**
-     * The type of vertex
+     * The vertex data
      */
-    HgVertexType2D type;
-    /**
-     * Padding to match glsl
-     */
-    u32 pad0;
-    /**
-     * Padding to match glsl
-     */
-    u32 pad1;
+    union {
+        /**
+         * The rectangle data
+         */
+        HgVertexRect2D rect;
+        /**
+         * The sprite data
+         */
+        HgVertexSprite2D sprite;
+    };
 };
 
 /**

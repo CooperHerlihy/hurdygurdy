@@ -7,19 +7,29 @@ layout (HgUniformBuffer) uniform ViewProjection {
     mat4 view;
 } uVP[];
 
-struct Vertex {
-    vec4 color;
+struct VertexRect {
     vec2 pos;
-    vec2 texUV;
-    uint texIdx;
+    uint type;
+    uint pad;
+    vec4 color;
+};
+
+struct VertexSprite {
+    vec2 pos;
     uint type;
     uint pad0;
+    vec2 uv;
+    uint tex;
     uint pad1;
 };
 
-layout (HgStorageBuffer) readonly buffer Vertices {
-    Vertex verts[];
-} vertexBufs[];
+layout (HgStorageBuffer) readonly buffer RectVertices {
+    VertexRect verts[];
+} rectBufs[];
+
+layout (HgStorageBuffer) readonly buffer SpriteVertices {
+    VertexSprite verts[];
+} spriteBufs[];
 
 layout (HgStorageBuffer) readonly buffer Indices {
     uint indices[];
@@ -33,10 +43,10 @@ layout (push_constant) uniform Push {
 } push;
 
 layout (location = 0) out VertexOutput {
+    flat uint type;
     vec4 color;
     vec2 texUV;
     flat uint texIdx;
-    flat uint type;
 } vOut;
 
 void main()
@@ -45,13 +55,14 @@ void main()
     mat4 view = uVP[push.vp].view;
 
     uint idx = indexBufs[push.inds].indices[gl_VertexIndex];
-    Vertex vert = vertexBufs[push.verts].verts[idx];
+    VertexRect rectVert = rectBufs[push.verts].verts[idx];
+    VertexSprite spriteVert = spriteBufs[push.verts].verts[idx];
 
-    vOut.color = vert.color;
-    vOut.texUV = vert.texUV;
-    vOut.texIdx = vert.texIdx;
-    vOut.type = vert.type;
+    vOut.type = rectVert.type;
+    vOut.color = rectVert.color;
+    vOut.texUV = spriteVert.uv;
+    vOut.texIdx = spriteVert.tex;
 
-    gl_Position = proj * view * push.model * vec4(vert.pos.xy, 0.0, 1.0);
+    gl_Position = proj * view * push.model * vec4(rectVert.pos.xy, 0.0, 1.0);
 }
 

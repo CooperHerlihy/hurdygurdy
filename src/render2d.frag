@@ -8,10 +8,10 @@
 layout (HgCombinedImageSampler) uniform sampler2D uTextures[];
 
 layout (location = 0) in VertexInput {
+    flat uint type;
     vec4 color;
     vec2 texUV;
     flat uint texIdx;
-    flat uint type;
 } vIn;
 
 layout (location = 0) out vec4 outColor;
