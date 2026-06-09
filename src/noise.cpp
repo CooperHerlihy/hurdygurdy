@@ -182,7 +182,7 @@ int main()
         noisePush.seed = noiseSeed;
         noisePush.outImageIdx = hgGpuImageStorageDescriptor(noiseTex->data.view);
 
-        hgGpuPushConstants(cmd, noisePipeline, 0, &noisePush, sizeof(noisePush));
+        hgGpuPushConstants(cmd, noisePipeline, &noisePush, sizeof(noisePush));
 
         hgGpuDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 

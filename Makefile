@@ -19,6 +19,8 @@ INCLUDES := \
 
 SHADERS := \
 	noise.comp \
+	render2d.vert \
+	render2d.frag \
 	skybox.vert \
 	skybox.frag \
 	sprite.vert \

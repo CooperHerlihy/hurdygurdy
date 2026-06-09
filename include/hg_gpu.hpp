@@ -942,7 +942,7 @@ void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline);
  * - size The size of the data
  * - push The data to push
  */
-void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size);
+void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, void* push, u32 size);
 
 /**
  * Issue a draw call

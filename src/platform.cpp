@@ -2379,7 +2379,7 @@ void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline)
         nullptr);
 }
 
-void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size)
+void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, void* push, u32 size)
 {
     vkCmdPushConstants(
         (VkCommandBuffer)cmd,
@@ -2387,7 +2387,7 @@ void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, u32 offset, void
         pipeline->bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE
             ? VK_SHADER_STAGE_COMPUTE_BIT
             : VK_SHADER_STAGE_ALL,
-        offset,
+        0,
         size,
         push);
 }

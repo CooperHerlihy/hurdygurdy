@@ -350,6 +350,150 @@ void hgEcsDtor(HgCamera* camera);
 void hgCameraUpdate(HgEcs* ecs, HgEntity e);
 
 /**
+ * The 2D vertex types
+ */
+enum Hg2dVertexType : u32 {
+    /**
+     * A vertex with a color value
+     */
+    Hg2dVertexType_color = 0,
+    /**
+     * A vertex with a pointer to a texture
+     */
+    Hg2dVertexType_texture = 1,
+};
+
+/**
+ * A vertex in a 2D layer
+ */
+struct Hg2dVertex {
+    /**
+     * The color, if a color vertex
+     */
+    HgVec4 color;
+    /**
+     * The vertex position
+     */
+    HgVec2 pos;
+    /**
+     * The texture uv coord, if a texture vertex
+     */
+    HgVec2 texUV;
+    /**
+     * The texture descriptor index, if a texture vertex
+     */
+    u32 texIdx;
+    /**
+     * The type of vertex
+     */
+    Hg2dVertexType type;
+    /**
+     * Padding to match glsl
+     */
+    u32 pad0;
+    /**
+     * Padding to match glsl
+     */
+    u32 pad1;
+};
+
+/**
+ * A 2D render layer
+ */
+struct Hg2dLayer {
+    /**
+     * The gpu vertex buffer
+     */
+    HgGpuBuffer* vertexBuffer;
+    /**
+     * The gpu index buffer
+     */
+    HgGpuBuffer* indexBuffer;
+    /**
+     * The current capacity of the vertex buffer
+     */
+    u32 vertexBufferCapacity;
+    /**
+     * The current capacity of the index buffer
+     */
+    u32 indexBufferCapacity;
+    /**
+     * The vertex data
+     */
+    HgArray<Hg2dVertex> vertices;
+    /**
+     * The index data
+     */
+    HgArray<u32> indices;
+    /**
+     * The transform, does not affect changed
+     */
+    HgMat4 transform;
+    /**
+     * Whether the gpu data needs to be updated
+     */
+    bool changed;
+};
+
+/**
+ * Initialize the 2d layer renderer
+ */
+void hg2dInit(HgFormat colorFormat);
+
+/**
+ * Deinitialize the 2d layer renderer
+ */
+void hg2dDeinit();
+
+/**
+ * Create a 2D render layer
+ */
+Hg2dLayer hg2dLayerCreate();
+
+/**
+ * Destroy a 2D render layer
+ */
+void hg2dLayerDestroy(Hg2dLayer* layer);
+
+/**
+ * Remove all drawings from the layer
+ */
+void hg2dLayerClear(Hg2dLayer* layer);
+
+/**
+ * Draw a rectangle on the layer
+ */
+void hg2dRectDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, HgVec4 color);
+
+/**
+ * A 2D sprite which can be drawn
+ */
+struct Hg2dSprite {
+    /**
+     * The sprite's texture
+     */
+    HgGpuTextureAsset* texture;
+    /**
+     * Where in the texture
+     */
+    HgVec2 texPos;
+    /**
+     * The size in the texture
+     */
+    HgVec2 texSize;
+};
+
+/**
+ *  Draw the sprite on the layer
+ */
+void hg2dSpriteDraw(Hg2dLayer* layer, HgVec2 position, HgVec2 size, Hg2dSprite* sprite);
+
+/**
+ * Issue draw commands for a 2D scene
+ */
+void hg2dDraw(HgGpuCmd* cmd, HgCamera* camera, Hg2dLayer* layer);
+
+/**
  * Initialize the sprite pipeline
  *
  * Parameters
