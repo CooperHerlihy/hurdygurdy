@@ -3352,6 +3352,51 @@ void hgLayerClear2D(HgLayer2D* layer)
     layer->changed = true;
 }
 
+static void renderLayer2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer, HgGpuPipeline* pipeline)
+{
+    hgAssert(cmd != nullptr);
+    hgAssert(camera != nullptr);
+    hgAssert(layer != nullptr);
+
+    if (layer->changed)
+    {
+        if (layer->instances.capacity > layer->instanceCapacity)
+        {
+            hgGpuWaitIdle();
+            hgGpuBufferDestroy(layer->instanceBuffer);
+
+            layer->instanceBuffer = hgGpuBufferCreate(layer->instances.capacity * sizeof(HgRender2DInstance),
+                HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
+            layer->instanceCapacity = layer->instances.capacity;
+        }
+
+        hgGpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(HgRender2DInstance));
+
+        layer->changed = false;
+    }
+
+    hgGpuBindPipeline(cmd, pipeline);
+
+    RenderPush2D push{};
+    push.model = layer->transform;
+    push.vpIdx = hgGpuBufferUniformDescriptor(camera->vpBuffer);
+    push.instIdx = hgGpuBufferStorageDescriptor(layer->instanceBuffer);
+
+    hgGpuPushConstants(cmd, pipeline, &push, sizeof(push));
+
+    hgGpuDraw(cmd, 0, 6, 0, layer->instances.count);
+}
+
+void hgRenderLayer2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
+{
+    renderLayer2D(cmd, camera, layer, render2D.pipeline);
+}
+
+void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
+{
+    renderLayer2D(cmd, camera, layer, render2D.debugPipeline);
+}
+
 void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect2D dst)
 {
     hgAssert(layer != nullptr);
@@ -3497,76 +3542,6 @@ void hgDrawTilemap2D(HgLayer2D* layer, HgTilemap2D* tilemap, HgRect2D dst)
         }
         pos.y += size.y;
     }
-}
-
-void hgRender2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
-{
-    hgAssert(cmd != nullptr);
-    hgAssert(camera != nullptr);
-    hgAssert(layer != nullptr);
-
-    if (layer->changed)
-    {
-        if (layer->instances.capacity > layer->instanceCapacity)
-        {
-            hgGpuWaitIdle();
-            hgGpuBufferDestroy(layer->instanceBuffer);
-
-            layer->instanceBuffer = hgGpuBufferCreate(layer->instances.capacity * sizeof(HgRender2DInstance),
-                HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
-            layer->instanceCapacity = layer->instances.capacity;
-        }
-
-        hgGpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(HgRender2DInstance));
-
-        layer->changed = false;
-    }
-
-    hgGpuBindPipeline(cmd, render2D.pipeline);
-
-    RenderPush2D push{};
-    push.model = layer->transform;
-    push.vpIdx = hgGpuBufferUniformDescriptor(camera->vpBuffer);
-    push.instIdx = hgGpuBufferStorageDescriptor(layer->instanceBuffer);
-
-    hgGpuPushConstants(cmd, render2D.pipeline, &push, sizeof(push));
-
-    hgGpuDraw(cmd, 0, 6, 0, layer->instances.count);
-}
-
-void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
-{
-    hgAssert(cmd != nullptr);
-    hgAssert(camera != nullptr);
-    hgAssert(layer != nullptr);
-
-    if (layer->changed)
-    {
-        if (layer->instances.capacity > layer->instanceCapacity)
-        {
-            hgGpuWaitIdle();
-            hgGpuBufferDestroy(layer->instanceBuffer);
-
-            layer->instanceBuffer = hgGpuBufferCreate(layer->instances.capacity * sizeof(HgRender2DInstance),
-                HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
-            layer->instanceCapacity = layer->instances.capacity;
-        }
-
-        hgGpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(HgRender2DInstance));
-
-        layer->changed = false;
-    }
-
-    hgGpuBindPipeline(cmd, render2D.debugPipeline);
-
-    RenderPush2D push{};
-    push.model = layer->transform;
-    push.vpIdx = hgGpuBufferUniformDescriptor(camera->vpBuffer);
-    push.instIdx = hgGpuBufferStorageDescriptor(layer->instanceBuffer);
-
-    hgGpuPushConstants(cmd, render2D.debugPipeline, &push, sizeof(push));
-
-    hgGpuDraw(cmd, 0, 6, 0, layer->instances.count);
 }
 
 struct SpritePipelinePush {

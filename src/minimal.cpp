@@ -201,8 +201,8 @@ int main()
             hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
             hgGpuSetScissor(cmd, 0, 0, width, height);
 
-            hgRender2D(cmd, &camera, &background);
-            hgRender2D(cmd, &camera, &spriteLayer);
+            hgRenderLayer2D(cmd, &camera, &background);
+            hgRenderLayer2D(cmd, &camera, &spriteLayer);
 
             if (renderDebug)
             {

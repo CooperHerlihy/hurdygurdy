@@ -382,6 +382,16 @@ void hgLayerDestroy2D(HgLayer2D* layer);
 void hgLayerClear2D(HgLayer2D* layer);
 
 /**
+ * Issue draw commands for a 2D layer
+ */
+void hgRenderLayer2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
+
+/**
+ * Issue draw commands for a 2D layer using debug lines
+ */
+void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
+
+/**
  * A 2D rectangle
  */
 struct HgRect2D {
@@ -513,16 +523,6 @@ void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile);
  * Draw a tilemap to the layer
  */
 void hgDrawTilemap2D(HgLayer2D* layer, HgTilemap2D* tilemap, HgRect2D dst);
-
-/**
- * Issue draw commands for a 2D layer
- */
-void hgRender2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
-
-/**
- * Issue draw commands for a 2D layer using debug lines
- */
-void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
 
 /**
  * A vertex in a mesh
