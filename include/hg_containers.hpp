@@ -104,6 +104,12 @@ template<typename T>
 T* hgArrayPushTemp(HgArena* arena, HgArray<T>* arr);
 
 /**
+ * Remove the value at idx in the array
+ */
+template<typename T>
+T hgArrayRemove(HgArray<T>* arr, u32 idx);
+
+/**
  * Pop a value from the end of the array
  */
 template<typename T>

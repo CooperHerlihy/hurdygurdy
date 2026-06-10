@@ -160,7 +160,7 @@ struct HgCameraOrthographic {
  */
 struct HgCamera {
     /**
-     * The gpu view projection data, created/destroyed on add/remove
+     * The gpu view projection data
      */
     HgGpuBuffer* vpBuffer;
     /**
@@ -209,7 +209,12 @@ void hgCameraDestroy(HgCamera* camera);
 /**
  * The the camera to a perspective projection
  */
-void hgCameraSetPerspective(HgCamera* camera, f32 aspect, f32 fov = (f32)hgPi / 2.0f, f32 near = 0.01f, f32 far = 1000.0f);
+void hgCameraSetPerspective(
+    HgCamera* camera,
+    f32 aspect,
+    f32 fov = (f32)hgPi / 2.0f,
+    f32 near = 0.01f,
+    f32 far = 1000.0f);
 
 /**
  * The the camera to an orthographic projection using reasonable defaults

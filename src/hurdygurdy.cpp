@@ -1949,12 +1949,12 @@ void hgAssetInitDefaults()
     hgAssetInit<HgTexture>();
     hgAssetInit<HgMeshData>();
     hgAssetInit<HgMesh>();
-    hgAssetInit<HgAudio>();
+    hgAssetInit<HgSound>();
 }
 
 void hgAssetDeinitDefaults()
 {
-    hgAssetDeinit<HgAudio>();
+    hgAssetDeinit<HgSound>();
     hgAssetDeinit<HgMesh>();
     hgAssetDeinit<HgMeshData>();
     hgAssetDeinit<HgTexture>();
@@ -4145,14 +4145,14 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgAudio>* data)
+void hgAssetLoadImpl(HgAsset<HgSound>* data)
 {
     (void)data;
     hgError("Load audio file impl : TODO\n");
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgAudio>* data)
+void hgAssetUnloadImpl(HgAsset<HgSound>* data)
 {
     (void)data;
     hgError("Unload audio file impl : TODO\n");
@@ -4167,14 +4167,152 @@ void hgSerialize(HgSerializer* s, HgAudioSource* src)
         &src->repeat);
 }
 
-HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioAsset* audio, bool repeat)
+HgAudioPlayer hgAudioPlayerCreate()
+{
+    HgAudioPlayer player{};
+    player.music = hgArrayCreate<HgAudioPlayerMusic>();
+    player.sounds = hgArrayCreate<HgAudioStream*>();
+    return player;
+}
+
+void hgAudioPlayerDestroy(HgAudioPlayer* player)
+{
+    hgAssert(player != nullptr);
+
+    for (u32 i = 0; i < player->sounds.count; ++i)
+    {
+        hgAudioStreamDestroy(player->sounds[i]);
+    }
+
+    for (u32 i = 0; i < player->music.count; ++i)
+    {
+        hgAudioStreamDestroy(player->music[i].stream);
+    }
+
+    hgArrayDestroy(&player->sounds);
+    hgArrayDestroy(&player->music);
+}
+
+void hgAudioPlayerUpdate(HgAudioPlayer* player)
+{
+    for (u32 i = player->sounds.count - 1; i < player->sounds.count; --i)
+    {
+        if (hgAudioStreamQueuedSize(player->sounds[i]) == 0)
+        {
+            HgAudioStream* stream = hgArrayRemove(&player->sounds, i);
+            hgAudioStreamDestroy(stream);
+        }
+    }
+
+    for (u32 i = 0; i < player->music.count; ++i)
+    {
+        HgAudioPlayerMusic* music = &player->music[i];
+        if (!music->playing)
+            continue;
+
+        HgSound* sound = &music->sound->data;
+
+        HgArena* scratch = hgScratch();
+        hgArenaScope(scratch);
+
+        u32 width = sizeof(f32);
+
+        u32 total = sound->frequency * width / 16;
+        u32 queued = hgAudioStreamQueuedSize(music->stream);
+        if (queued >= total)
+            continue;
+        u32 sizeToPush = total - queued;
+
+        f32* queue = (f32*)hgArenaAlloc(scratch, sizeToPush, width);
+        u32 queueSize = 0;
+
+        while (queueSize < sizeToPush)
+        {
+            if (music->pos == sound->size)
+                music->pos = 0;
+
+            u32 sizeToQueue = hgMin(sizeToPush - queueSize, (u32)(sound->size - music->pos));
+            hgMemCopy((u8*)queue + queueSize, (u8*)sound->data + music->pos, sizeToQueue);
+            queueSize += sizeToQueue;
+            music->pos += sizeToQueue;
+        }
+
+        hgAssert(queueSize <= sizeToPush);
+        hgAudioStreamPush(music->stream, queue, queueSize);
+    }
+}
+
+void hgAudioPlayerMusic(HgAudioPlayer* player, HgSoundAsset* music)
+{
+    for (u32 i = 0; i < player->music.count; ++i)
+    {
+        if (player->music[i].sound == music)
+        {
+            player->music[i].playing = true;
+            return;
+        }
+    }
+
+    HgAudioPlayerMusic* track = hgArrayPush(&player->music);
+    track->stream = hgAudioStreamCreate(music->data.frequency, music->data.channels);
+    track->sound = music;
+    track->pos = 0;
+    track->playing = true;
+}
+
+void hgAudioPlayerMusicKill(HgAudioPlayer* player, HgSoundAsset* music)
+{
+    for (u32 i = 0; i < player->music.count; ++i)
+    {
+        if (player->music[i].sound == music)
+        {
+            HgAudioPlayerMusic track = hgArrayRemove(&player->music, i);
+            hgAudioStreamDestroy(track.stream);
+            return;
+        }
+    }
+}
+
+void hgAudioPlayerMusicPause(HgAudioPlayer* player, HgSoundAsset* music)
+{
+    for (u32 i = 0; i < player->music.count; ++i)
+    {
+        if (player->music[i].sound == music)
+        {
+            player->music[i].playing = false;
+            return;
+        }
+    }
+}
+
+void hgAudioPlayerSetMusicGain(HgAudioPlayer* player, HgSoundAsset* music, f32 gain)
+{
+    for (u32 i = 0; i < player->music.count; ++i)
+    {
+        if (player->music[i].sound == music)
+        {
+            hgAudioStreamSetGain(player->music[i].stream, gain);
+            return;
+        }
+    }
+}
+
+void hgAudioPlayerSound(HgAudioPlayer* player, HgSoundAsset* sound, f32 gain)
+{
+    HgAudioStream** stream = hgArrayPush(&player->sounds);
+    *stream = hgAudioStreamCreate(sound->data.frequency, sound->data.channels);
+    hgAudioStreamSetGain(*stream, gain);
+    hgAudioStreamPush(*stream, sound->data.data, sound->data.size);
+}
+
+HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgSoundAsset* audio, bool repeat)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
 
     HgAudioSource* src = hgEcsAdd<HgAudioSource>(ecs, e);
     *src = {};
-    src->player = hgAudioPlayerCreate(HgAudioFormat_f32, 8000, 1);
+    src->player = hgAudioStreamCreate(8000, 1);
     src->audio = audio;
     src->position = 0;
     src->repeat = repeat;
@@ -4186,29 +4324,29 @@ template<>
 void hgEcsDtor(HgAudioSource* src)
 {
     hgAssetUnload(src->audio);
-    hgAudioPlayerDestroy(src->player);
+    hgAudioStreamDestroy(src->player);
 }
 
 void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
 {
     hgEcsForEach<HgAudioSource>(ecs, [&](HgEntity e, HgAudioSource* src)
     {
-        HgAudio* audio = &src->audio->data;
+        HgSound* audio = &src->audio->data;
         if (src->position == audio->size && !src->repeat)
             return;
 
         HgArena* scratch = hgScratch();
         hgArenaScope(scratch);
 
-        u32 width = hgAudioFormatSize(audio->format);
+        u32 width = sizeof(f32);
 
         u32 total = audio->frequency * width / 8;
-        u32 queued = hgAudioPlayerQueuedSize(src->player);
+        u32 queued = hgAudioStreamQueuedSize(src->player);
         if (queued >= total)
             return;
         u32 sizeToPush = total - queued;
 
-        void* queue = hgArenaAlloc(scratch, sizeToPush, width);
+        f32* queue = (f32*)hgArenaAlloc(scratch, sizeToPush, width);
         u32 queueSize = 0;
 
         if (src->repeat)
@@ -4237,56 +4375,16 @@ void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
 
             HgVec3 relPos = hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, listener))
                           - hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, e));
-            f32 dist = hgVecDot3(relPos, relPos);
-            f32 factor = 1.0f / dist;
+            f32 factor = 1.0f / hgVecDot3(relPos, relPos);
 
-            switch (audio->format)
+            for (u64 i = 0; i < sizeToPush / sizeof(f32); ++i)
             {
-                case HgAudioFormat_u8:
-                    for (u64 i = 0; i < sizeToPush / sizeof(u8); ++i)
-                    {
-                        u8 val = ((u8*)queue)[i];
-                        val = (u8)((f32)val * factor);
-                        ((u8*)queue)[i] = val;
-                    }
-                    break;
-                case HgAudioFormat_s8:
-                    for (u64 i = 0; i < sizeToPush / sizeof(i8); ++i)
-                    {
-                        i8 val = ((i8*)queue)[i];
-                        val = (i8)((f32)val * factor);
-                        ((i8*)queue)[i] = val;
-                    }
-                    break;
-                case HgAudioFormat_s16:
-                    for (u64 i = 0; i < sizeToPush / sizeof(i16); ++i)
-                    {
-                        i16 val = ((i16*)queue)[i];
-                        val = (i16)((f32)val * factor);
-                        ((i16*)queue)[i] = val;
-                    }
-                    break;
-                case HgAudioFormat_s32:
-                    for (u64 i = 0; i < sizeToPush / sizeof(i32); ++i)
-                    {
-                        i32 val = ((i32*)queue)[i];
-                        val = (i32)((f32)val * factor);
-                        ((i32*)queue)[i] = val;
-                    }
-                    break;
-                case HgAudioFormat_f32:
-                    for (u64 i = 0; i < sizeToPush / sizeof(f32); ++i)
-                    {
-                        ((f32*)queue)[i] *= factor;
-                    }
-                    break;
-                default:
-                    hgError("Invalid audio format enum: %u\n", audio->format);
+                ((f32*)queue)[i] *= factor;
             }
         }
 
         hgAssert(queueSize <= sizeToPush);
-        hgAudioPlayerPush(src->player, queue, queueSize);
+        hgAudioStreamPush(src->player, queue, queueSize);
     });
 }
 

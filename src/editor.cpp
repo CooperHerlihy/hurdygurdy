@@ -28,7 +28,7 @@ static HgTransform* transform;
 static HgCamera* camera;
 
 static f32 audioData[4000];
-static HgAudioAsset* audio;
+static HgSoundAsset* audio;
 
 static bool showEditor = true;
 static bool showRender = true;
@@ -71,10 +71,9 @@ void init(HgArena* arena)
 
     hgImGuiInit(window, hgWindowImageFormat(window));
 
-    audio = hgAssetCreate<HgAudio>();
+    audio = hgAssetCreate<HgSound>();
     audio->data.data = audioData;
     audio->data.size = sizeof(audioData);
-    audio->data.format = HgAudioFormat_f32;
     audio->data.frequency = 8000;
     audio->data.channels = 1;
 
@@ -142,6 +141,8 @@ void init(HgArena* arena)
     *hgEcsAdd<Name>(ecs, sound) = {"sound"};
     hgNodeAdd(ecs, sound);
     hgTransformAdd(ecs, sound);
+    hgEcsGet<HgTransform>(ecs, sound)->position = HgVec3{0, 0, 1};
+    hgTransformUpdate(ecs, sound);
     hgAudioSourceAdd(ecs, sound, hgAssetCopy(audio), true);
 
     hgNodeAddChild(ecs, root, sound);

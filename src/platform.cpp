@@ -767,30 +767,6 @@ struct VulkanState {
 
 static VulkanState vk{};
 
-struct WindowState {
-    HgPool<HgWindow> pool = {};
-    HgMap<SDL_WindowID, HgWindow*> ids = {};
-
-    f32 mouseDX = 0.0f;
-    f32 mouseDY = 0.0f;
-    bool wasQuit = false;
-
-    bool imguiInitialized = false;
-};
-
-static WindowState windowState{};
-
-struct HgAudioPlayer {
-    SDL_AudioStream* stream;
-};
-
-struct AudioState {
-    SDL_AudioDeviceID device;
-    HgPool<HgAudioPlayer> players;
-};
-
-static AudioState audio{};
-
 static void loadVulkan();
 static void unloadVulkan();
 
@@ -3178,6 +3154,19 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
     return extCount;
 }
 
+struct WindowState {
+    HgPool<HgWindow> pool = {};
+    HgMap<SDL_WindowID, HgWindow*> ids = {};
+
+    f32 mouseDX = 0.0f;
+    f32 mouseDY = 0.0f;
+    bool wasQuit = false;
+
+    bool imguiInitialized = false;
+};
+
+static WindowState windowState{};
+
 void hgWindowsInit()
 {
     windowState.pool = hgPoolCreate<HgWindow>();
@@ -3748,106 +3737,99 @@ HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count)
     return window->events.vals;
 }
 
+struct AudioState {
+    SDL_AudioDeviceID device;
+    HgArray<SDL_AudioStream*> streams;
+};
+
+static AudioState audio{};
+
 void hgAudioInit()
 {
     audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
         hgError("SDL could not open audio device: %s\n", SDL_GetError());
 
-    audio.players = hgPoolCreate<HgAudioPlayer>();
+    audio.streams = hgArrayCreate<SDL_AudioStream*>();
 }
 
 void hgAudioDeinit()
 {
-    hgPoolDestroy(&audio.players);
+    for (u32 i = 0; i < audio.streams.count; ++i)
+    {
+        SDL_DestroyAudioStream(audio.streams[i]);
+    }
+    hgArrayDestroy(&audio.streams);
 
     SDL_CloseAudioDevice(audio.device);
 }
 
-u32 hgAudioFormatSize(HgAudioFormat format)
+HgAudioStream* hgAudioStreamCreate(u32 frequency, u32 channels)
 {
-    switch (format)
-    {
-        case HgAudioFormat_u8:
-            return 1;
-        case HgAudioFormat_s8:
-            return 1;
-        case HgAudioFormat_s16:
-            return 2;
-        case HgAudioFormat_s32:
-            return 4;
-        case HgAudioFormat_f32:
-            return 4;
-        default:
-            hgError("Invalid audio format enum: %u\n", format);
-    }
-}
-
-static SDL_AudioFormat hgAudioFormatToSDL(HgAudioFormat format)
-{
-    switch (format)
-    {
-        case HgAudioFormat_u8:
-            return SDL_AUDIO_U8;
-        case HgAudioFormat_s8:
-            return SDL_AUDIO_S8;
-        case HgAudioFormat_s16:
-            return SDL_AUDIO_S16;
-        case HgAudioFormat_s32:
-            return SDL_AUDIO_S32;
-        case HgAudioFormat_f32:
-            return SDL_AUDIO_F32;
-        default:
-            hgError("Invalid audio format enum: %u\n", format);
-    }
-}
-
-HgAudioPlayer* hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 channels)
-{
-    HgAudioPlayer* player = hgPoolAlloc(&audio.players);
-
     SDL_AudioSpec audioSpec{};
-    audioSpec.format = hgAudioFormatToSDL(format);
+    audioSpec.format = SDL_AUDIO_F32;
     audioSpec.freq = (int)frequency;
     audioSpec.channels = (int)channels;
 
-    player->stream = SDL_CreateAudioStream(&audioSpec, nullptr);
-    if (player->stream == nullptr)
-        hgError("SDL could not create audio stream: %s\n", SDL_GetError());
+    SDL_AudioStream* stream;
+    if (audio.streams.count == 0)
+    {
+        stream = SDL_CreateAudioStream(&audioSpec, nullptr);
+        if (stream == nullptr)
+            hgError("SDL could not create audio stream: %s\n", SDL_GetError());
 
-    if (!SDL_BindAudioStream(audio.device, player->stream))
-        hgError("SDL could not set audio stream format: %s\n", SDL_GetError());
+        if (!SDL_BindAudioStream(audio.device, stream))
+            hgError("SDL could not bind audio stream: %s\n", SDL_GetError());
+    }
+    else
+    {
+        stream = hgArrayPop(&audio.streams);
+        if (!SDL_SetAudioStreamFormat(stream, &audioSpec, nullptr))
+            hgError("SDL could not set audio stream format: %s\n", SDL_GetError());
+    }
 
-    return player;
+    return (HgAudioStream*)stream;
 }
 
-void hgAudioPlayerDestroy(HgAudioPlayer* player)
+void hgAudioStreamDestroy(HgAudioStream* stream)
 {
-    if (player != nullptr)
+    if (stream != nullptr)
     {
-        SDL_DestroyAudioStream(player->stream);
-        hgPoolFree(&audio.players, player);
+        SDL_AudioStream* sdlStream = (SDL_AudioStream*)stream;
+
+        // SDL_UnbindAudioStream(sdlStream);
+        if (!SDL_ClearAudioStream(sdlStream))
+            hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
+
+        *hgArrayPush(&audio.streams) = sdlStream;
     }
 }
 
-void hgAudioPlayerPush(HgAudioPlayer* player, const void* data, u64 size)
+void hgAudioStreamPush(HgAudioStream* player, const f32* data, u64 size)
 {
-    if (!SDL_PutAudioStreamData(player->stream, data, (int)size))
+    SDL_AudioStream* stream = (SDL_AudioStream*)player;
+    if (!SDL_PutAudioStreamData(stream, data, (int)size))
         hgError("SDL could not push audio data: %s\n", SDL_GetError());
 }
 
-u32 hgAudioPlayerQueuedSize(HgAudioPlayer* player)
+u32 hgAudioStreamQueuedSize(HgAudioStream* stream)
 {
-    int size = SDL_GetAudioStreamQueued(player->stream);
+    int size = SDL_GetAudioStreamQueued((SDL_AudioStream*)stream);
     if (size == -1)
         hgError("SDL could not read audio data: %s\n", SDL_GetError());
 
     return (u32)size;
 }
 
-void hgAudioPlayerClear(HgAudioPlayer* player)
+void hgAudioStreamClear(HgAudioStream* stream)
 {
-    if (!SDL_ClearAudioStream(player->stream))
+    if (!SDL_ClearAudioStream((SDL_AudioStream*)stream))
+        hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
+}
+
+void hgAudioStreamSetGain(HgAudioStream* stream, f32 gain)
+{
+    if (!SDL_SetAudioStreamGain((SDL_AudioStream*)stream, gain))
         hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 

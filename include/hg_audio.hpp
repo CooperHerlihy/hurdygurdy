@@ -43,50 +43,128 @@ void hgAudioInit();
 void hgAudioDeinit();
 
 /**
- * An audio player
+ * An audio stream
  */
-struct HgAudioPlayer;
+struct HgAudioStream;
 
 /**
- * Audio formats
- */
-enum HgAudioFormat : u32 {
-    /**
-     * Unsigned 8 bit int
-     */
-    HgAudioFormat_u8,
-    /**
-     * Signed 8 bit int
-     */
-    HgAudioFormat_s8,
-    /**
-     * Signed 16 bit int
-     */
-    HgAudioFormat_s16,
-    /**
-     * Signed 32 bit int
-     */
-    HgAudioFormat_s32,
-    /**
-     * 32 bit float
-     */
-    HgAudioFormat_f32,
-};
-
-/**
- * Returns the size in bytes of the format
- */
-u32 hgAudioFormatSize(HgAudioFormat format);
-
-/**
- * Create a new audio player
+ * Create a new audio stream
  *
  * Parameters
- * - format The format that will be pushed to the player
  * - frequency The segments per second to play
  * - channels The number of channels (mono, stereo, etc.)
  */
-HgAudioPlayer* hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 channels);
+HgAudioStream* hgAudioStreamCreate(u32 frequency, u32 channels);
+
+/**
+ * Destroy an audio stream
+ */
+void hgAudioStreamDestroy(HgAudioStream* player);
+
+/**
+ * Push data to the audio stream
+ *
+ * Parameters
+ * - stream The stream to push to
+ * - data The raw audio data in 32 bit float format
+ * - size The size of the pushed data in bytes
+ */
+void hgAudioStreamPush(HgAudioStream* player, const f32* data, u64 size);
+
+/**
+ * Returns the amount of audio still queued in bytes
+ */
+u32 hgAudioStreamQueuedSize(HgAudioStream* player);
+
+/**
+ * Clear data from the audio player
+ */
+void hgAudioStreamClear(HgAudioStream* player);
+
+/**
+ * The the gain for the stream
+ */
+void hgAudioStreamSetGain(HgAudioStream* stream, f32 gain);
+
+/**
+ * Audio data asset
+ */
+struct HgSound {
+    /**
+     * The sound data
+     */
+    f32* data;
+    /**
+     * The size of the data in bytes
+     */
+    u64 size;
+    /**
+     * The floats per second
+     */
+    u32 frequency;
+    /**
+     * The number of channels (mono, stereo, etc.)
+     */
+    u32 channels;
+};
+
+/**
+ * A handle to an audio asset
+ */
+typedef HgAsset<HgSound> HgSoundAsset;
+
+/**
+ * HgAudioData asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAsset<HgSound>* data);
+
+/**
+ * HgAudioData asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAsset<HgSound>* data);
+
+/**
+ * A music track in the audio player
+ */
+struct HgAudioPlayerMusic {
+    /**
+     * The music's stream
+     */
+    HgAudioStream* stream;
+    /**
+     * The music sound to play
+     */
+    HgSoundAsset* sound;
+    /**
+     * The current position in the sound
+     */
+    u32 pos;
+    /**
+     * Whether the music is currently playing or paused
+     */
+    bool playing;
+};
+
+/**
+ * An audio player system
+ */
+struct HgAudioPlayer {
+    /**
+     * The repeating music
+     */
+    HgArray<HgAudioPlayerMusic> music;
+    /**
+     * The temporary sounds
+     */
+    HgArray<HgAudioStream*> sounds;
+};
+
+/**
+ * Create a new audio player
+ */
+HgAudioPlayer hgAudioPlayerCreate();
 
 /**
  * Destroy an audio player
@@ -94,47 +172,34 @@ HgAudioPlayer* hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 chan
 void hgAudioPlayerDestroy(HgAudioPlayer* player);
 
 /**
- * Push data to the audio player
+ * Update the audio player
  */
-void hgAudioPlayerPush(HgAudioPlayer* player, const void* data, u64 size);
+void hgAudioPlayerUpdate(HgAudioPlayer* player);
 
 /**
- * Returns the amount of audio still queued in bytes
+ * Start a new music track, or resume an existing one
  */
-u32 hgAudioPlayerQueuedSize(HgAudioPlayer* player);
+void hgAudioPlayerMusic(HgAudioPlayer* player, HgSoundAsset* music);
 
 /**
- * Clear data from the audio player
+ * Remove a music track from the player
  */
-void hgAudioPlayerClear(HgAudioPlayer* player);
+void hgAudioPlayerMusicKill(HgAudioPlayer* player, HgSoundAsset* music);
 
 /**
- * Audio data asset
+ * Pause a music track
  */
-struct HgAudio {
-    void* data;
-    u64 size;
-    HgAudioFormat format;
-    u32 frequency;
-    u32 channels;
-};
+void hgAudioPlayerMusicPause(HgAudioPlayer* player, HgSoundAsset* music);
 
 /**
- * A handle to an audio asset
+ * Set the volume for a music track
  */
-typedef HgAsset<HgAudio> HgAudioAsset;
+void hgAudioPlayerSetMusicGain(HgAudioPlayer* player, HgSoundAsset* music, f32 gain = 1.0f);
 
 /**
- * HgAudioData asset load implementation
+ * Play a sound once
  */
-template<>
-void hgAssetLoadImpl(HgAsset<HgAudio>* data);
-
-/**
- * HgAudioData asset unload implementation
- */
-template<>
-void hgAssetUnloadImpl(HgAsset<HgAudio>* data);
+void hgAudioPlayerSound(HgAudioPlayer* player, HgSoundAsset* sound, f32 gain);
 
 /**
  * An audio source component
@@ -143,11 +208,11 @@ struct HgAudioSource {
     /**
      * The audio player for this source, should not be modified
      */
-    HgAudioPlayer* player;
+    HgAudioStream* player;
     /**
      * The audio to play from
      */
-    HgAudioAsset* audio;
+    HgSoundAsset* audio;
     /**
      * The current position in the audio data
      */
@@ -167,7 +232,7 @@ void hgSerialize(HgSerializer* s, HgAudioSource* src);
 /**
  * Add an audio source to an entity
  */
-HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioAsset* audio, bool repeat);
+HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgSoundAsset* audio, bool repeat);
 
 /**
  * HgAudioSource ecs destructor
@@ -179,7 +244,5 @@ void hgEcsDtor(HgAudioSource* src);
  * Update all audio sources, playing sound if needed
  */
 void hgAudioUpdate(HgEcs* ecs, HgEntity listener);
-
-// mixing : TODO
 
 #endif // HG_AUDIO_HPP

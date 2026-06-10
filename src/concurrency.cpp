@@ -171,17 +171,6 @@ static bool poolExecute()
     return true;
 }
 
-bool hgThreadsHelp(HgFence* fence, f64 timeout)
-{
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
-    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
-    {
-        if (!poolExecute())
-            _mm_pause();
-    }
-    return hgFenceIsComplete(fence);
-}
-
 void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data))
 {
     hgAssert(fn != nullptr);
@@ -207,6 +196,17 @@ void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data))
     threadPool.mtx.lock();
     threadPool.mtx.unlock();
     threadPool.cv.notify_one();
+}
+
+bool hgThreadsHelp(HgFence* fence, f64 timeout)
+{
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
+    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
+    {
+        if (!poolExecute())
+            _mm_pause();
+    }
+    return hgFenceIsComplete(fence);
 }
 
 void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))

@@ -266,6 +266,22 @@ T* hgArrayPushTemp(HgArena* arena, HgArray<T>* arr)
 }
 
 template<typename T>
+T hgArrayRemove(HgArray<T>* arr, u32 idx)
+{
+    hgAssert(idx < arr->count);
+
+    T val = (*arr)[idx];
+    if (idx + 1 < arr->count)
+    {
+        hgMemCopy(
+            &(*arr)[idx],
+            &(*arr)[idx + 1],
+            (arr->count - (idx + 1)) * sizeof(T));
+    }
+    --arr->count;
+    return val;
+}
+template<typename T>
 T hgArrayPop(HgArray<T>* arr)
 {
     hgAssert(arr->count > 0);

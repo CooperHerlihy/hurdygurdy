@@ -10,7 +10,41 @@ int main()
     HgWindow* window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
-    hgProcessEvents();
+    f32 musicData[2000];
+    HgSoundAsset* music = hgAssetCreate<HgSound>();
+    music->data.data = musicData;
+    music->data.size = sizeof(musicData);
+    music->data.frequency = 8000;
+    music->data.channels = 1;
+
+    for (u32 i = 0; i < hgArrayCount(musicData); ++i)
+    {
+        f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
+        musicData[i] = 0;
+        for (u32 j = 1; j <= 64; ++j)
+        {
+            f32 x = (f32)j;
+            musicData[i] += 1.0f / x * std::sin(100.f * t * x);
+        }
+    }
+
+    f32 soundData[2000];
+    HgSoundAsset* sound = hgAssetCreate<HgSound>();
+    sound->data.data = soundData;
+    sound->data.size = sizeof(soundData);
+    sound->data.frequency = 8000;
+    sound->data.channels = 1;
+
+    for (u32 i = 0; i < hgArrayCount(soundData); ++i)
+    {
+        f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
+        soundData[i] = hgNoiseNorm(42.0f, t);
+    }
+
+    HgAudioPlayer audio = hgAudioPlayerCreate();
+    hgAudioPlayerMusic(&audio, music);
+    hgAudioPlayerSetMusicGain(&audio, music, 0.3f);
+    hgAudioPlayerMusicPause(&audio, music);
 
     hgInit2D(hgWindowImageFormat(window));
     hgDefer(hgDeinit2D());
@@ -41,6 +75,8 @@ int main()
     for (;;)
     {
         f64 delta = hgClockTick(&gameClock);
+
+        hgAudioPlayerUpdate(&audio);
 
         hgProcessEvents();
         if (hgWasQuit() || hgWindowWasClosed(window))
@@ -73,6 +109,26 @@ int main()
         hgLayerClear2D(&spriteLayer);
 
         hgDrawSprite2D(&spriteLayer, &sprite, {spritePos, spriteSize});
+
+        u32 eventCount;
+        HgWindowEvent* event = hgWindowEvents(window, &eventCount);
+        for (u32 i = 0; i < eventCount; ++i, ++event)
+        {
+            if (event->type == HgWindowEventType_buttonPress &&
+                event->button.button == HgButton_space)
+            {
+                hgAudioPlayerSound(&audio, sound, 0.5f);
+            }
+        }
+
+        if (hgIsButtonDown(window, HgButton_m))
+        {
+            hgAudioPlayerMusic(&audio, music);
+        }
+        else
+        {
+            hgAudioPlayerMusicPause(&audio, music);
+        }
 
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
         if (hgWindowImageView(window) != nullptr)

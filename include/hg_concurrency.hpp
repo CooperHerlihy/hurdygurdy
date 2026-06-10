@@ -95,7 +95,7 @@ void hgFenceDestroy(HgFence* fence);
  * - fence The fence to attach to
  * - count The number of added events
  */
-void hgFenceAttach(HgFence* fence, u32 count);
+void hgFenceAttach(HgFence* fence, u32 count = 1);
 
 /**
  * Signal that events have completed
@@ -104,7 +104,7 @@ void hgFenceAttach(HgFence* fence, u32 count);
  * - fence The fence to signal
  * - count The number of signaled events
  */
-void hgFenceSignal(HgFence* fence, u32 count);
+void hgFenceSignal(HgFence* fence, u32 count = 1);
 
 /**
  * Returns whether all work has been completed
@@ -129,6 +129,16 @@ bool hgFenceWait(HgFence* fence, f64 timeoutSeconds);
 void hgFenceWaitIndefinite(HgFence* fence);
 
 /**
+ * Pushes work to the thread pool queue to be executed
+ *
+ * Parameters
+ * - fence The fences to signal upon completion
+ * - data The data passed to the function
+ * - work The function to be executed
+ */
+void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data));
+
+/**
  * Wait on a fence, and help complete work in the meantime
  *
  * Parameters
@@ -140,16 +150,6 @@ void hgFenceWaitIndefinite(HgFence* fence);
  * - false if the timeout was reached
  */
 bool hgThreadsHelp(HgFence* fence, f64 timeout);
-
-/**
- * Pushes work to the thread pool queue to be executed
- *
- * Parameters
- * - fence The fences to signal upon completion
- * - data The data passed to the function
- * - work The function to be executed
- */
-void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data));
 
 /**
  * Iterates in parallel over a function n times using the thread pool
