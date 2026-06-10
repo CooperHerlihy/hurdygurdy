@@ -1,5 +1,17 @@
 #include "hurdygurdy.hpp"
 
+#define IM_ASSERT hgAssert
+#include "imgui.h"
+
+#include <emmintrin.h>
+
+static volatile bool quit = false;
+
+static HgClock cpuClock{};
+static f64 cpuTime = 0.0f;
+
+static bool renderDebug = true;
+
 int main()
 {
     hgInit();
@@ -38,7 +50,7 @@ int main()
     for (u32 i = 0; i < hgArrayCount(soundData); ++i)
     {
         f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
-        soundData[i] = hgNoiseNorm(42.0f, t);
+        soundData[i] = hgNoiseNorm(42.0f, t) / (t + 0.1f);
     }
 
     HgAudioPlayer audio = hgAudioPlayerCreate();
@@ -46,8 +58,8 @@ int main()
     hgAudioPlayerSetMusicGain(&audio, music, 0.3f);
     hgAudioPlayerMusicPause(&audio, music);
 
-    hgInit2D(hgWindowImageFormat(window));
-    hgDefer(hgDeinit2D());
+    hgRendererInit2D(hgWindowImageFormat(window));
+    hgDefer(hgRendererDeinit2D());
 
     u32 width = hgWindowWidth(window);
     u32 height = hgWindowHeight(window);
@@ -70,17 +82,44 @@ int main()
     HgVec2 spriteSize{0.1f, 0.1f};
     HgVec2 spritePos = (HgVec2{(f32)width / (f32)height, 1} - spriteSize) / 2.0f;
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    hgDefer(ImGui::DestroyContext());
+
+    ImGui::StyleColorsDark();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    hgImGuiInit(window, hgWindowImageFormat(window));
+    hgDefer(hgImGuiDeinit());
+
+    // temporary, trick the OS into thinking we're important
+    hgThreadsCall(nullptr, nullptr, [](void*)
+    {
+        while(!quit)
+        {
+            _mm_pause();
+        }
+    });
+
     HgClock gameClock;
     hgClockTick(&gameClock);
+    hgClockTick(&cpuClock);
     for (;;)
     {
+        hgClockTick(&cpuClock);
         f64 delta = hgClockTick(&gameClock);
-
-        hgAudioPlayerUpdate(&audio);
 
         hgProcessEvents();
         if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
+
+        hgAudioPlayerUpdate(&audio);
+
+        hgImGuiNewFrame();
+        ImGui::NewFrame();
 
         width = hgWindowWidth(window);
         height = hgWindowHeight(window);
@@ -130,9 +169,26 @@ int main()
             hgAudioPlayerMusicPause(&audio, music);
         }
 
+        if (ImGui::Begin("Info"))
+        {
+            ImGui::Text("Total: %.3fms", delta * 1.0e3);
+
+            cpuTime += hgClockTick(&cpuClock);
+            ImGui::Text("Cpu: %.3fms", cpuTime * 1.0e3);
+            cpuTime = 0.0f;
+
+            ImGui::Checkbox("Render Debug", &renderDebug);
+        }
+        ImGui::End();
+
+        ImGui::Render();
+
+        cpuTime += hgClockTick(&cpuClock);
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
+        hgClockTick(&cpuClock);
         if (hgWindowImageView(window) != nullptr)
         {
+
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);
 
@@ -145,8 +201,16 @@ int main()
             hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
             hgGpuSetScissor(cmd, 0, 0, width, height);
 
-            HgLayer2D* layers[] = {&background, &spriteLayer};
-            hgRender2D(cmd, &camera, layers, (u32)hgArrayCount(layers));
+            hgRender2D(cmd, &camera, &background);
+            hgRender2D(cmd, &camera, &spriteLayer);
+
+            if (renderDebug)
+            {
+                hgRenderDebug2D(cmd, &camera, &background);
+                hgRenderDebug2D(cmd, &camera, &spriteLayer);
+            }
+
+            hgImGuiDraw(cmd);
 
             hgGpuRenderPassEnd(cmd);
 
@@ -156,11 +220,13 @@ int main()
 
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
         }
+        cpuTime += hgClockTick(&cpuClock);
 
         hgGpuFrameEnd(cmd);
     }
 
 quit:
+    quit = true;
     hgGpuWaitIdle();
 }
 

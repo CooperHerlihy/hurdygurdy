@@ -245,33 +245,33 @@ void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e);
 /**
  * Initialize the 2D renderer
  */
-void hgInit2D(HgFormat colorFormat);
+void hgRendererInit2D(HgFormat colorFormat);
 
 /**
  * Deinitialize the 2D renderer
  */
-void hgDeinit2D();
+void hgRendererDeinit2D();
 
 /**
- * The 2D vertex types
+ * The 2D instance types
  */
-enum HgVertexType2D : u32 {
+enum HgRender2DInstanceType : u32 {
     /**
-     * A vertex with a color value
+     * A instance with a color value
      */
-    HgVertexType2D_color = 0,
+    HgRender2DInstanceType_color = 0,
     /**
-     * A vertex with a pointer to a texture
+     * A instance with a sprite
      */
-    HgVertexType2D_texture = 1,
+    HgRender2DInstanceType_sprite = 1,
 };
 
 /**
- * A rectangle vertex
+ * A rectangle instance
  */
-struct HgInstanceRect2D {
+struct HgRect2DInstance {
     /**
-     * The vertex position
+     * The instance position
      */
     HgVec2 pos;
     /**
@@ -279,7 +279,7 @@ struct HgInstanceRect2D {
      */
     HgVec2 size;
     /**
-     * The vertex type
+     * The instance type
      */
     u32 type;
     /**
@@ -293,9 +293,9 @@ struct HgInstanceRect2D {
 };
 
 /**
- * A sprite vertex
+ * A sprite instance
  */
-struct HgInstanceSprite2D {
+struct HgSprite2DInstance {
     /**
      * The instance position
      */
@@ -305,7 +305,7 @@ struct HgInstanceSprite2D {
      */
     HgVec2 size;
     /**
-     * The vertex type
+     * The instance type
      */
     u32 type;
     /**
@@ -329,15 +329,15 @@ struct HgInstanceSprite2D {
 /**
  * An instance in a 2D layer
  */
-union HgInstance2D {
+union HgRender2DInstance {
     /**
      * The rectangle data
      */
-    HgInstanceRect2D rect;
+    HgRect2DInstance rect;
     /**
      * The sprite data
      */
-    HgInstanceSprite2D sprite;
+    HgSprite2DInstance sprite;
 };
 
 /**
@@ -351,7 +351,7 @@ struct HgLayer2D {
     /**
      * The instance data
      */
-    HgArray<HgInstance2D> instances;
+    HgArray<HgRender2DInstance> instances;
     /**
      * The gpu side instance buffer
      */
@@ -515,9 +515,14 @@ void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile);
 void hgDrawTilemap2D(HgLayer2D* layer, HgTilemap2D* tilemap, HgRect2D dst);
 
 /**
- * Issue draw commands for a 2D scene
+ * Issue draw commands for a 2D layer
  */
-void hgRender2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D** layers, u32 layerCount);
+void hgRender2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
+
+/**
+ * Issue draw commands for a 2D layer using debug lines
+ */
+void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
 
 /**
  * A vertex in a mesh
