@@ -5,6 +5,8 @@
 #define IM_ASSERT hgAssert
 #include "imgui.h"
 
+#include "noise.comp.spv.h"
+
 int main()
 {
     hgInit();
@@ -71,11 +73,9 @@ int main()
         u32 outImageIdx;
     };
 
-    HgBinaryAsset* noiseShaderCode = hgAssetLoad<HgBinary>("build/noise.comp.spv");
-    HgGpuPipeline* noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data.data, noiseShaderCode->data.size);
+    HgGpuPipeline* noisePipeline =
+        hgGpuPipelineCreateCompute(sizeof(NoisePush), noise_comp_spv, sizeof(noise_comp_spv));
     hgDefer(hgGpuPipelineDestroy(noisePipeline));
-
-    hgAssetUnload(noiseShaderCode);
 
     HgEcs ecs = hgEcsCreate();
     hgDefer(hgEcsDestroy(&ecs));

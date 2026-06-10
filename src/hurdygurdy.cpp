@@ -3269,20 +3269,17 @@ struct RenderPush2D {
     u32 instIdx;
 };
 
+#include "render2d.vert.spv.h"
+#include "render2d.frag.spv.h"
+#include "debug2d.frag.spv.h"
+
 void hgRendererInit2D(HgFormat colorFormat)
 {
-    HgBinaryAsset* vertSpv = hgAssetLoad<HgBinary>("build/render2d.vert.spv");
-    HgBinaryAsset* fragSpv = hgAssetLoad<HgBinary>("build/render2d.frag.spv");
-    HgBinaryAsset* debugSpv = hgAssetLoad<HgBinary>("build/debug2d.frag.spv");
-    hgDefer(hgAssetUnload(vertSpv));
-    hgDefer(hgAssetUnload(fragSpv));
-    hgDefer(hgAssetUnload(debugSpv));
-
     HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = vertSpv->data.data;
-    pipelineConfig.vertexShaderSize = vertSpv->data.size;
-    pipelineConfig.fragmentShader = fragSpv->data.data;
-    pipelineConfig.fragmentShaderSize = fragSpv->data.size;
+    pipelineConfig.vertexShader = render2d_vert_spv;
+    pipelineConfig.vertexShaderSize = sizeof(render2d_vert_spv);
+    pipelineConfig.fragmentShader = render2d_frag_spv;
+    pipelineConfig.fragmentShaderSize = sizeof(render2d_frag_spv);
     pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
@@ -3291,8 +3288,8 @@ void hgRendererInit2D(HgFormat colorFormat)
 
     render2D.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
 
-    pipelineConfig.fragmentShader = debugSpv->data.data;
-    pipelineConfig.fragmentShaderSize = debugSpv->data.size;
+    pipelineConfig.fragmentShader = debug2d_frag_spv;
+    pipelineConfig.fragmentShaderSize = sizeof(debug2d_frag_spv);
     pipelineConfig.topology = HgGpuTopology_lineStrip;
 
     render2D.debugPipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
@@ -3559,6 +3556,9 @@ struct SpritePipelineState {
 
 static SpritePipelineState spritePipeline{};
 
+#include "sprite.vert.spv.h"
+#include "sprite.frag.spv.h"
+
 void hgSpritesInit(
     HgFormat colorFormat,
     HgFormat depthFormat)
@@ -3566,16 +3566,11 @@ void hgSpritesInit(
     hgAssert(colorFormat != HgFormat_undefined);
     hgAssert(depthFormat != HgFormat_undefined);
 
-    HgBinaryAsset* spriteVertSpv = hgAssetLoad<HgBinary>("build/sprite.vert.spv");
-    HgBinaryAsset* spriteFragSpv = hgAssetLoad<HgBinary>("build/sprite.frag.spv");
-    hgDefer(hgAssetUnload(spriteVertSpv));
-    hgDefer(hgAssetUnload(spriteFragSpv));
-
     HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = spriteVertSpv->data.data;
-    pipelineConfig.vertexShaderSize = spriteVertSpv->data.size;
-    pipelineConfig.fragmentShader = spriteFragSpv->data.data;
-    pipelineConfig.fragmentShaderSize = spriteFragSpv->data.size;
+    pipelineConfig.vertexShader = sprite_vert_spv;
+    pipelineConfig.vertexShaderSize = sizeof(sprite_vert_spv);
+    pipelineConfig.fragmentShader = sprite_frag_spv;
+    pipelineConfig.fragmentShaderSize = sizeof(sprite_frag_spv);
     pipelineConfig.pushConstantSize = sizeof(SpritePipelinePush);
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
@@ -3679,20 +3674,18 @@ struct SkyboxPipelineState {
 
 static SkyboxPipelineState skyboxPipeline{};
 
+#include "skybox.vert.spv.h"
+#include "skybox.frag.spv.h"
+
 void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
 {
     hgAssert(colorFormat != HgFormat_undefined);
 
-    HgBinaryAsset* vertSpv = hgAssetLoad<HgBinary>("build/skybox.vert.spv");
-    HgBinaryAsset* fragSpv = hgAssetLoad<HgBinary>("build/skybox.frag.spv");
-    hgDefer(hgAssetUnload(vertSpv));
-    hgDefer(hgAssetUnload(fragSpv));
-
     HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = vertSpv->data.data;
-    pipelineConfig.vertexShaderSize = vertSpv->data.size;
-    pipelineConfig.fragmentShader = fragSpv->data.data;
-    pipelineConfig.fragmentShaderSize = fragSpv->data.size;
+    pipelineConfig.vertexShader = skybox_vert_spv;
+    pipelineConfig.vertexShaderSize = sizeof(skybox_vert_spv);
+    pipelineConfig.fragmentShader = skybox_frag_spv;
+    pipelineConfig.fragmentShaderSize = sizeof(skybox_frag_spv);
     pipelineConfig.pushConstantSize = sizeof(SkyboxPipelinePush);
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
@@ -3870,6 +3863,9 @@ struct ModelPipelineState {
 
 static ModelPipelineState modelPipeline{};
 
+#include "model.vert.spv.h"
+#include "model.frag.spv.h"
+
 void hgModelsInit(
     HgFormat colorFormat,
     HgFormat depthFormat)
@@ -3877,16 +3873,11 @@ void hgModelsInit(
     hgAssert(colorFormat != HgFormat_undefined);
     hgAssert(depthFormat != HgFormat_undefined);
 
-    HgBinaryAsset* modelVertSpv = hgAssetLoad<HgBinary>("build/model.vert.spv");
-    HgBinaryAsset* modelFragSpv = hgAssetLoad<HgBinary>("build/model.frag.spv");
-    hgDefer(hgAssetUnload(modelVertSpv));
-    hgDefer(hgAssetUnload(modelFragSpv));
-
     HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = modelVertSpv->data.data;
-    pipelineConfig.vertexShaderSize = modelVertSpv->data.size;
-    pipelineConfig.fragmentShader = modelFragSpv->data.data;
-    pipelineConfig.fragmentShaderSize = modelFragSpv->data.size;
+    pipelineConfig.vertexShader = model_vert_spv;
+    pipelineConfig.vertexShaderSize = sizeof(model_vert_spv);
+    pipelineConfig.fragmentShader = model_frag_spv;
+    pipelineConfig.fragmentShaderSize = sizeof(model_frag_spv);
     pipelineConfig.pushConstantSize = sizeof(ModelPipelinePush);
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;

@@ -10,6 +10,7 @@ RELEASE_CONFIG := -O3 -DNDEBUG -fno-exceptions -fno-rtti
 CONFIG := $(DEBUG_CONFIG)
 
 INCLUDES := \
+	-I$(SRC_DIR)/build \
 	-I$(SRC_DIR)/include \
 	-I$(SRC_DIR)/vendor \
 	-I$(SRC_DIR)/vendor/SDL/include \
@@ -46,7 +47,7 @@ TARGETS := \
 
 .PHONY: all debug release clean
 
-all: $(patsubst %, $(BUILD_DIR)/%, $(TARGETS)) $(patsubst %, $(BUILD_DIR)/%.spv, $(SHADERS))
+all: $(patsubst %, $(BUILD_DIR)/%, $(TARGETS))
 
 debug:
 	$(MAKE) CONFIG="$(DEBUG_CONFIG)"
@@ -75,13 +76,19 @@ $(BUILD_DIR)/%.frag.spv: $(SRC_DIR)/src/%.frag $(SRC_DIR)/include/hurdygurdy.gls
 $(BUILD_DIR)/%.comp.spv: $(SRC_DIR)/src/%.comp $(SRC_DIR)/include/hurdygurdy.glsl | $(BUILD_DIR)
 	glslc -o $@ $< -I$(SRC_DIR)/include
 
+$(BUILD_DIR)/embed: $(SRC_DIR)/src/embed.cpp | $(BUILD_DIR)
+	c++ $(STD) $(CONFIG) $(INCLUDES) $< -o $@
+
+$(BUILD_DIR)/%.spv.h: $(BUILD_DIR)/%.spv $(BUILD_DIR)/embed | $(BUILD_DIR)
+	$(BUILD_DIR)/embed $< $(notdir $<) > $@
+
 $(BUILD_DIR)/%.o: $(SRC_DIR)/vendor/imgui/backends/%.cpp | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/vendor/imgui/%.cpp | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/src/%.cpp | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: $(SRC_DIR)/src/%.cpp $(patsubst %, $(BUILD_DIR)/%.spv.h, $(SHADERS)) | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(WARNINGS) $(INCLUDES) -c $< -o $@
 
 LIB_FILES := \

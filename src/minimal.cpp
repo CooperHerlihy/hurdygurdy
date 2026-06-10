@@ -10,7 +10,7 @@ static volatile bool quit = false;
 static HgClock cpuClock{};
 static f64 cpuTime = 0.0f;
 
-static bool renderDebug = true;
+static bool renderDebug = false;
 
 int main()
 {
@@ -67,13 +67,22 @@ int main()
     HgCamera camera = hgCameraCreate();
     hgDefer(hgCameraDestroy(&camera));
 
-    HgLayer2D background = hgLayerCreate2D();
-    hgDefer(hgLayerDestroy2D(&background));
+    HgLayer2D backgroundLayer = hgLayerCreate2D();
+    hgDefer(hgLayerDestroy2D(&backgroundLayer));
 
-    hgLayerClear2D(&background);
-    hgDrawRect2D(&background,
+    hgLayerClear2D(&backgroundLayer);
+    hgDrawRect2D(&backgroundLayer,
         HgVec4{.002f, 0, .012f, 1},
-        {HgVec2{(f32)width / (f32)height - 0.5f, 0.5f} / 2.0f, HgVec2{0.5f}});
+        HgRect2D{
+            HgVec2{
+                (f32)width / (f32)height - 0.5f,
+                0.5f,
+            } / 2.0f,
+            HgVec2{
+                0.5f,
+                0.5f,
+            }
+        });
 
     HgLayer2D spriteLayer = hgLayerCreate2D();
     hgDefer(hgLayerDestroy2D(&spriteLayer));
@@ -155,19 +164,13 @@ int main()
         {
             if (event->type == HgWindowEventType_buttonPress &&
                 event->button.button == HgButton_space)
-            {
                 hgAudioPlayerSound(&audio, sound, 0.5f);
-            }
         }
 
         if (hgIsButtonDown(window, HgButton_m))
-        {
             hgAudioPlayerMusic(&audio, music);
-        }
         else
-        {
             hgAudioPlayerMusicPause(&audio, music);
-        }
 
         if (ImGui::Begin("Info"))
         {
@@ -188,7 +191,6 @@ int main()
         hgClockTick(&cpuClock);
         if (hgWindowImageView(window) != nullptr)
         {
-
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);
 
@@ -201,12 +203,12 @@ int main()
             hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
             hgGpuSetScissor(cmd, 0, 0, width, height);
 
-            hgRenderLayer2D(cmd, &camera, &background);
+            hgRenderLayer2D(cmd, &camera, &backgroundLayer);
             hgRenderLayer2D(cmd, &camera, &spriteLayer);
 
             if (renderDebug)
             {
-                hgRenderDebug2D(cmd, &camera, &background);
+                hgRenderDebug2D(cmd, &camera, &backgroundLayer);
                 hgRenderDebug2D(cmd, &camera, &spriteLayer);
             }
 
