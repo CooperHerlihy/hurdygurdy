@@ -3100,7 +3100,8 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     HgArray<HgGpuImageBarrier> presentBarriers = hgArrayTemp<HgGpuImageBarrier>(scratch, 0, frame->windows.count);
     for (u32 i = 0; i < frame->windows.count; ++i)
     {
-        HgGpuImageBarrier* barrier = hgArrayPush(&presentBarriers);
+        HgGpuImageBarrier* barrier = hgArrayPushTemp(scratch, &presentBarriers);
+        *barrier = {};
         barrier->image = hgWindowImageView(frame->windows[i]);
         barrier->nextLayout = HgGpuLayout_presentSrc;
     }
