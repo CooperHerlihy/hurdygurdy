@@ -363,7 +363,7 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
                 if (ImGui::Button("Perspective"))
                 {
                     c->type = HgCameraType_orthographic;
-                    hgCameraSetOrthographic(c, (f32)width / (f32)height);
+                    hgCameraSetOrthographic(c, (f32)width / (f32)height, 1.0f);
                 }
                 ImGui::DragFloat("FoV", &c->perspective.fov, 0.01f);
                 ImGui::DragFloat("Aspect", &c->perspective.aspect, 0.01f);

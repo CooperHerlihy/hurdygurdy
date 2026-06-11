@@ -3171,15 +3171,31 @@ void hgCameraSetPerspective(HgCamera* camera, f32 aspect, f32 fov, f32 near, f32
     camera->perspective.far = far;
 }
 
-void hgCameraSetOrthographic(HgCamera* camera, f32 aspect)
+void hgCameraSetOrthographic(HgCamera* camera, f32 width, f32 height, f32 actualAspect)
 {
     camera->type = HgCameraType_orthographic;
     camera->orthographic.left = 0;
-    camera->orthographic.right = aspect;
+    camera->orthographic.right = width;
     camera->orthographic.top = 0;
-    camera->orthographic.bottom = 1;
+    camera->orthographic.bottom = height;
     camera->orthographic.near = 0;
     camera->orthographic.far = 1;
+
+    if (actualAspect != 0.0)
+    {
+        if (actualAspect > (f32)width / (f32)height)
+        {
+            f32 margin = actualAspect - (f32)width / (f32)height;
+            camera->orthographic.left -= margin * width / 2.0f;
+            camera->orthographic.right += margin * width / 2.0f;
+        }
+        else
+        {
+            f32 margin = 1.0f / actualAspect - (f32)height / (f32)width;
+            camera->orthographic.top -= margin * height / 2.0f;
+            camera->orthographic.bottom += margin * height / 2.0f;
+        }
+    }
 }
 
 void hgCameraUpdate(HgCamera* camera)
@@ -3485,12 +3501,9 @@ HgSprite2D hgAtlasGet2D(HgAtlas2D* atlas, u32 idx)
     return {atlas->texture, atlas->sprites[idx]};
 }
 
-HgTilemap2D hgTilemapCreate2D(HgAtlas2D* atlas, u32 width, u32 height)
+HgTilemap2D hgTilemapCreate2D(u32 width, u32 height)
 {
-    hgAssert(atlas != nullptr);
-
     HgTilemap2D tilemap{};
-    tilemap.atlas = atlas;
     tilemap.tiles = hgGpaAlloc<u32>(width * height);
     tilemap.width = width;
     tilemap.height = height;
@@ -3502,7 +3515,7 @@ HgTilemap2D hgTilemapCreate2D(HgAtlas2D* atlas, u32 width, u32 height)
     return tilemap;
 }
 
-void hgTilemapCreate2D(HgTilemap2D* tilemap)
+void hgTilemapDestroy2D(HgTilemap2D* tilemap)
 {
     hgAssert(tilemap != nullptr);
     hgGpaFree(tilemap->tiles, tilemap->width * tilemap->height);
@@ -3520,7 +3533,7 @@ void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile)
     tilemap->tiles[y * tilemap->width + x] = tile;
 }
 
-void hgDrawTilemap2D(HgLayer2D* layer, HgTilemap2D* tilemap, HgRect2D dst)
+void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, HgRect2D dst)
 {
     hgAssert(layer != nullptr);
     hgAssert(tilemap != nullptr);
@@ -3533,7 +3546,7 @@ void hgDrawTilemap2D(HgLayer2D* layer, HgTilemap2D* tilemap, HgRect2D dst)
         for (u32 x = 0; x < tilemap->height; ++x)
         {
             u32 tile = hgTilemapGet2D(tilemap, x, y);
-            HgSprite2D sprite = hgAtlasGet2D(tilemap->atlas, tile);
+            HgSprite2D sprite = hgAtlasGet2D(atlas, tile);
             hgDrawSprite2D(layer, &sprite, {pos, size});
             pos.x += size.x;
         }

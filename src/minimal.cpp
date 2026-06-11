@@ -133,7 +133,7 @@ int main()
         width = hgWindowWidth(window);
         height = hgWindowHeight(window);
 
-        hgCameraSetOrthographic(&camera, (f32)width / (f32)height);
+        hgCameraSetOrthographic(&camera, (f32)width / (f32)height, 1.0f);
 
         if (hgIsButtonDown(window, HgButton_lmouse))
         {

@@ -38,84 +38,6 @@
 #include "hg_window.hpp"
 
 /**
- * A texture asset
- */
-struct HgTextureData {
-    /**
-     * The width of the texture in pixels
-     */
-    u32 width;
-    /**
-     * The height of the texture in pixels
-     */
-    u32 height;
-    /**
-     * The depth of the texture in pixels
-     */
-    u32 depth;
-    /**
-     * The format of each pixel
-     */
-    HgFormat format;
-    /**
-     * The pixel data, aligned to 16 bytes
-     */
-    void* pixels;
-};
-
-/**
- * A handle to a texture
- */
-typedef HgAsset<HgTextureData> HgTextureDataAsset;
-
-/**
- * HgTexture asset load implementation
- */
-template<>
-void hgAssetLoadImpl(HgAsset<HgTextureData>* data);
-
-/**
- * HgTexture asset unload implementation
- */
-template<>
-void hgAssetUnloadImpl(HgAsset<HgTextureData>* data);
-
-/**
- * Store an image to disc in the png format
- */
-void hgTextureStorePng(HgTextureData* texture, HgStringView path, HgFence* fence);
-
-/**
- * A texture asset stored on the gpu
- */
-struct HgTexture {
-    /**
-     * The image
-     */
-    HgGpuImage* image;
-    /**
-     * The image view
-     */
-    HgGpuView* view;
-};
-
-/**
- * A handle to a texture asset
- */
-typedef HgAsset<HgTexture> HgTextureAsset;
-
-/**
- * HgGpuTexture asset load implementation
- */
-template<>
-void hgAssetLoadImpl(HgAsset<HgTexture>* data);
-
-/**
- * HgGpuTexture asset unload implementation
- */
-template<>
-void hgAssetUnloadImpl(HgAsset<HgTexture>* data);
-/**
  * The types of camera projections
  */
 enum HgCameraType : u32 {
@@ -217,9 +139,15 @@ void hgCameraSetPerspective(
     f32 far = 1000.0f);
 
 /**
- * The the camera to an orthographic projection using reasonable defaults
+ * The the camera to an orthographic projection
+ *
+ * Parameters
+ * - camera The camera to set
+ * - width The desired width of the render space
+ * - height The desired height of the render space
+ * - actualAspect The actual aspect, so margins can be added, or 0 to ignore
  */
-void hgCameraSetOrthographic(HgCamera* camera, f32 aspect);
+void hgCameraSetOrthographic(HgCamera* camera, f32 width, f32 height, f32 actualAspect = 0.0f);
 
 /**
  * Update the camera's gpu side data
@@ -241,6 +169,85 @@ void hgEcsDtor(HgCamera* camera);
  * Update the camera's gpu side data, must have a camera and transform
  */
 void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e);
+
+/**
+ * A texture asset
+ */
+struct HgTextureData {
+    /**
+     * The width of the texture in pixels
+     */
+    u32 width;
+    /**
+     * The height of the texture in pixels
+     */
+    u32 height;
+    /**
+     * The depth of the texture in pixels
+     */
+    u32 depth;
+    /**
+     * The format of each pixel
+     */
+    HgFormat format;
+    /**
+     * The pixel data, aligned to 16 bytes
+     */
+    void* pixels;
+};
+
+/**
+ * A handle to a texture
+ */
+typedef HgAsset<HgTextureData> HgTextureDataAsset;
+
+/**
+ * HgTexture asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAsset<HgTextureData>* data);
+
+/**
+ * HgTexture asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAsset<HgTextureData>* data);
+
+/**
+ * Store an image to disc in the png format
+ */
+void hgTextureStorePng(HgTextureData* texture, HgStringView path, HgFence* fence);
+
+/**
+ * A texture asset stored on the gpu
+ */
+struct HgTexture {
+    /**
+     * The image
+     */
+    HgGpuImage* image;
+    /**
+     * The image view
+     */
+    HgGpuView* view;
+};
+
+/**
+ * A handle to a texture asset
+ */
+typedef HgAsset<HgTexture> HgTextureAsset;
+
+/**
+ * HgGpuTexture asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAsset<HgTexture>* data);
+
+/**
+ * HgGpuTexture asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAsset<HgTexture>* data);
 
 /**
  * Initialize the 2D renderer
@@ -482,10 +489,6 @@ HgSprite2D hgAtlasGet2D(HgAtlas2D* atlas, u32 idx);
  */
 struct HgTilemap2D {
     /**
-     * The texture atlas
-     */
-    HgAtlas2D* atlas;
-    /**
      * The tilemap data
      */
     u32* tiles;
@@ -502,12 +505,12 @@ struct HgTilemap2D {
 /**
  * Create an empty tilemap
  */
-HgTilemap2D hgTilemapCreate2D(HgAtlas2D* atlas, u32 width, u32 height);
+HgTilemap2D hgTilemapCreate2D(u32 width, u32 height);
 
 /**
  * Destroy a tilemap
  */
-void hgTilemapCreate2D(HgTilemap2D* tilemap);
+void hgTilemapDestroy2D(HgTilemap2D* tilemap);
 
 /**
  * Get the value of a tile in a tilemap
@@ -522,7 +525,7 @@ void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile);
 /**
  * Draw a tilemap to the layer
  */
-void hgDrawTilemap2D(HgLayer2D* layer, HgTilemap2D* tilemap, HgRect2D dst);
+void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, HgRect2D dst);
 
 /**
  * A vertex in a mesh
@@ -889,8 +892,6 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
 
 /**
  * Initialize ImGui platform backend
- *
- * Note, requires GLFW on Linux (for now)
  *
  * Parameters
  * - window The window for ImGui to use
