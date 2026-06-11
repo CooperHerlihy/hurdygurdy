@@ -541,9 +541,6 @@ void render()
 
         hgGpuRenderPassBegin(cmd, &renderPass);
 
-        hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
-        hgGpuSetScissor(cmd, 0, 0, width, height);
-
         hgCameraUpdateEcs(ecs, player);
         hgSkyboxDraw(ecs, player, cmd);
         hgSpritesDraw(ecs, player, cmd);
@@ -564,18 +561,9 @@ void render()
 
         hgGpuRenderPassBegin(cmd, &guiPass);
 
-        hgGpuSetViewport(cmd, 0, 0, (f32)hgWindowWidth(window), (f32)hgWindowHeight(window));
-        hgGpuSetScissor(cmd, 0, 0, hgWindowWidth(window), hgWindowHeight(window));
-
         hgImGuiDraw(cmd);
 
         hgGpuRenderPassEnd(cmd);
-
-        HgGpuImageBarrier presentBarrier{};
-        presentBarrier.image = hgWindowImageView(window);
-        presentBarrier.nextLayout = HgGpuLayout_presentSrc;
-
-        hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
     }
     cpuDelta += hgClockTick(&cpuClock);
     hgGpuFrameEnd(cmd);

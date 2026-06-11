@@ -2863,11 +2863,12 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
         hgMemCopy(&stencilAttachment.clearValue, &pass->stencilAttachment->clearValue, sizeof(VkClearValue));
     }
 
+    u32 width = pass->colorAttachments[0].image->image->width;
+    u32 height = pass->colorAttachments[0].image->image->height;
+
     VkRenderingInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = {
-        pass->colorAttachments[0].image->image->width,
-        pass->colorAttachments[0].image->image->height};
+    renderingInfo.renderArea.extent = {width, height};
     renderingInfo.layerCount = pass->layerCount;
     renderingInfo.colorAttachmentCount = pass->colorAttachmentCount;
     renderingInfo.pColorAttachments = colorAttachments;
@@ -2879,6 +2880,9 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
         : nullptr;
 
     vkCmdBeginRendering((VkCommandBuffer)cmd, &renderingInfo);
+
+    hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
+    hgGpuSetScissor(cmd, 0, 0, width, height);
 }
 
 static VkPresentModeKHR hgPresentModeToVk(HgGpuPresentMode mode)
@@ -3087,12 +3091,22 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
 void hgGpuFrameEnd(HgGpuCmd* cmd)
 {
     hgAssert(cmd != nullptr);
-    vkEndCommandBuffer((VkCommandBuffer)cmd);
 
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
     Frame* frame = &vk.frames[vk.currentFrame];
+
+    HgArray<HgGpuImageBarrier> presentBarriers = hgArrayTemp<HgGpuImageBarrier>(scratch, 0, frame->windows.count);
+    for (u32 i = 0; i < frame->windows.count; ++i)
+    {
+        HgGpuImageBarrier* barrier = hgArrayPush(&presentBarriers);
+        barrier->image = hgWindowImageView(frame->windows[i]);
+        barrier->nextLayout = HgGpuLayout_presentSrc;
+    }
+    hgGpuMemoryBarrier(cmd, nullptr, 0, presentBarriers.vals, presentBarriers.count);
+
+    vkEndCommandBuffer((VkCommandBuffer)cmd);
 
     VkPipelineStageFlags* waitStages = hgArenaAlloc<VkPipelineStageFlags>(scratch, frame->windows.count);
     VkSemaphore* imageAvailableSemaphores = hgArenaAlloc<VkSemaphore>(scratch, frame->windows.count);

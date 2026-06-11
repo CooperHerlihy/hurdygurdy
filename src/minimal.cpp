@@ -200,9 +200,6 @@ int main()
 
             hgGpuRenderPassBegin(cmd, &pass);
 
-            hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
-            hgGpuSetScissor(cmd, 0, 0, width, height);
-
             hgRenderLayer2D(cmd, &camera, &backgroundLayer);
             hgRenderLayer2D(cmd, &camera, &spriteLayer);
 
@@ -215,12 +212,6 @@ int main()
             hgImGuiDraw(cmd);
 
             hgGpuRenderPassEnd(cmd);
-
-            HgGpuImageBarrier presentBarrier{};
-            presentBarrier.image = hgWindowImageView(window);
-            presentBarrier.nextLayout = HgGpuLayout_presentSrc;
-
-            hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
         }
         cpuTime += hgClockTick(&cpuClock);
 
