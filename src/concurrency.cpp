@@ -3,7 +3,6 @@
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
 #include "hg_time.hpp"
-#include "hg_templates.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -16,7 +15,7 @@ struct HgMutex {
     std::atomic_bool acquired;
 };
 
-static HgPool<HgMutex> mutices{};
+static HgPool mutices{};
 
 HgMutex* hgMutexCreate()
 {
@@ -60,7 +59,7 @@ struct HgFence {
     std::atomic<u32> counter;
 };
 
-static HgPool<HgFence> fences{};
+static HgPool fences{};
 
 HgFence* hgFenceCreate()
 {

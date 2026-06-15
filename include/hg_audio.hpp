@@ -29,7 +29,6 @@
 
 #include "hg_assets.hpp"
 #include "hg_core.hpp"
-#include "hg_ecs.hpp"
 #include "hg_serialization.hpp"
 
 /**
@@ -200,6 +199,8 @@ void hgAudioPlayerSetMusicGain(HgAudioPlayer* player, HgSoundAsset* music, f32 g
  * Play a sound once
  */
 void hgAudioPlayerSound(HgAudioPlayer* player, HgSoundAsset* sound, f32 gain);
+
+#include "hg_ecs.hpp"
 
 /**
  * An audio source component

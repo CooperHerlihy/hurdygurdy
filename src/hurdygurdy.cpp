@@ -16,8 +16,24 @@
 #include "hg_utils.hpp"
 #include "hg_window.hpp"
 
+#include <cstring>
+
 #include "stb_image.h"
 #include "stb_image_write.h"
+
+thread_local static char errorMessageData[4096];
+thread_local static u64 errorMessageLength = 0;
+
+HgString hgErrorGet()
+{
+    return {errorMessageData, errorMessageLength};
+}
+
+void hgErrorGet(HgString error)
+{
+    errorMessageLength = hgMin(error.length, sizeof(errorMessageData));
+    hgMemCopy(errorMessageData, error.chars, errorMessageLength);
+}
 
 static HgSubsystemFlags initialized = 0;
 
@@ -96,9 +112,20 @@ void hgDeinit()
     initialized = 0;
 }
 
-void hgMemClear(void* dst, u64 size)
+void hgSwap(void* a, void* b, u64 size)
 {
-    memset(dst, 0, size);
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    void* tmp = hgArenaAlloc(scratch, size, 1);
+    hgMemCopy(tmp, a, size);
+    hgMemCopy(a, b, size);
+    hgMemCopy(b, tmp, size);
+}
+
+void hgMemClear(void* dst, u64 size, u8 val)
+{
+    memset(dst, val, size);
 }
 
 void hgMemCopy(void* __restrict dst, const void* __restrict src, u64 size)
@@ -139,8 +166,12 @@ void hgGpaFree(void* allocation, u64 size)
 void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment)
 {
     hgAssert(arena != nullptr);
-    arena->head = hgAlign((u64)arena->head, alignment) + size;
-    hgAssert(arena->head <= arena->capacity);
+
+    u64 newHead = hgAlign((u64)arena->head, alignment) + size;
+    if (arena->head > arena->capacity)
+        return nullptr;
+
+    arena->head = newHead;
     return (void*)((uptr)arena->memory + arena->head - size);
 }
 
@@ -152,8 +183,11 @@ void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize,
     {
         if ((uptr)allocation + oldSize - (uptr)arena->memory == (uptr)arena->head)
         {
-            arena->head = (uptr)allocation + newSize - (uptr)arena->memory;
-            hgAssert(arena->head <= arena->capacity);
+            u64 newHead = (uptr)allocation + newSize - (uptr)arena->memory;
+            if (arena->head > arena->capacity)
+                return nullptr;
+
+            arena->head = newHead;
             return allocation;
         }
 
@@ -216,28 +250,28 @@ HgArena* hgScratch(HgArena const* const* conflicts, u32 count)
 next:
         continue;
     }
-    hgError("No scratch arena available\n");
+    hgPanic("No scratch arena available\n");
 }
 
-void hgBinaryResize(HgArena* arena, HgBinary* bin, u64 newSize)
+void hgBinaryRead(HgBinary bin, u64 idx, void* dst, u64 len)
+{
+    hgAssert(idx + len <= bin.size);
+    hgMemCopy(dst, (u8*)bin.data + idx, len);
+}
+
+void hgBinaryResize(HgArena* arena, HgBinaryBuilder* bin, u64 newSize)
 {
     bin->data = hgArenaRealloc(arena, bin->data, bin->size, newSize, 1);
     bin->size = newSize;
 }
 
-void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len)
-{
-    hgAssert(idx + len <= bin->size);
-    hgMemCopy(dst, (u8*)bin->data + idx, len);
-}
-
-void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
+void hgBinaryOverwrite(HgBinaryBuilder* bin, u64 idx, const void* src, u64 len)
 {
     hgAssert(idx + len <= bin->size);
     hgMemCopy((u8*)bin->data + idx, src, len);
 }
 
-char* hgCString(HgArena* arena, HgStringView str)
+char* hgCString(HgArena* arena, HgString str)
 {
     hgAssert(arena != nullptr);
     if (str.length > 0)
@@ -249,9 +283,9 @@ char* hgCString(HgArena* arena, HgStringView str)
     return cStr;
 }
 
-HgStringOwner hgStringCreate(HgStringView data)
+HgString hgStringCreate(HgString data)
 {
-    HgStringOwner str{};
+    HgString str{};
     if (data != "")
     {
         str.chars = hgGpaAlloc<char>(data.length);
@@ -261,12 +295,12 @@ HgStringOwner hgStringCreate(HgStringView data)
     return str;
 }
 
-void hgStringDestroy(HgStringOwner* str)
+void hgStringDestroy(HgString* str)
 {
     hgGpaFree((char*)str->chars, str->length);
 }
 
-HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str)
+HgStringBuilder hgStringCopy(HgArena* arena, HgString str)
 {
     hgAssert(arena != nullptr);
 
@@ -277,7 +311,7 @@ HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str)
     return copy;
 }
 
-void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgStringView src)
+void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgString src)
 {
     hgAssert(arena != nullptr);
     hgAssert(dst != nullptr);
@@ -306,7 +340,7 @@ bool hgIsNumeral(char c)
     return c >= '0' && c <= '9';
 }
 
-bool hgIsInteger(HgStringView str)
+bool hgIsInteger(HgString str)
 {
     if (str.length == 0)
         return false;
@@ -325,7 +359,7 @@ bool hgIsInteger(HgStringView str)
     return true;
 }
 
-bool hgIsFloat(HgStringView str)
+bool hgIsFloat(HgString str)
 {
     if (str.length == 0)
         return false;
@@ -378,7 +412,7 @@ bool hgIsFloat(HgStringView str)
     return hasDecimal || hasExponent;
 }
 
-i64 hgStringToInteger(HgStringView str)
+i64 hgStringToInteger(HgString str)
 {
     hgAssert(hgIsInteger(str));
 
@@ -404,7 +438,7 @@ i64 hgStringToInteger(HgStringView str)
     return ret;
 }
 
-f64 hgStringToFloat(HgStringView str)
+f64 hgStringToFloat(HgString str)
 {
     hgAssert(hgIsFloat(str));
 
@@ -539,89 +573,12 @@ HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
     return ret;
 }
 
-HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...)
-{
-    (void)arena;
-    (void)fmt;
-    hgError("hgFormatString not implemented yet : TODO\n");
-}
-
-HgPerf hgPerfCreate(HgArena* arena, u32 count)
-{
-    hgAssert(arena != nullptr);
-
-    HgPerf perf;
-    perf.times = hgArenaAlloc<f64>(arena, count);
-    perf.count = count;
-    perf.current = 0;
-    return perf;
-}
-
-void hgPerfBegin(HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-    hgClockTick(&perf->clock);
-}
-
-f64 hgPerfEnd(HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-    hgAssert(perf->current < perf->count);
-
-    f64 time = hgClockTick(&perf->clock);
-    perf->times[perf->current++] = time;
-
-    return time;
-}
-
-HgPerfStats hgPerfAnalyze(const HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-
-    HgPerfStats stats;
-    stats.avg = 0.0;
-    stats.best = INFINITY;
-    stats.worst = 0.0;
-
-    for (u32 i = 0; i < perf->current; ++i)
-    {
-        if (perf->times[i] < stats.best)
-            stats.best = perf->times[i];
-        if (perf->times[i] > stats.worst)
-            stats.worst = perf->times[i];
-        stats.avg += perf->times[i];
-    }
-    stats.avg /= (f64)perf->current;
-
-    return stats;
-}
-
-void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
-{
-    hgAssert(stats != nullptr);
-    if (title.length == 0 || title.chars == nullptr)
-        title = "Title Missing";
-
-    switch (scale)
-    {
-        case HgPerfScale_seconds:
-            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
-                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
-            break;
-        case HgPerfScale_milli:
-            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
-                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
-            break;
-        case HgPerfScale_micro:
-            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
-                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
-            break;
-        case HgPerfScale_nano:
-            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
-                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
-            break;
-    }
-}
+// HgStringBuilder hgStringFormat(HgArena* arena, HgString fmt, ...)
+// {
+//     (void)arena;
+//     (void)fmt;
+//     hgPanic("hgFormatString not implemented yet : TODO\n");
+// }
 
 const char* hgSerialTypeToString(HgSerialType s)
 {
@@ -765,28 +722,11 @@ void hgSerializeVoid(HgSerializer* s, void* val, u32 size)
 template<>
 void hgSerialize(HgSerializer* s, HgBinary* val)
 {
-    hgSerialize(s, (HgStringView*)val);
+    hgSerialize(s, (HgString*)val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgStringView* val)
-{
-    hgSerializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->type = HgSerialType_string;
-        s->current->string = hgStringCopy(s->arena, *val);
-    }
-    else
-    {
-        hgAssert(s->current->type == HgSerialType_string);
-        *val = hgStringCopy(s->arena, s->current->string);
-    }
-}
-
-template<>
-void hgSerialize(HgSerializer* s, HgStringOwner* val)
+void hgSerialize(HgSerializer* s, HgString* val)
 {
     hgSerializeNodeStart(s);
 
@@ -805,7 +745,18 @@ void hgSerialize(HgSerializer* s, HgStringOwner* val)
 template<>
 void hgSerialize(HgSerializer* s, HgStringBuilder* val)
 {
-    hgSerialize(s, (HgStringView*)val);
+    hgSerializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->type = HgSerialType_string;
+        s->current->string = hgStringCopy(s->arena, *val);
+    }
+    else
+    {
+        hgAssert(s->current->type == HgSerialType_string);
+        *val = hgStringCopy(s->arena, s->current->string);
+    }
 }
 
 template<typename T>
@@ -1026,9 +977,9 @@ struct SerialBinNode {
     };
 };
 
-static void serialBinWriteNode(HgArena* arena, HgBinary* bin, u32 idx, HgSerialNode* node);
+static void serialBinWriteNode(HgArena* arena, HgBinaryBuilder* bin, u32 idx, HgSerialNode* node);
 
-static void serialBinWriteString(HgArena* arena, HgBinary* bin, u32 idx, HgStringView string)
+static void serialBinWriteString(HgArena* arena, HgBinaryBuilder* bin, u32 idx, HgString string)
 {
     SerialBinNode node{};
     node.type = HgSerialType_string;
@@ -1042,7 +993,7 @@ static void serialBinWriteString(HgArena* arena, HgBinary* bin, u32 idx, HgStrin
     hgBinaryOverwrite(bin, node.string.begin, string.chars, string.length);
 }
 
-static void serialBinWriteInteger(HgBinary* bin, u32 idx, i64 integer)
+static void serialBinWriteInteger(HgBinaryBuilder* bin, u32 idx, i64 integer)
 {
     SerialBinNode node{};
     node.type = HgSerialType_integer;
@@ -1050,7 +1001,7 @@ static void serialBinWriteInteger(HgBinary* bin, u32 idx, i64 integer)
     hgBinaryOverwrite(bin, idx, node);
 }
 
-static void serialBinWriteFloating(HgBinary* bin, u32 idx, f64 floating)
+static void serialBinWriteFloating(HgBinaryBuilder* bin, u32 idx, f64 floating)
 {
     SerialBinNode node{};
     node.type = HgSerialType_floating;
@@ -1058,7 +1009,7 @@ static void serialBinWriteFloating(HgBinary* bin, u32 idx, f64 floating)
     hgBinaryOverwrite(bin, idx, node);
 }
 
-static void serialBinWriteBoolean(HgBinary* bin, u32 idx, bool boolean)
+static void serialBinWriteBoolean(HgBinaryBuilder* bin, u32 idx, bool boolean)
 {
     SerialBinNode node{};
     node.type = HgSerialType_boolean;
@@ -1066,7 +1017,7 @@ static void serialBinWriteBoolean(HgBinary* bin, u32 idx, bool boolean)
     hgBinaryOverwrite(bin, idx, node);
 }
 
-static void serialBinWriteObject(HgArena* arena, HgBinary* bin, u32 idx, HgSerialNode* object)
+static void serialBinWriteObject(HgArena* arena, HgBinaryBuilder* bin, u32 idx, HgSerialNode* object)
 {
     SerialBinNode node{};
     node.type = HgSerialType_object;
@@ -1085,7 +1036,7 @@ static void serialBinWriteObject(HgArena* arena, HgBinary* bin, u32 idx, HgSeria
     }
 }
 
-static void serialBinWriteNode(HgArena* arena, HgBinary* bin, u32 idx, HgSerialNode* node)
+static void serialBinWriteNode(HgArena* arena, HgBinaryBuilder* bin, u32 idx, HgSerialNode* node)
 {
     switch (node->type)
     {
@@ -1105,13 +1056,13 @@ static void serialBinWriteNode(HgArena* arena, HgBinary* bin, u32 idx, HgSerialN
             serialBinWriteBoolean(bin, idx, node->boolean);
             return;
         default:
-            hgError("Invalid HgSerialType: %s\n", hgSerialTypeToString(node->type));
+            hgPanic("Invalid HgSerialType: %s\n", hgSerialTypeToString(node->type));
     }
 }
 
 HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer* serial)
 {
-    HgBinary bin{};
+    HgBinaryBuilder bin{};
 
     SerialBinHeader header{};
     hgBinaryResize(arena, &bin, bin.size + sizeof(header));
@@ -1131,9 +1082,9 @@ HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer* serial)
     return bin;
 }
 
-static void serialBinReadNode(HgBinary* bin, u32 idx, HgSerializer* s);
+static void serialBinReadNode(HgBinary bin, u32 idx, HgSerializer* s);
 
-static void serialBinReadObject(HgBinary* bin, SerialBinObject object, HgSerializer* s)
+static void serialBinReadObject(HgBinary bin, SerialBinObject object, HgSerializer* s)
 {
     hgSerializeBegin(s);
     for (u32 i = 0; i < object.fieldCount; ++i)
@@ -1143,13 +1094,13 @@ static void serialBinReadObject(HgBinary* bin, SerialBinObject object, HgSeriali
     hgSerializeEnd(s);
 }
 
-static void serialBinReadString(HgBinary* bin, SerialBinString string, HgSerializer* s)
+static void serialBinReadString(HgBinary bin, SerialBinString string, HgSerializer* s)
 {
-    HgStringView val = {(char*)bin->data + string.begin, string.length};
+    HgString val = {(char*)bin.data + string.begin, string.length};
     hgSerialize(s, &val);
 }
 
-static void serialBinReadNode(HgBinary* bin, u32 idx, HgSerializer* s)
+static void serialBinReadNode(HgBinary bin, u32 idx, HgSerializer* s)
 {
     SerialBinNode node = hgBinaryRead<SerialBinNode>(bin, idx);
     switch (node.type)
@@ -1170,11 +1121,11 @@ static void serialBinReadNode(HgBinary* bin, u32 idx, HgSerializer* s)
             hgSerialize(s, &node.boolean);
             return;
         default:
-            hgError("Invalid HgSerialType: %s\n", hgSerialTypeToString(node.type));
+            hgPanic("Invalid HgSerialType: %s\n", hgSerialTypeToString(node.type));
     }
 }
 
-HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary* bin)
+HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin)
 {
     SerialBinHeader header = hgBinaryRead<SerialBinHeader>(bin, 0);
 
@@ -1203,7 +1154,7 @@ HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary* bin)
 
 static void serialJsonWriteNode(HgArena* arena, HgStringBuilder* str, u32 indentation, HgSerialNode* node);
 
-static void serialJsonWriteString(HgArena* arena, HgStringBuilder* str, HgStringView string)
+static void serialJsonWriteString(HgArena* arena, HgStringBuilder* str, HgString string)
 {
     hgStringAppendC(arena, str, '"');
     for (u32 i = 0; i < string.length; ++i)
@@ -1345,11 +1296,11 @@ static void serialJsonWriteNode(HgArena* arena, HgStringBuilder* str, u32 indent
                 hgStringAppend(arena, str, "false");
             return;
         default:
-            hgError("Invalid HgSerialType: %s\n", hgSerialTypeToString(node->type));
+            hgPanic("Invalid HgSerialType: %s\n", hgSerialTypeToString(node->type));
     }
 }
 
-HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer* serial)
+HgString hgJsonWriteSerial(HgArena* arena, HgSerializer* serial)
 {
     HgStringBuilder str{};
     serialJsonWriteNode(arena, &str, 0, serial->current);
@@ -1362,7 +1313,7 @@ HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer* serial)
 // }
 
 struct JsonParseState {
-    HgStringView text;
+    HgString text;
     u64 head;
     u64 line;
 };
@@ -1797,7 +1748,7 @@ static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state)
             isFloat = true;
         ++state->head;
     }
-    HgStringView num{&state->text[begin], &state->text[state->head]};
+    HgString num{&state->text[begin], &state->text[state->head]};
     while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
     {
         if (state->text[state->head] == '\n')
@@ -1854,7 +1805,7 @@ static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state)
 
 static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
 {
-    if (state->head + 4 < state->text.length && HgStringView{&state->text[state->head], 4} == "true")
+    if (state->head + 4 < state->text.length && HgString{&state->text[state->head], 4} == "true")
     {
         state->head += 4;
         while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
@@ -1871,7 +1822,7 @@ static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
         node->boolean = true;
         return {node, nullptr};
     }
-    if (state->head + 5 < state->text.length && HgStringView{&state->text[state->head], 5} == "false")
+    if (state->head + 5 < state->text.length && HgString{&state->text[state->head], 5} == "false")
     {
         state->head += 5;
         while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
@@ -1929,7 +1880,7 @@ static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
     }
 }
 
-HgJson hgParseJson(HgArena* arena, HgStringView text)
+HgJson hgParseJson(HgArena* arena, HgString text)
 {
     hgAssert(arena != nullptr);
     if (text.length > 0)
@@ -1988,9 +1939,9 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
     data->data.data = malloc(data->data.size);
 
     rewind(fileHandle);
-    if (fread(data->data.data, 1, data->data.size, fileHandle) != data->data.size)
+    if (fread((void*)data->data.data, 1, data->data.size, fileHandle) != data->data.size)
     {
-        free(data->data.data);
+        free((void*)data->data.data);
         data->data = {};
         hgWarn("Failed to read binary from file: %s\n", cpath);
         return;
@@ -2000,23 +1951,23 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
 template<>
 void hgAssetUnloadImpl(HgAsset<HgBinary>* data)
 {
-    free(data->data.data);
+    free((void*)data->data.data);
 }
 
-void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence* fence)
+void hgBinaryStore(HgBinary* bin, HgString path, HgFence* fence)
 {
     struct Capture {
         HgBinary bin;
-        HgStringOwner path;
+        HgString path;
     };
-    Capture* c = (Capture*)malloc(sizeof(*c));
+    Capture* c = hgGpaAlloc<Capture>(1);
     c->bin = *bin;
     c->path = hgStringCreate(path);
 
     hgThreadsCall(fence, c, [](void* pc)
     {
         Capture* c = (Capture*)pc;
-        hgDefer(free(c));
+        hgDefer(hgGpaFree(c, 1));
         hgDefer(hgStringDestroy(&c->path));
 
         HgArena* scratch = hgScratch();
@@ -2049,7 +2000,7 @@ void hgAssetLoadImpl(HgAsset<HgJson>* data)
     u64 head = scratch->head;
     hgDefer(scratch->head = head);
 
-    HgStringView jsonStr = {(char*)bin->data.data, bin->data.size};
+    HgString jsonStr = {(char*)bin->data.data, bin->data.size};
     HgJson parse = hgParseJson(scratch, jsonStr);
 
     HgJsonError* e = parse.errors;
@@ -2144,6 +2095,21 @@ void hgArrayAnyResize(HgArrayAny* arr, u32 newCount)
     arr->count = newCount;
 }
 
+void hgArrayAnyResizeTemp(HgArena* arena, HgArrayAny* arr, u32 newCount)
+{
+    if (newCount > arr->capacity)
+    {
+        arr->vals = hgArenaRealloc(
+            arena,
+            arr->vals,
+            arr->capacity * arr->width,
+            newCount * 2 * arr->width,
+            arr->align);
+        arr->capacity = newCount * 2;
+    }
+    arr->count = newCount;
+}
+
 void* hgArrayAnyPush(HgArrayAny* arr)
 {
     if (arr->count == arr->capacity)
@@ -2175,12 +2141,98 @@ void* hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr)
     return (u8*)arr->vals + arr->count++ * arr->width;
 }
 
+void hgArrayAnyRemove(HgArrayAny* arr, u32 idx, void* dst)
+{
+    hgAssert(idx < arr->count);
+
+    hgMemCopy(dst, (*arr)[idx], arr->width);
+    if (idx + 1 < arr->count)
+    {
+        hgMemCopy(
+            (*arr)[idx],
+            (*arr)[idx + 1],
+            (arr->count - (idx + 1)) * arr->width);
+    }
+    --arr->count;
+}
+
+void hgArrayAnyRemoveSwap(HgArrayAny* arr, u32 idx, void* dst)
+{
+    hgAssert(idx < arr->count);
+
+    hgMemCopy(dst, (*arr)[idx], arr->width);
+    if (idx + 1 < arr->count)
+    {
+        hgMemCopy(
+            (*arr)[idx],
+            (*arr)[arr->count - 1],
+            arr->width);
+    }
+    --arr->count;
+}
+
 void hgArrayAnyPop(HgArrayAny* arr, void* dst)
 {
     hgAssert(arr->count > 0);
     --arr->count;
     if (dst != nullptr)
         hgMemCopy(dst, (u8*)arr->vals + arr->count * arr->width, arr->width);
+}
+
+static constexpr u32 poolStockSize = 1024;
+
+static void poolRestock(HgPool* pool)
+{
+    hgAssert(pool != nullptr);
+
+    void* store = hgGpaAlloc(poolStockSize * pool->width, pool->align);
+    for (u32 i = 0; i < poolStockSize; ++i)
+    {
+        hgQueuePushBack(&pool->freeList, (u8*)store + i * pool->width);
+    }
+    *hgArrayPush(&pool->itemStores) = store;
+}
+
+HgPool hgPoolCreate(u32 width, u32 align)
+{
+    HgPool pool{};
+    pool.freeList = hgQueueCreate<void*>();
+    pool.itemStores = hgArrayCreate<void*>(0, 4);
+    pool.width = width;
+    pool.align = align;
+    poolRestock(&pool);
+    return pool;
+}
+
+void hgPoolDestroy(HgPool* pool)
+{
+    hgAssert(pool != nullptr);
+
+    for (u32 i = 0; i < pool->itemStores.count; ++i)
+    {
+        hgGpaFree(pool->itemStores[i], poolStockSize);
+    }
+    hgArrayDestroy(&pool->itemStores);
+    hgQueueDestroy(&pool->freeList);
+}
+
+void* hgPoolAlloc(HgPool* pool)
+{
+    hgAssert(pool != nullptr);
+
+    if (pool->freeList.count == 0)
+    {
+        poolRestock(pool);
+    }
+
+    return hgQueuePopFront(&pool->freeList);
+}
+
+void hgPoolFree(HgPool* pool, void* item)
+{
+    hgAssert(pool != nullptr);
+    hgAssert(item != nullptr);
+    hgQueuePushFront(&pool->freeList, item);
 }
 
 HgHandlePool hgHandlePoolCreate()
@@ -2955,6 +3007,83 @@ u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
     return max == 0 ? 0 : (u32)log2((f32)max) + 1;
 }
 
+HgPerf hgPerfCreate(HgArena* arena, u32 count)
+{
+    hgAssert(arena != nullptr);
+
+    HgPerf perf;
+    perf.times = hgArenaAlloc<f64>(arena, count);
+    perf.count = count;
+    perf.current = 0;
+    return perf;
+}
+
+void hgPerfBegin(HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+    hgClockTick(&perf->clock);
+}
+
+f64 hgPerfEnd(HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+    hgAssert(perf->current < perf->count);
+
+    f64 time = hgClockTick(&perf->clock);
+    perf->times[perf->current++] = time;
+
+    return time;
+}
+
+HgPerfStats hgPerfAnalyze(const HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+
+    HgPerfStats stats;
+    stats.avg = 0.0;
+    stats.best = INFINITY;
+    stats.worst = 0.0;
+
+    for (u32 i = 0; i < perf->current; ++i)
+    {
+        if (perf->times[i] < stats.best)
+            stats.best = perf->times[i];
+        if (perf->times[i] > stats.worst)
+            stats.worst = perf->times[i];
+        stats.avg += perf->times[i];
+    }
+    stats.avg /= (f64)perf->current;
+
+    return stats;
+}
+
+void hgPerfLog(HgString title, const HgPerfStats* stats, HgPerfScale scale)
+{
+    hgAssert(stats != nullptr);
+    if (title.length == 0 || title.chars == nullptr)
+        title = "Title Missing";
+
+    switch (scale)
+    {
+        case HgPerfScale_seconds:
+            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
+                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
+            break;
+        case HgPerfScale_milli:
+            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
+                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
+            break;
+        case HgPerfScale_micro:
+            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
+                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
+            break;
+        case HgPerfScale_nano:
+            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
+                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
+            break;
+    }
+}
+
 template<>
 void hgAssetLoadImpl(HgAsset<HgTextureData>* data)
 {
@@ -2981,11 +3110,11 @@ void hgAssetUnloadImpl(HgAsset<HgTextureData>* data)
     free(data->data.pixels);
 }
 
-void hgTextureStorePng(HgTextureData* texture, HgStringView path, HgFence* fence)
+void hgTextureStorePng(HgTextureData* texture, HgString path, HgFence* fence)
 {
     struct Capture {
         HgTextureData tex;
-        HgStringOwner path;
+        HgString path;
     };
     Capture* c = (Capture*)malloc(sizeof(*c));
     c->tex = *texture;
@@ -3047,7 +3176,7 @@ template<>
 void hgAssetLoadImpl(HgAsset<HgMeshData>* data)
 {
     (void)data;
-    hgError("load gltf file : TODO\n");
+    hgPanic("load gltf file : TODO\n");
 }
 
 template<>
@@ -3057,12 +3186,12 @@ void hgAssetUnloadImpl(HgAsset<HgMeshData>* data)
     free(data->data.vertices);
 }
 
-void hgMeshStoreGltf(HgMeshData* data, HgStringView path, HgFence* fence)
+void hgMeshStoreGltf(HgMeshData* data, HgString path, HgFence* fence)
 {
     (void)data;
     (void)path;
     (void)fence;
-    hgError("store gltf file : TODO\n");
+    hgPanic("store gltf file : TODO\n");
 }
 
 template<>
@@ -4162,14 +4291,14 @@ template<>
 void hgAssetLoadImpl(HgAsset<HgSound>* data)
 {
     (void)data;
-    hgError("Load audio file impl : TODO\n");
+    hgPanic("Load audio file impl : TODO\n");
 }
 
 template<>
 void hgAssetUnloadImpl(HgAsset<HgSound>* data)
 {
     (void)data;
-    hgError("Unload audio file impl : TODO\n");
+    hgPanic("Unload audio file impl : TODO\n");
 }
 
 template<>
@@ -4482,7 +4611,7 @@ void hgEcsUnregisterComponent(HgEcs* ecs, u64 componentId)
     hgMapRemove(&ecs->components, componentId);
 }
 
-HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId)
+HgString hgEcsComponentName(HgEcs* ecs, u64 componentId)
 {
     hgAssert(ecs != nullptr);
     HgComponent* system = hgMapGet(&ecs->components, componentId);
@@ -4804,7 +4933,7 @@ void hgSerialize(HgSerializer* s, HgEcs* ecs)
         }
         else
         {
-            HgStringView compName;
+            HgString compName;
             hgSerialize(s, &compName);
             systemId = hgHash(compName);
             system = hgMapGet(&ecs->components, systemId);

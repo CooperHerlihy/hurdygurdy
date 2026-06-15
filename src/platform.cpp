@@ -486,7 +486,7 @@ static VkDescriptorType descriptorTypeToVk(DescriptorType type)
         case DescriptorType_storageBuffer:
             return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         default:
-            hgError("invalid HgGpuDescriptorType: %d", type);
+            hgPanic("invalid HgGpuDescriptorType: %d", type);
     }
 }
 
@@ -520,7 +520,7 @@ static VmaAllocationCreateFlags gpuMemoryUsageToVma(HgGpuMemoryUsage usage)
             return VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
         default:
-            hgError("Invalid HgGpuMemoryUsage: %d\n", usage);
+            hgPanic("Invalid HgGpuMemoryUsage: %d\n", usage);
     }
 }
 
@@ -537,7 +537,7 @@ static HgGpuMemoryHostAccess gpuMemoryUsageToHostAccess(HgGpuMemoryUsage usage)
         case HgGpuMemoryUsage_frequentUpdate:
             return HgGpuMemoryHostAccess_none;
         default:
-            hgError("Invalid HgGpuMemoryUsage: %d\n", usage);
+            hgPanic("Invalid HgGpuMemoryUsage: %d\n", usage);
     }
 }
 
@@ -566,7 +566,7 @@ static VkImageType imageDimensionsToVkImage(u32 dimensions)
         case 3:
             return VK_IMAGE_TYPE_3D;
         default:
-            hgError("Invalid image dimensions: %d\n", dimensions);
+            hgPanic("Invalid image dimensions: %d\n", dimensions);
     }
 }
 
@@ -604,7 +604,7 @@ static VkSampleCountFlagBits countToMsaaSampleBits(u32 count)
         case 64:
             return VK_SAMPLE_COUNT_64_BIT;
         default:
-            hgError("Invalid msaa sample count\n");
+            hgPanic("Invalid msaa sample count\n");
     }
 }
 
@@ -655,7 +655,7 @@ static HgGpuViewType imageDimensionsToHgView(u32 dimensions)
         case 3:
             return HgGpuViewType_3D;
         default:
-            hgError("Invalid image dimensions: %d\n", dimensions);
+            hgPanic("Invalid image dimensions: %d\n", dimensions);
     }
 }
 
@@ -753,10 +753,10 @@ struct VulkanState {
 
     HgHandlePool descriptorPools[DescriptorType_count];
 
-    HgPool<HgGpuBuffer> buffers;
-    HgPool<HgGpuImage> images;
-    HgPool<HgGpuView> views;
-    HgPool<HgGpuPipeline> pipelines;
+    HgPool buffers;
+    HgPool images;
+    HgPool views;
+    HgPool pipelines;
 
     HgMap<SamplerInfo, VkSampler> samplers;
 
@@ -819,7 +819,7 @@ static const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerInfo{
 
 #endif
 
-static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
+static VkInstance createInstance(HgString* extensions, u32 extensionCount)
 {
     if (extensionCount > 0)
         hgAssert(extensions != nullptr);
@@ -862,7 +862,7 @@ static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
     VkInstance instance = nullptr;
     VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
     if (instance == nullptr)
-        hgError("Failed to create Vulkan instance: %s\n", vkResultToStr(result));
+        hgPanic("Failed to create Vulkan instance: %s\n", vkResultToStr(result));
 
     return instance;
 }
@@ -876,7 +876,7 @@ static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
     VkResult result = vkCreateDebugUtilsMessengerEXT(
         vk.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
-        hgError("Failed to create Vulkan debug messenger: %s\n", vkResultToStr(result));
+        hgPanic("Failed to create Vulkan debug messenger: %s\n", vkResultToStr(result));
 
     return messenger;
 }
@@ -1026,7 +1026,7 @@ static VkDevice createDevice()
     VkResult result = vkCreateDevice(vk.physicalDevice, &deviceInfo, nullptr, &device);
 
     if (device == nullptr)
-        hgError("Could not create Vulkan device: %s\n", vkResultToStr(result));
+        hgPanic("Could not create Vulkan device: %s\n", vkResultToStr(result));
     return device;
 }
 
@@ -1049,7 +1049,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     VkDescriptorPool pool = nullptr;
     VkResult result = vkCreateDescriptorPool(vk.device, &info, nullptr, &pool);
     if (pool == nullptr)
-        hgError("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
+        hgPanic("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
 
     return pool;
 }
@@ -1082,7 +1082,7 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
     VkDescriptorSetLayout layout = nullptr;
     VkResult result = vkCreateDescriptorSetLayout(vk.device, &info, nullptr, &layout);
     if (layout == nullptr)
-        hgError("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
+        hgPanic("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
 
     return layout;
 }
@@ -1100,7 +1100,7 @@ static Frame createFrame()
 
     VkResult poolResult = vkCreateCommandPool(vk.device, &poolInfo, nullptr, &frame.cmdPool);
     if (frame.cmdPool == nullptr)
-        hgError("Could not create Vulkan command pool: %s\n", vkResultToStr(poolResult));
+        hgPanic("Could not create Vulkan command pool: %s\n", vkResultToStr(poolResult));
 
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -1108,7 +1108,7 @@ static Frame createFrame()
 
     VkResult fenceResult = vkCreateFence(vk.device, &fenceInfo, nullptr, &frame.fence);
     if (frame.fence == nullptr)
-        hgError("Could not create Vulkan fence: %s\n", vkResultToStr(fenceResult));
+        hgPanic("Could not create Vulkan fence: %s\n", vkResultToStr(fenceResult));
 
     return frame;
 }
@@ -1121,7 +1121,7 @@ void hgGpuInit()
     hgArenaScope(scratch);
 
     {
-        HgStringView* exts;
+        HgString* exts;
         u32 extCount = hgPlatformGetVulkanExtensions(scratch, &exts);
 #ifdef HG_VK_DEBUG_MESSENGER
         exts = hgArenaRealloc(scratch, exts, extCount, extCount + 1);
@@ -1152,7 +1152,7 @@ void hgGpuInit()
 
         VkResult result = vmaCreateAllocator(&allocatorInfo, &vk.vma);
         if (vk.vma == nullptr)
-            hgError("Could not create Vulkan memory allocator: %s\n", vkResultToStr(result));
+            hgPanic("Could not create Vulkan memory allocator: %s\n", vkResultToStr(result));
     }
 
     {
@@ -1163,7 +1163,7 @@ void hgGpuInit()
 
         VkResult result = vkCreateCommandPool(vk.device, &cmdPoolInfo, nullptr, &vk.cmdPool);
         if (vk.cmdPool == nullptr)
-            hgError("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
+            hgPanic("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
     }
 
     vk.bindlessPool = createBindlessDescriptorPool();
@@ -1177,7 +1177,7 @@ void hgGpuInit()
 
         VkResult result = vkAllocateDescriptorSets(vk.device, &info, &vk.bindlessSet);
         if (vk.bindlessSet == nullptr)
-            hgError("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
+            hgPanic("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
     }
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
@@ -1290,7 +1290,7 @@ void hgGpuWaitIdle()
 //             return i;
 //         }
 //     }
-//     hgError("Could not find Vulkan memory type in bitmask: %x\n", bitmask);
+//     hgPanic("Could not find Vulkan memory type in bitmask: %x\n", bitmask);
 // }
 
 struct DescriptorBufferInfo {
@@ -1360,7 +1360,7 @@ HgGpuBuffer* hgGpuBufferCreate(
     hgAssert(size > 0);
     hgAssert(usageFlags != 0);
 
-    HgGpuBuffer* buffer = hgPoolAlloc(&vk.buffers);
+    HgGpuBuffer* buffer = (HgGpuBuffer*)hgPoolAlloc(&vk.buffers);
     *buffer = {};
 
     VkBufferCreateInfo bufferInfo{};
@@ -1381,7 +1381,7 @@ HgGpuBuffer* hgGpuBufferCreate(
         nullptr);
 
     if (result != VK_SUCCESS)
-        hgError("Could not create VkBuffer: %s\n", vkResultToStr(result));
+        hgPanic("Could not create VkBuffer: %s\n", vkResultToStr(result));
 
     if (usageFlags & HgGpuBufferUsage_uniformBuffer)
     {
@@ -1448,7 +1448,7 @@ void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size)
     {
         VkResult result = vmaCopyMemoryToAllocation(vk.vma, src, dst->alloc, offset, size);
         if (result != VK_SUCCESS)
-            hgError("Could not write gpu buffer: %s\n", vkResultToStr(result));
+            hgPanic("Could not write gpu buffer: %s\n", vkResultToStr(result));
         return;
     }
 
@@ -1482,7 +1482,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer* src, u64 offset, u64 size)
     {
         VkResult result = vmaCopyAllocationToMemory(vk.vma, src->alloc, offset, dst, size);
         if (result != VK_SUCCESS)
-            hgError("Could not read gpu buffer: %s\n", vkResultToStr(result));
+            hgPanic("Could not read gpu buffer: %s\n", vkResultToStr(result));
         return;
     }
 
@@ -1520,7 +1520,7 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     hgAssert(create->format != HgFormat_undefined);
     hgAssert(create->usage != 0);
 
-    HgGpuImage* image = hgPoolAlloc(&vk.images);
+    HgGpuImage* image = (HgGpuImage*)hgPoolAlloc(&vk.images);
     *image = {};
 
     VkImageCreateInfo imageInfo{};
@@ -1546,7 +1546,7 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
         nullptr);
 
     if (result != VK_SUCCESS)
-        hgError("Could not create VkImage: %s\n", vkResultToStr(result));
+        hgPanic("Could not create VkImage: %s\n", vkResultToStr(result));
 
     image->usage = create->usage;
     image->format = create->format;
@@ -1600,7 +1600,7 @@ static VkSampler samplerCreate(SamplerInfo* desc)
     VkSampler sampler = nullptr;
     VkResult result = vkCreateSampler(vk.device, &info, nullptr, &sampler);
     if (sampler == nullptr)
-        hgError("Could not create VkSampler: %s\n", vkResultToStr(result));
+        hgPanic("Could not create VkSampler: %s\n", vkResultToStr(result));
 
     return sampler;
 }
@@ -1642,7 +1642,7 @@ HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 {
     hgAssert(config->aspectFlags != 0);
 
-    HgGpuView* view = hgPoolAlloc(&vk.views);
+    HgGpuView* view = (HgGpuView*)hgPoolAlloc(&vk.views);
     *view = {};
 
     VkImageViewCreateInfo info{};
@@ -1658,7 +1658,7 @@ HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 
     VkResult result = vkCreateImageView(vk.device, &info, nullptr, &view->view);
     if (view->view == nullptr)
-        hgError("Could not create VkImageView: %s\n", vkResultToStr(result));
+        hgPanic("Could not create VkImageView: %s\n", vkResultToStr(result));
 
     if (config->image->usage & HgGpuImageUsage_sampled)
     {
@@ -2081,7 +2081,7 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
     VkShaderModule shader = nullptr;
     VkResult result = vkCreateShaderModule(vk.device, &info, nullptr, &shader);
     if (shader == nullptr)
-        hgError("Could not create VkShaderModule: %s\n", vkResultToStr(result));
+        hgPanic("Could not create VkShaderModule: %s\n", vkResultToStr(result));
 
     return shader;
 }
@@ -2093,7 +2093,7 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     if (config->colorAttachmentCount > 0)
         hgAssert(config->colorAttachmentFormats != nullptr);
 
-    HgGpuPipeline* pipeline = hgPoolAlloc(&vk.pipelines);
+    HgGpuPipeline* pipeline = (HgGpuPipeline*)hgPoolAlloc(&vk.pipelines);
     *pipeline = {};
 
     HgArena* scratch = hgScratch();
@@ -2112,7 +2112,7 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
 
     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
-        hgError("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
+        hgPanic("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule vertexShader = createShaderModule(config->vertexShader, config->vertexShaderSize);
     VkShaderModule fragmentShader = createShaderModule(config->fragmentShader, config->fragmentShaderSize);
@@ -2254,7 +2254,7 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     VkResult pipelineResult = vkCreateGraphicsPipelines(
         vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
     if (pipeline == nullptr)
-        hgError("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
+        hgPanic("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
 
     pipeline->bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
@@ -2266,7 +2266,7 @@ HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u6
     hgAssert(shaderCode != nullptr);
     hgAssert(shaderCodeSize > 0);
 
-    HgGpuPipeline* pipeline = hgPoolAlloc(&vk.pipelines);
+    HgGpuPipeline* pipeline = (HgGpuPipeline*)hgPoolAlloc(&vk.pipelines);
     *pipeline = {};
 
     VkPipelineLayoutCreateInfo layoutInfo{};
@@ -2280,7 +2280,7 @@ HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u6
 
     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
-        hgError("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
+        hgPanic("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule computeShader = createShaderModule(shaderCode, shaderCodeSize);
     hgDefer(vkDestroyShaderModule(vk.device, computeShader, nullptr));
@@ -2298,7 +2298,7 @@ HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u6
     VkResult pipelineResult = vkCreateComputePipelines(
         vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
     if (pipeline == nullptr)
-        hgError("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
+        hgPanic("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
 
     pipeline->bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
 
@@ -2956,7 +2956,7 @@ static void resizeWindowSwapchain(HgWindow* window)
 
         VkResult result = vkCreateSwapchainKHR(vk.device, &swapchainInfo, nullptr, &window->swapchain);
         if (window->swapchain == nullptr)
-            hgError("Failed to create swapchain: %s\n", vkResultToStr(result));
+            hgPanic("Failed to create swapchain: %s\n", vkResultToStr(result));
 
         u32 swapImageCount;
         vkGetSwapchainImagesKHR(vk.device, window->swapchain, &swapImageCount, nullptr);
@@ -2995,7 +2995,7 @@ static void resizeWindowSwapchain(HgWindow* window)
 
             VkResult viewResult = vkCreateImageView(vk.device, &viewInfo, nullptr, &window->views[i].view);
             if (window->views[i].view == nullptr)
-                hgError("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
+                hgPanic("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
 
             window->views[i].image = &window->images[i];
             window->views[i].type = HgGpuViewType_2D;
@@ -3010,7 +3010,7 @@ static void resizeWindowSwapchain(HgWindow* window)
 
             VkResult readyToPresentResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
             if (window->readyToPresent[i] == nullptr)
-                hgError("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
+                hgPanic("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
         }
 
         for (u32 i = 0; i < vk.frameCount; ++i)
@@ -3020,7 +3020,7 @@ static void resizeWindowSwapchain(HgWindow* window)
 
             VkResult imageAvailableResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
             if (window->imageAvailable[i] == nullptr)
-                hgError("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
+                hgPanic("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
         }
     }
     else
@@ -3065,7 +3065,7 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
         }
         else
         {
-            hgError("Could not acquire next image: %s\n", vkResultToStr(result));
+            hgPanic("Could not acquire next image: %s\n", vkResultToStr(result));
         }
     }
 
@@ -3155,12 +3155,12 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     vk.currentFrame = (vk.currentFrame + 1) % vk.frameCount;
 }
 
-u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
+u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgString** extBuffer)
 {
     u32 extCount;
     const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);
 
-    *extBuffer = hgArenaAlloc<HgStringView>(arena, extCount);
+    *extBuffer = hgArenaAlloc<HgString>(arena, extCount);
     for (u32 i = 0; i < extCount; ++i)
     {
         (*extBuffer)[i] = exts[i];
@@ -3170,7 +3170,7 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
 }
 
 struct WindowState {
-    HgPool<HgWindow> pool = {};
+    HgPool pool = {};
     HgMap<SDL_WindowID, HgWindow*> ids = {};
 
     f32 mouseDX = 0.0f;
@@ -3213,7 +3213,7 @@ static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
         if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
             return HgFormat_b8g8r8a8_srgb;
     }
-    hgError("No supported swapchain formats\n");
+    hgPanic("No supported swapchain formats\n");
 }
 
 static HgGpuPresentMode findSwapchainPresentMode(
@@ -3241,16 +3241,16 @@ static HgGpuPresentMode findSwapchainPresentMode(
     return HgGpuPresentMode_fifo;
 }
 
-HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindowConfig* config)
+HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowConfig* config)
 {
     static const HgWindowConfig defaultConfig{};
     if (config == nullptr)
         config = &defaultConfig;
 
-    HgWindow* window = hgPoolAlloc(&windowState.pool);
+    HgWindow* window = (HgWindow*)hgPoolAlloc(&windowState.pool);
     *window = {};
 
-    if (title == nullptr)
+    if (title == "")
         title = "Hurdy Gurdy";
 
     u64 flags = SDL_WINDOW_VULKAN;
@@ -3268,9 +3268,12 @@ HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindo
         flags |= SDL_WINDOW_FULLSCREEN;
     }
 
-    window->sdlWindow = SDL_CreateWindow(title, (int)width, (int)height, flags);
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    window->sdlWindow = SDL_CreateWindow(hgCString(scratch, title), (int)width, (int)height, flags);
     if (window->sdlWindow == nullptr)
-        hgError("Failed to create SDL window: %s\n", SDL_GetError());
+        hgPanic("Failed to create SDL window: %s\n", SDL_GetError());
 
     SDL_WindowID windowID = SDL_GetWindowID(window->sdlWindow);
     hgMapAdd(&windowState.ids, windowID, window);
@@ -3278,7 +3281,7 @@ HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindo
     SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
 
     if (!SDL_Vulkan_CreateSurface(window->sdlWindow, vk.instance, nullptr, &window->surface))
-        hgError("Failed to create Vulkan surface: %s\n", SDL_GetError());
+        hgPanic("Failed to create Vulkan surface: %s\n", SDL_GetError());
 
     window->format = findSwapchainFormat(window->surface);
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
@@ -3763,7 +3766,7 @@ void hgAudioInit()
 {
     audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
-        hgError("SDL could not open audio device: %s\n", SDL_GetError());
+        hgPanic("SDL could not open audio device: %s\n", SDL_GetError());
 
     audio.streams = hgArrayCreate<SDL_AudioStream*>();
 }
@@ -3791,16 +3794,16 @@ HgAudioStream* hgAudioStreamCreate(u32 frequency, u32 channels)
     {
         stream = SDL_CreateAudioStream(&audioSpec, nullptr);
         if (stream == nullptr)
-            hgError("SDL could not create audio stream: %s\n", SDL_GetError());
+            hgPanic("SDL could not create audio stream: %s\n", SDL_GetError());
 
         if (!SDL_BindAudioStream(audio.device, stream))
-            hgError("SDL could not bind audio stream: %s\n", SDL_GetError());
+            hgPanic("SDL could not bind audio stream: %s\n", SDL_GetError());
     }
     else
     {
         stream = hgArrayPop(&audio.streams);
         if (!SDL_SetAudioStreamFormat(stream, &audioSpec, nullptr))
-            hgError("SDL could not set audio stream format: %s\n", SDL_GetError());
+            hgPanic("SDL could not set audio stream format: %s\n", SDL_GetError());
     }
 
     return (HgAudioStream*)stream;
@@ -3814,7 +3817,7 @@ void hgAudioStreamDestroy(HgAudioStream* stream)
 
         // SDL_UnbindAudioStream(sdlStream);
         if (!SDL_ClearAudioStream(sdlStream))
-            hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
+            hgPanic("SDL could not clear audio stream: %s\n", SDL_GetError());
 
         *hgArrayPush(&audio.streams) = sdlStream;
     }
@@ -3824,14 +3827,14 @@ void hgAudioStreamPush(HgAudioStream* player, const f32* data, u64 size)
 {
     SDL_AudioStream* stream = (SDL_AudioStream*)player;
     if (!SDL_PutAudioStreamData(stream, data, (int)size))
-        hgError("SDL could not push audio data: %s\n", SDL_GetError());
+        hgPanic("SDL could not push audio data: %s\n", SDL_GetError());
 }
 
 u32 hgAudioStreamQueuedSize(HgAudioStream* stream)
 {
     int size = SDL_GetAudioStreamQueued((SDL_AudioStream*)stream);
     if (size == -1)
-        hgError("SDL could not read audio data: %s\n", SDL_GetError());
+        hgPanic("SDL could not read audio data: %s\n", SDL_GetError());
 
     return (u32)size;
 }
@@ -3839,13 +3842,13 @@ u32 hgAudioStreamQueuedSize(HgAudioStream* stream)
 void hgAudioStreamClear(HgAudioStream* stream)
 {
     if (!SDL_ClearAudioStream((SDL_AudioStream*)stream))
-        hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
+        hgPanic("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 
 void hgAudioStreamSetGain(HgAudioStream* stream, f32 gain)
 {
     if (!SDL_SetAudioStreamGain((SDL_AudioStream*)stream, gain))
-        hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
+        hgPanic("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 
 void hgImGuiInit(
@@ -4056,7 +4059,7 @@ static HgLibrary* libvulkan = nullptr;
 
 #define HG_LOAD_VULKAN_FUNC(name) \
     vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
-    if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
+    if (vulkanFuncs. name == nullptr) { hgPanic("Could not load " #name "\n"); }
 
 static void loadVulkan()
 {
@@ -4070,11 +4073,11 @@ static void loadVulkan()
         );
 
     if (libvulkan == nullptr)
-        hgError("Could not load vulkan\n");
+        hgPanic("Could not load vulkan\n");
 
     *(void**)&vulkanFuncs.vkGetInstanceProcAddr = hgLibraryFindFunction(libvulkan, "vkGetInstanceProcAddr");
     if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
-        hgError("Could not load vkGetInstanceProcAddr\n");
+        hgPanic("Could not load vkGetInstanceProcAddr\n");
 
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
 }
@@ -4092,7 +4095,7 @@ static void unloadVulkan()
 
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
     vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(instance, #name); \
-    if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
+    if (vulkanFuncs. name == nullptr) { hgPanic("Could not load " #name "\n"); }
 
 static void loadVulkanInstanceFuncs(VkInstance instance)
 {
@@ -4123,7 +4126,7 @@ static void loadVulkanInstanceFuncs(VkInstance instance)
 
 #define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
     vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetDeviceProcAddr(device, #name); \
-    if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
+    if (vulkanFuncs. name == nullptr) { hgPanic("Could not load " #name "\n"); }
 
 static void loadVulkanDeviceFuncs(VkDevice device)
 {
@@ -5529,7 +5532,7 @@ void vkCmdDispatch(
 
 #include <dlfcn.h>
 
-HgLibrary* hgLibraryLoad(HgStringView path)
+HgLibrary* hgLibraryLoad(HgString path)
 {
     char* cstr = hgCString(hgScratch(), path);
 
@@ -5546,7 +5549,7 @@ void hgLibraryUnload(HgLibrary* lib)
         dlclose(lib);
 }
 
-void* hgLibraryFindFunction(HgLibrary* lib, HgStringView symbol)
+void* hgLibraryFindFunction(HgLibrary* lib, HgString symbol)
 {
     char* cstr = hgCString(hgScratch(), symbol);
 

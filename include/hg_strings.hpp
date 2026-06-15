@@ -32,29 +32,6 @@
 #include "hg_utils.hpp"
 
 /**
- * A block of binary data
- */
-struct HgBinary {
-    /**
-     * The data in the file
-     */
-    void* data;
-    /**
-     * The size of the file in bytes
-     */
-    u64 size;
-};
-
-/**
- * Resize the file
- *
- * Parameters
- * - arena The arena to allocate from
- * - newSize The new size of the file in bytes
- */
-void hgBinaryResize(HgArena* arena, HgBinary* bin, u64 newSize);
-
-/**
  * Read data at index into a buffer
  *
  * Parameters
@@ -62,7 +39,7 @@ void hgBinaryResize(HgArena* arena, HgBinary* bin, u64 newSize);
  * - dst A pointer to store the read data
  * - size The size in bytes to read
  */
-void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len);
+void hgBinaryRead(HgBinary bin, u64 idx, void* dst, u64 len);
 
 /**
  * Read data of arbitrary type from the file
@@ -71,12 +48,43 @@ void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len);
  * - idx The index into the file in bytes to read from
  */
 template<typename T>
-T hgBinaryRead(const HgBinary* bin, u64 idx)
+T hgBinaryRead(HgBinary bin, u64 idx)
 {
     T ret;
     hgBinaryRead(bin, idx, &ret, sizeof(T));
     return ret;
 }
+
+/**
+ * A binary builder
+ */
+struct HgBinaryBuilder {
+    /**
+     * The data
+     */
+    void* data;
+    /**
+     * The size of data in bytes
+     */
+    u64 size;
+
+    /**
+     * Implicitly convert to HgBinary
+     */
+    constexpr operator HgBinary()
+    {
+        return {data, size};
+    }
+};
+
+/**
+ * Resize the binary
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - newSize The new size of the file in bytes
+ */
+void hgBinaryResize(HgArena* arena, HgBinaryBuilder* bin, u64 newSize);
 
 /**
  * Overwrite data at the index
@@ -86,7 +94,7 @@ T hgBinaryRead(const HgBinary* bin, u64 idx)
  * - src The data to write
  * - size The size of the data in bytes
  */
-void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len);
+void hgBinaryOverwrite(HgBinaryBuilder* bin, u64 idx, const void* src, u64 len);
 
 /**
  * Overwrite data of arbitrary type at the index
@@ -96,84 +104,23 @@ void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len);
  * - src The data to write
  */
 template<typename T>
-void hgBinaryOverwrite(HgBinary* bin, u64 idx, const T& src)
+void hgBinaryOverwrite(HgBinaryBuilder* bin, u64 idx, const T& src)
 {
     hgBinaryOverwrite(bin, idx, &src, sizeof(T));
 }
 
 /**
- * A span view into a string
+ * Compare strings
  */
-struct HgStringView {
-    /**
-     * The characters
-     */
-    const char* chars;
-    /**
-     * The number of characters;
-     */
-    u64 length;
-
-    /**
-     * Construct uninitialized
-     */
-    HgStringView() = default;
-
-    /**
-     * Create a string view from a pointer and length
-     */
-    constexpr HgStringView(const char* charsVal, u64 lengthVal)
-        : chars{charsVal}, length{lengthVal} {}
-
-    /**
-     * Create a string view from begin and end pointers
-     */
-    constexpr HgStringView(const char* charsBegin, const char* charsEnd)
-        : chars{charsBegin}, length{(uptr)(charsEnd - charsBegin)}
-    {
-        hgAssert(charsBegin <= charsEnd);
-    }
-
-    /**
-     * Implicit constexpr conversion from c string
-     *
-     * Potentially dangerous, c string should be at most 4096 chars
-     */
-    constexpr HgStringView(const char* cStr) : chars{cStr}, length{0}
-    {
-        if (cStr != nullptr)
-        {
-            while (cStr[length] != '\0')
-            {
-                ++length;
-                hgAssert(length <= 4096);
-            }
-        }
-    }
-
-    /**
-     * Convenience to index into the array with debug bounds checking
-     */
-    constexpr const char& operator[](u64 idx) const
-    {
-        hgAssert(chars != nullptr);
-        hgAssert(idx < length);
-        return chars[idx];
-    }
-};
-
-/**
- * Compare string views
- */
-constexpr bool operator==(HgStringView lhs, HgStringView rhs)
+constexpr bool operator==(HgString lhs, HgString rhs)
 {
     return lhs.length == rhs.length && hgMemEqual(lhs.chars, rhs.chars, lhs.length);
 }
 
 /**
- * Compare string views
+ * Compare strings
  */
-constexpr bool operator!=(HgStringView lhs, HgStringView rhs)
+constexpr bool operator!=(HgString lhs, HgString rhs)
 {
     return !(lhs == rhs);
 }
@@ -185,64 +132,17 @@ constexpr bool operator!=(HgStringView lhs, HgStringView rhs)
  * - arena The arena to allocate from
  * - str The string to create from
  */
-char* hgCString(HgArena* arena, HgStringView str);
+char* hgCString(HgArena* arena, HgString str);
 
 /**
- * A dynamically allocated owning string
+ * Create a new owning string
  */
-struct HgStringOwner {
-    /**
-     * The string characters
-     */
-    const char* chars;
-    /**
-     * The length of the string
-     */
-    u64 length;
-
-    /**
-     * Access using the index operator
-     */
-    constexpr const char& operator[](u64 index) const
-    {
-        hgAssert(index < length);
-        return chars[index];
-    }
-
-    /**
-     * Implicit converts to a string view
-     */
-    constexpr operator HgStringView() const
-    {
-        return {chars, length};
-    }
-};
+HgString hgStringCreate(HgString data);
 
 /**
- * Compare string owners
+ * Destroy an owning string
  */
-inline bool operator==(const HgStringOwner& lhs, const HgStringOwner& rhs)
-{
-    return HgStringView{lhs} == HgStringView{rhs};
-}
-
-/**
- * Compare string owners
- */
-inline bool operator!=(const HgStringOwner& lhs, const HgStringOwner& rhs)
-{
-    return !(lhs == rhs);
-}
-
-/**
- * Create a new HgStringOwner
- */
-HgStringOwner hgStringCreate(HgStringView data);
-
-/**
- * Destroy an HgStringOwner
- */
-void hgStringDestroy(HgStringOwner* str);
+void hgStringDestroy(HgString* str);
 
 /**
  * A string builder using arenas
@@ -269,7 +169,7 @@ struct HgStringBuilder {
     /**
      * Implicit converts to a string view
      */
-    constexpr operator HgStringView() const
+    constexpr operator HgString() const
     {
         return {chars, length};
     }
@@ -280,7 +180,7 @@ struct HgStringBuilder {
  */
 inline bool operator==(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
 {
-    return HgStringView{lhs} == HgStringView{rhs};
+    return HgString{lhs} == HgString{rhs};
 }
 
 /**
@@ -298,7 +198,7 @@ inline bool operator!=(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
  * - arena The arena to allocate from
  * - init The initial string to copy from
  */
-HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str);
+HgStringBuilder hgStringCopy(HgArena* arena, HgString str);
 
 // /**
 //  * Create a formatted string : TODO
@@ -331,12 +231,12 @@ HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str);
  * - idx The index into dst
  * - src The string to copy from
  */
-void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgStringView src);
+void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgString src);
 
 /**
  * Copies another string to the end of the string
  */
-inline void hgStringAppend(HgArena* arena, HgStringBuilder* dst, HgStringView src)
+inline void hgStringAppend(HgArena* arena, HgStringBuilder* dst, HgString src)
 {
     hgStringInsert(arena, dst, dst->length, src);
 }
@@ -344,7 +244,7 @@ inline void hgStringAppend(HgArena* arena, HgStringBuilder* dst, HgStringView sr
 /**
  * Copies another string to the beginning of the string
  */
-inline void hgStringPrepend(HgArena* arena, HgStringBuilder* dst, HgStringView src)
+inline void hgStringPrepend(HgArena* arena, HgStringBuilder* dst, HgString src)
 {
     hgStringInsert(arena, dst, 0, src);
 }
@@ -392,22 +292,22 @@ bool hgIsNumeral(char c);
 /**
  * Check whether a string is a base 10 integer
  */
-bool hgIsInteger(HgStringView str);
+bool hgIsInteger(HgString str);
 
 /**
  * Check whether a string is a base 10 floating point number
  */
-bool hgIsFloat(HgStringView str);
+bool hgIsFloat(HgString str);
 
 /**
  * Create an integer from a base 10 string
  */
-i64 hgStringToInteger(HgStringView str);
+i64 hgStringToInteger(HgString str);
 
 /**
  * Create a float from a base 10 string
  */
-f64 hgStringToFloat(HgStringView str);
+f64 hgStringToFloat(HgString str);
 
 /**
  * Create a base 10 string from an integer

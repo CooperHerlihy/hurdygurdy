@@ -55,7 +55,7 @@ void hgTest()
             Big* reallocBigSame = hgArenaRealloc(&arena, reallocBig, 2, 2);
             hgAssert(reallocBigSame == reallocBig);
 
-            memset(reallocBig, 2, 2 * sizeof(*reallocBig));
+            hgMemClear(reallocBig, 2 * sizeof(*reallocBig), 2);
             u8* allocInterrupt = hgArenaAlloc<u8>(&arena, 1);
             (void)allocInterrupt;
 
@@ -503,6 +503,9 @@ void hgTest()
 
     // Serialization
     {
+        HgArena* arena = hgScratch();
+        hgArenaScope(arena);
+
         struct PlainOldData {
             i64 a;
             u16 b;
@@ -521,9 +524,6 @@ void hgTest()
         pod.e[2] = {6};
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
             HgSerializer writer = hgSerialWriter(arena);
             hgSerialize(&writer, &pod);
 
@@ -536,9 +536,6 @@ void hgTest()
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
             HgSerializer writer = hgSerialWriter(arena);
             hgSerialize(&writer, &pod);
 
@@ -546,16 +543,13 @@ void hgTest()
 
             PlainOldData podCopy{};
 
-            HgSerializer reader = hgBinaryReadSerial(arena, &bin);
+            HgSerializer reader = hgBinaryReadSerial(arena, bin);
             hgSerialize(&reader, &podCopy);
 
             hgAssert(hgMemEqual(&podCopy, &pod, sizeof(pod)));
         }
 
         // {
-        //     HgArena* arena = hgScratch();
-        //     hgArenaScope(arena);
-        //
         //     HgSerializer writer = hgSerialWriter(arena);
         //     hgSerialize(arena, &writer, "data", &pod);
         //
@@ -575,7 +569,7 @@ void hgTest()
             f32 c;
             bool d;
             u32 e[3];
-            HgStringView f;
+            HgStringBuilder f;
         };
 
         Data data{};
@@ -586,7 +580,7 @@ void hgTest()
         data.e[0] = {2};
         data.e[1] = {4};
         data.e[2] = {6};
-        data.f = "hello";
+        data.f = hgStringCopy(arena, "hello");
 
         auto serializeData = [](HgSerializer* s, Data* val)
         {
@@ -600,9 +594,6 @@ void hgTest()
         };
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
             HgSerializer writer = hgSerialWriter(arena);
             serializeData(&writer, &data);
 
@@ -626,9 +617,6 @@ void hgTest()
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
-
             HgSerializer writer = hgSerialWriter(arena);
             serializeData(&writer, &data);
 
@@ -636,7 +624,7 @@ void hgTest()
 
             Data dataCopy{};
 
-            HgSerializer reader = hgBinaryReadSerial(arena, &bin);
+            HgSerializer reader = hgBinaryReadSerial(arena, bin);
             serializeData(&reader, &dataCopy);
 
             hgAssert(!hgMemEqual(&dataCopy, &data, sizeof(data)));
@@ -651,9 +639,6 @@ void hgTest()
         }
 
 //         {
-//             HgArena* arena = hgScratch();
-//             hgArenaScope(arena);
-//
 //             HgSerializer writer = hgSerialWriter(arena);
 //             serializeData(&writer, &data);
 //
@@ -698,7 +683,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
             )";
 
             HgJson json = hgParseJson(arena, file);
@@ -711,7 +696,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                 }
             )";
@@ -730,7 +715,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     1234
                 }
@@ -754,7 +739,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf"
                 }
@@ -778,7 +763,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf":
                 }
@@ -805,7 +790,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": true
                 }
@@ -832,7 +817,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": false
                 }
@@ -859,7 +844,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": asdf
                 }
@@ -886,7 +871,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": "asdf"
                 }
@@ -913,7 +898,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": 1234
                 }
@@ -940,7 +925,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": 1234.0
                 }
@@ -967,7 +952,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": 1234.0,
                     "hjkl": 5678.0
@@ -1002,7 +987,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": [1, 2, 3, 4]
                 }
@@ -1053,7 +1038,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": [1 2 3 4]
                 }
@@ -1104,7 +1089,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": [1, 2, "3", 4]
                 }
@@ -1154,7 +1139,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "asdf": {
                         "a": 1,
@@ -1214,7 +1199,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgStringView file = R"(
+            HgString file = R"(
                 {
                     "player": {
                         "transform": {
@@ -1746,7 +1731,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgSet<HgStringView> set = hgSetTemp<HgStringView>(arena, 128);
+            HgSet<HgString> set = hgSetTemp<HgString>(arena, 128);
 
             hgAssert(!hgSetHas(&set, "a"));
             hgAssert(!hgSetHas(&set, "b"));
@@ -1966,7 +1951,7 @@ void hgTest()
             HgArena* arena = hgScratch();
             hgArenaScope(arena);
 
-            HgMap<HgStringView, u32> map = hgMapTemp<HgStringView, u32>(arena, 6);
+            HgMap<HgString, u32> map = hgMapTemp<HgString, u32>(arena, 6);
 
             hgAssert(hgMapGet(&map, "a") == nullptr);
             hgAssert(hgMapGet(&map, "b") == nullptr);
@@ -2001,12 +1986,12 @@ void hgTest()
 
     // HgPool
     {
-        HgPool<u32> pool = hgPoolCreate<u32>();
+        HgPool pool = hgPoolCreate<u32>();
         hgDefer(hgPoolDestroy(&pool));
 
-        u32* a = hgPoolAlloc(&pool);
-        u32* b = hgPoolAlloc(&pool);
-        u32* c = hgPoolAlloc(&pool);
+        u32* a = (u32*)hgPoolAlloc(&pool);
+        u32* b = (u32*)hgPoolAlloc(&pool);
+        u32* c = (u32*)hgPoolAlloc(&pool);
 
         hgAssert(a != nullptr);
         hgAssert(b != nullptr);
@@ -2023,8 +2008,8 @@ void hgTest()
         hgPoolFree(&pool, b);
         hgPoolFree(&pool, c);
 
-        u32* d = hgPoolAlloc(&pool);
-        u32* e = hgPoolAlloc(&pool);
+        u32* d = (u32*)hgPoolAlloc(&pool);
+        u32* e = (u32*)hgPoolAlloc(&pool);
 
         hgAssert(d == c);
         hgAssert(e == b);
@@ -2044,8 +2029,8 @@ void hgTest()
 
         for (u32 i = 0; i < n; ++i)
         {
-            u32* p = hgPoolAlloc(&pool);
-            *hgArrayPush(&ptrs) = p;
+            u32* p = (u32*)hgPoolAlloc(&pool);
+            *hgArrayPushTemp(scratch, &ptrs) = p;
             hgAssert(p != nullptr);
         }
 
@@ -2188,7 +2173,7 @@ void hgTest()
         {
             HgBinary bin{saveData, sizeof(saveData)};
 
-            HgStringView filePath = "hg_test_dir/file_bin_test.bin";
+            HgString filePath = "hg_test_dir/file_bin_test.bin";
 
             hgBinaryStore(&bin, filePath, fence);
             hgAssert(hgFenceWait(fence, 2.0));
@@ -2226,7 +2211,7 @@ void hgTest()
             {blue, yellow},
         };
 
-        HgStringView path = "hg_test_dir/image_test.png";
+        HgString path = "hg_test_dir/image_test.png";
 
         HgTextureData testImage{};
         testImage.width = 2;

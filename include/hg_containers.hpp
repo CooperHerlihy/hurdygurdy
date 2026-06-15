@@ -92,6 +92,12 @@ template<typename T>
 void hgArrayResize(HgArray<T>* arr, u32 newCount);
 
 /**
+ * Resize an array using an arena
+ */
+template<typename T>
+void hgArrayResizeTemp(HgArena* arena, HgArray<T>* arr, u32 newCount);
+
+/**
  * Push a value to the end of the array
  */
 template<typename T>
@@ -104,10 +110,16 @@ template<typename T>
 T* hgArrayPushTemp(HgArena* arena, HgArray<T>* arr);
 
 /**
- * Remove the value at idx in the array
+ * Remove the value at idx in the array, with stanle order
  */
 template<typename T>
 T hgArrayRemove(HgArray<T>* arr, u32 idx);
+
+/**
+ * Remove the value at idx in the array, without stable order
+ */
+template<typename T>
+T hgArrayRemoveSwap(HgArray<T>* arr, u32 idx);
 
 /**
  * Pop a value from the end of the array
@@ -178,6 +190,11 @@ HgArrayAny hgArrayAnyTemp(HgArena* arena, u32 width, u32 align, u32 count = 0, u
 void hgArrayAnyResize(HgArrayAny* arr, u32 newCount);
 
 /**
+ * Resize an array of unkown type using an arena
+ */
+void hgArrayAnyResizeTemp(HgArena* arean, HgArrayAny* arr, u32 newCount);
+
+/**
  * Push a value to the end of the array
  */
 void* hgArrayAnyPush(HgArrayAny* arr);
@@ -186,6 +203,16 @@ void* hgArrayAnyPush(HgArrayAny* arr);
  * Push a value to the end of the array using an arena
  */
 void* hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr);
+
+/**
+ * Remove a value from the array, with stable order
+ */
+void hgArrayAnyRemove(HgArrayAny* arr, u32 idx, void* dst);
+
+/**
+ * Remove a value from the array, without stable order
+ */
+void hgArrayAnyRemoveSwap(HgArrayAny* arr, u32 idx, void* dst);
 
 /**
  * Pop a value from the end of the array
@@ -577,7 +604,7 @@ constexpr u64 hgHash(void* val)
  * Hash map hashing for strings
  */
 template<>
-constexpr u64 hgHash(HgStringView str)
+constexpr u64 hgHash(HgString str)
 {
     u64 ret = 0;
     u64 mult = 1;
@@ -595,16 +622,7 @@ constexpr u64 hgHash(HgStringView str)
 template<>
 constexpr u64 hgHash(const char* str)
 {
-    return hgHash(HgStringView{str});
-}
-
-/**
- * Hash map hashing for HgStringOwner
- */
-template<>
-constexpr u64 hgHash(HgStringOwner str)
-{
-    return hgHash(HgStringView{str});
+    return hgHash(HgString{str});
 }
 
 /**
@@ -613,47 +631,59 @@ constexpr u64 hgHash(HgStringOwner str)
 template<>
 constexpr u64 hgHash(HgStringBuilder str)
 {
-    return hgHash(HgStringView{str});
+    return hgHash(HgString{str});
 }
 
 /**
  * A pool of objects
  */
-template<typename T>
 struct HgPool {
     /**
      * The free list
      */
-    HgQueue<T*> freeList;
+    HgQueue<void*> freeList;
     /**
      * The items in the pool
      */
-    HgArray<T*> itemStores;
+    HgArray<void*> itemStores;
+    /**
+     * The size of each item in bytes
+     */
+    u32 width;
+    /**
+     * The alignment of each item in bytes
+     */
+    u32 align;
 };
 
 /**
  * Create an object pool
  */
+HgPool hgPoolCreate(u32 width, u32 align);
+
+/**
+ * Create an object pool
+ */
 template<typename T>
-HgPool<T> hgPoolCreate();
+HgPool hgPoolCreate()
+{
+    return hgPoolCreate(sizeof(T), alignof(T));
+}
 
 /**
  * Destroy an object pool
  */
-template<typename T>
-void hgPoolDestroy(HgPool<T>* pool);
+void hgPoolDestroy(HgPool* pool);
 
 /**
  * Allocate an object from the pool
  */
-template<typename T>
-T* hgPoolAlloc(HgPool<T>* pool);
+void* hgPoolAlloc(HgPool* pool);
 
 /**
  * Free an object from the pool
  */
-template<typename T>
-void hgPoolFree(HgPool<T>* pool, T* item);
+void hgPoolFree(HgPool* pool, void* item);
 
 /**
  * A generation counted handle

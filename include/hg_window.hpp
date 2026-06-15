@@ -84,7 +84,7 @@ struct HgWindow;
  *
  * Note, width and height are ignored if fullscreen is enabled
  */
-HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindowConfig* config);
+HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowConfig* config);
 
 /**
  * Destroy a window

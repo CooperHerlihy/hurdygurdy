@@ -34,7 +34,6 @@
 #include "hg_gpu.hpp"
 #include "hg_math.hpp"
 #include "hg_serialization.hpp"
-#include "hg_strings.hpp"
 #include "hg_window.hpp"
 
 /**
@@ -216,7 +215,7 @@ void hgAssetUnloadImpl(HgAsset<HgTextureData>* data);
 /**
  * Store an image to disc in the png format
  */
-void hgTextureStorePng(HgTextureData* texture, HgStringView path, HgFence* fence);
+void hgTextureStorePng(HgTextureData* texture, HgString path, HgFence* fence);
 
 /**
  * A texture asset stored on the gpu
@@ -609,7 +608,7 @@ void hgAssetUnloadImpl(HgAsset<HgMeshData>* data);
 /**
  * Store the model data to disc in gltf format : TODO
  */
-void hgMeshStoreGltf(HgMeshData* data, HgStringView path, HgFence* fence);
+void hgMeshStoreGltf(HgMeshData* data, HgString path, HgFence* fence);
 
 /**
  * A 3d mesh asset stored on the gpu

@@ -29,7 +29,6 @@
 
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
-#include "hg_strings.hpp"
 
 /**
  * A high precision clock for timers and game deltas
@@ -125,6 +124,6 @@ enum HgPerfScale : u32 {
 /**
  * Logs performance statistics to stdout
  */
-void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale);
+void hgPerfLog(HgString title, const HgPerfStats* stats, HgPerfScale scale);
 
 #endif // HG_TIME_HPP

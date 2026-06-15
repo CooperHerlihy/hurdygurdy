@@ -29,21 +29,15 @@
 
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
-#include "hg_strings.hpp"
+
 
 /**
- * Initializes global platform resources
- *
- * Parameters
- * - arena The arena to allocate from
- * - maxWindows The maximum number of windows that can be created
- * - maxEvents The maximum number of events recorded per frame
- * - maxAudioPlayers The maximum number of audio players
+ * Initialize the platform
  */
-void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents, u32 maxAudioPlayers);
+void hgPlatformInit();
 
 /**
- * Deinitializes global platform resources
+ * Deinitialize the platform
  */
 void hgPlatformDeinit();
 
@@ -57,6 +51,6 @@ void hgPlatformDeinit();
  * Returns
  * - The number of required extensions
  */
-u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
+u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgString** extBuffer);
 
 #endif // HG_PLATFORM_HPP

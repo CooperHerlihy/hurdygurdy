@@ -39,6 +39,11 @@ constexpr u64 hgArrayCount(T (&)[N])
 }
 
 /**
+ * Swap to regions of memory
+ */
+void hgSwap(void* a, void* b, u64 size);
+
+/**
  * Swap the values of two objects
  */
 template<typename T>
@@ -79,19 +84,27 @@ constexpr T hgClamp(T x, T min, T max)
 }
 
 /**
+ * Returns whether a value is a power of 2
+ */
+constexpr bool hgIsPowerOf2(u64 val)
+{
+    return val > 0 && (val & (val - 1)) == 0;
+}
+
+/**
  * Aligns a pointer to an alignment
  *
  * Parameters
- * - value The value to align
- * - alignment The alignment, must be a power of two
+ * - val The value to align
+ * - align The alignment, must be a power of two
  *
  * Returns
  * - The aligned value
  */
-constexpr uptr hgAlign(uptr value, uptr alignment)
+constexpr uptr hgAlign(uptr val, uptr align)
 {
-    hgAssert(alignment > 0 && (alignment & (alignment - 1)) == 0);
-    return (value + alignment - 1) & ~(alignment - 1);
+    hgAssert(hgIsPowerOf2(align));
+    return (val + align - 1) & ~(align - 1);
 }
 
 /**
@@ -122,9 +135,9 @@ constexpr u64 hgEndianReverse64(u64 val)
 }
 
 /**
- * Clear a section of memory to 0
+ * Clear a section of memory
  */
-void hgMemClear(void* dst, u64 size);
+void hgMemClear(void* dst, u64 size, u8 val = 0);
 
 /**
  * Copy memory from src to dst, may not overlap

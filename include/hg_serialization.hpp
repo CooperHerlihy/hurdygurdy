@@ -94,7 +94,7 @@ struct HgSerialNode {
         /**
          * String data
          */
-        HgStringView string;
+        HgString string;
         /**
          * Integer value
          */
@@ -191,16 +191,10 @@ template<>
 void hgSerialize(HgSerializer* s, HgBinary* val);
 
 /**
- * HgStringView serialization
+ * HgString serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgStringView* val);
-
-/**
- * HgStringOwner serialization
- */
-template<>
-void hgSerialize(HgSerializer* s, HgStringOwner* val);
+void hgSerialize(HgSerializer* s, HgString* val);
 
 /**
  * HgStringBuilder serialization
@@ -330,12 +324,12 @@ HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer* data);
 /**
  * Read binary data to be deserialized
  */
-HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary* bin);
+HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin);
 
 /**
  * Write serialized data as json
  */
-HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer* data);
+HgString hgJsonWriteSerial(HgArena* arena, HgSerializer* data);
 
 // /**
 //  * Read json data to be deserialized : TODO
@@ -353,7 +347,7 @@ struct HgJsonError {
     /**
      * The error message
      */
-    HgStringView msg;
+    HgString msg;
 };
 
 /**
@@ -386,7 +380,7 @@ struct HgJsonField {
     /**
      * The name of the field
      */
-    HgStringView name;
+    HgString name;
     /**
      * The value stored in the field
      */
@@ -442,7 +436,7 @@ struct HgJsonNode {
         HgJsonStruct jstruct;
         HgJsonField field;
         HgJsonArray array;
-        HgStringView string;
+        HgString string;
         f64 floating;
         i64 integer;
         bool boolean;
@@ -490,6 +484,6 @@ struct HgJson {
  * Returns
  * - The parsed json, errors contained inside
  */
-HgJson hgParseJson(HgArena* arena, HgStringView text);
+HgJson hgParseJson(HgArena* arena, HgString text);
 
 #endif // HG_SERIALIZATION_HPP

@@ -149,7 +149,7 @@ struct HgArena {
  * - alignment The required alignment of the allocation in bytes
  *
  * Returns
- * - The allocation, never nullptr
+ * - The allocation, or nullptr if out of memory
  */
 void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment);
 
@@ -163,7 +163,7 @@ void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment);
  * - count The number of T to allocate
  *
  * Returns
- * - The allocated array, never nullptr
+ * - The allocated array, or nullptr if out of memory
  */
 template<typename T>
 T* hgArenaAlloc(HgArena* arena, u64 count)
@@ -184,7 +184,7 @@ T* hgArenaAlloc(HgArena* arena, u64 count)
  * - alignment The required alignment of the allocation in bytes
  *
  * Returns
- * - The allocation, never nullptr
+ * - The allocation, never or if out of memory
  */
 void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment);
 
@@ -201,7 +201,7 @@ void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize,
  * - newCount The new number of T to allocate
  *
  * Returns
- * - The reallocated array, never nullptr
+ * - The reallocated array, or nullptr if out of memory
  */
 template<typename T>
 T* hgArenaRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount)

@@ -45,7 +45,7 @@ volatile static bool quit = false;
 static bool renderHovered = false;
 
 struct Name {
-    HgStringView name;
+    HgString name;
 };
 
 struct Spin {
@@ -595,7 +595,7 @@ void drawUI(HgArena* frame)
 
 int main()
 {
-    hgDefer(hgDebug("Exited successfully\n"));
+    hgDefer(hgLog("Exited successfully\n"));
 
     hgInit();
     hgDefer(hgDeinit());

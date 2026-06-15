@@ -70,121 +70,6 @@ void hgSerialize(HgSerializer* s, T (*arr)[N])
 }
 
 template<typename T>
-void hgAssetInit()
-{
-    hgAssets<T>.map = hgMapCreate<HgStringView, HgAsset<T>*>();
-    hgAssets<T>.pool = hgPoolCreate<HgAsset<T>>();
-}
-
-template<typename T>
-void hgAssetDeinit()
-{
-    hgPoolDestroy(&hgAssets<T>.pool);
-    hgMapDestroy(&hgAssets<T>.map);
-}
-
-template<typename T>
-void hgAssetLoadImpl(HgAsset<T>* data)
-{
-    (void)data;
-    static_assert(false, "Asset type cannot be loaded without implementation");
-}
-
-template<typename T>
-void hgAssetUnloadImpl(HgAsset<T>* data)
-{
-    (void)data;
-    static_assert(false, "Asset type cannot be unloaded without implementation");
-}
-
-template<typename T>
-HgAsset<T>* hgAssetCreate()
-{
-    HgAsset<T>* asset = hgPoolAlloc(&hgAssets<T>.pool);
-    asset->data = {};
-    asset->refCount = 1;
-    asset->path = {};
-
-    return asset;
-}
-
-template<typename T>
-HgAsset<T>* hgAssetLoad(HgStringView path)
-{
-    if (HgAsset<T>** asset = hgMapGet(&hgAssets<T>.map, path);
-        asset != nullptr)
-    {
-        ++(*asset)->refCount;
-        return *asset;
-    }
-
-    HgAsset<T>* asset = hgPoolAlloc(&hgAssets<T>.pool);
-    asset->data = {};
-    asset->refCount = 1;
-    asset->path = hgStringCreate(path);
-
-    if (hgAssets<T>.map.count * 2 > hgAssets<T>.map.capacity)
-        hgMapResize(&hgAssets<T>.map, hgAssets<T>.map.capacity * 2);
-    hgMapAdd(&hgAssets<T>.map, asset->path, asset);
-
-    hgAssetLoadImpl(asset);
-    return asset;
-}
-
-template<typename T>
-void hgAssetUnload(HgAsset<T>* asset)
-{
-    if (asset != nullptr && --asset->refCount == 0)
-    {
-        hgAssetUnloadImpl(asset);
-
-        if (asset->path != nullptr)
-        {
-            hgMapRemove(&hgAssets<T>.map, asset->path);
-            hgStringDestroy(&asset->path);
-        }
-        hgPoolFree(&hgAssets<T>.pool, asset);
-    }
-}
-
-template<typename T>
-void hgAssetReload(HgAsset<T>* asset)
-{
-    hgAssert(asset != nullptr);
-
-    hgAssetUnloadImpl(asset);
-    hgAssetLoadImpl(asset);
-}
-
-template<typename T>
-HgAsset<T>* hgAssetCopy(HgAsset<T>* asset)
-{
-    hgAssert(asset != nullptr);
-    ++asset->refCount;
-    return asset;
-}
-
-template<typename T>
-void hgSerialize(HgSerializer* s, HgAsset<T>** asset)
-{
-    if (s->writing)
-    {
-        HgStringView path = (*asset)->path;
-        hgSerialize(s, &path);
-    }
-    else
-    {
-        hgArenaScope(s->arena);
-        HgStringView path;
-        hgSerialize(s, &path);
-        if (path != "")
-            *asset = hgAssetLoad<T>(path);
-        else
-            *asset = nullptr;
-    }
-}
-
-template<typename T>
 void hgSerialize(HgSerializer* s, HgArray<T>* arr)
 {
     hgSerializeBegin(s);
@@ -246,6 +131,17 @@ void hgArrayResize(HgArray<T>* arr, u32 newCount)
 }
 
 template<typename T>
+void hgArrayResizeTemp(HgArena* arena, HgArray<T>* arr, u32 newCount)
+{
+    if (newCount > arr->capacity)
+    {
+        arr->vals = hgArenaRealloc(arena, arr->vals, arr->capacity, newCount * 2);
+        arr->capacity = newCount * 2;
+    }
+    arr->count = newCount;
+}
+
+template<typename T>
 T* hgArrayPush(HgArray<T>* arr)
 {
     if (arr->count == arr->capacity)
@@ -281,6 +177,22 @@ T hgArrayRemove(HgArray<T>* arr, u32 idx)
     --arr->count;
     return val;
 }
+
+template<typename T>
+T hgArrayRemoveSwap(HgArray<T>* arr, u32 idx)
+{
+    T val = (*arr)[idx];
+    if (idx + 1 < arr->count)
+    {
+        hgMemCopy(
+            &(*arr)[idx],
+            &(*arr)[arr->count - 1],
+            sizeof(T));
+    }
+    --arr->count;
+    return val;
+}
+
 template<typename T>
 T hgArrayPop(HgArray<T>* arr)
 {
@@ -774,63 +686,119 @@ void hgMapForEach(HgMap<K, V>* map, F fn)
     }
 }
 
-static constexpr u32 hgPoolStockSize = 1024;
+template<typename T>
+void hgAssetInit()
+{
+    hgAssets<T>.map = hgMapCreate<HgString, HgAsset<T>*>();
+    hgAssets<T>.pool = hgPoolCreate<HgAsset<T>>();
+}
 
 template<typename T>
-void hgPoolRestock(HgPool<T>* pool)
+void hgAssetDeinit()
 {
-    hgAssert(pool != nullptr);
+    hgPoolDestroy(&hgAssets<T>.pool);
+    hgMapDestroy(&hgAssets<T>.map);
+}
 
-    T* store = hgGpaAlloc<T>(hgPoolStockSize);
-    for (u32 i = 0; i < hgPoolStockSize; ++i)
+template<typename T>
+void hgAssetLoadImpl(HgAsset<T>* data)
+{
+    (void)data;
+    static_assert(false, "Asset type cannot be loaded without implementation");
+}
+
+template<typename T>
+void hgAssetUnloadImpl(HgAsset<T>* data)
+{
+    (void)data;
+    static_assert(false, "Asset type cannot be unloaded without implementation");
+}
+
+template<typename T>
+HgAsset<T>* hgAssetCreate()
+{
+    HgAsset<T>* asset = (HgAsset<T>*)hgPoolAlloc(&hgAssets<T>.pool);
+    asset->data = {};
+    asset->refCount = 1;
+    asset->path = {};
+
+    return asset;
+}
+
+template<typename T>
+HgAsset<T>* hgAssetLoad(HgString path)
+{
+    if (HgAsset<T>** asset = hgMapGet(&hgAssets<T>.map, path);
+        asset != nullptr)
     {
-        hgQueuePushBack(&pool->freeList, store + i);
+        ++(*asset)->refCount;
+        return *asset;
     }
-    *hgArrayPush(&pool->itemStores) = store;
+
+    HgAsset<T>* asset = (HgAsset<T>*)hgPoolAlloc(&hgAssets<T>.pool);
+    asset->data = {};
+    asset->refCount = 1;
+    asset->path = hgStringCreate(path);
+
+    if (hgAssets<T>.map.count * 2 > hgAssets<T>.map.capacity)
+        hgMapResize(&hgAssets<T>.map, hgAssets<T>.map.capacity * 2);
+    hgMapAdd(&hgAssets<T>.map, asset->path, asset);
+
+    hgAssetLoadImpl(asset);
+    return asset;
 }
 
 template<typename T>
-HgPool<T> hgPoolCreate()
+void hgAssetUnload(HgAsset<T>* asset)
 {
-    HgPool<T> pool{};
-    pool.freeList = hgQueueCreate<T*>();
-    pool.itemStores = hgArrayCreate<T*>(0, 4);
-    hgPoolRestock(&pool);
-    return pool;
-}
-
-template<typename T>
-void hgPoolDestroy(HgPool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-
-    for (u32 i = 0; i < pool->itemStores.count; ++i)
+    if (asset != nullptr && --asset->refCount == 0)
     {
-        hgGpaFree(pool->itemStores[i], hgPoolStockSize);
+        hgAssetUnloadImpl(asset);
+
+        if (asset->path != nullptr)
+        {
+            hgMapRemove(&hgAssets<T>.map, asset->path);
+            hgStringDestroy(&asset->path);
+        }
+        hgPoolFree(&hgAssets<T>.pool, asset);
     }
-    hgArrayDestroy(&pool->itemStores);
-    hgQueueDestroy(&pool->freeList);
 }
 
 template<typename T>
-T* hgPoolAlloc(HgPool<T>* pool)
+void hgAssetReload(HgAsset<T>* asset)
 {
-    hgAssert(pool != nullptr);
+    hgAssert(asset != nullptr);
 
-    if (pool->freeList.count == 0)
+    hgAssetUnloadImpl(asset);
+    hgAssetLoadImpl(asset);
+}
+
+template<typename T>
+HgAsset<T>* hgAssetCopy(HgAsset<T>* asset)
+{
+    hgAssert(asset != nullptr);
+    ++asset->refCount;
+    return asset;
+}
+
+template<typename T>
+void hgSerialize(HgSerializer* s, HgAsset<T>** asset)
+{
+    if (s->writing)
     {
-        hgPoolRestock(pool);
+        HgString path = (*asset)->path;
+        hgSerialize(s, &path);
     }
-
-    return hgQueuePopFront(&pool->freeList);
-}
-
-template<typename T>
-void hgPoolFree(HgPool<T>* pool, T* item)
-{
-    hgAssert(pool != nullptr);
-    hgAssert(item != nullptr);
-    hgQueuePushFront(&pool->freeList, item);
+    else
+    {
+        hgArenaScope(s->arena);
+        HgStringBuilder path;
+        hgSerialize(s, &path);
+        if (path != "")
+            *asset = hgAssetLoad<T>(path);
+        else
+            *asset = nullptr;
+    }
 }
 
 template<typename T, typename Fn>

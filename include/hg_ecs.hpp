@@ -31,7 +31,6 @@
 #include "hg_core.hpp"
 #include "hg_math.hpp"
 #include "hg_serialization.hpp"
-#include "hg_strings.hpp"
 
 /**
  * An entity in the ecs
@@ -123,7 +122,7 @@ struct HgComponent {
     /**
      * The name of the component type
      */
-    HgStringOwner name;
+    HgString name;
     /**
      * The component lookup from entity index
      */
@@ -195,7 +194,7 @@ struct HgEcsRegisterComponent {
      *
      * Note, the componentId is derived from this name
      */
-    HgStringView name;
+    HgString name;
     /**
      * The width of the component data in bytes
      */
@@ -260,7 +259,7 @@ void hgEcsUnregisterComponent(HgEcs* ecs)
 /**
  * Returns the name of the component type
  */
-HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId);
+HgString hgEcsComponentName(HgEcs* ecs, u64 componentId);
 
 /**
  * Return a new entity

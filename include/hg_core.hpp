@@ -31,8 +31,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 
 #include <type_traits>
 
@@ -140,15 +138,15 @@ struct HgDefer {
 #ifdef HG_LOGGING
 
 /**
- * Formats and logs a debug message to stderr for debugging purposes
+ * Formats and logs a message to stderr for debugging purposes
  *
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hgDebug(...) do { (void)fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); } while(0)
+#define hgLog(...) do { (void)fprintf(stderr, "HurdyGurdy Log: " __VA_ARGS__); } while(0)
 
 /**
- * Formats and logs a warning message to stderr
+ * Formats and logs a message to stderr as a warning
  *
  * Parameters
  * - ... The message to print and its format parameters
@@ -156,29 +154,29 @@ struct HgDefer {
 #define hgWarn(...) do { (void)fprintf(stderr, "HurdyGurdy Warning: " __VA_ARGS__); } while(0)
 
 /**
- * Formats and logs an error message to stderr and aborts the program
+ * Formats and logs a message to stderr and aborts the program
  *
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hgError(...) do { (void)fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); } while(0)
+#define hgPanic(...) do { (void)fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); abort(); } while(0)
 
 #else
 
 /**
- * Formats and logs a debug message to stderr for debugging puposes
- */
-#define hgDebug(...) do {} while(0)
-
-/**
- * Formats and logs a warning message to stderr
+ * Formats and logs a message to stderr for debugging puposes
  */
 #define hgWarn(...) do {} while(0)
 
 /**
- * Formats and logs an error message to stderr and aborts the program
+ * Formats and logs a message to stderr as a warning
  */
-#define hgError(...) do { abort(); } while(0)
+#define hgWarn(...) do {} while(0)
+
+/**
+ * Formats and logs a message to stderr and aborts the program
+ */
+#define hgPanic(...) do { abort(); } while(0)
 
 #endif
 
@@ -190,7 +188,7 @@ struct HgDefer {
 #define hgAssert(cond) do { \
     if (!(cond)) \
     { \
-        hgError("Assertion failed in " __FILE__ ":%d %s() " #cond "\n", __LINE__, __func__); \
+        hgPanic("Assertion failed in " __FILE__ ":%d %s() " #cond "\n", __LINE__, __func__); \
     } \
 } while(0)
 
@@ -256,6 +254,91 @@ typedef float_t f32;
 typedef double_t f64;
 
 /**
+ * A block of binary data
+ */
+struct HgBinary {
+    /**
+     * The data
+     */
+    const void* data;
+    /**
+     * The size of data in bytes
+     */
+    u64 size;
+};
+
+/**
+ * A view into a string
+ */
+struct HgString {
+    /**
+     * The characters
+     */
+    const char* chars;
+    /**
+     * The number of characters;
+     */
+    u64 length;
+
+    /**
+     * Construct uninitialized
+     */
+    HgString() = default;
+
+    /**
+     * Create a string view from a pointer and length
+     */
+    constexpr HgString(const char* charsVal, u64 lengthVal)
+        : chars{charsVal}, length{lengthVal} {}
+
+    /**
+     * Create a string view from begin and end pointers
+     */
+    constexpr HgString(const char* charsBegin, const char* charsEnd)
+        : chars{charsBegin}, length{(uptr)(charsEnd - charsBegin)}
+    {
+        hgAssert(charsBegin <= charsEnd);
+    }
+
+    /**
+     * Implicit constexpr conversion from c string
+     *
+     * Potentially dangerous, c string should be at most 4096 chars
+     */
+    constexpr HgString(const char* cStr) : chars{cStr}, length{0}
+    {
+        if (cStr != nullptr)
+        {
+            while (cStr[length] != '\0')
+            {
+                ++length;
+                hgAssert(length <= 4096);
+            }
+        }
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    constexpr const char& operator[](u64 idx) const
+    {
+        hgAssert(chars != nullptr);
+        hgAssert(idx < length);
+        return chars[idx];
+    }
+};
+
+/**
+ * Get this thread's most recent error message
+ */
+HgString hgErrorGet();
+
+/**
+ * Set this thread's current error message
+ */
+void hgErrorGet(HgString error);
+
+/**
  * The Hurdy Gurdy subsystems
  */
 enum HgSubsystem : u32 {
@@ -286,15 +369,5 @@ void hgDeinit();
  * Run Hurdy Gurdy tests, asserting success
  */
 void hgTest();
-
-/**
- * Initialize the platform
- */
-void hgPlatformInit();
-
-/**
- * Deinitialize the platform
- */
-void hgPlatformDeinit();
 
 #endif // HG_CORE_HPP

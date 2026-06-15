@@ -31,7 +31,6 @@
 #include "hg_containers.hpp"
 #include "hg_core.hpp"
 #include "hg_serialization.hpp"
-#include "hg_strings.hpp"
 
 /**
  * Initialize all default asset types
@@ -67,7 +66,7 @@ struct HgAsset {
     /**
      * The unique path for caching
      */
-    HgStringOwner path;
+    HgString path;
 };
 
 /**
@@ -80,11 +79,11 @@ struct HgAssetManager {
     /**
      * The asset lookup
      */
-    HgMap<HgStringView, HgAsset<T>*> map;
+    HgMap<HgString, HgAsset<T>*> map;
     /**
      * The asset pool
      */
-    HgPool<HgAsset<T>> pool;
+    HgPool pool;
 };
 
 /**
@@ -127,7 +126,7 @@ HgAsset<T>* hgAssetCreate();
  * Load an asset (or increment the ref count)
  */
 template<typename T>
-HgAsset<T>* hgAssetLoad(HgStringView path);
+HgAsset<T>* hgAssetLoad(HgString path);
 
 /**
  * Destroy an asset and unload it (or decrement the ref count)
@@ -178,6 +177,6 @@ void hgAssetUnloadImpl(HgAsset<HgBinary>* data);
  * - path The file path to store at
  * - fence The fence to signal on completion
  */
-void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence* fence);
+void hgBinaryStore(HgBinary* bin, HgString path, HgFence* fence);
 
 #endif // HG_ASSETS_HPP

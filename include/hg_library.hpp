@@ -27,7 +27,7 @@
 #ifndef HG_LIBRARY_HPP
 #define HG_LIBRARY_HPP
 
-#include "hg_strings.hpp"
+#include "hg_core.hpp"
 
 /**
  * A dynamically loaded library
@@ -37,7 +37,7 @@ struct HgLibrary;
 /**
  * Load a dynamic library
  */
-HgLibrary* hgLibraryLoad(HgStringView path);
+HgLibrary* hgLibraryLoad(HgString path);
 
 /**
  * Unload a dynamic library
@@ -54,6 +54,6 @@ void hgLibraryUnload(HgLibrary* lib);
  * Returns
  * - A function pointer to the found symbol, or nullptr not found
  */
-void* hgLibraryFindFunction(HgLibrary* lib, HgStringView symbol);
+void* hgLibraryFindFunction(HgLibrary* lib, HgString symbol);
 
 #endif // HG_LIBRARY_HPP
