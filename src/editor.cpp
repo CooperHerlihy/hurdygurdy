@@ -59,6 +59,8 @@ void init(HgArena* arena)
     // windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
 
     window = hgWindowCreate("Hg Editor Example", 1600, 900, &windowConfig);
+    if (window == nullptr)
+        hgPanic("Could not create window\n");
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -597,7 +599,8 @@ int main()
 {
     hgDefer(hgLog("Exited successfully\n"));
 
-    hgInit();
+    if (!hgInit())
+        hgPanic("Could not initialize Hurdy Gurdy\n");
     hgDefer(hgDeinit());
 
     hgTest();

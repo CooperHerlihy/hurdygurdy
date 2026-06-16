@@ -172,11 +172,9 @@ void hgAssetUnloadImpl(HgAsset<HgBinary>* data);
 /**
  * Store a binary file to disc
  *
- * Parameters
- * - bin The binary to store
- * - path The file path to store at
- * - fence The fence to signal on completion
+ * Returns
+ * - Whether the write succeeded
  */
-void hgBinaryStore(HgBinary* bin, HgString path, HgFence* fence);
+bool hgBinaryStore(HgBinary bin, HgString path);
 
 #endif // HG_ASSETS_HPP

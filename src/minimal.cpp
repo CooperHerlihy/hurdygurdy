@@ -14,12 +14,15 @@ static bool renderDebug = false;
 
 int main()
 {
-    hgInit();
+    if (!hgInit())
+        hgPanic("Could not initialize Hurdy Gurdy\n");
     hgDefer(hgDeinit());
 
     hgTest();
 
     HgWindow* window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
+    if (window == nullptr)
+        hgPanic("Could not create window\n");
     hgDefer(hgWindowDestroy(window));
 
     f32 musicData[2000];

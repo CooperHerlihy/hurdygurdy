@@ -20,14 +20,19 @@
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_sdl3.h"
 
-void hgPlatformInit()
+bool hgPlatformInit()
 {
-    SDL_Init(
+    if (!SDL_Init(
         SDL_INIT_AUDIO |
         SDL_INIT_VIDEO |
         SDL_INIT_JOYSTICK |
         SDL_INIT_GAMEPAD |
-        SDL_INIT_EVENTS);
+        SDL_INIT_EVENTS))
+    {
+        hgErrorSet((HgString)SDL_GetError());
+        return false;
+    }
+    return true;
 }
 
 void hgPlatformDeinit()
@@ -767,11 +772,11 @@ struct VulkanState {
 
 static VulkanState vk{};
 
-static void loadVulkan();
+static bool loadVulkan();
 static void unloadVulkan();
 
-static void loadVulkanInstanceFuncs(VkInstance instance);
-static void loadVulkanDeviceFuncs(VkDevice device);
+static bool loadVulkanInstanceFuncs(VkInstance instance);
+static bool loadVulkanDeviceFuncs(VkDevice device);
 
 #ifdef HG_VK_DEBUG_MESSENGER
 
@@ -862,7 +867,10 @@ static VkInstance createInstance(HgString* extensions, u32 extensionCount)
     VkInstance instance = nullptr;
     VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
     if (instance == nullptr)
-        hgPanic("Failed to create Vulkan instance: %s\n", vkResultToStr(result));
+    {
+        hgErrorSet("Failed to create Vulkan instance: ");
+        hgErrorAppend(vkResultToStr(result));
+    }
 
     return instance;
 }
@@ -873,10 +881,12 @@ static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
     hgAssert(vk.instance != nullptr);
 
     VkDebugUtilsMessengerEXT messenger = nullptr;
-    VkResult result = vkCreateDebugUtilsMessengerEXT(
-        vk.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
+    VkResult result = vkCreateDebugUtilsMessengerEXT(vk.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
-        hgPanic("Failed to create Vulkan debug messenger: %s\n", vkResultToStr(result));
+    {
+        hgErrorSet("Failed to create Vulkan debug messenger: ");
+        hgErrorAppend(vkResultToStr(result));
+    }
 
     return messenger;
 }
@@ -903,6 +913,9 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
             return true;
         }
     }
+
+    hgErrorSet("Could not find Vulkan queue family");
+    *queueFamily = (u32)-1;
     return false;
 }
 
@@ -961,7 +974,7 @@ nextGpu:
         continue;
     }
 
-    hgWarn("Could not find a suitable gpu\n");
+    hgErrorSet("Could not find suitable gpu");
     return nullptr;
 }
 
@@ -1024,10 +1037,32 @@ static VkDevice createDevice()
 
     VkDevice device = nullptr;
     VkResult result = vkCreateDevice(vk.physicalDevice, &deviceInfo, nullptr, &device);
-
     if (device == nullptr)
-        hgPanic("Could not create Vulkan device: %s\n", vkResultToStr(result));
+    {
+        hgErrorSet("Could not create VkDevice: ");
+        hgErrorAppend(vkResultToStr(result));
+    }
+
     return device;
+}
+
+static VmaAllocator createVma()
+{
+    VmaAllocatorCreateInfo allocatorInfo{};
+    allocatorInfo.physicalDevice = vk.physicalDevice;
+    allocatorInfo.device = vk.device;
+    allocatorInfo.instance = vk.instance;
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+
+    VmaAllocator vma = nullptr;
+    VkResult result = vmaCreateAllocator(&allocatorInfo, &vma);
+    if (vma == nullptr)
+    {
+        hgErrorSet("Could not create Vulkan memory allocator: ");
+        hgErrorAppend(vkResultToStr(result));
+    }
+
+    return vma;
 }
 
 static VkDescriptorPool createBindlessDescriptorPool()
@@ -1113,12 +1148,13 @@ static Frame createFrame()
     return frame;
 }
 
-void hgGpuInit()
+bool hgGpuInit()
 {
-    loadVulkan();
-
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
+
+    if (!loadVulkan())
+        goto loadFailed;
 
     {
         HgString* exts;
@@ -1128,32 +1164,40 @@ void hgGpuInit()
         exts[extCount++] = "VK_EXT_debug_utils";
 #endif
         vk.instance = createInstance(exts, extCount);
+        if (vk.instance == nullptr)
+            goto instanceFailed;
     }
-    loadVulkanInstanceFuncs(vk.instance);
+    if (!loadVulkanInstanceFuncs(vk.instance))
+        goto loadInstanceFailed;
 
 #ifdef HG_VK_DEBUG_MESSENGER
     vk.debugMessenger = createDebugUtilsMessenger();
+    if (vk.debugMessenger == nullptr)
+        goto debugMessengerFailed;
 #endif
 
     vk.physicalDevice = findPhysicalDevice();
+    if (vk.physicalDevice == nullptr)
+        goto physicalDeviceFailed;
+
     findQueueFamily(vk.physicalDevice, &vk.queueFamily,
         VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
+    if (vk.queueFamily == (u32)-1)
+        goto queueFamilyFailed;
 
     vk.device = createDevice();
+    if (vk.device == nullptr)
+        goto deviceFailed;
+
     loadVulkanDeviceFuncs(vk.device);
+
     vkGetDeviceQueue(vk.device, vk.queueFamily, 0, &vk.queue);
+    if (vk.queue == nullptr)
+        goto queueFailed;
 
-    {
-        VmaAllocatorCreateInfo allocatorInfo{};
-        allocatorInfo.physicalDevice = vk.physicalDevice;
-        allocatorInfo.device = vk.device;
-        allocatorInfo.instance = vk.instance;
-        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
-
-        VkResult result = vmaCreateAllocator(&allocatorInfo, &vk.vma);
-        if (vk.vma == nullptr)
-            hgPanic("Could not create Vulkan memory allocator: %s\n", vkResultToStr(result));
-    }
+    vk.vma = createVma();
+    if (vk.vma == nullptr)
+        goto vmaFailed;
 
     {
         VkCommandPoolCreateInfo cmdPoolInfo{};
@@ -1203,6 +1247,25 @@ void hgGpuInit()
     {
         vk.frames[i] = createFrame();
     }
+
+    return true;
+
+vmaFailed:
+queueFailed:
+    vkDestroyDevice(vk.device, nullptr);
+deviceFailed:
+queueFamilyFailed:
+physicalDeviceFailed:
+#ifdef HG_VK_DEBUG_MESSENGER
+    vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
+debugMessengerFailed:
+#endif
+loadInstanceFailed:
+    vkDestroyInstance(vk.instance, nullptr);
+instanceFailed:
+    unloadVulkan();
+loadFailed:
+    return false;
 }
 
 void hgGpuDeinit()
@@ -3273,15 +3336,20 @@ HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowCo
 
     window->sdlWindow = SDL_CreateWindow(hgCString(scratch, title), (int)width, (int)height, flags);
     if (window->sdlWindow == nullptr)
-        hgPanic("Failed to create SDL window: %s\n", SDL_GetError());
-
-    SDL_WindowID windowID = SDL_GetWindowID(window->sdlWindow);
-    hgMapAdd(&windowState.ids, windowID, window);
-
-    SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
+    {
+        hgErrorSet(SDL_GetError());
+        goto windowFailed;
+    }
 
     if (!SDL_Vulkan_CreateSurface(window->sdlWindow, vk.instance, nullptr, &window->surface))
-        hgPanic("Failed to create Vulkan surface: %s\n", SDL_GetError());
+    {
+        hgErrorSet(SDL_GetError());
+        goto surfaceFailed;
+    }
+
+    hgMapAdd(&windowState.ids, SDL_GetWindowID(window->sdlWindow), window);
+
+    SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
 
     window->format = findSwapchainFormat(window->surface);
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
@@ -3298,6 +3366,12 @@ HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowCo
     window->events = hgArrayCreate<HgWindowEvent>();
 
     return window;
+
+surfaceFailed:
+    SDL_DestroyWindow(window->sdlWindow);
+windowFailed:
+    hgPoolFree(&windowState.pool, window);
+    return nullptr;
 }
 
 void hgWindowDestroy(HgWindow* window)
@@ -3322,8 +3396,7 @@ void hgWindowDestroy(HgWindow* window)
     hgArrayDestroy(&window->views);
     hgArrayDestroy(&window->images);
 
-    SDL_WindowID windowID = SDL_GetWindowID(window->sdlWindow);
-    hgMapRemove(&windowState.ids, windowID);
+    hgMapRemove(&windowState.ids, SDL_GetWindowID(window->sdlWindow));
 
     vkDestroySurfaceKHR(vk.instance, window->surface, nullptr);
     SDL_DestroyWindow(window->sdlWindow);
@@ -3762,13 +3835,19 @@ struct AudioState {
 
 static AudioState audio{};
 
-void hgAudioInit()
+bool hgAudioInit()
 {
     audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
-        hgPanic("SDL could not open audio device: %s\n", SDL_GetError());
+    {
+        hgErrorSet("SDL could not open audio device: ");
+        hgErrorAppend(SDL_GetError());
+        return false;
+    }
 
     audio.streams = hgArrayCreate<SDL_AudioStream*>();
+
+    return true;
 }
 
 void hgAudioDeinit()
@@ -3794,10 +3873,17 @@ HgAudioStream* hgAudioStreamCreate(u32 frequency, u32 channels)
     {
         stream = SDL_CreateAudioStream(&audioSpec, nullptr);
         if (stream == nullptr)
-            hgPanic("SDL could not create audio stream: %s\n", SDL_GetError());
+        {
+            hgErrorSet(SDL_GetError());
+            return nullptr;
+        }
 
         if (!SDL_BindAudioStream(audio.device, stream))
-            hgPanic("SDL could not bind audio stream: %s\n", SDL_GetError());
+        {
+            hgErrorSet(SDL_GetError());
+            SDL_DestroyAudioStream(stream);
+            return nullptr;
+        }
     }
     else
     {
@@ -3815,7 +3901,6 @@ void hgAudioStreamDestroy(HgAudioStream* stream)
     {
         SDL_AudioStream* sdlStream = (SDL_AudioStream*)stream;
 
-        // SDL_UnbindAudioStream(sdlStream);
         if (!SDL_ClearAudioStream(sdlStream))
             hgPanic("SDL could not clear audio stream: %s\n", SDL_GetError());
 
@@ -4059,27 +4144,37 @@ static HgLibrary* libvulkan = nullptr;
 
 #define HG_LOAD_VULKAN_FUNC(name) \
     vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
-    if (vulkanFuncs. name == nullptr) { hgPanic("Could not load " #name "\n"); }
+    if (vulkanFuncs. name == nullptr) { \
+        hgErrorSet("Could not load " #name); \
+        return false; \
+    }
 
-static void loadVulkan()
+static bool loadVulkan()
 {
-    if (libvulkan == nullptr)
-        libvulkan = hgLibraryLoad(
+    libvulkan = hgLibraryLoad(
 #if defined(HG_PLATFORM_LINUX)
-            "libvulkan.so.1"
+        "libvulkan.so.1"
 #elif defined(HG_PLATFORM_WINDOWS)
-            "vulkan-1.dll"
+        "vulkan-1.dll"
 #endif
-        );
+    );
 
     if (libvulkan == nullptr)
-        hgPanic("Could not load vulkan\n");
+    {
+        hgErrorSet("Could not load vulkan");
+        return false;
+    }
 
     *(void**)&vulkanFuncs.vkGetInstanceProcAddr = hgLibraryFindFunction(libvulkan, "vkGetInstanceProcAddr");
     if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
-        hgPanic("Could not load vkGetInstanceProcAddr\n");
+    {
+        hgErrorSet("Could not load vkGetInstanceProcAddr\n");
+        return false;
+    }
 
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
+
+    return true;
 }
 
 #undef HG_LOAD_VULKAN_FUNC
@@ -4095,9 +4190,12 @@ static void unloadVulkan()
 
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
     vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(instance, #name); \
-    if (vulkanFuncs. name == nullptr) { hgPanic("Could not load " #name "\n"); }
+    if (vulkanFuncs. name == nullptr) { \
+        hgErrorSet("Could not load " #name); \
+        return false; \
+    }
 
-static void loadVulkanInstanceFuncs(VkInstance instance)
+static bool loadVulkanInstanceFuncs(VkInstance instance)
 {
     hgAssert(instance != nullptr);
 
@@ -4120,15 +4218,20 @@ static void loadVulkanInstanceFuncs(VkInstance instance)
 
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroySurfaceKHR)
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkCreateDevice)
+
+    return true;
 }
 
 #undef HG_LOAD_VULKAN_INSTANCE_FUNC
 
 #define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
     vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetDeviceProcAddr(device, #name); \
-    if (vulkanFuncs. name == nullptr) { hgPanic("Could not load " #name "\n"); }
+    if (vulkanFuncs. name == nullptr) { \
+        hgErrorSet("Could not load " #name); \
+        return false; \
+    }
 
-static void loadVulkanDeviceFuncs(VkDevice device)
+static bool loadVulkanDeviceFuncs(VkDevice device)
 {
     hgAssert(device != nullptr);
 
@@ -4233,6 +4336,8 @@ static void loadVulkanDeviceFuncs(VkDevice device)
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDraw);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDrawIndexed);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDispatch);
+
+    return true;
 }
 
 #undef HG_LOAD_VULKAN_DEVICE_FUNC
@@ -5538,7 +5643,12 @@ HgLibrary* hgLibraryLoad(HgString path)
 
     HgLibrary* lib = (HgLibrary*)dlopen(cstr, RTLD_LAZY);
     if (lib == nullptr)
-        hgWarn("Could not load dynamic library \"%s\": %s\n", cstr, dlerror());
+    {
+        hgErrorSet("Could not load dynamic library \"");
+        hgErrorAppend(path);
+        hgErrorAppend("\": ");
+        hgErrorAppend(dlerror());
+    }
 
     return lib;
 }
@@ -5554,8 +5664,13 @@ void* hgLibraryFindFunction(HgLibrary* lib, HgString symbol)
     char* cstr = hgCString(hgScratch(), symbol);
 
     void* fn = dlsym(lib, cstr);
-    if (lib == nullptr)
-        hgWarn("Could not load function symbol \"%s\": %s\n", cstr, dlerror());
+    if (fn == nullptr)
+    {
+        hgErrorSet("Could not load function symbol \"");
+        hgErrorAppend(symbol);
+        hgErrorAppend("\": ");
+        hgErrorAppend(dlerror());
+    }
 
     return fn;
 }
@@ -5571,7 +5686,11 @@ HgLibrary* hgLibraryLoad(HgStringView path)
 
     HgLibrary* lib = (HgLibrary*)LoadLibraryA(cstr);
     if (lib == nullptr)
-        hgWarn("Could not load dynamic library \"%s\"\n", cstr);
+    {
+        hgErrorSet("Could not load dynamic library \"");
+        hgErrorAppend(path);
+        hgErrorAppend("\"");
+    }
 
     return lib;
 }
@@ -5587,8 +5706,12 @@ void* hgLibraryFindFunction(HgLibrary* lib, HgStringView symbol)
     char* cstr = hgCString(hgScratch(), symbol);
 
     void* fn = GetProcAddress((HMODULE)lib, cstr);
-    if (lib == nullptr)
-        hgWarn("Could not load function symbol \"%s\"\n", cstr);
+    if (fn == nullptr)
+    {
+        hgErrorSet("Could not load function symbol \"");
+        hgErrorAppend(symbol);
+        hgErrorAppend("\"");
+    }
 
     return fn;
 }

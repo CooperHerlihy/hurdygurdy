@@ -33,8 +33,11 @@
 
 /**
  * Initialize the audio subsystem
+ *
+ * Returns
+ * - Whether init succeeded
  */
-void hgAudioInit();
+bool hgAudioInit();
 
 /**
  * Deinitialize the audio subsystem
@@ -52,6 +55,9 @@ struct HgAudioStream;
  * Parameters
  * - frequency The segments per second to play
  * - channels The number of channels (mono, stereo, etc.)
+ *
+ * Returns
+ * - The created audio stream, or nullptr on failure
  */
 HgAudioStream* hgAudioStreamCreate(u32 frequency, u32 channels);
 

@@ -17,102 +17,11 @@ struct HgMutex {
 
 static HgPool mutices{};
 
-HgMutex* hgMutexCreate()
-{
-    return new (hgPoolAlloc(&mutices)) HgMutex{false};
-}
-
-void hgMutexDestroy(HgMutex* mtx)
-{
-    hgPoolFree(&mutices, mtx);
-}
-
-void hgMutexAcquire(HgMutex* mtx)
-{
-    hgAssert(mtx != nullptr);
-
-    bool acquired = false;
-    while (!mtx->acquired.compare_exchange_weak(acquired, true))
-    {
-        _mm_pause();
-        acquired = false;
-    }
-}
-
-bool hgMutexTryAcquire(HgMutex* mtx)
-{
-    hgAssert(mtx != nullptr);
-
-    bool acquired = false;
-    return mtx->acquired.compare_exchange_weak(acquired, true);
-}
-
-void hgMutexRelease(HgMutex* mtx)
-{
-    hgAssert(mtx != nullptr);
-    hgAssert(mtx->acquired);
-
-    mtx->acquired.store(false);
-}
-
 struct HgFence {
     std::atomic<u32> counter;
 };
 
 static HgPool fences{};
-
-HgFence* hgFenceCreate()
-{
-    return new (hgPoolAlloc(&fences)) HgFence{0};
-}
-
-void hgFenceDestroy(HgFence* fence)
-{
-    hgAssert(fence != nullptr);
-    if (fence != nullptr)
-        hgPoolFree(&fences, fence);
-}
-
-void hgFenceAttach(HgFence* fence, u32 count)
-{
-    hgAssert(fence != nullptr);
-    fence->counter.fetch_add(count);
-}
-
-void hgFenceSignal(HgFence* fence, u32 count)
-{
-    hgAssert(fence != nullptr);
-    fence->counter.fetch_sub(count);
-}
-
-bool hgFenceIsComplete(HgFence* fence)
-{
-    hgAssert(fence != nullptr);
-    return fence->counter.load() == 0;
-}
-
-bool hgFenceWait(HgFence* fence, f64 timeoutSeconds)
-{
-    hgAssert(fence != nullptr);
-
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
-    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
-    {
-        _mm_pause();
-    }
-
-    return hgFenceIsComplete(fence);
-}
-
-void hgFenceWaitIndefinite(HgFence* fence)
-{
-    hgAssert(fence != nullptr);
-
-    while (!hgFenceIsComplete(fence))
-    {
-        _mm_pause();
-    }
-}
 
 struct ThreadWork {
     HgFence* fence;
@@ -168,6 +77,185 @@ static bool poolExecute()
     if (work.fence != nullptr)
         hgFenceSignal(work.fence, 1);
     return true;
+}
+
+static void poolInit()
+{
+    threadPool.shouldClose.store(false);
+    threadPool.threadCount = hgMax((u32)1, std::thread::hardware_concurrency() - 1);
+    threadPool.threads = hgGpaAlloc<std::thread>(threadPool.threadCount);
+
+    threadPool.workCapacity = 4096;
+    threadPool.work = hgGpaAlloc<ThreadWork>(threadPool.workCapacity);
+    threadPool.hasWork = hgGpaAlloc<std::atomic_bool>(threadPool.workCapacity);
+
+    threadPool.workCount.store(0);
+    threadPool.tail.store(0);
+    threadPool.workingTail.store(0);
+    threadPool.head.store(0);
+    threadPool.workingHead.store(0);
+
+    for (u32 i = 0; i < threadPool.workCapacity; ++i)
+    {
+        threadPool.hasWork[i].store(false);
+    }
+
+    for (u32 i = 0; i < threadPool.threadCount; ++i)
+    {
+        new (threadPool.threads + i) std::thread([] {
+            hgScratchInit(2, 1 << 16);
+            hgDefer(hgScratchDeinit());
+
+            for (;;)
+            {
+                std::unique_lock<std::mutex> lock{threadPool.mtx};
+                while (threadPool.workCount.load() == 0 && !threadPool.shouldClose.load())
+                {
+                    threadPool.cv.wait(lock);
+                }
+                lock.unlock();
+                if (threadPool.shouldClose.load())
+                    return;
+
+                static constexpr u32 spinCount = 128;
+                for (u32 j = 0; j < spinCount; ++j)
+                {
+                    if (!poolExecute())
+                        _mm_pause();
+                }
+            }
+        });
+    }
+}
+
+void hgConcurrencyInit()
+{
+    mutices = hgPoolCreate<HgMutex>();
+    fences = hgPoolCreate<HgFence>();
+
+    poolInit();
+}
+
+static void poolDeinit()
+{
+    threadPool.mtx.lock();
+    threadPool.shouldClose = true;
+    threadPool.mtx.unlock();
+    threadPool.cv.notify_all();
+
+    for (u32 i = 0; i < threadPool.threadCount; ++i)
+    {
+        threadPool.threads[i].join();
+    }
+    for (u32 i = 0; i < threadPool.threadCount; ++i)
+    {
+        threadPool.threads[i].~thread();
+    }
+    threadPool.cv.~condition_variable();
+    threadPool.mtx.~mutex();
+
+    hgGpaFree(threadPool.hasWork, threadPool.workCapacity);
+    hgGpaFree(threadPool.work, threadPool.workCapacity);
+    hgGpaFree(threadPool.threads, threadPool.threadCount);
+}
+
+void hgConcurrencyDeinit()
+{
+    poolDeinit();
+
+    hgPoolDestroy(&fences);
+    hgPoolDestroy(&mutices);
+}
+
+HgMutex* hgMutexCreate()
+{
+    return new (hgPoolAlloc(&mutices)) HgMutex{false};
+}
+
+void hgMutexDestroy(HgMutex* mtx)
+{
+    hgPoolFree(&mutices, mtx);
+}
+
+void hgMutexAcquire(HgMutex* mtx)
+{
+    hgAssert(mtx != nullptr);
+
+    bool acquired = false;
+    while (!mtx->acquired.compare_exchange_weak(acquired, true))
+    {
+        _mm_pause();
+        acquired = false;
+    }
+}
+
+bool hgMutexTryAcquire(HgMutex* mtx)
+{
+    hgAssert(mtx != nullptr);
+
+    bool acquired = false;
+    return mtx->acquired.compare_exchange_weak(acquired, true);
+}
+
+void hgMutexRelease(HgMutex* mtx)
+{
+    hgAssert(mtx != nullptr);
+    hgAssert(mtx->acquired);
+
+    mtx->acquired.store(false);
+}
+
+HgFence* hgFenceCreate()
+{
+    return new (hgPoolAlloc(&fences)) HgFence{0};
+}
+
+void hgFenceDestroy(HgFence* fence)
+{
+    hgAssert(fence != nullptr);
+    if (fence != nullptr)
+        hgPoolFree(&fences, fence);
+}
+
+void hgFenceAttach(HgFence* fence, u32 count)
+{
+    hgAssert(fence != nullptr);
+    fence->counter.fetch_add(count);
+}
+
+void hgFenceSignal(HgFence* fence, u32 count)
+{
+    hgAssert(fence != nullptr);
+    fence->counter.fetch_sub(count);
+}
+
+bool hgFenceIsComplete(HgFence* fence)
+{
+    hgAssert(fence != nullptr);
+    return fence->counter.load() == 0;
+}
+
+bool hgFenceWait(HgFence* fence, f64 timeoutSeconds)
+{
+    hgAssert(fence != nullptr);
+
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
+    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
+    {
+        _mm_pause();
+    }
+
+    return hgFenceIsComplete(fence);
+}
+
+void hgFenceWaitIndefinite(HgFence* fence)
+{
+    hgAssert(fence != nullptr);
+
+    while (!hgFenceIsComplete(fence))
+    {
+        _mm_pause();
+    }
 }
 
 void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data))
@@ -247,84 +335,6 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
         });
     }
     hgThreadsHelp(fence, INFINITY);
-}
-
-void hgConcurrencyInit()
-{
-    mutices = hgPoolCreate<HgMutex>();
-    fences = hgPoolCreate<HgFence>();
-
-    threadPool.shouldClose.store(false);
-    threadPool.threadCount = hgMax((u32)1, std::thread::hardware_concurrency() - 1);
-    threadPool.threads = hgGpaAlloc<std::thread>(threadPool.threadCount);
-
-    threadPool.workCapacity = 4096;
-    threadPool.work = hgGpaAlloc<ThreadWork>(threadPool.workCapacity);
-    threadPool.hasWork = hgGpaAlloc<std::atomic_bool>(threadPool.workCapacity);
-
-    threadPool.workCount.store(0);
-    threadPool.tail.store(0);
-    threadPool.workingTail.store(0);
-    threadPool.head.store(0);
-    threadPool.workingHead.store(0);
-
-    for (u32 i = 0; i < threadPool.workCapacity; ++i)
-    {
-        threadPool.hasWork[i].store(false);
-    }
-
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        new (threadPool.threads + i) std::thread([] {
-            hgScratchInit(2, 1 << 16);
-            hgDefer(hgScratchDeinit());
-
-            for (;;)
-            {
-                std::unique_lock<std::mutex> lock{threadPool.mtx};
-                while (threadPool.workCount.load() == 0 && !threadPool.shouldClose.load())
-                {
-                    threadPool.cv.wait(lock);
-                }
-                lock.unlock();
-                if (threadPool.shouldClose.load())
-                    return;
-
-                static constexpr u32 spinCount = 128;
-                for (u32 j = 0; j < spinCount; ++j)
-                {
-                    if (!poolExecute())
-                        _mm_pause();
-                }
-            }
-        });
-    }
-}
-
-void hgConcurrencyDeinit()
-{
-    threadPool.mtx.lock();
-    threadPool.shouldClose = true;
-    threadPool.mtx.unlock();
-    threadPool.cv.notify_all();
-
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        threadPool.threads[i].join();
-    }
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        threadPool.threads[i].~thread();
-    }
-    threadPool.cv.~condition_variable();
-    threadPool.mtx.~mutex();
-
-    hgGpaFree(threadPool.hasWork, threadPool.workCapacity);
-    hgGpaFree(threadPool.work, threadPool.workCapacity);
-    hgGpaFree(threadPool.threads, threadPool.threadCount);
-
-    hgPoolDestroy(&fences);
-    hgPoolDestroy(&mutices);
 }
 
 f64 hgClockTick(HgClock* clock)

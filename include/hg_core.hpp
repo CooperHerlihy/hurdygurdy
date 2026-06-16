@@ -96,6 +96,83 @@
 
 #endif
 
+/**
+ * An 8 bit, 1 byte unsigned integer
+ */
+typedef uint8_t u8;
+/**
+ * A 16 bit, 2 byte unsigned integer
+ */
+typedef uint16_t u16;
+/**
+ * A 32 bit, 4 byte unsigned integer
+ */
+typedef uint32_t u32;
+/**
+ * A 64 bit, 8 byte unsigned integer
+ */
+typedef uint64_t u64;
+
+/**
+ * An 8 bit, 1 byte signed integer
+ */
+typedef int8_t i8;
+/**
+ * A 16 bit, 2 byte signed integer
+ */
+typedef int16_t i16;
+/**
+ * A 32 bit, 4 byte signed integer
+ */
+typedef int32_t i32;
+/**
+ * A 64 bit, 8 byte signed integer
+ */
+typedef int64_t i64;
+
+/**
+ * An unsigned integer representing a pointer
+ */
+typedef uintptr_t uptr;
+/**
+ * A signed integer representing a pointer
+ */
+typedef intptr_t iptr;
+
+/**
+ * A 32 bit, 4 byte floating point value
+ */
+typedef float_t f32;
+/**
+ * A 64 bit, 8 byte floating point value
+ */
+typedef double_t f64;
+
+/**
+ * A block of binary data
+ */
+struct HgBinary;
+
+/**
+ * A view into a string
+ */
+struct HgString;
+
+/**
+ * Get this thread's most recent error message
+ */
+HgString hgErrorGet();
+
+/**
+ * Set this thread's current error message
+ */
+void hgErrorSet(HgString error);
+
+/**
+ * Append to this thread's current error message
+ */
+void hgErrorAppend(HgString error);
+
 #define hgMacroConcatInternal(x, y) x##y
 
 /**
@@ -159,7 +236,11 @@ struct HgDefer {
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hgPanic(...) do { (void)fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); abort(); } while(0)
+#define hgPanic(...) do { \
+    (void)fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); \
+    (void)fprintf(stderr, "\tLast error: \"%.*s\"\n", (int)hgErrorGet().length, hgErrorGet().chars); \
+    abort(); \
+} while(0)
 
 #else
 
@@ -187,9 +268,7 @@ struct HgDefer {
  */
 #define hgAssert(cond) do { \
     if (!(cond)) \
-    { \
-        hgPanic("Assertion failed in " __FILE__ ":%d %s() " #cond "\n", __LINE__, __func__); \
-    } \
+        hgPanic("Assertion failed in " __FILE__ ":%d %s() \"" #cond "\"\n", __LINE__, __func__); \
 } while(0)
 
 #else
@@ -200,58 +279,6 @@ struct HgDefer {
 #define hgAssert(cond) do {} while(0)
 
 #endif
-
-/**
- * An 8 bit, 1 byte unsigned integer
- */
-typedef uint8_t u8;
-/**
- * A 16 bit, 2 byte unsigned integer
- */
-typedef uint16_t u16;
-/**
- * A 32 bit, 4 byte unsigned integer
- */
-typedef uint32_t u32;
-/**
- * A 64 bit, 8 byte unsigned integer
- */
-typedef uint64_t u64;
-
-/**
- * An 8 bit, 1 byte signed integer
- */
-typedef int8_t i8;
-/**
- * A 16 bit, 2 byte signed integer
- */
-typedef int16_t i16;
-/**
- * A 32 bit, 4 byte signed integer
- */
-typedef int32_t i32;
-/**
- * A 64 bit, 8 byte signed integer
- */
-typedef int64_t i64;
-
-/**
- * An unsigned integer representing a pointer
- */
-typedef uintptr_t uptr;
-/**
- * A signed integer representing a pointer
- */
-typedef intptr_t iptr;
-
-/**
- * A 32 bit, 4 byte floating point value
- */
-typedef float_t f32;
-/**
- * A 64 bit, 8 byte floating point value
- */
-typedef double_t f64;
 
 /**
  * A block of binary data
@@ -329,16 +356,6 @@ struct HgString {
 };
 
 /**
- * Get this thread's most recent error message
- */
-HgString hgErrorGet();
-
-/**
- * Set this thread's current error message
- */
-void hgErrorGet(HgString error);
-
-/**
  * The Hurdy Gurdy subsystems
  */
 enum HgSubsystem : u32 {
@@ -357,8 +374,11 @@ typedef u32 HgSubsystemFlags;
  *
  * Parameters
  * - init Which subsystems to initialize, all are recommended
+ *
+ * Returns
+ * - Whether initialization succeeded
  */
-void hgInit(HgSubsystemFlags init = HgSubsystem_all);
+bool hgInit(HgSubsystemFlags init = HgSubsystem_all);
 
 /**
  * Shut down the Hurdy Gurdy library

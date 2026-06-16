@@ -33,8 +33,11 @@
 
 /**
  * Initialize the platform
+ *
+ * Returns
+ * - Whether init succeeded
  */
-void hgPlatformInit();
+bool hgPlatformInit();
 
 /**
  * Deinitialize the platform

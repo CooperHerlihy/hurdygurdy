@@ -36,6 +36,9 @@ struct HgLibrary;
 
 /**
  * Load a dynamic library
+ *
+ * Returns
+ * - The loaded library, or nullptr on failure
  */
 HgLibrary* hgLibraryLoad(HgString path);
 

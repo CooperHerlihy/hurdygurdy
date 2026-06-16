@@ -83,6 +83,9 @@ struct HgWindow;
  * Create a new window
  *
  * Note, width and height are ignored if fullscreen is enabled
+ *
+ * Returns
+ * - The created window, or nullptr on failure
  */
 HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowConfig* config);
 
@@ -108,12 +111,12 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount);
 void hgGpuFrameEnd(HgGpuCmd* cmd);
 
 /**
- * Returns the window's current image, or nullptr if it could not be acquired
+ * Returns the window's current image, or nullptr if unavailable this frame
  */
 HgGpuView* hgWindowImageView(HgWindow* window);
 
 /**
- * Get the window's width in pixels
+ * Returns the window's width in pixels
  */
 HgFormat hgWindowImageFormat(HgWindow* window);
 

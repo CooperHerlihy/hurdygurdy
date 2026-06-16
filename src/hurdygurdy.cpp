@@ -29,15 +29,23 @@ HgString hgErrorGet()
     return {errorMessageData, errorMessageLength};
 }
 
-void hgErrorGet(HgString error)
+void hgErrorSet(HgString error)
 {
-    errorMessageLength = hgMin(error.length, sizeof(errorMessageData));
-    hgMemCopy(errorMessageData, error.chars, errorMessageLength);
+    u64 newLength = hgMin(error.length, sizeof(errorMessageData));
+    hgMemCopy(errorMessageData, error.chars, newLength);
+    errorMessageLength = newLength;
+}
+
+void hgErrorAppend(HgString error)
+{
+    u64 newLength = hgMin(errorMessageLength + error.length, sizeof(errorMessageData));
+    hgMemCopy(errorMessageData + errorMessageLength, error.chars, newLength - errorMessageLength);
+    errorMessageLength = newLength;
 }
 
 static HgSubsystemFlags initialized = 0;
 
-void hgInit(HgSubsystemFlags init)
+bool hgInit(HgSubsystemFlags init)
 {
     if (init & HgSubsystem_memory)
     {
@@ -55,13 +63,15 @@ void hgInit(HgSubsystemFlags init)
         init & HgSubsystem_windowing ||
         init & HgSubsystem_audio)
     {
-        hgPlatformInit();
+        if (!hgPlatformInit())
+            goto platformFailed;
     }
 
     if (init & HgSubsystem_gpu ||
         init & HgSubsystem_windowing)
     {
-        hgGpuInit();
+        if (!hgGpuInit())
+            goto gpuFailed;
         initialized |= HgSubsystem_gpu;
     }
 
@@ -79,9 +89,32 @@ void hgInit(HgSubsystemFlags init)
 
     if (init & HgSubsystem_audio)
     {
-        hgAudioInit();
+        if (!hgAudioInit())
+            goto audioFailed;
         initialized |= HgSubsystem_assets;
     }
+
+    return true;
+
+audioFailed:
+    if (initialized & HgSubsystem_windowing)
+        hgWindowsDeinit();
+    if (initialized & HgSubsystem_assets)
+        hgAssetDeinitDefaults();
+    if (initialized & HgSubsystem_gpu)
+        hgGpuDeinit();
+gpuFailed:
+    if (initialized & HgSubsystem_gpu ||
+        initialized & HgSubsystem_windowing ||
+        initialized & HgSubsystem_audio)
+        hgPlatformDeinit();
+platformFailed:
+    if (initialized & HgSubsystem_concurrency)
+        hgConcurrencyDeinit();
+    if (initialized & HgSubsystem_memory)
+        hgScratchDeinit();
+    initialized = 0;
+    return false;
 }
 
 void hgDeinit()
@@ -146,14 +179,20 @@ bool hgMemEqual(const void* dst, const void* src, u64 size)
 void* hgGpaAlloc(u64 size, u64 alignment)
 {
     (void)alignment;
-    return malloc(size);
+    void* alloc = malloc(size);
+    if (alloc == nullptr)
+        hgPanic("malloc out of memory");
+    return alloc;
 }
 
 void* hgGpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 {
     (void)oldSize;
     (void)alignment;
-    return realloc(allocation, newSize);
+    void* alloc = realloc(allocation, newSize);
+    if (alloc == nullptr)
+        hgPanic("malloc out of memory");
+    return alloc;
 }
 
 template<>
@@ -169,7 +208,10 @@ void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment)
 
     u64 newHead = hgAlign((u64)arena->head, alignment) + size;
     if (arena->head > arena->capacity)
+    {
+        hgErrorSet("Arena out of memory");
         return nullptr;
+    }
 
     arena->head = newHead;
     return (void*)((uptr)arena->memory + arena->head - size);
@@ -185,7 +227,10 @@ void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize,
         {
             u64 newHead = (uptr)allocation + newSize - (uptr)arena->memory;
             if (arena->head > arena->capacity)
+            {
+                hgErrorSet("Arena out of memory");
                 return nullptr;
+            }
 
             arena->head = newHead;
             return allocation;
@@ -206,13 +251,10 @@ static thread_local u32 arenaCount = 0;
 
 void hgScratchInit(u32 count, u64 size)
 {
-    if (arenas != nullptr)
-        return;
-
     size = hgAlign(size, 16);
     hgAssert(size < UINT64_MAX / count);
 
-    void* block = malloc(count * size);
+    void* block = hgGpaAlloc(count * size, 16);
     HgArena base = {block, size, 0};
     arenas = hgArenaAlloc<HgArena>(&base, count);
     arenaCount = count;
@@ -228,7 +270,7 @@ void hgScratchDeinit()
 {
     if (arenas != nullptr)
     {
-        free(arenas);
+        hgGpaFree(arenas[0].memory, arenas[0].capacity * arenaCount);
     }
 }
 
@@ -1924,26 +1966,29 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
     FILE* fileHandle = fopen(cpath, "rb");
     if (fileHandle == nullptr)
     {
-    hgWarn("Could not find file to read binary: %s\n", cpath);
-    return;
+        hgErrorSet("Could not find file to read binary: ");
+        hgErrorAppend(data->path);
+        return;
     }
     hgDefer(fclose(fileHandle));
 
     if (fseek(fileHandle, 0, SEEK_END) != 0)
     {
-        hgWarn("Failed to read binary from file: %s\n", cpath);
+        hgErrorSet("Failed to read binary from file: ");
+        hgErrorAppend(data->path);
         return;
     }
 
     data->data.size = (u32)ftell(fileHandle);
-    data->data.data = malloc(data->data.size);
+    data->data.data = hgGpaAlloc(data->data.size, 1);
 
     rewind(fileHandle);
     if (fread((void*)data->data.data, 1, data->data.size, fileHandle) != data->data.size)
     {
-        free((void*)data->data.data);
+        hgGpaFree((void*)data->data.data, data->data.size);
+        hgErrorSet("Failed to read binary from file: ");
+        hgErrorAppend(data->path);
         data->data = {};
-        hgWarn("Failed to read binary from file: %s\n", cpath);
         return;
     }
 }
@@ -1951,43 +1996,33 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
 template<>
 void hgAssetUnloadImpl(HgAsset<HgBinary>* data)
 {
-    free((void*)data->data.data);
+    hgGpaFree((void*)data->data.data, data->data.size);
 }
 
-void hgBinaryStore(HgBinary* bin, HgString path, HgFence* fence)
+bool hgBinaryStore(HgBinary bin, HgString path)
 {
-    struct Capture {
-        HgBinary bin;
-        HgString path;
-    };
-    Capture* c = hgGpaAlloc<Capture>(1);
-    c->bin = *bin;
-    c->path = hgStringCreate(path);
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
 
-    hgThreadsCall(fence, c, [](void* pc)
+    char* cpath = hgCString(scratch, path);
+
+    FILE* fileHandle = fopen(cpath, "wb");
+    if (fileHandle == nullptr)
     {
-        Capture* c = (Capture*)pc;
-        hgDefer(hgGpaFree(c, 1));
-        hgDefer(hgStringDestroy(&c->path));
+        hgErrorSet("Failed to create file to write binary: ");
+        hgErrorAppend(path);
+        return false;
+    }
+    hgDefer(fclose(fileHandle));
 
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
+    if (fwrite(bin.data, 1, bin.size, fileHandle) != bin.size)
+    {
+        hgErrorSet("Failed to write binary data to file: ");
+        hgErrorAppend(path);
+        return false;
+    }
 
-        char* cpath = hgCString(scratch, c->path);
-
-        FILE* fileHandle = fopen(cpath, "wb");
-        if (fileHandle == nullptr)
-        {
-            hgWarn("Failed to create file to write binary: %s\n", cpath);
-            return;
-        }
-        hgDefer(fclose(fileHandle));
-
-        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
-        {
-            hgWarn("Failed to write binary data to file: %s\n", cpath);
-        }
-    });
+    return true;
 }
 
 template<>
@@ -2004,6 +2039,8 @@ void hgAssetLoadImpl(HgAsset<HgJson>* data)
     HgJson parse = hgParseJson(scratch, jsonStr);
 
     HgJsonError* e = parse.errors;
+    if (e != nullptr)
+        hgErrorSet("Json parse errors");
     while (e != nullptr)
     {
         hgWarn("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
@@ -3095,7 +3132,8 @@ void hgAssetLoadImpl(HgAsset<HgTextureData>* data)
     data->data.pixels = stbi_load(cpath, &x, &y, &channels, 4);
     if (data->data.pixels == nullptr)
     {
-        hgWarn("Could not load image: %s\n", cpath);
+        hgErrorSet("Could not load image: ");
+        hgErrorAppend(data->path);
         return;
     }
     data->data.width = (u32)x;
@@ -3110,35 +3148,24 @@ void hgAssetUnloadImpl(HgAsset<HgTextureData>* data)
     free(data->data.pixels);
 }
 
-void hgTextureStorePng(HgTextureData* texture, HgString path, HgFence* fence)
+bool hgTextureStorePng(HgTextureData* texture, HgString path)
 {
-    struct Capture {
-        HgTextureData tex;
-        HgString path;
-    };
-    Capture* c = (Capture*)malloc(sizeof(*c));
-    c->tex = *texture;
-    c->path = hgStringCreate(path);
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
 
-    hgThreadsCall(fence, c, [](void* pc)
+    if (!stbi_write_png(
+         hgCString(scratch, path),
+         (int)texture->width,
+         (int)texture->height,
+         4,
+         texture->pixels,
+         (int)(texture->width * sizeof(u32))))
     {
-        Capture* c = (Capture*)pc;
-        hgDefer(free(c));
-        hgDefer(hgStringDestroy(&c->path));
-
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
-
-        char* cpath = hgCString(scratch, c->path);
-
-        stbi_write_png(
-            cpath,
-            (int)c->tex.width,
-            (int)c->tex.height,
-            4,
-            c->tex.pixels,
-            (int)(c->tex.width * sizeof(u32)));
-    });
+        hgErrorSet("Could not store image: ");
+        hgErrorAppend(path);
+        return false;
+    }
+    return true;
 }
 
 template<>
@@ -3146,11 +3173,8 @@ void hgAssetLoadImpl(HgAsset<HgTexture>* data)
 {
     HgTextureDataAsset* tex = hgAssetLoad<HgTextureData>(data->path);
     hgDefer(hgAssetUnload(tex));
-
     if (tex->data.pixels == nullptr)
-    {
-        hgWarn("Could not load image: %.*s\n", (int)data->path.length, data->path.chars);
-    }
+        return;
 
     HgGpuImageCreateEx imageInfo{};
     imageInfo.format = tex->data.format;
@@ -3182,8 +3206,8 @@ void hgAssetLoadImpl(HgAsset<HgMeshData>* data)
 template<>
 void hgAssetUnloadImpl(HgAsset<HgMeshData>* data)
 {
-    free(data->data.indices);
-    free(data->data.vertices);
+    hgGpaFree(data->data.indices, data->data.indexCount);
+    hgGpaFree(data->data.vertices, data->data.vertexCount);
 }
 
 void hgMeshStoreGltf(HgMeshData* data, HgString path, HgFence* fence)
@@ -3201,10 +3225,7 @@ void hgAssetLoadImpl(HgAsset<HgMesh>* data)
     hgDefer(hgAssetUnload(mesh));
 
     if (mesh->data.vertices == nullptr || mesh->data.indices == nullptr)
-    {
-        hgWarn("Could not load model: %.*s\n", (int)data->path.length, data->path.chars);
         return;
-    }
 
     data->data.vertexCount = mesh->data.vertexCount;
     data->data.vertexWidth = mesh->data.vertexWidth;

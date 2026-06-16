@@ -9,7 +9,8 @@
 
 int main()
 {
-    hgInit();
+    if (!hgInit())
+        hgPanic("Could not initialize Hurdy Gurdy\n");
     hgDefer(hgDeinit());
 
     hgTest();
@@ -18,6 +19,8 @@ int main()
     hgArenaScope(arena);
 
     HgWindow* window = hgWindowCreate("Hg Noise Test", 1200, 800, nullptr);
+    if (window == nullptr)
+        hgPanic("Could not create window\n");
     hgDefer(hgWindowDestroy(window));
 
     u32 width = 0;

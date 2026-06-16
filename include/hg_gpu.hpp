@@ -31,8 +31,11 @@
 
 /**
  * Initializes the graphics subsystem, loading all global Vulkan resources
+ *
+ * Returns
+ * - Whether init succeeded
  */
-void hgGpuInit();
+bool hgGpuInit();
 
 /**
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources

@@ -2157,14 +2157,10 @@ void hgTest()
 
         u32 saveData[]{12, 42, 100, 128};
 
-        HgFence* fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
         {
             HgBinary bin{saveData, sizeof(saveData)};
 
-            hgBinaryStore(&bin, "dir/does/not/exist.bin", fence);
-            hgAssert(hgFenceWait(fence, 2.0));
+            hgBinaryStore(bin, "dir/does/not/exist.bin");
 
             FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
             hgAssert(fileHandle == nullptr);
@@ -2175,8 +2171,7 @@ void hgTest()
 
             HgString filePath = "hg_test_dir/file_bin_test.bin";
 
-            hgBinaryStore(&bin, filePath, fence);
-            hgAssert(hgFenceWait(fence, 2.0));
+            hgBinaryStore(bin, filePath);
 
             HgBinaryAsset* newBin = hgAssetLoad<HgBinary>(filePath);
 
@@ -2220,11 +2215,8 @@ void hgTest()
         testImage.format = HgFormat_r8g8b8a8_srgb;
         testImage.pixels = saveData;
 
-        HgFence* fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
         {
-            hgTextureStorePng(&testImage, path, fence);
-            hgAssert(hgFenceWait(fence, 2.0));
+            hgTextureStorePng(&testImage, path);
 
             HgTextureDataAsset* image = hgAssetLoad<HgTextureData>(path);
             hgDefer(hgAssetUnload(image));

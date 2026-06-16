@@ -214,8 +214,11 @@ void hgAssetUnloadImpl(HgAsset<HgTextureData>* data);
 
 /**
  * Store an image to disc in the png format
+ *
+ * Returns
+ * - Whether the write succeeded
  */
-void hgTextureStorePng(HgTextureData* texture, HgString path, HgFence* fence);
+bool hgTextureStorePng(HgTextureData* texture, HgString path);
 
 /**
  * A texture asset stored on the gpu
