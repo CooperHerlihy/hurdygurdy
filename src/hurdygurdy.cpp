@@ -2960,6 +2960,31 @@ HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
     };
 }
 
+bool hgIntersectPointRect2D(HgVec2 point, HgRect2D rect)
+{
+    return point.x >= rect.pos.x && point.x <= rect.pos.x + rect.size.x
+        && point.y >= rect.pos.y && point.y <= rect.pos.y + rect.size.y;
+}
+
+bool hgIntersectRect2D(HgRect2D a, HgRect2D b)
+{
+    return a.pos.x + a.size.x >= b.pos.x && a.pos.x <= b.pos.x + b.size.x
+        && a.pos.y + a.size.y >= b.pos.y && a.pos.y <= b.pos.y + b.size.y;
+}
+
+bool hgIntersectPointCircle2D(HgVec2 point, HgCircle2D circle)
+{
+    HgVec2 relPos = circle.pos - point;
+    return abs(hgVecDot2(relPos, relPos)) <= circle.radius * circle.radius;
+}
+
+bool hgIntersectCircle2D(HgCircle2D a, HgCircle2D b)
+{
+    HgVec2 relPos = a.pos - b.pos;
+    f32 dist = abs(a.radius) + abs(b.radius);
+    return abs(hgVecDot2(relPos, relPos)) <= dist * dist;
+}
+
 u32 hgNoise(u32 seed, u32 pos)
 {
     u32 ret = (pos + 384521713u) * 955740521u;

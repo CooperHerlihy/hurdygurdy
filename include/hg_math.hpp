@@ -1174,6 +1174,54 @@ HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32
 HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 /**
+ * A 2D rectangle
+ */
+struct HgRect2D {
+    /**
+     * The origin position
+     */
+    HgVec2 pos;
+    /**
+     * The extension in either direction
+     */
+    HgVec2 size;
+};
+
+/**
+ * Returns whether the point is inside the rect
+ */
+bool hgIntersectPointRect2D(HgVec2 point, HgRect2D rect);
+
+/**
+ * Returns whether the rects intersect
+ */
+bool hgIntersectRect2D(HgRect2D a, HgRect2D b);
+
+/**
+ * A 2D circle
+ */
+struct HgCircle2D {
+    /**
+     * The center position
+     */
+    HgVec2 pos;
+    /**
+     * The radius
+     */
+    f32 radius;
+};
+
+/**
+ * Returns whether the point is inside the circle
+ */
+bool hgIntersectPointCircle2D(HgVec2 point, HgCircle2D circle);
+
+/**
+ * Returns whether the circles intersect
+ */
+bool hgIntersectCircle2D(HgCircle2D a, HgCircle2D b);
+
+/**
  * Generate white noise
  */
 u32 hgNoise(u32 seed, u32 pos);

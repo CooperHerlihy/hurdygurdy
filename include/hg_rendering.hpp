@@ -401,20 +401,6 @@ void hgRenderLayer2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
 void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
 
 /**
- * A 2D rectangle
- */
-struct HgRect2D {
-    /**
-     * The upper left position
-     */
-    HgVec2 pos;
-    /**
-     * The extension in each dimension
-     */
-    HgVec2 size;
-};
-
-/**
  * Draw a rectangle on the layer
  */
 void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect2D dst);
