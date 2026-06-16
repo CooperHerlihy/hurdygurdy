@@ -1225,6 +1225,34 @@ HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos);
 
 // value and gradient noise : TODO
 
+/**
+ * Get a true random number from hardware
+ */
+u32 hgTrueRandom();
+
+/**
+ * A pseudo random number generator
+ */
+struct HgRng {
+    u32 seed;
+    u32 pos;
+};
+
+/**
+ * Set the rng seed
+ */
+void hgRngSeed(HgRng* rng, u32 seed);
+
+/**
+ * Get the next random value
+ */
+u32 hgRngNext(HgRng* rng);
+
+/**
+ * Get the next 64 bit random value
+ */
+u64 hgRngNext64(HgRng* rng);
+
 // sort algorithm : TODO
 
 /**

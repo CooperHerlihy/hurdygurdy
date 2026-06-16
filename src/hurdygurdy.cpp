@@ -17,6 +17,7 @@
 #include "hg_window.hpp"
 
 #include <cstring>
+#include <random>
 
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -3035,6 +3036,27 @@ HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos)
 {
     f32 rot = 2.0f * (f32)hgPi * hgNoiseNorm2D(seed, pos);
     return HgVec2(std::cos(rot), std::sin(rot));
+}
+
+u32 hgTrueRandom()
+{
+    static std::random_device trueRandom{};
+    return trueRandom();
+}
+
+void hgRngSeed(HgRng* rng, u32 seed)
+{
+    rng->seed = seed;
+}
+
+u32 hgRngNext(HgRng* rng)
+{
+    return rng->pos = hgNoise(rng->seed, rng->pos);
+}
+
+u64 hgRngNext64(HgRng* rng)
+{
+    return ((u64)hgRngNext(rng) << 32) | (u64)hgRngNext(rng);
 }
 
 u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
