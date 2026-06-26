@@ -403,7 +403,7 @@ void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
 /**
  * Draw a rectangle on the layer
  */
-void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect2D dst);
+void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect dst);
 
 /**
  * A 2D sprite which can be drawn
@@ -416,13 +416,13 @@ struct HgSprite2D {
     /**
      * The uv coords in the texture
      */
-    HgRect2D uv;
+    HgRect uv;
 };
 
 /**
  *  Draw the sprite on the layer
  */
-void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect2D dst);
+void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect dst);
 
 /**
  * A texture atlas
@@ -435,7 +435,7 @@ struct HgAtlas2D {
     /**
      * The sprites
      */
-    HgArray<HgRect2D> sprites;
+    HgArray<HgRect> sprites;
 };
 
 /**
@@ -451,7 +451,7 @@ void hgAtlasDestroy2D(HgAtlas2D* atlas);
 /**
  * Add a sprite to the atlas
  */
-u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect2D sprite);
+u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect sprite);
 
 /**
  * Add a grid of sprites to the atlas
@@ -465,7 +465,7 @@ u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect2D sprite);
  * Returns
  * - The first sprite index
  */
-u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect2D grid, u32 width, u32 height);
+u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect grid, u32 width, u32 height);
 
 /**
  * Get a sprite from the atlas
@@ -513,7 +513,7 @@ void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile);
 /**
  * Draw a tilemap to the layer
  */
-void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, HgRect2D dst);
+void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, HgRect dst);
 
 /**
  * A vertex in a mesh

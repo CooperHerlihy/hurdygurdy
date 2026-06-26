@@ -29,8 +29,8 @@
 
 #include <cfloat>
 #include <cmath>
+#include <cstdarg>
 #include <cstdint>
-#include <cstdio>
 
 #include <type_traits>
 
@@ -169,9 +169,9 @@ HgString hgErrorGet();
 void hgErrorSet(HgString error);
 
 /**
- * Append to this thread's current error message
+ * Format and set this thread's current error message
  */
-void hgErrorAppend(HgString error);
+void hgErrorFormat(HgString errorFmt, ...);
 
 #define hgMacroConcatInternal(x, y) x##y
 
@@ -206,57 +206,44 @@ struct HgDefer {
 
 /**
  * Defers a piece of code until the end of the scope
- *
- * Parameters
- * - code The code to run, may be placed inside braces or not
  */
-#define hgDefer(code) [[maybe_unused]] HgDefer hgMacroConcat(hgDefer_, __LINE__){[&]{code;}};
+#define hgDefer(...) [[maybe_unused]] HgDefer hgMacroConcat(hgDefer_, __LINE__){[&]{ __VA_ARGS__ ;}};
 
-#ifdef HG_LOGGING
+/**
+ * Format and print a string to stdout
+ */
+void hgPrintStdout(HgString str);
+
+/**
+ * Format and print a string to stderr
+ */
+void hgPrintStderr(HgString str);
 
 /**
  * Formats and logs a message to stderr for debugging purposes
- *
- * Parameters
- * - ... The message to print and its format parameters
  */
-#define hgLog(...) do { (void)fprintf(stderr, "HurdyGurdy Log: " __VA_ARGS__); } while(0)
+void hgLogInternal(HgString format, ...);
 
 /**
  * Formats and logs a message to stderr as a warning
- *
- * Parameters
- * - ... The message to print and its format parameters
  */
-#define hgWarn(...) do { (void)fprintf(stderr, "HurdyGurdy Warning: " __VA_ARGS__); } while(0)
+void hgWarnInternal(HgString format, ...);
 
 /**
  * Formats and logs a message to stderr and aborts the program
- *
- * Parameters
- * - ... The message to print and its format parameters
  */
-#define hgPanic(...) do { \
-    (void)fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); \
-    (void)fprintf(stderr, "\tLast error: \"%.*s\"\n", (int)hgErrorGet().length, hgErrorGet().chars); \
-    abort(); \
-} while(0)
+[[noreturn]] void hgPanicInternal(HgString format, ...);
+
+#ifdef HG_LOGGING
+
+#define hgLog(...) do { hgLogInternal(__VA_ARGS__); } while(0)
+#define hgWarn(...) do { hgWarnInternal(__VA_ARGS__); } while(0)
+#define hgPanic(...) do { hgPanicInternal(__VA_ARGS__); } while(0)
 
 #else
 
-/**
- * Formats and logs a message to stderr for debugging puposes
- */
 #define hgWarn(...) do {} while(0)
-
-/**
- * Formats and logs a message to stderr as a warning
- */
 #define hgWarn(...) do {} while(0)
-
-/**
- * Formats and logs a message to stderr and aborts the program
- */
 #define hgPanic(...) do { abort(); } while(0)
 
 #endif

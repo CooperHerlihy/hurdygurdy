@@ -76,7 +76,7 @@ int main()
     hgLayerClear2D(&backgroundLayer);
     hgDrawRect2D(&backgroundLayer,
         HgVec4{.002f, 0, .012f, 1},
-        HgRect2D{
+        HgRect{
             HgVec2{
                 (f32)width / (f32)height - 0.5f,
                 0.5f,

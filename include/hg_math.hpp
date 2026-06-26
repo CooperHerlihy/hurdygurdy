@@ -1174,33 +1174,9 @@ HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32
 HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 /**
- * A 2D rectangle
- */
-struct HgRect2D {
-    /**
-     * The origin position
-     */
-    HgVec2 pos;
-    /**
-     * The extension in either direction
-     */
-    HgVec2 size;
-};
-
-/**
- * Returns whether the point is inside the rect
- */
-bool hgIntersectPointRect2D(HgVec2 point, HgRect2D rect);
-
-/**
- * Returns whether the rects intersect
- */
-bool hgIntersectRect2D(HgRect2D a, HgRect2D b);
-
-/**
  * A 2D circle
  */
-struct HgCircle2D {
+struct HgCircle {
     /**
      * The center position
      */
@@ -1212,14 +1188,177 @@ struct HgCircle2D {
 };
 
 /**
- * Returns whether the point is inside the circle
+ * A 2D rectangle
  */
-bool hgIntersectPointCircle2D(HgVec2 point, HgCircle2D circle);
+struct HgRect {
+    /**
+     * The origin position
+     */
+    HgVec2 pos;
+    /**
+     * The extension in either direction
+     */
+    HgVec2 size;
+};
 
 /**
- * Returns whether the circles intersect
+ * Returns whether the circle contains the point
  */
-bool hgIntersectCircle2D(HgCircle2D a, HgCircle2D b);
+bool hgContainsPointCircle(HgVec2 point, HgCircle circle);
+
+/**
+ * Returns whether the rect contains the point
+ */
+bool hgContainsPointRect(HgVec2 point, HgRect rect);
+
+/**
+ * Returns the point on the circle closest ot the position
+ */
+HgVec2 hgClosestPointCircle(HgVec2 pos, HgCircle circle);
+
+/**
+ * Returns the point on the rect closest ot the position
+ */
+HgVec2 hgClosestPointRect(HgVec2 pos, HgRect rect);
+
+/**
+ * Returns the distance squared between the point and the circle
+ *
+ * Notes returns 0 if touching, and negative if overlapping
+ */
+f32 hgDistSqrdPointCircle(HgVec2 point, HgCircle circle);
+
+/**
+ * Returns the distance squared between the circles
+ *
+ * Notes returns 0 if touching, and negative if overlapping
+ */
+f32 hgDistSqrdCircles(HgCircle a, HgCircle b);
+
+/**
+ * Returns whether to rects intersect or not (includes touching)
+ */
+bool hgIntersectRects(HgRect a, HgRect b);
+
+/**
+ * A 2D ray
+ */
+struct HgRay2D {
+    /**
+     * The origin position
+     */
+    HgVec2 pos;
+    /**
+     * The direction
+     */
+    HgVec2 dir;
+};
+
+/**
+ * A 2D line
+ */
+struct HgLine2D {
+    /**
+     * The begin vertex
+     */
+    HgVec2 begin;
+    /**
+     * The end vertex
+     */
+    HgVec2 end;
+};
+
+struct HgRayHit2D {
+    bool hit;
+    HgVec2 pos;
+    HgVec2 normal;
+};
+
+HgRayHit2D hgCollideRay2(HgRay2D a, HgRay2D b);
+HgRayHit2D hgCollideRayLine2(HgRay2D a, HgLine2D b);
+HgRayHit2D hgCollideRayCircle2(HgRay2D a, HgCircle b);
+HgRayHit2D hgCollideRayRect2(HgRay2D a, HgRect b);
+
+HgRayHit2D hgCollideLine2(HgLine2D a, HgLine2D b);
+HgRayHit2D hgCollideLineRay2(HgLine2D a, HgRay2D b);
+HgRayHit2D hgCollideLineCircle2(HgLine2D a, HgCircle b);
+HgRayHit2D hgCollideLineRect2(HgLine2D a, HgRect b);
+
+/**
+ * A 3D ray
+ */
+struct HgRay3 {
+    /**
+     * The origin position
+     */
+    HgVec3 pos;
+    /**
+     * The direction
+     */
+    HgVec3 dir;
+};
+
+/**
+ * A 3D plane
+ */
+struct HgPlane3 {
+    /**
+     * Three points on the plane
+     */
+    HgVec3 points[3];
+};
+
+/**
+ * A 3D line
+ */
+struct HgLine3 {
+    /**
+     * The begin vertex
+     */
+    HgVec3 begin;
+    /**
+     * The end vertex
+     */
+    HgVec3 end;
+};
+
+/**
+ * A 3D triangle
+ */
+struct HgTri3 {
+    /**
+     * The three vertices
+     */
+    HgVec3 verts[3];
+};
+
+/**
+ * A 3D box
+ */
+struct HgBox3 {
+    /**
+     * The origin position
+     */
+    HgVec3 pos;
+    /**
+     * The extension in each direction
+     */
+    HgVec3 size;
+};
+
+/**
+ * A 3D sphere
+ */
+struct HgSphere3 {
+    /**
+     * The center position
+     */
+    HgVec3 pos;
+    /**
+     * The radius from the center
+     */
+    f32 radius;
+};
 
 /**
  * Generate white noise

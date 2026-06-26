@@ -220,7 +220,17 @@ HgStringBuilder hgStringCopy(HgArena* arena, HgString str);
 //  * - fmt The format string
 //  * - ... The format parameters
 //  */
-// HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...);
+// HgStringBuilder hgStringFormat(HgArena* arena, HgString fmt, ...);
+
+/**
+ * Create a formatted string, interally using snprintf
+ */
+HgStringBuilder hgStringFormat(HgArena* arena, HgString fmt, ...);
+
+/**
+ * Create a formatted string with varargs, interally using snprintf
+ */
+HgStringBuilder hgStringFormatVar(HgArena* arena, HgString fmt, va_list args);
 
 /**
  * Copies another string into the string at index

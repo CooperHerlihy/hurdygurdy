@@ -11,6 +11,8 @@
 #include "hg_utils.hpp"
 #include "hg_window.hpp"
 
+#include <cstdio>
+
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
@@ -868,8 +870,7 @@ static VkInstance createInstance(HgString* extensions, u32 extensionCount)
     VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
     if (instance == nullptr)
     {
-        hgErrorSet("Failed to create Vulkan instance: ");
-        hgErrorAppend(vkResultToStr(result));
+        hgErrorFormat("Failed to create Vulkan instance: %s", vkResultToStr(result));
     }
 
     return instance;
@@ -884,8 +885,7 @@ static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
     VkResult result = vkCreateDebugUtilsMessengerEXT(vk.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
     {
-        hgErrorSet("Failed to create Vulkan debug messenger: ");
-        hgErrorAppend(vkResultToStr(result));
+        hgErrorFormat("Failed to create Vulkan debug messenger: %s", vkResultToStr(result));
     }
 
     return messenger;
@@ -1039,8 +1039,7 @@ static VkDevice createDevice()
     VkResult result = vkCreateDevice(vk.physicalDevice, &deviceInfo, nullptr, &device);
     if (device == nullptr)
     {
-        hgErrorSet("Could not create VkDevice: ");
-        hgErrorAppend(vkResultToStr(result));
+        hgErrorFormat("Could not create VkDevice: %s", vkResultToStr(result));
     }
 
     return device;
@@ -1058,8 +1057,7 @@ static VmaAllocator createVma()
     VkResult result = vmaCreateAllocator(&allocatorInfo, &vma);
     if (vma == nullptr)
     {
-        hgErrorSet("Could not create Vulkan memory allocator: ");
-        hgErrorAppend(vkResultToStr(result));
+        hgErrorFormat("Could not create Vulkan memory allocator: %s", vkResultToStr(result));
     }
 
     return vma;
@@ -3840,8 +3838,7 @@ bool hgAudioInit()
     audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
     {
-        hgErrorSet("SDL could not open audio device: ");
-        hgErrorAppend(SDL_GetError());
+        hgErrorFormat("SDL could not open audio device: %s", SDL_GetError());
         return false;
     }
 
@@ -5643,12 +5640,7 @@ HgLibrary* hgLibraryLoad(HgString path)
 
     HgLibrary* lib = (HgLibrary*)dlopen(cstr, RTLD_LAZY);
     if (lib == nullptr)
-    {
-        hgErrorSet("Could not load dynamic library \"");
-        hgErrorAppend(path);
-        hgErrorAppend("\": ");
-        hgErrorAppend(dlerror());
-    }
+        hgErrorFormat("Could not load dynamic library \"%s\": %s", cstr, dlerror());
 
     return lib;
 }
@@ -5665,12 +5657,7 @@ void* hgLibraryFindFunction(HgLibrary* lib, HgString symbol)
 
     void* fn = dlsym(lib, cstr);
     if (fn == nullptr)
-    {
-        hgErrorSet("Could not load function symbol \"");
-        hgErrorAppend(symbol);
-        hgErrorAppend("\": ");
-        hgErrorAppend(dlerror());
-    }
+        hgErrorFormat("Could not load function symbol \"%s\": %s", cstr, dlerror());
 
     return fn;
 }

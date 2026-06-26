@@ -16,6 +16,7 @@
 #include "hg_utils.hpp"
 #include "hg_window.hpp"
 
+#include <cstdio>
 #include <cstring>
 #include <random>
 
@@ -24,6 +25,71 @@
 
 thread_local static char errorMessageData[4096];
 thread_local static u64 errorMessageLength = 0;
+
+void hgPrintStdout(HgString str)
+{
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    fputs(hgCString(scratch, str), stdout);
+}
+
+void hgPrintStderr(HgString str)
+{
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    fputs(hgCString(scratch, str), stderr);
+}
+
+void hgLogInternal(HgString format, ...)
+{
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    va_list args;
+    va_start(args, format);
+
+    HgStringBuilder begin = hgStringCopy(scratch, "HurdyGurdy Log: ");
+    hgStringAppend(scratch, &begin, format);
+    HgStringBuilder formatted = hgStringFormatVar(scratch, begin, args);
+    hgPrintStderr(formatted);
+
+    va_end(args);
+}
+
+void hgWarnInternal(HgString format, ...)
+{
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    va_list args;
+    va_start(args, format);
+
+    HgStringBuilder begin = hgStringCopy(scratch, "HurdyGurdy Warn: ");
+    hgStringAppend(scratch, &begin, format);
+    hgPrintStderr(hgStringFormatVar(scratch, begin, args));
+
+    va_end(args);
+}
+
+void hgPanicInternal(HgString format, ...)
+{
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    va_list args;
+    va_start(args, format);
+
+    HgStringBuilder begin = hgStringCopy(scratch, "HurdyGurdy Panic: ");
+    hgStringAppend(scratch, &begin, format);
+    begin.length += hgStringFormat(scratch, "\tLast error: \"%.*s\"\n", (int)hgErrorGet().length, hgErrorGet().chars).length;
+    hgPrintStderr(hgStringFormatVar(scratch, begin, args));
+
+    va_end(args);
+
+    abort();
+}
 
 HgString hgErrorGet()
 {
@@ -37,11 +103,15 @@ void hgErrorSet(HgString error)
     errorMessageLength = newLength;
 }
 
-void hgErrorAppend(HgString error)
+void hgErrorFormat(HgString errorFmt, ...)
 {
-    u64 newLength = hgMin(errorMessageLength + error.length, sizeof(errorMessageData));
-    hgMemCopy(errorMessageData + errorMessageLength, error.chars, newLength - errorMessageLength);
-    errorMessageLength = newLength;
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    va_list args;
+    va_start(args, errorFmt);
+    hgErrorSet(hgStringFormatVar(scratch, errorFmt, args));
+    va_end(args);
 }
 
 static HgSubsystemFlags initialized = 0;
@@ -354,6 +424,30 @@ HgStringBuilder hgStringCopy(HgArena* arena, HgString str)
     return copy;
 }
 
+HgStringBuilder hgStringFormat(HgArena* arena, HgString format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    HgStringBuilder ret = hgStringFormatVar(arena, format, args);
+    va_end(args);
+    return ret;
+}
+
+HgStringBuilder hgStringFormatVar(HgArena* arena, HgString fmt, va_list args)
+{
+    HgArena* scratch = hgScratch(&arena, 1);
+    hgArenaScope(scratch);
+
+    int len = vsnprintf((char*)arena->memory + arena->head, arena->capacity - arena->head, hgCString(scratch, fmt), args);
+    if (len < 0)
+        hgPanic("snprintf returned an error");
+
+    HgStringBuilder ret{(char*)arena->memory + arena->head, (u32)len};
+    arena->head += (u32)len;
+
+    return ret;
+}
+
 void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgString src)
 {
     hgAssert(arena != nullptr);
@@ -615,13 +709,6 @@ HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
     hgStringAppend(arena, &ret, decStr);
     return ret;
 }
-
-// HgStringBuilder hgStringFormat(HgArena* arena, HgString fmt, ...)
-// {
-//     (void)arena;
-//     (void)fmt;
-//     hgPanic("hgFormatString not implemented yet : TODO\n");
-// }
 
 const char* hgSerialTypeToString(HgSerialType s)
 {
@@ -1967,16 +2054,14 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
     FILE* fileHandle = fopen(cpath, "rb");
     if (fileHandle == nullptr)
     {
-        hgErrorSet("Could not find file to read binary: ");
-        hgErrorAppend(data->path);
+        hgErrorFormat("Could not find file to read binary: %s", cpath);
         return;
     }
     hgDefer(fclose(fileHandle));
 
     if (fseek(fileHandle, 0, SEEK_END) != 0)
     {
-        hgErrorSet("Failed to read binary from file: ");
-        hgErrorAppend(data->path);
+        hgErrorFormat("Failed to read binary from file: %s", cpath);
         return;
     }
 
@@ -1987,8 +2072,7 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
     if (fread((void*)data->data.data, 1, data->data.size, fileHandle) != data->data.size)
     {
         hgGpaFree((void*)data->data.data, data->data.size);
-        hgErrorSet("Failed to read binary from file: ");
-        hgErrorAppend(data->path);
+        hgErrorFormat("Failed to read binary from file: %s", cpath);
         data->data = {};
         return;
     }
@@ -2010,16 +2094,14 @@ bool hgBinaryStore(HgBinary bin, HgString path)
     FILE* fileHandle = fopen(cpath, "wb");
     if (fileHandle == nullptr)
     {
-        hgErrorSet("Failed to create file to write binary: ");
-        hgErrorAppend(path);
+        hgErrorFormat("Failed to create file to write binary: %s", cpath);
         return false;
     }
     hgDefer(fclose(fileHandle));
 
     if (fwrite(bin.data, 1, bin.size, fileHandle) != bin.size)
     {
-        hgErrorSet("Failed to write binary data to file: ");
-        hgErrorAppend(path);
+        hgErrorFormat("Failed to write binary data to file: %s", cpath);
         return false;
     }
 
@@ -2960,29 +3042,44 @@ HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
     };
 }
 
-bool hgIntersectPointRect2D(HgVec2 point, HgRect2D rect)
+bool hgContainsPointCircle(HgVec2 point, HgCircle circle)
+{
+    HgVec2 relPos = point - circle.pos;
+    return hgVecDot2(relPos, relPos) <= circle.radius * circle.radius;
+}
+
+bool hgContainsPointRect(HgVec2 point, HgRect rect)
 {
     return point.x >= rect.pos.x && point.x <= rect.pos.x + rect.size.x
         && point.y >= rect.pos.y && point.y <= rect.pos.y + rect.size.y;
 }
 
-bool hgIntersectRect2D(HgRect2D a, HgRect2D b)
+HgVec2 hgClosestPointCircle(HgVec2 pos, HgCircle circle)
+{
+    return circle.radius * hgVecNorm2(pos - circle.pos);
+}
+
+// HgVec2 hgClosestPointRect(HgVec2 pos, HgRect rect)
+// {
+// }
+
+f32 hgDistSqrdPointCircle(HgVec2 point, HgCircle circle)
+{
+    HgVec2 relPos = point - circle.pos;
+    return hgVecDot2(relPos, relPos) - circle.radius * circle.radius;
+}
+
+f32 hgDistSqrdCircles(HgCircle a, HgCircle b)
+{
+    HgVec2 relPos = a.pos - b.pos;
+    f32 totalRad = abs(a.radius) + abs(b.radius);
+    return hgVecDot2(relPos, relPos) - totalRad * totalRad;
+}
+
+bool hgIntersectRects(HgRect a, HgRect b)
 {
     return a.pos.x + a.size.x >= b.pos.x && a.pos.x <= b.pos.x + b.size.x
         && a.pos.y + a.size.y >= b.pos.y && a.pos.y <= b.pos.y + b.size.y;
-}
-
-bool hgIntersectPointCircle2D(HgVec2 point, HgCircle2D circle)
-{
-    HgVec2 relPos = circle.pos - point;
-    return abs(hgVecDot2(relPos, relPos)) <= circle.radius * circle.radius;
-}
-
-bool hgIntersectCircle2D(HgCircle2D a, HgCircle2D b)
-{
-    HgVec2 relPos = a.pos - b.pos;
-    f32 dist = abs(a.radius) + abs(b.radius);
-    return abs(hgVecDot2(relPos, relPos)) <= dist * dist;
 }
 
 u32 hgNoise(u32 seed, u32 pos)
@@ -3008,7 +3105,7 @@ u32 hgNoise3D(u32 seed, u32 x, u32 y, u32 z)
 
 u32 hgNoise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
 {
-    return hgNoise(seed, x + y * 425537443u + z * 682607u + w * 9067);
+    return hgNoise(seed, x + y * 425537443u + z * 682607u + w * 9067u);
 }
 
 f32 hgNoiseNorm(u32 seed, f32 pos)
@@ -3179,8 +3276,7 @@ void hgAssetLoadImpl(HgAsset<HgTextureData>* data)
     data->data.pixels = stbi_load(cpath, &x, &y, &channels, 4);
     if (data->data.pixels == nullptr)
     {
-        hgErrorSet("Could not load image: ");
-        hgErrorAppend(data->path);
+        hgErrorFormat("Could not load image: %s", cpath);
         return;
     }
     data->data.width = (u32)x;
@@ -3200,16 +3296,17 @@ bool hgTextureStorePng(HgTextureData* texture, HgString path)
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
+    const char* cpath = hgCString(scratch, path);
+
     if (!stbi_write_png(
-         hgCString(scratch, path),
+         cpath,
          (int)texture->width,
          (int)texture->height,
          4,
          texture->pixels,
          (int)(texture->width * sizeof(u32))))
     {
-        hgErrorSet("Could not store image: ");
-        hgErrorAppend(path);
+        hgErrorFormat("Could not store image: %s", cpath);
         return false;
     }
     return true;
@@ -3607,7 +3704,7 @@ void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
     renderLayer2D(cmd, camera, layer, render2D.debugPipeline);
 }
 
-void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect2D dst)
+void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect dst)
 {
     hgAssert(layer != nullptr);
 
@@ -3622,7 +3719,7 @@ void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect2D dst)
     layer->changed = true;
 }
 
-void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect2D dst)
+void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect dst)
 {
     hgAssert(layer != nullptr);
     hgAssert(sprite != nullptr);
@@ -3650,7 +3747,7 @@ HgAtlas2D hgAtlasCreate2D(HgTextureAsset* texture)
 
     HgAtlas2D atlas{};
     atlas.texture = texture;
-    atlas.sprites = hgArrayCreate<HgRect2D>();
+    atlas.sprites = hgArrayCreate<HgRect>();
     return atlas;
 }
 
@@ -3660,7 +3757,7 @@ void hgAtlasDestroy2D(HgAtlas2D* atlas)
     hgArrayDestroy(&atlas->sprites);
 }
 
-u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect2D sprite)
+u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect sprite)
 {
     hgAssert(atlas != nullptr);
 
@@ -3669,7 +3766,7 @@ u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect2D sprite)
     return idx;
 }
 
-u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect2D grid, u32 width, u32 height)
+u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect grid, u32 width, u32 height)
 {
     hgAssert(atlas != nullptr);
 
@@ -3730,7 +3827,7 @@ void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile)
     tilemap->tiles[y * tilemap->width + x] = tile;
 }
 
-void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, HgRect2D dst)
+void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, HgRect dst)
 {
     hgAssert(layer != nullptr);
     hgAssert(tilemap != nullptr);
