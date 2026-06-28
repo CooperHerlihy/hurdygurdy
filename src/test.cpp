@@ -2136,91 +2136,90 @@ void hgTest()
                     && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
     }
 
-    // // HgRect2D
-    // {
-    //     HgRect2D a{
-    //         HgVec2{1.0f, 1.0f},
-    //         HgVec2{1.0f, 1.0f},
-    //     };
-    //
-    //     hgAssert(hgIntersectPointRect2D(HgVec2{1.5f, 1.5f}, a));
-    //     hgAssert(hgIntersectPointRect2D(HgVec2{1.0f, 1.0f}, a));
-    //     hgAssert(hgIntersectPointRect2D(HgVec2{2.0f, 2.0f}, a));
-    //     hgAssert(!hgIntersectPointRect2D(HgVec2{0.0f, 0.0f}, a));
-    //     hgAssert(!hgIntersectPointRect2D(HgVec2{3.0f, 0.0f}, a));
-    //     hgAssert(!hgIntersectPointRect2D(HgVec2{0.0f, 3.0f}, a));
-    //     hgAssert(!hgIntersectPointRect2D(HgVec2{3.0f, 3.0f}, a));
-    //
-    //     hgAssert(hgIntersectRect2D(a, a));
-    //     hgAssert(hgIntersectRect2D(a, {
-    //         HgVec2{0.5f, 0.5f},
-    //         HgVec2{1.0f, 1.0f},
-    //     }));
-    //     hgAssert(hgIntersectRect2D(a, {
-    //         HgVec2{1.5f, 0.5f},
-    //         HgVec2{1.0f, 1.0f},
-    //     }));
-    //     hgAssert(hgIntersectRect2D(a, {
-    //         HgVec2{0.5f, 1.5f},
-    //         HgVec2{1.0f, 1.0f},
-    //     }));
-    //     hgAssert(hgIntersectRect2D(a, {
-    //         HgVec2{1.5f, 1.5f},
-    //         HgVec2{1.0f, 1.0f},
-    //     }));
-    //     hgAssert(!hgIntersectRect2D(a, {
-    //         HgVec2{0.0f, 0.0f},
-    //         HgVec2{0.5f, 0.5f},
-    //     }));
-    //     hgAssert(!hgIntersectRect2D(a, {
-    //         HgVec2{2.5f, 2.5f},
-    //         HgVec2{0.5f, 0.5f},
-    //     }));
-    //     hgAssert(!hgIntersectRect2D(a, {
-    //         HgVec2{-1.0f, 0.0f},
-    //         HgVec2{1.0f, 1.0f},
-    //     }));
-    //     hgAssert(!hgIntersectRect2D(a, {
-    //         HgVec2{3.0f, 0.0f},
-    //         HgVec2{1.0f, 1.0f},
-    //     }));
-    //     hgAssert(!hgIntersectRect2D(a, {
-    //         HgVec2{0.0f, -1.0f},
-    //         HgVec2{1.0f, 1.0f},
-    //     }));
-    //     hgAssert(!hgIntersectRect2D(a, {
-    //         HgVec2{0.0f, 3.0f},
-    //         HgVec2{1.0f, 1.0f},
-    //     }));
-    // }
-    //
-    // // HgCircle2D
-    // {
-    //     HgCircle2D a{
-    //         HgVec2{0.0},
-    //         1.0f,
-    //     };
-    //
-    //     hgAssert(hgIntersectPointCircle2D(HgVec2{0.0f, 0.0f}, a));
-    //     hgAssert(hgIntersectPointCircle2D(HgVec2{1.0f, 0.0f}, a));
-    //     hgAssert(!hgIntersectPointCircle2D(HgVec2{2.0f, 0.0f}, a));
-    //     hgAssert(!hgIntersectPointCircle2D(HgVec2{1.0f, 1.0f}, a));
-    //     hgAssert(hgIntersectPointCircle2D(HgVec2{0.5f, 0.5f}, a));
-    //
-    //     hgAssert(hgSdfPointCircle2D(HgVec2{0.0f, 0.0f}, a) < 0.0);
-    //     hgAssert(abs(hgSdfPointCircle2D(HgVec2{1.0f, 0.0f}, a)) < FLT_EPSILON);
-    //     hgAssert(hgSdfPointCircle2D(HgVec2{2.0f, 0.0f}, a) > 0.0);
-    //     hgAssert(hgSdfPointCircle2D(HgVec2{1.0f, 1.0f}, a) > 0.0);
-    //     hgAssert(hgSdfPointCircle2D(HgVec2{0.5f, 0.5f}, a) < 0.0);
-    //     hgAssert(abs(hgSdfPointCircle2D(HgVec2{1.0f / (f32)hgRoot2}, a)) < FLT_EPSILON);
-    //
-    //     hgAssert(hgIntersectCircle2D(a, {HgVec2{0.0f, 0.0f}, 1.0f}));
-    //     hgAssert(hgIntersectCircle2D(a, {HgVec2{1.0f, 0.0f}, 1.0f}));
-    //     hgAssert(hgIntersectCircle2D(a, {HgVec2{2.0f, 0.0f}, 1.0f}));
-    //     hgAssert(!hgIntersectCircle2D(a, {HgVec2{3.0f, 0.0f}, 1.0f}));
-    //     hgAssert(!hgIntersectCircle2D(a, {HgVec2{2.0f, 2.0f}, 1.0f}));
-    //     hgAssert(hgIntersectCircle2D(a, {HgVec2{1.0f, 1.0f}, 1.0f}));
-    // }
+    // HgCircle
+    {
+        HgCircle a{
+            HgVec2{0.0},
+            1.0f,
+        };
+
+        hgAssert(hgContainsPointCircle(HgVec2{0.0f, 0.0f}, a));
+        hgAssert(hgContainsPointCircle(HgVec2{1.0f, 0.0f}, a));
+        hgAssert(!hgContainsPointCircle(HgVec2{2.0f, 0.0f}, a));
+        hgAssert(!hgContainsPointCircle(HgVec2{1.0f, 1.0f}, a));
+        hgAssert(hgContainsPointCircle(HgVec2{0.5f, 0.5f}, a));
+
+        hgAssert(hgDistSqrPointCircle(HgVec2{0.0f, 0.0f}, a) < 0.0);
+        hgAssert(abs(hgDistSqrPointCircle(HgVec2{1.0f, 0.0f}, a)) < FLT_EPSILON);
+        hgAssert(hgDistSqrPointCircle(HgVec2{2.0f, 0.0f}, a) > 0.0);
+        hgAssert(hgDistSqrPointCircle(HgVec2{1.0f, 1.0f}, a) > 0.0);
+        hgAssert(hgDistSqrPointCircle(HgVec2{0.5f, 0.5f}, a) < 0.0);
+        hgAssert(abs(hgDistSqrPointCircle(HgVec2{1.0f / (f32)hgRoot2}, a)) < FLT_EPSILON);
+
+        hgAssert(hgIntersectCircles(a, {HgVec2{0.0f, 0.0f}, 1.0f}));
+        hgAssert(hgIntersectCircles(a, {HgVec2{1.0f, 0.0f}, 1.0f}));
+        hgAssert(hgIntersectCircles(a, {HgVec2{2.0f, 0.0f}, 1.0f}));
+        hgAssert(!hgIntersectCircles(a, {HgVec2{3.0f, 0.0f}, 1.0f}));
+        hgAssert(!hgIntersectCircles(a, {HgVec2{2.0f, 2.0f}, 1.0f}));
+        hgAssert(hgIntersectCircles(a, {HgVec2{1.0f, 1.0f}, 1.0f}));
+
+        hgAssert(hgDistSqrCircles(a, {HgVec2{0.0f, 0.0f}, 1.0f}) < 0.0f);
+        hgAssert(hgDistSqrCircles(a, {HgVec2{0.5f, 0.0f}, 0.25f}) < 0.0f);
+        hgAssert(hgDistSqrCircles(a, {HgVec2{1.0f, 0.0f}, 1.0f}) < 0.0f);
+        hgAssert(abs(hgDistSqrCircles(a, {HgVec2{2.0f, 0.0f}, 1.0f})) < FLT_EPSILON);
+        hgAssert(hgDistSqrCircles(a, {HgVec2{2.1f, 0.0f}, 1.0f}) > 0.0f);
+        hgAssert(hgDistSqrCircles(a, {HgVec2{3.0f, 0.0f}, 1.0f}) > 0.0f);
+        hgAssert(hgDistSqrCircles(a, {HgVec2{2.0f, 2.0f}, 1.0f}) > 0.0f);
+    }
+
+    // HgRect
+    {
+        HgRect a{
+            HgVec2{1.0f, 1.0f},
+            HgVec2{1.0f, 1.0f},
+        };
+
+        hgAssert(hgContainsPointRect(HgVec2{1.5f, 1.5f}, a));
+        hgAssert(hgContainsPointRect(HgVec2{1.0f, 1.0f}, a));
+        hgAssert(hgContainsPointRect(HgVec2{2.0f, 2.0f}, a));
+        hgAssert(!hgContainsPointRect(HgVec2{0.0f, 0.0f}, a));
+        hgAssert(!hgContainsPointRect(HgVec2{3.0f, 0.0f}, a));
+        hgAssert(!hgContainsPointRect(HgVec2{0.0f, 3.0f}, a));
+        hgAssert(!hgContainsPointRect(HgVec2{3.0f, 3.0f}, a));
+
+        hgAssert(hgIntersectRects(a, a));
+
+        hgAssert(hgIntersectRects(a, {HgVec2{1.25f, 1.25f}, HgVec2{0.5f, 0.5f}}));
+
+        hgAssert(hgIntersectRects(a, {HgVec2{0.5f, 0.5f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(hgIntersectRects(a, {HgVec2{1.5f, 0.5f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(hgIntersectRects(a, {HgVec2{0.5f, 1.5f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(hgIntersectRects(a, {HgVec2{1.5f, 1.5f}, HgVec2{1.0f, 1.0f}}));
+
+        hgAssert(hgIntersectRects(a, {HgVec2{2.0f, 1.0f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(hgIntersectRects(a, {HgVec2{0.0f, 1.0f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(hgIntersectRects(a, {HgVec2{1.0f, 2.0f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(hgIntersectRects(a, {HgVec2{1.0f, 0.0f}, HgVec2{1.0f, 1.0f}}));
+
+        hgAssert(hgIntersectRects(a, {HgVec2{2.0f, 2.0f}, HgVec2{1.0f, 1.0f}}));
+
+        hgAssert(!hgIntersectRects(a, {HgVec2{0.0f, 0.0f}, HgVec2{0.5f, 0.5f}}));
+        hgAssert(!hgIntersectRects(a, {HgVec2{2.5f, 2.5f}, HgVec2{0.5f, 0.5f}}));
+        hgAssert(!hgIntersectRects(a, {HgVec2{-1.0f, 0.0f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(!hgIntersectRects(a, {HgVec2{3.0f, 0.0f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(!hgIntersectRects(a, {HgVec2{0.0f, -1.0f}, HgVec2{1.0f, 1.0f}}));
+        hgAssert(!hgIntersectRects(a, {HgVec2{0.0f, 3.0f}, HgVec2{1.0f, 1.0f}}));
+
+        hgAssert(hgIntersectRectCircle(a, {HgVec2{1.5f, 1.5f}, 0.25f}));
+        hgAssert(hgIntersectRectCircle(a, {HgVec2{1.5f, 1.5f}, 2.0f}));
+        hgAssert(hgIntersectRectCircle(a, {HgVec2{2.5f, 1.5f}, 0.6f}));
+        hgAssert(hgIntersectRectCircle(a, {HgVec2{3.0f, 1.5f}, 1.0f}));
+        hgAssert(hgIntersectRectCircle(a, {HgVec2{3.0f, 3.0f}, (f32)hgRoot2 + 0.01f}));
+        hgAssert(hgIntersectRectCircle(a, {HgVec2{2.5f, 2.5f}, 1.0f}));
+        hgAssert(!hgIntersectRectCircle(a, {HgVec2{4.0f, 4.0f}, 0.5f}));
+        hgAssert(!hgIntersectRectCircle(a, {HgVec2{3.01f, 1.5f}, 1.0f}));
+        hgAssert(!hgIntersectRectCircle(a, {HgVec2{3.0f, 3.0f}, (f32)hgRoot2 - 0.01f}));
+    }
 
     // HgAssetManager and HgBinary
     {

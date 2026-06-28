@@ -47,6 +47,27 @@
 #define hgRoot3 1.7320508075688772
 
 /**
+ * Returns base to the positive integer exp power
+ */
+constexpr f32 hgPow(f32 base, u32 exp)
+{
+    f32 ret = 1.0f;
+    for (u32 i = 0; i < exp; ++i)
+    {
+        ret *= base;
+    }
+    return ret;
+}
+
+/**
+ * Squares a number
+ */
+constexpr f32 hgSquare(f32 x)
+{
+    return x * x;
+}
+
+/**
  * Interpolates between two values
  */
 constexpr f32 hgLerp(f32 a, f32 b, f32 t)
@@ -638,6 +659,30 @@ constexpr HgVec4 operator-(HgVec4 lhs, HgVec4 rhs)
 }
 
 /**
+ * Multiple a 2D vector by -1
+ */
+constexpr HgVec2 operator-(HgVec2 v)
+{
+    return HgVec2{-v.x, -v.y};
+}
+
+/**
+ * Multiple a 3D vector by -1
+ */
+constexpr HgVec3 operator-(HgVec3 v)
+{
+    return HgVec3{-v.x, -v.y, -v.z};
+}
+
+/**
+ * Multiple a 4D vector by -1
+ */
+constexpr HgVec4 operator-(HgVec4 v)
+{
+    return HgVec4{-v.x, -v.y, -v.z, -v.w};
+}
+
+/**
  * Multiply pairwise arbitrary size vectors
  *
  * Parameters
@@ -1069,6 +1114,24 @@ constexpr HgComplex operator*(HgComplex lhs, HgComplex rhs)
 }
 
 /**
+ * Compute the absolute value of a complex number
+ */
+f32 hgComplexAbs(HgComplex comp);
+
+/**
+ * Normalize a complex number
+ */
+HgComplex hgComplexNorm(HgComplex comp);
+
+/**
+ * Compute the conjugate of a complex number
+ */
+constexpr HgComplex hgComplexConj(HgComplex comp)
+{
+    return HgComplex{comp.r, -comp.i};
+}
+
+/**
  * Add quaternions
  */
 constexpr HgQuat operator+(HgQuat lhs, HgQuat rhs)
@@ -1188,6 +1251,30 @@ struct HgCircle {
 };
 
 /**
+ * Returns whether the circle contains the point
+ */
+bool hgContainsPointCircle(HgVec2 point, HgCircle circle);
+
+/**
+ * Returns the distance squared between the point and the circle
+ *
+ * Notes returns 0 if touching, and negative if overlapping
+ */
+f32 hgDistSqrPointCircle(HgVec2 point, HgCircle circle);
+
+/**
+ * Returns whether two circles intersect or not (includes touching)
+ */
+bool hgIntersectCircles(HgCircle a, HgCircle b);
+
+/**
+ * Returns the distance squared between the circles
+ *
+ * Notes returns 0 if touching, and negative if overlapping
+ */
+f32 hgDistSqrCircles(HgCircle a, HgCircle b);
+
+/**
  * A 2D rectangle
  */
 struct HgRect {
@@ -1202,56 +1289,32 @@ struct HgRect {
 };
 
 /**
- * Returns whether the circle contains the point
- */
-bool hgContainsPointCircle(HgVec2 point, HgCircle circle);
-
-/**
  * Returns whether the rect contains the point
  */
 bool hgContainsPointRect(HgVec2 point, HgRect rect);
 
 /**
- * Returns the point on the circle closest ot the position
- */
-HgVec2 hgClosestPointCircle(HgVec2 pos, HgCircle circle);
-
-/**
- * Returns the point on the rect closest ot the position
- */
-HgVec2 hgClosestPointRect(HgVec2 pos, HgRect rect);
-
-/**
- * Returns the distance squared between the point and the circle
- *
- * Notes returns 0 if touching, and negative if overlapping
- */
-f32 hgDistSqrdPointCircle(HgVec2 point, HgCircle circle);
-
-/**
- * Returns the distance squared between the circles
- *
- * Notes returns 0 if touching, and negative if overlapping
- */
-f32 hgDistSqrdCircles(HgCircle a, HgCircle b);
-
-/**
- * Returns whether to rects intersect or not (includes touching)
+ * Returns whether two rects intersect or not (includes touching)
  */
 bool hgIntersectRects(HgRect a, HgRect b);
 
 /**
- * A 2D ray
+ * Returns whether a rect and a circle intersect or not (includes touching)
  */
-struct HgRay2D {
+bool hgIntersectRectCircle(HgRect rect, HgCircle circle);
+
+/**
+ * 2D intersection info
+ */
+struct HgIntersection2D {
     /**
-     * The origin position
+     * The position of the hit
      */
     HgVec2 pos;
     /**
-     * The direction
+     * The normal at the hit position
      */
-    HgVec2 dir;
+    HgVec2 normal;
 };
 
 /**
@@ -1268,21 +1331,123 @@ struct HgLine2D {
     HgVec2 end;
 };
 
-struct HgRayHit2D {
-    bool hit;
+/**
+ * A 2D ray
+ */
+struct HgRay2D {
+    /**
+     * The origin position
+     */
     HgVec2 pos;
-    HgVec2 normal;
+    /**
+     * The direction
+     */
+    HgVec2 dir;
 };
 
-HgRayHit2D hgCollideRay2(HgRay2D a, HgRay2D b);
-HgRayHit2D hgCollideRayLine2(HgRay2D a, HgLine2D b);
-HgRayHit2D hgCollideRayCircle2(HgRay2D a, HgCircle b);
-HgRayHit2D hgCollideRayRect2(HgRay2D a, HgRect b);
+/**
+ * Intersect two lines
+ *
+ * Parameters
+ * - line The line to cast
+ * - other The other line to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the lines intersect
+ */
+bool hgIntersectLine2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit);
 
-HgRayHit2D hgCollideLine2(HgLine2D a, HgLine2D b);
-HgRayHit2D hgCollideLineRay2(HgLine2D a, HgRay2D b);
-HgRayHit2D hgCollideLineCircle2(HgLine2D a, HgCircle b);
-HgRayHit2D hgCollideLineRect2(HgLine2D a, HgRect b);
+/**
+ * Intersect a line and a ray
+ *
+ * Parameters
+ * - line The line to cast
+ * - ray The ray to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and ray intersect
+ */
+bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgIntersection2D* hit);
+
+/**
+ * Intersect a line and a circle
+ *
+ * Parameters
+ * - line The line to cast
+ * - circle The circle to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and circle intersect
+ */
+bool hgIntersectLineCircle2D(HgLine2D line, HgCircle circle, HgIntersection2D* hit);
+
+/**
+ * Intersect a line and a rect
+ *
+ * Parameters
+ * - line The line to cast
+ * - rect The rect to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and rect intersect
+ */
+bool hgIntersectLineRect2D(HgLine2D line, HgRect rect, HgIntersection2D* hit);
+
+/**
+ * Intersect two rays
+ *
+ * Parameters
+ * - ray The ray to cast
+ * - other The other ray to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the rays intersect
+ */
+bool hgIntersectRay2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit);
+
+/**
+ * Intersect a ray and a line
+ *
+ * Parameters
+ * - ray The ray to cast
+ * - line The line to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the ray and line intersect
+ */
+bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgIntersection2D* hit);
+
+/**
+ * Intersect a ray and a circle
+ *
+ * Parameters
+ * - ray The ray to cast
+ * - circle The circle to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the ray and circle intersect
+ */
+bool hgIntersectRayCircle2D(HgRay2D ray, HgCircle circle, HgIntersection2D* hit);
+
+/**
+ * Intersect a ray and a rect
+ *
+ * Parameters
+ * - ray The ray to cast
+ * - rect The rect to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the ray and rect intersect
+ */
+bool hgIntersectRayRect2D(HgRay2D ray, HgRect rect, HgIntersection2D* hit);
 
 /**
  * A 3D ray
