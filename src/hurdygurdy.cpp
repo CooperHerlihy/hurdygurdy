@@ -2418,35 +2418,35 @@ void hgHandlePoolFree(HgHandlePool* pool, HgHandle handle)
     *hgArrayPush(&pool->freed) = hgHandleNextGeneration(handle);
 }
 
-const HgVec2& HgVec2::operator+=(HgVec2 other)
+HgVec2& HgVec2::operator+=(HgVec2 other)
 {
     x += other.x;
     y += other.y;
     return* this;
 }
 
-const HgVec2& HgVec2::operator-=(HgVec2 other)
+HgVec2& HgVec2::operator-=(HgVec2 other)
 {
     x -= other.x;
     y -= other.y;
     return* this;
 }
 
-const HgVec2& HgVec2::operator*=(HgVec2 other)
+HgVec2& HgVec2::operator*=(HgVec2 other)
 {
     x *= other.x;
     y *= other.y;
     return* this;
 }
 
-const HgVec2& HgVec2::operator/=(HgVec2 other)
+HgVec2& HgVec2::operator/=(HgVec2 other)
 {
     x /= other.x;
     y /= other.y;
     return* this;
 }
 
-const HgVec3& HgVec3::operator+=(HgVec3 other)
+HgVec3& HgVec3::operator+=(HgVec3 other)
 {
     x += other.x;
     y += other.y;
@@ -2454,7 +2454,7 @@ const HgVec3& HgVec3::operator+=(HgVec3 other)
     return* this;
 }
 
-const HgVec3& HgVec3::operator-=(HgVec3 other)
+HgVec3& HgVec3::operator-=(HgVec3 other)
 {
     x -= other.x;
     y -= other.y;
@@ -2462,7 +2462,7 @@ const HgVec3& HgVec3::operator-=(HgVec3 other)
     return* this;
 }
 
-const HgVec3& HgVec3::operator*=(HgVec3 other)
+HgVec3& HgVec3::operator*=(HgVec3 other)
 {
     x *= other.x;
     y *= other.y;
@@ -2470,7 +2470,7 @@ const HgVec3& HgVec3::operator*=(HgVec3 other)
     return* this;
 }
 
-const HgVec3& HgVec3::operator/=(HgVec3 other)
+HgVec3& HgVec3::operator/=(HgVec3 other)
 {
     x /= other.x;
     y /= other.y;
@@ -2478,7 +2478,7 @@ const HgVec3& HgVec3::operator/=(HgVec3 other)
     return* this;
 }
 
-const HgVec4& HgVec4::operator+=(HgVec4 other)
+HgVec4& HgVec4::operator+=(HgVec4 other)
 {
     x += other.x;
     y += other.y;
@@ -2487,7 +2487,7 @@ const HgVec4& HgVec4::operator+=(HgVec4 other)
     return* this;
 }
 
-const HgVec4& HgVec4::operator-=(HgVec4 other)
+HgVec4& HgVec4::operator-=(HgVec4 other)
 {
     x -= other.x;
     y -= other.y;
@@ -2496,7 +2496,7 @@ const HgVec4& HgVec4::operator-=(HgVec4 other)
     return* this;
 }
 
-const HgVec4& HgVec4::operator*=(HgVec4 other)
+HgVec4& HgVec4::operator*=(HgVec4 other)
 {
     x *= other.x;
     y *= other.y;
@@ -2505,7 +2505,7 @@ const HgVec4& HgVec4::operator*=(HgVec4 other)
     return* this;
 }
 
-const HgVec4& HgVec4::operator/=(HgVec4 other)
+HgVec4& HgVec4::operator/=(HgVec4 other)
 {
     x /= other.x;
     y /= other.y;
@@ -2514,21 +2514,21 @@ const HgVec4& HgVec4::operator/=(HgVec4 other)
     return* this;
 }
 
-const HgMat2& HgMat2::operator+=(const HgMat2& other)
+HgMat2& HgMat2::operator+=(const HgMat2& other)
 {
     x += other.x;
     y += other.y;
     return* this;
 }
 
-const HgMat2& HgMat2::operator-=(const HgMat2& other)
+HgMat2& HgMat2::operator-=(const HgMat2& other)
 {
     x -= other.x;
     y -= other.y;
     return* this;
 }
 
-const HgMat3& HgMat3::operator+=(const HgMat3& other)
+HgMat3& HgMat3::operator+=(const HgMat3& other)
 {
     x += other.x;
     y += other.y;
@@ -2536,7 +2536,7 @@ const HgMat3& HgMat3::operator+=(const HgMat3& other)
     return* this;
 }
 
-const HgMat3& HgMat3::operator-=(const HgMat3& other)
+HgMat3& HgMat3::operator-=(const HgMat3& other)
 {
     x -= other.x;
     y -= other.y;
@@ -2544,7 +2544,7 @@ const HgMat3& HgMat3::operator-=(const HgMat3& other)
     return* this;
 }
 
-const HgMat4& HgMat4::operator+=(const HgMat4& other)
+HgMat4& HgMat4::operator+=(const HgMat4& other)
 {
     x += other.x;
     y += other.y;
@@ -2553,7 +2553,7 @@ const HgMat4& HgMat4::operator+=(const HgMat4& other)
     return* this;
 }
 
-const HgMat4& HgMat4::operator-=(const HgMat4& other)
+HgMat4& HgMat4::operator-=(const HgMat4& other)
 {
     x -= other.x;
     y -= other.y;
@@ -2594,21 +2594,21 @@ HgMat4 hgMatTranspose4(const HgMat4& mat)
     return ret;
 }
 
-const HgComplex& HgComplex::operator+=(HgComplex other)
+HgComplex& HgComplex::operator+=(HgComplex other)
 {
     r += other.r;
     i += other.i;
     return* this;
 }
 
-const HgComplex& HgComplex::operator-=(HgComplex other)
+HgComplex& HgComplex::operator-=(HgComplex other)
 {
     r -= other.r;
     i -= other.i;
     return* this;
 }
 
-const HgQuat& HgQuat::operator+=(HgQuat other)
+HgQuat& HgQuat::operator+=(HgQuat other)
 {
     r += other.r;
     i += other.i;
@@ -2617,7 +2617,7 @@ const HgQuat& HgQuat::operator+=(HgQuat other)
     return* this;
 }
 
-const HgQuat& HgQuat::operator-=(HgQuat other)
+HgQuat& HgQuat::operator-=(HgQuat other)
 {
     r -= other.r;
     i -= other.i;
@@ -2771,7 +2771,7 @@ void hgVecCross(f32* dst, const f32* lhs, const f32* rhs)
     dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
 }
 
-HgVec3 hgCross(const HgVec3& lhs, const HgVec3& rhs)
+HgVec3 hgVecCross(HgVec3 lhs, HgVec3 rhs)
 {
     return HgVec3{
         lhs.y * rhs.z - lhs.z * rhs.y,
@@ -2927,9 +2927,14 @@ HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs)
     return result;
 }
 
+f32 hgComplexAbsSqr(HgComplex comp)
+{
+    return comp.r * comp.r + comp.i * comp.i;
+}
+
 f32 hgComplexAbs(HgComplex comp)
 {
-    return sqrtf(comp.r * comp.r + comp.i + comp.i);
+    return sqrtf(hgComplexAbsSqr(comp));
 }
 
 HgComplex hgComplexNorm(HgComplex comp)
@@ -2937,6 +2942,12 @@ HgComplex hgComplexNorm(HgComplex comp)
     f32 len = hgComplexAbs(comp);
     hgAssert(len != 0);
     return HgComplex{comp.r / len, comp.i / len};
+}
+
+HgVec2 hgVecRot2(HgComplex lhs, HgVec2 rhs)
+{
+    HgComplex c = lhs * HgComplex{rhs.x, rhs.y};
+    return HgVec2{c.r, c.i};
 }
 
 HgQuat operator*(HgQuat lhs, HgQuat rhs)
@@ -2947,6 +2958,22 @@ HgQuat operator*(HgQuat lhs, HgQuat rhs)
         lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
         lhs.r * rhs.k + lhs.i * rhs.j - lhs.j * rhs.i + lhs.k * rhs.r,
     };
+}
+
+f32 hgQuatAbsSqr(HgQuat quat)
+{
+    return quat.r * quat.r + quat.i * quat.i + quat.j * quat.j + quat.k * quat.k;
+}
+
+f32 hgQuatAbs(HgQuat quat)
+{
+    return sqrtf(hgQuatAbsSqr(quat));
+}
+
+HgQuat hgQuatNorm(HgQuat quat)
+{
+    f32 len = hgQuatAbs(quat);
+    return HgQuat{quat.r / len, quat.i / len, quat.j / len, quat.k / len};
 }
 
 HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle)
@@ -2961,18 +2988,45 @@ HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle)
     };
 }
 
-HgVec3 hgVecRotate(HgQuat lhs, HgVec3 rhs)
+HgQuat hgQuatBetween(HgVec3 from, HgVec3 to)
+{
+    hgAssert(from != HgVec3{0});
+    hgAssert(to != HgVec3{0});
+
+    from = hgVecNorm3(from);
+    to = hgVecNorm3(to);
+
+    f32 dot = hgVecDot3(from, to);
+
+    if (dot > 1 - FLT_EPSILON)
+    {
+        return HgQuat{1};
+    }
+
+    if (dot < -1 + FLT_EPSILON)
+    {
+        HgVec3 axis = abs(from.x) >= 1 - FLT_EPSILON
+            ? hgVecCross(from, HgVec3{0, 1, 0})
+            : hgVecCross(from, HgVec3{1, 0, 0});
+        return HgQuat(0, axis.x, axis.y, axis.z);
+    }
+
+    HgVec3 axis = hgVecCross(from, to);
+    return hgQuatNorm(HgQuat{dot + 1, axis.x, axis.y, axis.z});
+}
+
+HgVec3 hgVecRot3(HgQuat lhs, HgVec3 rhs)
 {
     HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hgQuatConj(lhs);
     return HgVec3{q.i, q.j, q.k};
 }
 
-HgMat3 hgMatRotate(HgQuat lhs, HgMat3 rhs)
+HgMat3 hgMatRot3(HgQuat lhs, HgMat3 rhs)
 {
     return HgMat3{
-        hgVecRotate(lhs, rhs.x),
-        hgVecRotate(lhs, rhs.y),
-        hgVecRotate(lhs, rhs.z),
+        hgVecRot3(lhs, rhs.x),
+        hgVecRot3(lhs, rhs.y),
+        hgVecRot3(lhs, rhs.z),
     };
 }
 
@@ -2995,7 +3049,7 @@ HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& r
     m3.x.x = scale.x;
     m3.y.y = scale.y;
     m3.z.z = scale.z;
-    m3 = hgMatRotate(rotation, m3);
+    m3 = hgMatRot3(rotation, m3);
     HgMat4 m4 = HgMat4{m3};
     m4.w.x = position.x;
     m4.w.y = position.y;
@@ -3005,7 +3059,7 @@ HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& r
 
 HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation)
 {
-    HgMat4 rot{hgMatRotate(hgQuatConj(rotation), HgMat3{1.0f})};
+    HgMat4 rot{hgMatRot3(hgQuatConj(rotation), HgMat3{1.0f})};
     HgMat4 pos{1.0f};
     pos.x.x = zoom.x;
     pos.y.y = zoom.y;
@@ -3062,7 +3116,7 @@ bool hgContainsPointCircle(HgVec2 point, HgCircle circle)
 f32 hgDistSqrPointCircle(HgVec2 point, HgCircle circle)
 {
     HgVec2 relPos = point - circle.pos;
-    return hgVecDot2(relPos, relPos) - circle.radius * circle.radius;
+    return hgVecDot2(relPos, relPos) - hgSquare(circle.radius);
 }
 
 bool hgIntersectCircles(HgCircle a, HgCircle b)
@@ -3091,30 +3145,190 @@ bool hgIntersectRects(HgRect a, HgRect b)
 
 bool hgIntersectRectCircle(HgRect rect, HgCircle circle)
 {
-    if (circle.pos.x + circle.radius < rect.pos.x ||
-        circle.pos.x - circle.radius > rect.pos.x + rect.size.x ||
-        circle.pos.y + circle.radius < rect.pos.y ||
-        circle.pos.y - circle.radius > rect.pos.y + rect.size.y)
-        return false;
+    for (u32 i = 0; i < 2; ++i)
+    {
+        if (circle.pos[i] + circle.radius < rect.pos[i] ||
+            circle.pos[i] - circle.radius > rect.pos[i] + rect.size[i])
+            return false;
+    }
+
+    auto y = [&](f32 xOff)
+    {
+        if (circle.pos.y < rect.pos.y)
+        {
+            return hgContainsPointCircle(rect.pos + HgVec2{xOff, 0}, circle);
+        }
+        else if (circle.pos.y > rect.pos.y + rect.size.y)
+        {
+            return hgContainsPointCircle(rect.pos + HgVec2{xOff, rect.size.y}, circle);
+        }
+        return true;
+    };
 
     if (circle.pos.x < rect.pos.x)
     {
-        if (circle.pos.y < rect.pos.y)
-            return hgContainsPointCircle(rect.pos, circle);
-
-        if (circle.pos.y > rect.pos.y + rect.size.y)
-            return hgContainsPointCircle(rect.pos + HgVec2{0, rect.size.y}, circle);
+        return y(0);
     }
     else if (circle.pos.x > rect.pos.x + rect.size.x)
     {
-        if (circle.pos.y < rect.pos.y)
-            return hgContainsPointCircle(rect.pos + HgVec2{rect.size.x, 0}, circle);
-
-        if (circle.pos.y > rect.pos.y + rect.size.y)
-            return hgContainsPointCircle(rect.pos + rect.size, circle);
+        return y(rect.size.x);
     }
 
     return true;
+}
+
+bool hgIntersectRay2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit)
+{
+    hgAssert(ray.dir != HgVec2{0});
+    hgAssert(other.dir != HgVec2{0});
+
+    ray.dir = hgVecNorm2(ray.dir);
+    other.dir = hgVecNorm2(other.dir);
+
+    HgComplex otherRot = HgComplex{other.dir.x, -other.dir.y};
+
+    HgVec2 rayPos = hgVecRot2(otherRot, ray.pos - other.pos);
+    HgVec2 rayDir = hgVecRot2(otherRot, ray.dir);
+    if (rayDir.y == 0)
+        return false;
+
+    f32 tRay = -rayPos.y / rayDir.y;
+    if (tRay < 0 || rayPos.x + tRay * rayDir.x < 0)
+        return false;
+
+    if (hit != nullptr)
+    {
+        hit->pos = ray.pos + tRay * ray.dir;
+        hit->normal = rayDir.y > 0
+            ? HgVec2{other.dir.y, -other.dir.x}
+            : HgVec2{-other.dir.y, other.dir.x};
+    }
+    return true;
+}
+
+bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgIntersection2D* hit)
+{
+    hgAssert(ray.dir != HgVec2{0});
+    ray.dir = hgVecNorm2(ray.dir);
+
+    if (line.begin == line.end)
+        return false;
+    HgVec2 lineDirV = hgVecNorm2(line.end - line.begin);
+
+    HgComplex lineRot = HgComplex{lineDirV.x, -lineDirV.y};
+
+    HgVec2 rayPos = hgVecRot2(lineRot, ray.pos - line.begin);
+    HgVec2 rayDir = hgVecRot2(lineRot, ray.dir);
+    if (rayDir.y == 0)
+        return false;
+
+    f32 tRay = -rayPos.y / rayDir.y;
+    if (tRay < 0)
+        return false;
+
+    HgVec2 lineEnd = hgVecRot2(lineRot, line.end - line.begin);
+
+    f32 tLine = rayPos.x + tRay * rayDir.x;
+    if (tLine < 0 || tLine > lineEnd.x)
+        return false;
+
+    if (hit != nullptr)
+    {
+        hit->pos = ray.pos + tRay * ray.dir;
+        hit->normal = rayDir.y > 0
+            ? HgVec2{lineDirV.y, -lineDirV.x}
+            : HgVec2{-lineDirV.y, lineDirV.x};
+    }
+
+    return true;
+}
+
+bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgIntersection2D* hit)
+{
+    hgAssert(ray.dir != HgVec2{0});
+
+    HgVec2 rel = ray.pos - circle.pos;
+    f32 a = hgVecDot2(ray.dir, ray.dir);
+    f32 b = 2 * hgVecDot2(ray.dir, rel);
+    f32 c = hgVecDot2(rel, rel) - hgSquare(circle.radius);
+
+    f32 det = hgSquare(b) - 4 * a * c;
+    if (det < 0)
+        return false;
+    f32 rtdet = sqrtf(det);
+
+    f32 t = (-b - rtdet) / (2 * a);
+    if (t < 0)
+        t = (-b + rtdet) / (2 * a);
+    if (t < 0)
+        return false;
+
+    if (hit != nullptr)
+    {
+        hit->pos = ray.pos + t * ray.dir;
+        hit->normal = (hit->pos - circle.pos) / circle.radius;
+    }
+    return true;
+}
+
+bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgIntersection2D* hit)
+{
+    hgAssert(ray.dir != HgVec2{0});
+
+    if (rect.size == HgVec2{0})
+        return false;
+
+    if ((ray.pos.x < rect.pos.x && ray.dir.x < 0) ||
+        (ray.pos.x > rect.pos.x + rect.size.x && ray.dir.x > 0) ||
+        (ray.pos.y < rect.pos.y && ray.dir.y < 0) ||
+        (ray.pos.y > rect.pos.y + rect.size.y && ray.dir.y > 0))
+        return false;
+
+    if (ray.pos.x < rect.pos.x)
+    {
+        if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
+            return true;
+    }
+    else if (ray.pos.x > rect.pos.x + rect.size.x)
+    {
+        if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+            return true;
+    }
+
+    if (ray.pos.y < rect.pos.y)
+    {
+        if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+            return true;
+    }
+    else if (ray.pos.y > rect.pos.y + rect.size.y)
+    {
+        if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{0, rect.size.y}}, hit))
+            return true;
+    }
+
+    if (ray.dir.x < 0)
+    {
+        if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
+            return true;
+    }
+    else if (ray.dir.x > 0)
+    {
+        if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+            return true;
+    }
+
+    if (ray.dir.y < 0)
+    {
+        if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+            return true;
+    }
+    else if (ray.dir.y > 0)
+    {
+        if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{0, rect.size.y}}, hit))
+            return true;
+    }
+
+    return false;
 }
 
 bool hgIntersectLine2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit)
@@ -3126,26 +3340,25 @@ bool hgIntersectLine2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit)
         return false;
     HgVec2 otherDirV = hgVecNorm2(other.end - other.begin);
 
-    HgComplex otherBegin = HgComplex{other.begin.x, other.begin.y};
-    HgComplex otherDir = HgComplex{otherDirV.x, otherDirV.y};
+    HgComplex otherRot = HgComplex{otherDirV.x, -otherDirV.y};
 
-    HgComplex lineBegin = hgComplexConj(otherDir) * (HgComplex{line.begin.x, line.begin.y} - otherBegin);
-    HgComplex lineEnd = hgComplexConj(otherDir) * (HgComplex{line.end.x, line.end.y} - otherBegin);
+    HgVec2 lineBegin = hgVecRot2(otherRot, line.begin - other.begin);
+    HgVec2 lineEnd = hgVecRot2(otherRot, line.end - other.begin);
 
-    f32 tLine = -lineBegin.i / (lineEnd.i - lineBegin.i);
+    f32 tLine = -lineBegin.y / (lineEnd.y - lineBegin.y);
     if (tLine < 0 || tLine > 1)
         return false;
 
-    HgComplex otherEnd = hgComplexConj(otherDir) * (HgComplex{other.end.x, other.end.y} - otherBegin);
+    HgVec2 otherEnd = hgVecRot2(otherRot, other.end - other.begin);
 
-    f32 tOther = lineBegin.r + tLine * (lineEnd.r - lineBegin.r);
-    if (tOther < 0 || tOther > otherEnd.r)
+    f32 tOther = lineBegin.x + tLine * (lineEnd.x - lineBegin.x);
+    if (tOther < 0 || tOther > otherEnd.x)
         return false;
 
     if (hit != nullptr)
     {
         hit->pos = line.begin + tLine * (line.end - line.begin);
-        hit->normal = lineEnd.i > lineBegin.i
+        hit->normal = lineEnd.y > lineBegin.y
             ? HgVec2{otherDirV.y, -otherDirV.x}
             : HgVec2{-otherDirV.y, otherDirV.x};
     }
@@ -3161,26 +3374,25 @@ bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgIntersection2D* hit)
     hgAssert(ray.dir != HgVec2{0});
     ray.dir = hgVecNorm2(ray.dir);
 
-    HgComplex rayPos = HgComplex{ray.pos.x, ray.pos.y};
-    HgComplex rayDir = HgComplex{ray.dir.x, ray.dir.y};
+    HgComplex rayRot = HgComplex{ray.dir.x, -ray.dir.y};
 
-    HgComplex lineBegin = hgComplexConj(rayDir) * (HgComplex{line.begin.x, line.begin.y} - rayPos);
-    HgComplex lineEnd = hgComplexConj(rayDir) * (HgComplex{line.end.x, line.end.y} - rayPos);
-    if (lineEnd.i == lineBegin.i)
+    HgVec2 lineBegin = hgVecRot2(rayRot, line.begin - ray.pos);
+    HgVec2 lineEnd = hgVecRot2(rayRot, line.end - ray.pos);
+    if (lineEnd.y == lineBegin.y)
         return false;
 
-    f32 tLine = -lineBegin.i / (lineEnd.i - lineBegin.i);
+    f32 tLine = -lineBegin.y / (lineEnd.y - lineBegin.y);
     if (tLine < 0 || tLine > 1)
         return false;
 
-    f32 tOther = lineBegin.r + tLine * (lineEnd.r - lineBegin.r);
+    f32 tOther = lineBegin.x + tLine * (lineEnd.x - lineBegin.x);
     if (tOther < 0)
         return false;
 
     if (hit != nullptr)
     {
         hit->pos = line.begin + tLine * (line.end - line.begin);
-        hit->normal = lineEnd.i > lineBegin.i
+        hit->normal = lineEnd.y > lineBegin.y
             ? HgVec2{ray.dir.y, -ray.dir.x}
             : HgVec2{-ray.dir.y, ray.dir.x};
     }
@@ -3188,13 +3400,14 @@ bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgIntersection2D* hit)
     return true;
 }
 
-bool hgIntersectLineCircle2D(HgLine2D line, HgCircle circle, HgIntersection2D* hit)
+bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgIntersection2D* hit)
 {
     HgVec2 dir = line.end - line.begin;
 
+    HgVec2 rel = line.begin - circle.pos;
     f32 a = hgVecDot2(dir, dir);
-    f32 b = 2 * hgVecDot2(dir, line.begin - circle.pos);
-    f32 c = hgVecDot2(line.begin - circle.pos, line.begin - circle.pos) - hgSquare(circle.radius);
+    f32 b = 2 * hgVecDot2(dir, rel);
+    f32 c = hgVecDot2(rel, rel) - hgSquare(circle.radius);
 
     f32 det = hgSquare(b) - 4 * a * c;
     if (det < 0)
@@ -3220,209 +3433,158 @@ bool hgIntersectLineCircle2D(HgLine2D line, HgCircle circle, HgIntersection2D* h
     return true;
 }
 
-bool hgIntersectLineRect2D(HgLine2D line, HgRect rect, HgIntersection2D* hit)
+bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgIntersection2D* hit)
 {
-    if (line.end == line.begin)
+    if (line.begin == line.end)
+        return false;
+    if (rect.size == HgVec2{0})
         return false;
 
-    if (rect.size == HgVec2{0})
+    if ((line.begin.x < rect.pos.x && line.end.x < line.begin.x) ||
+        (line.begin.x > rect.pos.x + rect.size.x && line.end.x > line.begin.x) ||
+        (line.begin.y < rect.pos.y && line.end.y < line.begin.y) ||
+        (line.begin.y > rect.pos.y + rect.size.y && line.end.y > line.begin.y))
         return false;
 
     if (line.begin.x < rect.pos.x)
     {
-        if (line.end.x < line.begin.x)
-            return false;
-
-        if (line.begin.y < rect.pos.y)
-        {
-            if (line.end.y < line.begin.y)
-                return false;
-
-            if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
-                return true;
-
-            if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
-                return true;
-
-            return false;
-        }
-        else if (line.begin.y > rect.pos.y + rect.size.y)
-        {
-            if (line.end.y > line.begin.y)
-                return false;
-
-            if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
-                return true;
-
-            if (hgIntersectLine2D(line, HgLine2D{rect.pos + HgVec2{0, rect.size.y}, rect.pos + rect.size}, hit))
-                return true;
-
-            return false;
-        }
-        else
-        {
-            return hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit);
-        }
+        if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
+            return true;
     }
     else if (line.begin.x > rect.pos.x + rect.size.x)
     {
-        if (line.end.x > line.begin.x)
-            return false;
-
-        if (line.begin.y < rect.pos.y)
-        {
-            if (line.end.y < line.begin.y)
-                return false;
-
-            if (hgIntersectLine2D(line, HgLine2D{rect.pos + HgVec2{rect.size.x, 0}, rect.pos + rect.size}, hit))
-                return true;
-
-            if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
-                return true;
-
-            return false;
-        }
-        else if (line.begin.y > rect.pos.y + rect.size.y)
-        {
-            if (line.end.y > line.begin.y)
-                return false;
-
-            if (hgIntersectLine2D(line, HgLine2D{rect.pos + HgVec2{rect.size.x, 0}, rect.pos + rect.size}, hit))
-                return true;
-
-            if (hgIntersectLine2D(line, HgLine2D{rect.pos + HgVec2{0, rect.size.y}, rect.pos + rect.size}, hit))
-                return true;
-
-            return false;
-        }
-        else
-        {
-            return hgIntersectLine2D(line, HgLine2D{rect.pos + HgVec2{rect.size.x, 0}, rect.pos + rect.size}, hit);
-        }
+        if (hgIntersectLine2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+            return true;
     }
-    else
+
+    if (line.begin.y < rect.pos.y)
     {
-        if (line.begin.y < rect.pos.y)
-        {
-            if (line.end.y < line.begin.y)
-                return false;
-
-            return hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit);
-        }
-        else if (line.begin.y > rect.pos.y + rect.size.y)
-        {
-            if (line.end.y > line.begin.y)
-                return false;
-
-            return hgIntersectLine2D(line, HgLine2D{rect.pos + HgVec2{0, rect.size.y}, rect.pos + rect.size}, hit);
-        }
-        else
-        {
-            if (line.end.x < line.begin.x)
-            {
-                if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
-                    return true;
-            }
-            else if (line.end.x > line.begin.x)
-            {
-                if (hgIntersectLine2D(line, HgLine2D{rect.pos + HgVec2{rect.size.x, 0}, rect.pos + rect.size}, hit))
-                    return true;
-            }
-
-            if (line.end.y < line.begin.y)
-            {
-                if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
-                    return true;
-            }
-            else if (line.end.y > line.begin.y)
-            {
-                if (hgIntersectLine2D(line, HgLine2D{rect.pos + HgVec2{0, rect.size.y}, rect.pos + rect.size}, hit))
-                    return true;
-            }
-
-            return false;
-        }
+        if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+            return true;
     }
+    else if (line.begin.y > rect.pos.y + rect.size.y)
+    {
+        if (hgIntersectLine2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{0, rect.size.y}}, hit))
+            return true;
+    }
+
+    if (line.end.x < line.begin.x)
+    {
+        if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
+            return true;
+    }
+    else if (line.end.x > line.begin.x)
+    {
+        if (hgIntersectLine2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+            return true;
+    }
+
+    if (line.end.y < line.begin.y)
+    {
+        if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+            return true;
+    }
+    else if (line.end.y > line.begin.y)
+    {
+        if (hgIntersectLine2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{0, rect.size.y}}, hit))
+            return true;
+    }
+
+    return false;
 }
 
-bool hgIntersectRay2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit)
+bool hgContainsPointSphere(HgVec3 point, HgSphere sphere)
 {
-    hgAssert(ray.dir != HgVec2{0});
-    ray.dir = hgVecNorm2(ray.dir);
+    return hgDistSqrPointSphere(point, sphere) <= 0;
+}
 
-    hgAssert(other.dir != HgVec2{0});
-    other.dir = hgVecNorm2(other.dir);
+f32 hgDistSqrPointSphere(HgVec3 point, HgSphere sphere)
+{
+    HgVec3 rel = point - sphere.pos;
+    return hgVecDot3(rel, rel) - hgSquare(sphere.radius);
+}
 
-    HgComplex otherPos = HgComplex{other.pos.x, other.pos.y};
-    HgComplex otherDir = HgComplex{other.dir.x, other.dir.y};
+bool hgIntersectSpheres(HgSphere a, HgSphere b)
+{
+    return hgDistSqrSpheres(a, b) <= 0;
+}
 
-    HgComplex rayDir = hgComplexConj(otherDir) * HgComplex{ray.dir.x, ray.dir.y};
-    if (rayDir.i == 0)
-        return false;
+f32 hgDistSqrSpheres(HgSphere a, HgSphere b)
+{
+    HgVec3 rel = a.pos - b.pos;
+    f32 totalRadius = a.radius + b.radius;
+    return hgVecDot3(rel, rel) - hgSquare(totalRadius);
+}
 
-    HgComplex rayPos = hgComplexConj(otherDir) * (HgComplex{ray.pos.x, ray.pos.y} - otherPos);
+bool hgContainsPointBox(HgVec3 point, HgBox box)
+{
+    return point.x >= box.pos.x && point.x <= box.pos.x + box.size.x
+        && point.y >= box.pos.y && point.y <= box.pos.y + box.size.y
+        &&  point.z >= box.pos.z && point.z <= box.pos.z + box.size.z;
+}
 
-    f32 tRay = -rayPos.i / rayDir.i;
-    if (tRay < 0 || rayPos.r + tRay * rayDir.r < 0)
-        return false;
+bool hgIntersectBox(HgBox a, HgBox b)
+{
+    return a.pos.x + a.size.x >= b.pos.x && a.pos.x <= b.pos.x + b.size.x
+        && a.pos.y + a.size.y >= b.pos.y && a.pos.y <= b.pos.y + b.size.y
+        &&  a.pos.z + a.size.z >= b.pos.z && a.pos.z <= b.pos.z + b.size.z;
+}
 
-    if (hit != nullptr)
+bool hgIntersectBoxSphere(HgBox box, HgSphere sphere)
+{
+    for (u32 i = 0; i < 3; ++i)
     {
-        hit->pos = ray.pos + tRay * ray.dir;
-        hit->normal = rayDir.i > 0
-            ? HgVec2{other.dir.y, -other.dir.x}
-            : HgVec2{-other.dir.y, other.dir.x};
+        if (sphere.pos[i] + sphere.radius < box.pos[i] ||
+            sphere.pos[i] - sphere.radius > box.pos[i] + box.size[i])
+            return false;
+    }
+
+    auto z = [&](f32 xOff, f32 yOff)
+    {
+        if (sphere.pos.z < box.pos.z)
+        {
+            return hgContainsPointSphere(box.pos + HgVec3{xOff, yOff, 0}, sphere);
+        }
+        else if (sphere.pos.z > box.pos.z + box.size.z)
+        {
+            return hgContainsPointSphere(box.pos + HgVec3{xOff, yOff, box.size.z}, sphere);
+        }
+        return true;
+    };
+
+    auto y = [&](f32 xOff)
+    {
+        if (sphere.pos.z < box.pos.z)
+        {
+            return z(xOff, 0);
+        }
+        else if (sphere.pos.z > box.pos.z + box.size.z)
+        {
+            return z(xOff, box.size.y);
+        }
+        return true;
+    };
+
+    if (sphere.pos.x < box.pos.x)
+    {
+        return y(0);
+    }
+    else if (sphere.pos.x > box.pos.x + box.size.x)
+    {
+        return y(box.size.x);
     }
 
     return true;
 }
 
-bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgIntersection2D* hit)
+bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgIntersection3D* hit)
 {
-    hgAssert(ray.dir != HgVec2{0});
-    ray.dir = hgVecNorm2(ray.dir);
+    hgAssert(ray.dir != HgVec3{0});
 
-    if (line.begin == line.end)
-        return false;
-    HgVec2 lineDirV = hgVecNorm2(line.end - line.begin);
-
-    HgComplex lineBegin = HgComplex{line.begin.x, line.begin.y};
-    HgComplex lineDir = HgComplex{lineDirV.x, lineDirV.y};
-
-    HgComplex rayDir = hgComplexConj(lineDir) * HgComplex{ray.dir.x, ray.dir.y};
-    if (rayDir.i == 0)
-        return false;
-
-    HgComplex rayPos = hgComplexConj(lineDir) * (HgComplex{ray.pos.x, ray.pos.y} - lineBegin);
-
-    f32 tRay = -rayPos.i / rayDir.i;
-    if (tRay < 0)
-        return false;
-
-    HgComplex lineEnd = hgComplexConj(lineDir) * (HgComplex{line.end.x, line.end.y} - lineBegin);
-
-    f32 tLine = rayPos.r + tRay * rayDir.r;
-    if (tLine < 0 || tLine > lineEnd.r)
-        return false;
-
-    if (hit != nullptr)
-    {
-        hit->pos = ray.pos + tRay * ray.dir;
-        hit->normal = rayDir.i > 0
-            ? HgVec2{lineDirV.y, -lineDirV.x}
-            : HgVec2{-lineDirV.y, lineDirV.x};
-    }
-
-    return true;
-}
-
-bool hgIntersectRayCircle2D(HgRay2D ray, HgCircle circle, HgIntersection2D* hit)
-{
-    hgAssert(ray.dir != HgVec2{0});
-
-    f32 a = hgVecDot2(ray.dir, ray.dir);
-    f32 b = 2 * hgVecDot2(ray.dir, ray.pos - circle.pos);
-    f32 c = hgVecDot2(ray.pos - circle.pos, ray.pos - circle.pos) - hgSquare(circle.radius);
+    HgVec3 rel = ray.pos - sphere.pos;
+    f32 a = hgVecDot3(ray.dir, ray.dir);
+    f32 b = 2 * hgVecDot3(ray.dir, rel);
+    f32 c = hgVecDot3(rel, rel) - hgSquare(sphere.radius);
 
     f32 det = hgSquare(b) - 4 * a * c;
     if (det < 0)
@@ -3438,133 +3600,388 @@ bool hgIntersectRayCircle2D(HgRay2D ray, HgCircle circle, HgIntersection2D* hit)
     if (hit != nullptr)
     {
         hit->pos = ray.pos + t * ray.dir;
-        hit->normal = (hit->pos - circle.pos) / circle.radius;
+        hit->normal = (hit->pos - sphere.pos) / sphere.radius;
     }
     return true;
 }
 
-bool hgIntersectRayRect2D(HgRay2D ray, HgRect rect, HgIntersection2D* hit)
+bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgIntersection3D* hit)
 {
-    hgAssert(ray.dir != HgVec2{0});
+    hgAssert(ray.dir != HgVec3{0});
 
-    if (rect.size == HgVec2{0})
+    if (box.size == HgVec3{0})
         return false;
 
-    if (ray.pos.x < rect.pos.x)
+    if ((ray.pos.x < box.pos.x && ray.dir.x < 0) ||
+        (ray.pos.x > box.pos.x + box.size.x && ray.dir.x > 0) ||
+        (ray.pos.y < box.pos.y && ray.dir.y < 0) ||
+        (ray.pos.y > box.pos.y + box.size.y && ray.dir.y > 0) ||
+        (ray.pos.z < box.pos.z && ray.dir.z < 0) ||
+        (ray.pos.z > box.pos.z + box.size.z && ray.dir.z > 0))
+        return false;
+
+    auto x = [&](f32 dist)
     {
-        if (ray.dir.x < 0)
-            return false;
+        HgPlane plane;
+        plane.normal = HgVec3{1, 0, 0};
+        plane.dist = dist;
+        hgIntersectRayPlane(ray, plane, hit);
+        return hgContainsPointRect(
+            HgVec2{hit->pos.y, hit->pos.z},
+            HgRect{HgVec2{box.pos.y, box.pos.z}, HgVec2{box.size.y, box.size.z}});
+    };
 
-        if (ray.pos.y < rect.pos.y)
-        {
-            if (ray.dir.y < 0)
-                return false;
-
-            if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
-                return true;
-
-            if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
-                return true;
-
-            return false;
-        }
-        else if (ray.pos.y > rect.pos.y + rect.size.y)
-        {
-            if (ray.dir.y > 0)
-                return false;
-
-            if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
-                return true;
-
-            if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + HgVec2{0, rect.size.y}, rect.pos + rect.size}, hit))
-                return true;
-
-            return false;
-        }
-        else
-        {
-            return hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit);
-        }
-    }
-    else if (ray.pos.x > rect.pos.x + rect.size.x)
+    auto y = [&](f32 dist)
     {
-        if (ray.dir.x > 0)
-            return false;
+        HgPlane plane;
+        plane.normal = HgVec3{0, 1, 0};
+        plane.dist = dist;
+        hgIntersectRayPlane(ray, plane, hit);
+        return hgContainsPointRect(
+            HgVec2{hit->pos.x, hit->pos.z},
+            HgRect{HgVec2{box.pos.x, box.pos.z}, HgVec2{box.size.x, box.size.z}});
+    };
 
-        if (ray.pos.y < rect.pos.y)
-        {
-            if (ray.dir.y < 0)
-                return false;
-
-            if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + HgVec2{rect.size.x, 0}, rect.pos + rect.size}, hit))
-                return true;
-
-            if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
-                return true;
-
-            return false;
-        }
-        else if (ray.pos.y > rect.pos.y + rect.size.y)
-        {
-            if (ray.dir.y > 0)
-                return false;
-
-            if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + HgVec2{rect.size.x, 0}, rect.pos + rect.size}, hit))
-                return true;
-
-            if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + HgVec2{0, rect.size.y}, rect.pos + rect.size}, hit))
-                return true;
-
-            return false;
-        }
-        else
-        {
-            return hgIntersectRayLine2D(ray, HgLine2D{rect.pos + HgVec2{rect.size.x, 0}, rect.pos + rect.size}, hit);
-        }
-    }
-    else
+    auto z = [&](f32 dist)
     {
-        if (ray.pos.y < rect.pos.y)
-        {
-            if (ray.dir.y < 0)
-                return false;
+        HgPlane plane;
+        plane.normal = HgVec3{0, 0, 1};
+        plane.dist = dist;
+        hgIntersectRayPlane(ray, plane, hit);
+        return hgContainsPointRect(
+            HgVec2{hit->pos.x, hit->pos.y},
+            HgRect{HgVec2{box.pos.x, box.pos.y}, HgVec2{box.size.x, box.size.y}});
+    };
 
-            return hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit);
-        }
-        else if (ray.pos.y > rect.pos.y + rect.size.y)
-        {
-            if (ray.dir.y > 0)
-                return false;
-
-            return hgIntersectRayLine2D(ray, HgLine2D{rect.pos + HgVec2{0, rect.size.y}, rect.pos + rect.size}, hit);
-        }
-        else
-        {
-            if (ray.dir.x < 0)
-            {
-                if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
-                    return true;
-            }
-            else if (ray.dir.x > 0)
-            {
-                if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + HgVec2{rect.size.x, 0}, rect.pos + rect.size}, hit))
-                    return true;
-            }
-
-            if (ray.dir.y < 0)
-            {
-                if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
-                    return true;
-            }
-            else if (ray.dir.y > 0)
-            {
-                if (hgIntersectRayLine2D(ray, HgLine2D{rect.pos + HgVec2{0, rect.size.y}, rect.pos + rect.size}, hit))
-                    return true;
-            }
-
-            hgPanic("Impossible, ray inside rect did not collide with rect");
-        }
+    if (ray.pos.x < box.pos.x)
+    {
+        if (x(box.pos.x))
+            return true;
     }
+    else if (ray.pos.x > box.pos.x + box.size.x)
+    {
+        if (x(box.pos.x + box.size.x))
+            return true;
+    }
+
+    if (ray.pos.y < box.pos.y)
+    {
+        if (y(box.pos.y))
+            return true;
+    }
+    else if (ray.pos.y > box.pos.y + box.size.y)
+    {
+        if (y(box.pos.y + box.size.y))
+            return true;
+    }
+
+    if (ray.pos.z < box.pos.z)
+    {
+        if (z(box.pos.z))
+            return true;
+    }
+    else if (ray.pos.z > box.pos.z + box.size.z)
+    {
+        if (z(box.pos.z + box.size.z))
+            return true;
+    }
+
+    if (ray.dir.x < 0)
+    {
+        if (x(box.pos.x))
+            return true;
+    }
+    else if (ray.dir.x > 0)
+    {
+        if (x(box.pos.x + box.size.x))
+            return true;
+    }
+
+    if (ray.dir.y < 0)
+    {
+        if (y(box.pos.y))
+            return true;
+    }
+    else if (ray.dir.y > 0)
+    {
+        if (y(box.pos.y + box.size.y))
+            return true;
+    }
+
+    if (ray.dir.z < 0)
+    {
+        if (z(box.pos.z))
+            return true;
+    }
+    else if (ray.dir.z > 0)
+    {
+        if (z(box.pos.z + box.size.z))
+            return true;
+    }
+
+    return false;
+}
+
+bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgIntersection3D* hit)
+{
+    if (tri.verts[0] == tri.verts[1] ||
+        tri.verts[0] == tri.verts[2] ||
+        tri.verts[1] == tri.verts[2])
+        return false;
+
+    HgPlane plane;
+    plane.normal = hgVecCross(tri.verts[1] - tri.verts[0], tri.verts[2] - tri.verts[0]);
+    plane.dist = -hgVecDot3(plane.normal, tri.verts[0]);
+
+    if (!hgIntersectRayPlane(ray, plane, hit))
+        return false;
+
+    for (u32 i = 0; i < 3; ++i)
+    {
+        HgVec3 p0 = tri.verts[(i + 0) % 3];
+        HgVec3 p1 = tri.verts[(i + 1) % 3];
+        HgVec3 p2 = tri.verts[(i + 2) % 3];
+
+        f32 a = (p1.y - p0.y) / (p1.x - p0.x);
+        f32 b = p0.y - a * p0.x;
+
+        if ((hit->pos.y - a * hit->pos.x + b) * (p2.y - a * p2.x + b) < 0)
+            return false;
+    }
+
+    return true;
+}
+
+bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgIntersection3D* hit)
+{
+    hgAssert(ray.dir != HgVec3{0});
+    hgAssert(plane.normal != HgVec3{0});
+
+    ray.dir = hgVecNorm3(ray.dir);
+    plane.normal = hgVecNorm3(plane.normal);
+
+    HgQuat planeRot = hgQuatBetween(plane.normal, HgVec3{1, 0, 0});
+
+    HgVec3 rayPos = hgVecRot3(planeRot, ray.pos - plane.dist * plane.normal);
+    HgVec3 rayDir = hgVecRot3(planeRot, ray.dir);
+    if (rayDir.x == 0)
+        return false;
+
+    f32 tRay = -rayPos.x / rayDir.x;
+    if (tRay < 0)
+        return false;
+
+    if (hit != nullptr)
+    {
+        hit->pos = ray.pos + tRay * ray.dir;
+        hit->normal = rayDir.x < 0 ? plane.normal : -plane.normal;
+    }
+    return true;
+}
+
+bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgIntersection3D* hit)
+{
+    HgVec3 dir = line.end - line.begin;
+
+    HgVec3 rel = line.begin - sphere.pos;
+    f32 a = hgVecDot3(dir, dir);
+    f32 b = 2 * hgVecDot3(dir, rel);
+    f32 c = hgVecDot3(rel, rel) - hgSquare(sphere.radius);
+
+    f32 det = hgSquare(b) - 4 * a * c;
+    if (det < 0)
+        return false;
+    f32 rtdet = sqrtf(det);
+
+    f32 t = (-b - rtdet) / (2 * a);
+    if (t < 0)
+    {
+        if (t > 1)
+            return false;
+
+        t = (-b + rtdet) / (2 * a);
+    }
+    if (t < 0)
+        return false;
+
+    if (hit != nullptr)
+    {
+        hit->pos = line.begin + t * dir;
+        hit->normal = (hit->pos - sphere.pos) / sphere.radius;
+    }
+    return true;
+}
+
+bool hgIntersectLineBox(HgLine3D line, HgBox box, HgIntersection3D* hit)
+{
+    if (line.begin == line.end)
+        return false;
+    if (box.size == HgVec3{0})
+        return false;
+
+    if ((line.begin.x < box.pos.x && line.end.x < line.begin.x) ||
+        (line.begin.x > box.pos.x + box.size.x && line.end.x > line.begin.x) ||
+        (line.begin.y < box.pos.y && line.end.y < line.begin.y) ||
+        (line.begin.y > box.pos.y + box.size.y && line.end.y > line.begin.y) ||
+        (line.begin.z < box.pos.z && line.end.z < line.begin.z) ||
+        (line.begin.z > box.pos.z + box.size.z && line.end.z > line.begin.z))
+        return false;
+
+    auto x = [&](f32 dist)
+    {
+        HgPlane plane;
+        plane.normal = HgVec3{1, 0, 0};
+        plane.dist = dist;
+        hgIntersectLinePlane(line, plane, hit);
+        return hgContainsPointRect(
+            HgVec2{hit->pos.y, hit->pos.z},
+            HgRect{HgVec2{box.pos.y, box.pos.z}, HgVec2{box.size.y, box.size.z}});
+    };
+
+    auto y = [&](f32 dist)
+    {
+        HgPlane plane;
+        plane.normal = HgVec3{0, 1, 0};
+        plane.dist = dist;
+        hgIntersectLinePlane(line, plane, hit);
+        return hgContainsPointRect(
+            HgVec2{hit->pos.x, hit->pos.z},
+            HgRect{HgVec2{box.pos.x, box.pos.z}, HgVec2{box.size.x, box.size.z}});
+    };
+
+    auto z = [&](f32 dist)
+    {
+        HgPlane plane;
+        plane.normal = HgVec3{0, 0, 1};
+        plane.dist = dist;
+        hgIntersectLinePlane(line, plane, hit);
+        return hgContainsPointRect(
+            HgVec2{hit->pos.x, hit->pos.y},
+            HgRect{HgVec2{box.pos.x, box.pos.y}, HgVec2{box.size.x, box.size.y}});
+    };
+
+    if (line.begin.x < box.pos.x)
+    {
+        if (x(box.pos.x))
+            return true;
+    }
+    else if (line.begin.x > box.pos.x + box.size.x)
+    {
+        if (x(box.pos.x + box.size.x))
+            return true;
+    }
+
+    if (line.begin.y < box.pos.y)
+    {
+        if (y(box.pos.y))
+            return true;
+    }
+    else if (line.begin.y > box.pos.y + box.size.y)
+    {
+        if (y(box.pos.y + box.size.y))
+            return true;
+    }
+
+    if (line.begin.z < box.pos.z)
+    {
+        if (z(box.pos.z))
+            return true;
+    }
+    else if (line.begin.z > box.pos.z + box.size.z)
+    {
+        if (z(box.pos.z + box.size.z))
+            return true;
+    }
+
+    if (line.end.x < line.begin.x)
+    {
+        if (x(box.pos.x))
+            return true;
+    }
+    else if (line.end.x > line.begin.x)
+    {
+        if (x(box.pos.x + box.size.x))
+            return true;
+    }
+
+    if (line.end.y < line.begin.y)
+    {
+        if (y(box.pos.y))
+            return true;
+    }
+    else if (line.end.y > line.begin.y)
+    {
+        if (y(box.pos.y + box.size.y))
+            return true;
+    }
+
+    if (line.end.z < line.begin.z)
+    {
+        if (z(box.pos.z))
+            return true;
+    }
+    else if (line.end.z > line.begin.z)
+    {
+        if (z(box.pos.z + box.size.z))
+            return true;
+    }
+
+    return false;
+}
+
+bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgIntersection3D* hit)
+{
+    if (tri.verts[0] == tri.verts[1] ||
+        tri.verts[0] == tri.verts[2] ||
+        tri.verts[1] == tri.verts[2])
+        return false;
+
+    HgPlane plane;
+    plane.normal = hgVecCross(tri.verts[1] - tri.verts[0], tri.verts[2] - tri.verts[0]);
+    plane.dist = -hgVecDot3(plane.normal, tri.verts[0]);
+
+    if (!hgIntersectLinePlane(line, plane, hit))
+        return false;
+
+    for (u32 i = 0; i < 3; ++i)
+    {
+        HgVec3 p0 = tri.verts[(i + 0) % 3];
+        HgVec3 p1 = tri.verts[(i + 1) % 3];
+        HgVec3 p2 = tri.verts[(i + 2) % 3];
+
+        f32 a = (p1.y - p0.y) / (p1.x - p0.x);
+        f32 b = p0.y - a * p0.x;
+
+        if ((hit->pos.y - a * hit->pos.x + b) * (p2.y - a * p2.x + b) < 0)
+            return false;
+    }
+
+    return true;
+}
+
+bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgIntersection3D* hit)
+{
+    if (line.begin == line.end)
+        return false;
+
+    hgAssert(plane.normal != HgVec3{0});
+    plane.normal = hgVecNorm3(plane.normal);
+
+    HgQuat planeRot = hgQuatBetween(plane.normal, HgVec3{1, 0, 0});
+
+    HgVec3 lineBegin = hgVecRot3(planeRot, line.begin - plane.dist * plane.normal);
+    HgVec3 lineEnd = hgVecRot3(planeRot, line.end - plane.dist * plane.normal);
+
+    f32 tLine = -lineBegin.x / (lineEnd.x - lineBegin.x);
+    if (tLine < 0 || tLine > 1)
+        return false;
+
+    if (hit != nullptr)
+    {
+        hit->pos = line.begin + tLine * (line.end - line.begin);
+        hit->normal = (lineEnd.x - lineBegin.x) < 0 ? plane.normal : -plane.normal;
+    }
+    return true;
 }
 
 u32 hgNoise(u32 seed, u32 pos)

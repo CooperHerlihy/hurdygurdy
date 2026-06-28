@@ -142,7 +142,7 @@ int main()
             if (movement != HgVec3{0.0f})
             {
                 f32 moveSpeed = 1.5f;
-                HgVec3 rotated = hgVecRotate(cameraTf->rotation, HgVec3{movement.x, 0.0f, movement.z});
+                HgVec3 rotated = hgVecRot3(cameraTf->rotation, HgVec3{movement.x, 0.0f, movement.z});
                 cameraTf->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
             }
 

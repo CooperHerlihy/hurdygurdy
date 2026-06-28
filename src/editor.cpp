@@ -727,7 +727,7 @@ int main()
             if (movement != HgVec3{0.0f})
             {
                 f32 moveSpeed = 1.5f * (f32)delta;
-                HgVec3 rotated = hgVecRotate(transform->rotation, HgVec3{movement.x, 0.0f, movement.z});
+                HgVec3 rotated = hgVecRot3(transform->rotation, HgVec3{movement.x, 0.0f, movement.z});
                 transform->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed;
             }
 

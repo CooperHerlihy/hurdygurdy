@@ -116,19 +116,28 @@ struct HgVec2 {
     /**
      * Add another vector in place
      */
-    const HgVec2& operator+=(HgVec2 other);
+    HgVec2& operator+=(HgVec2 other);
     /**
      * Subtract another vector in place
      */
-    const HgVec2& operator-=(HgVec2 other);
+    HgVec2& operator-=(HgVec2 other);
     /**
      * Multiply another vector in place
      */
-    const HgVec2& operator*=(HgVec2 other);
+    HgVec2& operator*=(HgVec2 other);
     /**
      * Divide another vector in place
      */
-    const HgVec2& operator/=(HgVec2 other);
+    HgVec2& operator/=(HgVec2 other);
+
+    /**
+     * Access by index
+     */
+    constexpr f32& operator[](u32 idx)
+    {
+        hgAssert(idx < 2);
+        return *(&x + idx);
+    }
 };
 
 /**
@@ -168,19 +177,28 @@ struct HgVec3 {
     /**
      * Add another vector in place
      */
-    const HgVec3& operator+=(HgVec3 other);
+    HgVec3& operator+=(HgVec3 other);
     /**
      * Subtract another vector in place
      */
-    const HgVec3& operator-=(HgVec3 other);
+    HgVec3& operator-=(HgVec3 other);
     /**
      * Multiply another vector in place
      */
-    const HgVec3& operator*=(HgVec3 other);
+    HgVec3& operator*=(HgVec3 other);
     /**
      * Divide another vector in place
      */
-    const HgVec3& operator/=(HgVec3 other);
+    HgVec3& operator/=(HgVec3 other);
+
+    /**
+     * Access by index
+     */
+    constexpr f32& operator[](u32 idx)
+    {
+        hgAssert(idx < 3);
+        return *(&x + idx);
+    }
 };
 
 /**
@@ -231,19 +249,28 @@ struct HgVec4 {
     /**
      * Add another vector in place
      */
-    const HgVec4& operator+=(HgVec4 other);
+    HgVec4& operator+=(HgVec4 other);
     /**
      * Subtract another vector in place
      */
-    const HgVec4& operator-=(HgVec4 other);
+    HgVec4& operator-=(HgVec4 other);
     /**
      * Multiply another vector in place
      */
-    const HgVec4& operator*=(HgVec4 other);
+    HgVec4& operator*=(HgVec4 other);
     /**
      * Divide another vector in place
      */
-    const HgVec4& operator/=(HgVec4 other);
+    HgVec4& operator/=(HgVec4 other);
+
+    /**
+     * Access by index
+     */
+    constexpr f32& operator[](u32 idx)
+    {
+        hgAssert(idx < 4);
+        return *(&x + idx);
+    }
 };
 
 /**
@@ -275,11 +302,20 @@ struct HgMat2 {
     /**
      * Add another matrix in place
      */
-    const HgMat2& operator+=(const HgMat2& other);
+    HgMat2& operator+=(const HgMat2& other);
     /**
      * Subtract another matrix in place
      */
-    const HgMat2& operator-=(const HgMat2& other);
+    HgMat2& operator-=(const HgMat2& other);
+
+    /**
+     * Access by index
+     */
+    constexpr HgVec2& operator[](u32 idx)
+    {
+        hgAssert(idx < 2);
+        return *(&x + idx);
+    }
 };
 
 /**
@@ -322,11 +358,20 @@ struct HgMat3 {
     /**
      * Add another matrix in place
      */
-    const HgMat3& operator+=(const HgMat3& other);
+    HgMat3& operator+=(const HgMat3& other);
     /**
      * Subtract another matrix in place
      */
-    const HgMat3& operator-=(const HgMat3& other);
+    HgMat3& operator-=(const HgMat3& other);
+
+    /**
+     * Access by index
+     */
+    constexpr HgVec3& operator[](u32 idx)
+    {
+        hgAssert(idx < 3);
+        return *(&x + idx);
+    }
 };
 
 /**
@@ -381,11 +426,20 @@ struct HgMat4 {
     /**
      * Add another matrix in place
      */
-    const HgMat4& operator+=(const HgMat4& other);
+    HgMat4& operator+=(const HgMat4& other);
     /**
      * Subtract another matrix in place
      */
-    const HgMat4& operator-=(const HgMat4& other);
+    HgMat4& operator-=(const HgMat4& other);
+
+    /**
+     * Access by index
+     */
+    constexpr HgVec4& operator[](u32 idx)
+    {
+        hgAssert(idx < 4);
+        return *(&x + idx);
+    }
 };
 
 /**
@@ -417,11 +471,11 @@ struct HgComplex {
     /**
      * Add another complex number in place
      */
-    const HgComplex& operator+=(HgComplex other);
+    HgComplex& operator+=(HgComplex other);
     /**
      * Subtract another complex number in place
      */
-    const HgComplex& operator-=(HgComplex other);
+    HgComplex& operator-=(HgComplex other);
 };
 
 /**
@@ -453,11 +507,11 @@ struct HgQuat {
     /**
      * Add another quaternion in place
      */
-    const HgQuat& operator+=(HgQuat other);
+    HgQuat& operator+=(HgQuat other);
     /**
      * Subtract another quaternion in place
      */
-    const HgQuat& operator-=(HgQuat other);
+    HgQuat& operator-=(HgQuat other);
 };
 
 /**
@@ -1114,6 +1168,19 @@ constexpr HgComplex operator*(HgComplex lhs, HgComplex rhs)
 }
 
 /**
+ * Compute the conjugate of a complex number
+ */
+constexpr HgComplex hgComplexConj(HgComplex comp)
+{
+    return HgComplex{comp.r, -comp.i};
+}
+
+/**
+ * Compute the absolute value squared of a complex number
+ */
+f32 hgComplexAbsSqr(HgComplex comp);
+
+/**
  * Compute the absolute value of a complex number
  */
 f32 hgComplexAbs(HgComplex comp);
@@ -1124,12 +1191,9 @@ f32 hgComplexAbs(HgComplex comp);
 HgComplex hgComplexNorm(HgComplex comp);
 
 /**
- * Compute the conjugate of a complex number
+ * Rotate a 2D vector using a complex number
  */
-constexpr HgComplex hgComplexConj(HgComplex comp)
-{
-    return HgComplex{comp.r, -comp.i};
-}
+HgVec2 hgVecRot2(HgComplex lhs, HgVec2 rhs);
 
 /**
  * Add quaternions
@@ -1161,19 +1225,39 @@ constexpr HgQuat hgQuatConj(HgQuat quat)
 }
 
 /**
+ * Return the absolute value squared of a quaternion
+ */
+f32 hgQuatAbsSqr(HgQuat quat);
+
+/**
+ * Return the absolute value of a quaternion
+ */
+f32 hgQuatAbs(HgQuat quat);
+
+/**
+ * Return a normalized quaternion
+ */
+HgQuat hgQuatNorm(HgQuat q);
+
+/**
  * Create a rotation quaternion from an axis and angle
  */
 HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle);
 
 /**
+ * Create a rotation quaternion between two directions
+ */
+HgQuat hgQuatBetween(HgVec3 from, HgVec3 to);
+
+/**
  * Rotate a 3D vector using a quaternion
  */
-HgVec3 hgVecRotate(HgQuat lhs, HgVec3 rhs);
+HgVec3 hgVecRot3(HgQuat lhs, HgVec3 rhs);
 
 /**
  * Rotate a 3x3 matrix using a quaternion
  */
-HgMat3 hgMatRotate(HgQuat lhs, HgMat3 rhs);
+HgMat3 hgMatRot3(HgQuat lhs, HgMat3 rhs);
 
 /**
  * Creates a model matrix for 2D graphics
@@ -1318,20 +1402,6 @@ struct HgIntersection2D {
 };
 
 /**
- * A 2D line
- */
-struct HgLine2D {
-    /**
-     * The begin vertex
-     */
-    HgVec2 begin;
-    /**
-     * The end vertex
-     */
-    HgVec2 end;
-};
-
-/**
  * A 2D ray
  */
 struct HgRay2D {
@@ -1346,56 +1416,18 @@ struct HgRay2D {
 };
 
 /**
- * Intersect two lines
- *
- * Parameters
- * - line The line to cast
- * - other The other line to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the lines intersect
+ * A 2D line
  */
-bool hgIntersectLine2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit);
-
-/**
- * Intersect a line and a ray
- *
- * Parameters
- * - line The line to cast
- * - ray The ray to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and ray intersect
- */
-bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgIntersection2D* hit);
-
-/**
- * Intersect a line and a circle
- *
- * Parameters
- * - line The line to cast
- * - circle The circle to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and circle intersect
- */
-bool hgIntersectLineCircle2D(HgLine2D line, HgCircle circle, HgIntersection2D* hit);
-
-/**
- * Intersect a line and a rect
- *
- * Parameters
- * - line The line to cast
- * - rect The rect to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and rect intersect
- */
-bool hgIntersectLineRect2D(HgLine2D line, HgRect rect, HgIntersection2D* hit);
+struct HgLine2D {
+    /**
+     * The begin vertex
+     */
+    HgVec2 begin;
+    /**
+     * The end vertex
+     */
+    HgVec2 end;
+};
 
 /**
  * Intersect two rays
@@ -1434,7 +1466,7 @@ bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgIntersection2D* hit);
  * Returns
  * - Whether the ray and circle intersect
  */
-bool hgIntersectRayCircle2D(HgRay2D ray, HgCircle circle, HgIntersection2D* hit);
+bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgIntersection2D* hit);
 
 /**
  * Intersect a ray and a rect
@@ -1447,12 +1479,145 @@ bool hgIntersectRayCircle2D(HgRay2D ray, HgCircle circle, HgIntersection2D* hit)
  * Returns
  * - Whether the ray and rect intersect
  */
-bool hgIntersectRayRect2D(HgRay2D ray, HgRect rect, HgIntersection2D* hit);
+bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgIntersection2D* hit);
+
+/**
+ * Intersect two lines
+ *
+ * Parameters
+ * - line The line to cast
+ * - other The other line to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the lines intersect
+ */
+bool hgIntersectLine2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit);
+
+/**
+ * Intersect a line and a ray
+ *
+ * Parameters
+ * - line The line to cast
+ * - ray The ray to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and ray intersect
+ */
+bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgIntersection2D* hit);
+
+/**
+ * Intersect a line and a circle
+ *
+ * Parameters
+ * - line The line to cast
+ * - circle The circle to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and circle intersect
+ */
+bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgIntersection2D* hit);
+
+/**
+ * Intersect a line and a rect
+ *
+ * Parameters
+ * - line The line to cast
+ * - rect The rect to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and rect intersect
+ */
+bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgIntersection2D* hit);
+
+/**
+ * A 3D sphere
+ */
+struct HgSphere {
+    /**
+     * The center position
+     */
+    HgVec3 pos;
+    /**
+     * The radius from the center
+     */
+    f32 radius;
+};
+
+/**
+ * Returns whether the sphere contains the point
+ */
+bool hgContainsPointSphere(HgVec3 point, HgSphere sphere);
+
+/**
+ * Returns the distance squared between the point and the sphere
+ *
+ * Notes returns 0 if touching, and negative if overlapping
+ */
+f32 hgDistSqrPointSphere(HgVec3 point, HgSphere sphere);
+
+/**
+ * Returns whether two spheres intersect or not (includes touching)
+ */
+bool hgIntersectSpheres(HgSphere a, HgSphere b);
+
+/**
+ * Returns the distance squared between the spheres
+ *
+ * Notes returns 0 if touching, and negative if overlapping
+ */
+f32 hgDistSqrSpheres(HgSphere a, HgSphere b);
+
+/**
+ * A 3D box
+ */
+struct HgBox {
+    /**
+     * The origin position
+     */
+    HgVec3 pos;
+    /**
+     * The extension in each direction
+     */
+    HgVec3 size;
+};
+
+/**
+ * Returns whether the box contains the point
+ */
+bool hgContainsPointBox(HgVec3 point, HgBox box);
+
+/**
+ * Returns whether two boxs intersect or not (includes touching)
+ */
+bool hgIntersectBox(HgBox a, HgBox b);
+
+/**
+ * Returns whether a box and a sphere intersect or not (includes touching)
+ */
+bool hgIntersectBoxSphere(HgBox box, HgSphere sphere);
+
+/**
+ * 3D intersection info
+ */
+struct HgIntersection3D {
+    /**
+     * The position of the hit
+     */
+    HgVec3 pos;
+    /**
+     * The normal at the hit position
+     */
+    HgVec3 normal;
+};
 
 /**
  * A 3D ray
  */
-struct HgRay3 {
+struct HgRay3D {
     /**
      * The origin position
      */
@@ -1464,19 +1629,9 @@ struct HgRay3 {
 };
 
 /**
- * A 3D plane
- */
-struct HgPlane3 {
-    /**
-     * Three points on the plane
-     */
-    HgVec3 points[3];
-};
-
-/**
  * A 3D line
  */
-struct HgLine3 {
+struct HgLine3D {
     /**
      * The begin vertex
      */
@@ -1490,7 +1645,7 @@ struct HgLine3 {
 /**
  * A 3D triangle
  */
-struct HgTri3 {
+struct HgTri {
     /**
      * The three vertices
      */
@@ -1498,32 +1653,122 @@ struct HgTri3 {
 };
 
 /**
- * A 3D box
+ * A 3D plane
  */
-struct HgBox3 {
+struct HgPlane {
     /**
-     * The origin position
+     * The plane's normal
      */
-    HgVec3 pos;
+    HgVec3 normal;
     /**
-     * The extension in each direction
+     * The distance in the direction of the normal
      */
-    HgVec3 size;
+    f32 dist;
 };
 
 /**
- * A 3D sphere
+ * Intersect a ray and a sphere
+ *
+ * Parameters
+ * - ray The ray to cast
+ * - sphere The sphere to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the ray and sphere intersect
  */
-struct HgSphere3 {
-    /**
-     * The center position
-     */
-    HgVec3 pos;
-    /**
-     * The radius from the center
-     */
-    f32 radius;
-};
+bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgIntersection3D* hit);
+
+/**
+ * Intersect a ray and a box
+ *
+ * Parameters
+ * - ray The ray to cast
+ * - box The box to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the ray and box intersect
+ */
+bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgIntersection3D* hit);
+
+/**
+ * Intersect a ray and a triangle
+ *
+ * Parameters
+ * - ray The ray to cast
+ * - triangle The triangle to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the ray and triangle intersect
+ */
+bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgIntersection3D* hit);
+
+/**
+ * Intersect a ray and a plane
+ *
+ * Parameters
+ * - ray The ray to cast
+ * - plane The plane to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the ray and plane intersect
+ */
+bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgIntersection3D* hit);
+
+/**
+ * Intersect a line and a sphere
+ *
+ * Parameters
+ * - line The line to cast
+ * - sphere The sphere to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and sphere intersect
+ */
+bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgIntersection3D* hit);
+
+/**
+ * Intersect a line and a box
+ *
+ * Parameters
+ * - line The line to cast
+ * - box The box to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and box intersect
+ */
+bool hgIntersectLineBox(HgLine3D line, HgBox box, HgIntersection3D* hit);
+
+/**
+ * Intersect a line and a triangle
+ *
+ * Parameters
+ * - line The line to cast
+ * - triangle The triangle to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and triangle intersect
+ */
+bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgIntersection3D* hit);
+
+/**
+ * Intersect a line and a plane
+ *
+ * Parameters
+ * - line The line to cast
+ * - plane The plane to intersect
+ * - hit A pointer to store the hit data, or nullptr
+ *
+ * Returns
+ * - Whether the line and plane intersect
+ */
+bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgIntersection3D* hit);
 
 /**
  * Generate white noise
