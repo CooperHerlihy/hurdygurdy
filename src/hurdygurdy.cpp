@@ -660,7 +660,7 @@ HgStringBuilder hgIntegerToString(HgArena* arena, i64 num)
         return hgStringCopy(arena, "0");
 
     bool isNegative = num < 0;
-    u64 unum = (u64)abs(num);
+    u64 unum = (u64)std::abs(num);
 
     HgStringBuilder reverse{};
     while (unum != 0)
@@ -690,12 +690,12 @@ HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
     if (num == 0.0)
         return hgStringCopy(arena, "0.0");
 
-    HgStringBuilder intStr = hgIntegerToString(scratch, (i64)fabs(num));
+    HgStringBuilder intStr = hgIntegerToString(scratch, (i64)std::abs(num));
 
     HgStringBuilder decStr{};
     hgStringAppendC(scratch, &decStr, '.');
 
-    f64 decPart = fabs(num);
+    f64 decPart = std::abs(num);
     for (u64 i = 0; i < decimalCount; ++i)
     {
         decPart *= 10.0;
@@ -3005,7 +3005,7 @@ HgQuat hgQuatBetween(HgVec3 from, HgVec3 to)
 
     if (dot < -1 + FLT_EPSILON)
     {
-        HgVec3 axis = abs(from.x) >= 1 - FLT_EPSILON
+        HgVec3 axis = std::abs(from.x) >= 1 - FLT_EPSILON
             ? hgVecCross(from, HgVec3{0, 1, 0})
             : hgVecCross(from, HgVec3{1, 0, 0});
         return HgQuat(0, axis.x, axis.y, axis.z);
@@ -3127,7 +3127,7 @@ bool hgIntersectCircles(HgCircle a, HgCircle b)
 f32 hgDistSqrCircles(HgCircle a, HgCircle b)
 {
     HgVec2 relPos = a.pos - b.pos;
-    f32 totalRad = abs(a.radius) + abs(b.radius);
+    f32 totalRad = std::abs(a.radius) + std::abs(b.radius);
     return hgVecDot2(relPos, relPos) - totalRad * totalRad;
 }
 
@@ -3177,7 +3177,7 @@ bool hgIntersectRectCircle(HgRect rect, HgCircle circle)
     return true;
 }
 
-bool hgIntersectRay2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit)
+bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit)
 {
     hgAssert(ray.dir != HgVec2{0});
     hgAssert(other.dir != HgVec2{0});
@@ -3273,6 +3273,10 @@ bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgIntersection2D* hit)
 
 bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgIntersection2D* hit)
 {
+    HgIntersection2D tmp;
+    if (hit == nullptr)
+        hit = &tmp;
+
     hgAssert(ray.dir != HgVec2{0});
 
     if (rect.size == HgVec2{0})
@@ -3331,7 +3335,7 @@ bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgIntersection2D* hit)
     return false;
 }
 
-bool hgIntersectLine2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit)
+bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit)
 {
     if (line.begin == line.end)
         return false;
@@ -3415,14 +3419,11 @@ bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgIntersection2D* hit
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
+    if (t > 1)
+        return false;
     if (t < 0)
-    {
-        if (t > 1)
-            return false;
-
         t = (-b + rtdet) / (2 * a);
-    }
-    if (t < 0)
+    if (t < 0 || t > 1)
         return false;
 
     if (hit != nullptr)
@@ -3435,6 +3436,10 @@ bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgIntersection2D* hit
 
 bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgIntersection2D* hit)
 {
+    HgIntersection2D tmp;
+    if (hit == nullptr)
+        hit = &tmp;
+
     if (line.begin == line.end)
         return false;
     if (rect.size == HgVec2{0})
@@ -3448,45 +3453,45 @@ bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgIntersection2D* hit)
 
     if (line.begin.x < rect.pos.x)
     {
-        if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
+        if (hgIntersectLines2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
             return true;
     }
     else if (line.begin.x > rect.pos.x + rect.size.x)
     {
-        if (hgIntersectLine2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+        if (hgIntersectLines2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{rect.size.x, 0}}, hit))
             return true;
     }
 
     if (line.begin.y < rect.pos.y)
     {
-        if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+        if (hgIntersectLines2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
             return true;
     }
     else if (line.begin.y > rect.pos.y + rect.size.y)
     {
-        if (hgIntersectLine2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{0, rect.size.y}}, hit))
+        if (hgIntersectLines2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{0, rect.size.y}}, hit))
             return true;
     }
 
     if (line.end.x < line.begin.x)
     {
-        if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
+        if (hgIntersectLines2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{0, rect.size.y}}, hit))
             return true;
     }
     else if (line.end.x > line.begin.x)
     {
-        if (hgIntersectLine2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+        if (hgIntersectLines2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{rect.size.x, 0}}, hit))
             return true;
     }
 
     if (line.end.y < line.begin.y)
     {
-        if (hgIntersectLine2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
+        if (hgIntersectLines2D(line, HgLine2D{rect.pos, rect.pos + HgVec2{rect.size.x, 0}}, hit))
             return true;
     }
     else if (line.end.y > line.begin.y)
     {
-        if (hgIntersectLine2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{0, rect.size.y}}, hit))
+        if (hgIntersectLines2D(line, HgLine2D{rect.pos + rect.size, rect.pos + HgVec2{0, rect.size.y}}, hit))
             return true;
     }
 
@@ -3577,6 +3582,22 @@ bool hgIntersectBoxSphere(HgBox box, HgSphere sphere)
     return true;
 }
 
+HgPlane hgPlaneFromPoint(HgVec3 point, HgVec3 normal)
+{
+    HgPlane plane;
+    plane.normal = hgVecNorm3(normal);
+    plane.dist = -hgVecDot3(plane.normal, point);
+    return plane;
+}
+
+HgPlane hgPlaneFromTri(HgTri tri)
+{
+    HgPlane plane;
+    plane.normal = hgVecNorm3(hgVecCross(tri.b - tri.a, tri.c - tri.a));
+    plane.dist = -hgVecDot3(plane.normal, tri.a);
+    return plane;
+}
+
 bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgIntersection3D* hit)
 {
     hgAssert(ray.dir != HgVec3{0});
@@ -3607,17 +3628,21 @@ bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgIntersection3D* hit)
 
 bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgIntersection3D* hit)
 {
+    HgIntersection3D tmp;
+    if (hit == nullptr)
+        hit = &tmp;
+
     hgAssert(ray.dir != HgVec3{0});
 
     if (box.size == HgVec3{0})
         return false;
 
-    if ((ray.pos.x < box.pos.x && ray.dir.x < 0) ||
-        (ray.pos.x > box.pos.x + box.size.x && ray.dir.x > 0) ||
-        (ray.pos.y < box.pos.y && ray.dir.y < 0) ||
-        (ray.pos.y > box.pos.y + box.size.y && ray.dir.y > 0) ||
-        (ray.pos.z < box.pos.z && ray.dir.z < 0) ||
-        (ray.pos.z > box.pos.z + box.size.z && ray.dir.z > 0))
+    if ((ray.pos.x <= box.pos.x && ray.dir.x <= 0) ||
+        (ray.pos.x >= box.pos.x + box.size.x && ray.dir.x >= 0) ||
+        (ray.pos.y <= box.pos.y && ray.dir.y <= 0) ||
+        (ray.pos.y >= box.pos.y + box.size.y && ray.dir.y >= 0) ||
+        (ray.pos.z <= box.pos.z && ray.dir.z <= 0) ||
+        (ray.pos.z >= box.pos.z + box.size.z && ray.dir.z >= 0))
         return false;
 
     auto x = [&](f32 dist)
@@ -3724,23 +3749,25 @@ bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgIntersection3D* hit)
 
 bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgIntersection3D* hit)
 {
-    if (tri.verts[0] == tri.verts[1] ||
-        tri.verts[0] == tri.verts[2] ||
-        tri.verts[1] == tri.verts[2])
+    HgIntersection3D tmp;
+    if (hit == nullptr)
+        hit = &tmp;
+
+    if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
         return false;
 
     HgPlane plane;
-    plane.normal = hgVecCross(tri.verts[1] - tri.verts[0], tri.verts[2] - tri.verts[0]);
-    plane.dist = -hgVecDot3(plane.normal, tri.verts[0]);
+    plane.normal = hgVecCross(tri.b - tri.a, tri.c - tri.a);
+    plane.dist = -hgVecDot3(plane.normal, tri.a);
 
     if (!hgIntersectRayPlane(ray, plane, hit))
         return false;
 
     for (u32 i = 0; i < 3; ++i)
     {
-        HgVec3 p0 = tri.verts[(i + 0) % 3];
-        HgVec3 p1 = tri.verts[(i + 1) % 3];
-        HgVec3 p2 = tri.verts[(i + 2) % 3];
+        HgVec3 p0 = (&tri.a)[(i + 0) % 3];
+        HgVec3 p1 = (&tri.a)[(i + 1) % 3];
+        HgVec3 p2 = (&tri.a)[(i + 2) % 3];
 
         f32 a = (p1.y - p0.y) / (p1.x - p0.x);
         f32 b = p0.y - a * p0.x;
@@ -3794,14 +3821,11 @@ bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgIntersection3D* hit
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
+    if (t > 1)
+        return false;
     if (t < 0)
-    {
-        if (t > 1)
-            return false;
-
         t = (-b + rtdet) / (2 * a);
-    }
-    if (t < 0)
+    if (t < 0 || t > 1)
         return false;
 
     if (hit != nullptr)
@@ -3814,17 +3838,21 @@ bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgIntersection3D* hit
 
 bool hgIntersectLineBox(HgLine3D line, HgBox box, HgIntersection3D* hit)
 {
+    HgIntersection3D tmp;
+    if (hit == nullptr)
+        hit = &tmp;
+
     if (line.begin == line.end)
         return false;
     if (box.size == HgVec3{0})
         return false;
 
-    if ((line.begin.x < box.pos.x && line.end.x < line.begin.x) ||
-        (line.begin.x > box.pos.x + box.size.x && line.end.x > line.begin.x) ||
-        (line.begin.y < box.pos.y && line.end.y < line.begin.y) ||
-        (line.begin.y > box.pos.y + box.size.y && line.end.y > line.begin.y) ||
-        (line.begin.z < box.pos.z && line.end.z < line.begin.z) ||
-        (line.begin.z > box.pos.z + box.size.z && line.end.z > line.begin.z))
+    if ((line.begin.x <= box.pos.x && line.end.x <= line.begin.x) ||
+        (line.begin.x >= box.pos.x + box.size.x && line.end.x >= line.begin.x) ||
+        (line.begin.y <= box.pos.y && line.end.y <= line.begin.y) ||
+        (line.begin.y >= box.pos.y + box.size.y && line.end.y >= line.begin.y) ||
+        (line.begin.z <= box.pos.z && line.end.z <= line.begin.z) ||
+        (line.begin.z >= box.pos.z + box.size.z && line.end.z >= line.begin.z))
         return false;
 
     auto x = [&](f32 dist)
@@ -3931,23 +3959,21 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgIntersection3D* hit)
 
 bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgIntersection3D* hit)
 {
-    if (tri.verts[0] == tri.verts[1] ||
-        tri.verts[0] == tri.verts[2] ||
-        tri.verts[1] == tri.verts[2])
+    HgIntersection3D tmp;
+    if (hit == nullptr)
+        hit = &tmp;
+
+    if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
         return false;
 
-    HgPlane plane;
-    plane.normal = hgVecCross(tri.verts[1] - tri.verts[0], tri.verts[2] - tri.verts[0]);
-    plane.dist = -hgVecDot3(plane.normal, tri.verts[0]);
-
-    if (!hgIntersectLinePlane(line, plane, hit))
+    if (!hgIntersectLinePlane(line, hgPlaneFromTri(tri), hit))
         return false;
 
     for (u32 i = 0; i < 3; ++i)
     {
-        HgVec3 p0 = tri.verts[(i + 0) % 3];
-        HgVec3 p1 = tri.verts[(i + 1) % 3];
-        HgVec3 p2 = tri.verts[(i + 2) % 3];
+        HgVec3 p0 = (&tri.a)[(i + 0) % 3];
+        HgVec3 p1 = (&tri.a)[(i + 1) % 3];
+        HgVec3 p2 = (&tri.a)[(i + 2) % 3];
 
         f32 a = (p1.y - p0.y) / (p1.x - p0.x);
         f32 b = p0.y - a * p0.x;

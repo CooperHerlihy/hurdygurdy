@@ -531,6 +531,36 @@ constexpr bool operator!=(HgVec2 lhs, HgVec2 rhs)
 }
 
 /**
+ * Compare vectors, treating values within FLT_EPSILON as the same
+ */
+constexpr bool hgVecEq2(HgVec2 lhs, HgVec2 rhs)
+{
+    return std::abs(lhs.x - rhs.x) < 1e-6 &&
+           std::abs(lhs.y - rhs.y) < 1e-6;
+}
+
+/**
+ * Compare vectors, treating values within FLT_EPSILON as the same
+ */
+constexpr bool hgVecEq3(HgVec3 lhs, HgVec3 rhs)
+{
+    return std::abs(lhs.x - rhs.x) < 1e-6 &&
+           std::abs(lhs.y - rhs.y) < 1e-6 &&
+           std::abs(lhs.z - rhs.z) < 1e-6;
+}
+
+/**
+ * Compare vectors, treating values within FLT_EPSILON as the same
+ */
+constexpr bool hgVecEq4(HgVec4 lhs, HgVec4 rhs)
+{
+    return std::abs(lhs.x - rhs.x) < 1e-6 &&
+           std::abs(lhs.y - rhs.y) < 1e-6 &&
+           std::abs(lhs.z - rhs.z) < 1e-6 &&
+           std::abs(lhs.w - rhs.w) < 1e-6;
+}
+
+/**
  * Compare vectors
  */
 constexpr bool operator==(HgVec3 lhs, HgVec3 rhs)
@@ -1367,7 +1397,7 @@ struct HgRect {
      */
     HgVec2 pos;
     /**
-     * The extension in either direction
+     * The extent in each dimension
      */
     HgVec2 size;
 };
@@ -1440,7 +1470,7 @@ struct HgLine2D {
  * Returns
  * - Whether the rays intersect
  */
-bool hgIntersectRay2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit);
+bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit);
 
 /**
  * Intersect a ray and a line
@@ -1492,7 +1522,7 @@ bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgIntersection2D* hit);
  * Returns
  * - Whether the lines intersect
  */
-bool hgIntersectLine2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit);
+bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit);
 
 /**
  * Intersect a line and a ray
@@ -1580,7 +1610,7 @@ struct HgBox {
      */
     HgVec3 pos;
     /**
-     * The extension in each direction
+     * The extent in each dimension
      */
     HgVec3 size;
 };
@@ -1647,9 +1677,17 @@ struct HgLine3D {
  */
 struct HgTri {
     /**
-     * The three vertices
+     * The first vertex
      */
-    HgVec3 verts[3];
+    HgVec3 a;
+    /**
+     * The second vertex
+     */
+    HgVec3 b;
+    /**
+     * The third vertex
+     */
+    HgVec3 c;
 };
 
 /**
@@ -1665,6 +1703,16 @@ struct HgPlane {
      */
     f32 dist;
 };
+
+/**
+ * Create a plane at the point
+ */
+HgPlane hgPlaneFromPoint(HgVec3 point, HgVec3 normal);
+
+/**
+ * Create a plane from a triangle
+ */
+HgPlane hgPlaneFromTri(HgTri tri);
 
 /**
  * Intersect a ray and a sphere
