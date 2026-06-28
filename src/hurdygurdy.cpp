@@ -3126,7 +3126,7 @@ bool hgIntersectLine2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit)
         return false;
     HgVec2 otherDirV = hgVecNorm2(other.end - other.begin);
 
-    HgComplex otherBegin = HgComplex{other.begin.x, other.end.y};
+    HgComplex otherBegin = HgComplex{other.begin.x, other.begin.y};
     HgComplex otherDir = HgComplex{otherDirV.x, otherDirV.y};
 
     HgComplex lineBegin = hgComplexConj(otherDir) * (HgComplex{line.begin.x, line.begin.y} - otherBegin);
@@ -3192,11 +3192,9 @@ bool hgIntersectLineCircle2D(HgLine2D line, HgCircle circle, HgIntersection2D* h
 {
     HgVec2 dir = line.end - line.begin;
 
-    f32 a = hgSquare(dir.x) + hgSquare(dir.y);
-    f32 b = 2 * (dir.x * (line.begin.x - circle.pos.x) + dir.y * (line.begin.y - circle.pos.y));
-    f32 c = hgSquare(line.begin.x) + hgSquare(line.begin.y)
-          - 2 * (line.begin.x * circle.pos.x + line.begin.y * circle.pos.y)
-          - hgSquare(circle.radius);
+    f32 a = hgVecDot2(dir, dir);
+    f32 b = 2 * hgVecDot2(dir, line.begin - circle.pos);
+    f32 c = hgVecDot2(line.begin - circle.pos, line.begin - circle.pos) - hgSquare(circle.radius);
 
     f32 det = hgSquare(b) - 4 * a * c;
     if (det < 0)
@@ -3217,7 +3215,7 @@ bool hgIntersectLineCircle2D(HgLine2D line, HgCircle circle, HgIntersection2D* h
     if (hit != nullptr)
     {
         hit->pos = line.begin + t * dir;
-        hit->normal = hit->pos - circle.pos;
+        hit->normal = (hit->pos - circle.pos) / circle.radius;
     }
     return true;
 }
@@ -3388,7 +3386,7 @@ bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgIntersection2D* hit)
         return false;
     HgVec2 lineDirV = hgVecNorm2(line.end - line.begin);
 
-    HgComplex lineBegin = HgComplex{line.begin.x, line.end.y};
+    HgComplex lineBegin = HgComplex{line.begin.x, line.begin.y};
     HgComplex lineDir = HgComplex{lineDirV.x, lineDirV.y};
 
     HgComplex rayDir = hgComplexConj(lineDir) * HgComplex{ray.dir.x, ray.dir.y};
@@ -3422,11 +3420,9 @@ bool hgIntersectRayCircle2D(HgRay2D ray, HgCircle circle, HgIntersection2D* hit)
 {
     hgAssert(ray.dir != HgVec2{0});
 
-    f32 a = hgSquare(ray.dir.x) + hgSquare(ray.dir.y);
-    f32 b = 2 * (ray.dir.x * (ray.pos.x - circle.pos.x) + ray.dir.y * (ray.pos.y - circle.pos.y));
-    f32 c = hgSquare(ray.pos.x) + hgSquare(ray.pos.y)
-          - 2 * (ray.pos.x * circle.pos.x + ray.pos.y * circle.pos.y)
-          - hgSquare(circle.radius);
+    f32 a = hgVecDot2(ray.dir, ray.dir);
+    f32 b = 2 * hgVecDot2(ray.dir, ray.pos - circle.pos);
+    f32 c = hgVecDot2(ray.pos - circle.pos, ray.pos - circle.pos) - hgSquare(circle.radius);
 
     f32 det = hgSquare(b) - 4 * a * c;
     if (det < 0)
@@ -3442,7 +3438,7 @@ bool hgIntersectRayCircle2D(HgRay2D ray, HgCircle circle, HgIntersection2D* hit)
     if (hit != nullptr)
     {
         hit->pos = ray.pos + t * ray.dir;
-        hit->normal = hit->pos - circle.pos;
+        hit->normal = (hit->pos - circle.pos) / circle.radius;
     }
     return true;
 }

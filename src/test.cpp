@@ -2221,6 +2221,82 @@ void hgTest()
         hgAssert(!hgIntersectRectCircle(a, {HgVec2{3.0f, 3.0f}, (f32)hgRoot2 - 0.01f}));
     }
 
+    // HgLine2D
+    {
+        HgIntersection2D hit;
+
+        HgLine2D horiz{HgVec2{0.0f, 0.0f}, HgVec2{2.0f, 0.0f}};
+        HgLine2D vert {HgVec2{1.0f,-1.0f}, HgVec2{1.0f, 1.0f}};
+
+        hgAssert(hgIntersectLine2D(horiz, vert, &hit));
+        hgAssert(abs(hit.pos.x - 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.pos.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.x + 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.y - 0.0f) < FLT_EPSILON);
+
+        hgAssert(!hgIntersectLine2D(horiz, {HgVec2{0.0f, 1.0f}, HgVec2{2.0f, 1.0f}}, nullptr));
+
+        hgAssert(hgIntersectLineRay2D(horiz, {HgVec2{1.0f, -1.0f}, HgVec2{0.0f, 1.0f}}, &hit));
+        hgAssert(abs(hit.pos.x - 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.pos.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.x + 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.y - 0.0f) < FLT_EPSILON);
+
+        hgAssert(!hgIntersectLineRay2D(horiz, {HgVec2{1.0f, -1.0f}, HgVec2{0.0f, -1.0f}}, nullptr));
+
+        hgAssert(hgIntersectLineCircle2D(horiz, {HgVec2{1.0f, 0.0f}, 0.5f}, &hit));
+        hgAssert(abs(hit.pos.x - 0.5f) < FLT_EPSILON);
+        hgAssert(abs(hit.pos.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.x + 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.y - 0.0f) < FLT_EPSILON);
+
+        hgAssert(hgIntersectLineRect2D(horiz, {HgVec2{0.5f, -0.5f}, HgVec2{1.0f, 1.0f}}, &hit));
+        hgAssert(abs(hit.pos.x - 0.5f) < FLT_EPSILON);
+        hgAssert(abs(hit.pos.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.x + 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.y - 0.0f) < FLT_EPSILON);
+    }
+
+    // HgRay2D
+    {
+        HgIntersection2D hit;
+
+        HgRay2D right{HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 0.0f}};
+        HgRay2D up   {HgVec2{1.0f,-1.0f}, HgVec2{0.0f, 1.0f}};
+
+        hgAssert(hgIntersectRay2D(right, up, &hit));
+        hgAssert(abs(hit.pos.x - 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.pos.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.x + 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.y - 0.0f) < FLT_EPSILON);
+
+        hgAssert(!hgIntersectRay2D(right, {HgVec2{1.0f, -1.0f}, HgVec2{0.0f,-1.0f}}, nullptr));
+
+        hgAssert(!hgIntersectRay2D(right, {HgVec2{0.0f, 1.0f}, HgVec2{1.0f, 0.0f}}, nullptr));
+
+        hgAssert(hgIntersectRayLine2D(right, {HgVec2{1.0f, -1.0f}, HgVec2{1.0f, 1.0f}}, &hit));
+        hgAssert(abs(hit.pos.x - 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.pos.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.x + 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.y - 0.0f) < FLT_EPSILON);
+
+        hgAssert(!hgIntersectRayLine2D(right, {HgVec2{-2.0f, -1.0f}, HgVec2{-2.0f, 1.0f}}, nullptr));
+
+        hgAssert(hgIntersectRayCircle2D(right, {HgVec2{2.0f, 0.0f}, 0.5f}, &hit));
+        hgAssert(abs(hit.pos.x - 1.5f) < FLT_EPSILON);
+        hgAssert(abs(hit.pos.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.x + 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.y - 0.0f) < FLT_EPSILON);
+
+        // Ray-Rect
+
+        hgAssert(hgIntersectRayRect2D(right, {HgVec2{2.0f,-1.0f}, HgVec2{1.0f,2.0f}}, &hit));
+        hgAssert(abs(hit.pos.x - 2.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.pos.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.x + 1.0f) < FLT_EPSILON);
+        hgAssert(abs(hit.normal.y - 0.0f) < FLT_EPSILON);
+    }
+
     // HgAssetManager and HgBinary
     {
         {
