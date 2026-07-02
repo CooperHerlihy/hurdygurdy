@@ -1029,19 +1029,14 @@ HgVec3 hgVecNorm3(HgVec3 vec);
 HgVec4 hgVecNorm4(HgVec4 vec);
 
 /**
- * Compute the cross product of 3D vectors
- *
- * Parameters
- * - dst The destination vector, must not be nullptr
- * - lhs The left-hand side vector, must not be nullptr
- * - rhs The right-hand side vector, must not be nullptr
+ * Compute the cross product of 2D vectors
  */
-void hgVecCross(f32* dst, const f32* lhs, const f32* rhs);
+f32 hgVecCross2(HgVec2 lhs, HgVec2 rhs);
 
 /**
  * Compute the cross product of 3D vectors
  */
-HgVec3 hgVecCross(HgVec3 lhs, HgVec3 rhs);
+HgVec3 hgVecCross3(HgVec3 lhs, HgVec3 rhs);
 
 /**
  * Add arbitrary size matrices
@@ -1377,6 +1372,11 @@ bool hgContainsPointCircle(HgVec2 point, HgCircle circle);
 f32 hgDistSqrPointCircle(HgVec2 point, HgCircle circle);
 
 /**
+ * Returns the closest point to pos which lies on the circle
+ */
+HgVec2 hgClosestPointCircle(HgVec2 pos, HgCircle circle);
+
+/**
  * Returns whether two circles intersect or not (includes touching)
  */
 bool hgIntersectCircles(HgCircle a, HgCircle b);
@@ -1403,9 +1403,24 @@ struct HgRect {
 };
 
 /**
+ * Returns an empty rect
+ */
+HgRect hgRectEmpty();
+
+/**
+ * Expands the rect to include the point
+ */
+HgRect hgRectAddPoint(HgRect rect, HgVec3 point);
+
+/**
  * Returns whether the rect contains the point
  */
 bool hgContainsPointRect(HgVec2 point, HgRect rect);
+
+/**
+ * Returns the closest point to pos which lies on the rect
+ */
+HgVec2 hgClosestPointRect(HgVec2 pos, HgRect rect);
 
 /**
  * Returns whether two rects intersect or not (includes touching)
@@ -1420,11 +1435,11 @@ bool hgIntersectRectCircle(HgRect rect, HgCircle circle);
 /**
  * 2D intersection info
  */
-struct HgIntersection2D {
+struct HgHit2D {
     /**
-     * The position of the hit
+     * The hit distance along the ray or line
      */
-    HgVec2 pos;
+    f32 dist;
     /**
      * The normal at the hit position
      */
@@ -1470,7 +1485,7 @@ struct HgLine2D {
  * Returns
  * - Whether the rays intersect
  */
-bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit);
+bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgHit2D* hit);
 
 /**
  * Intersect a ray and a line
@@ -1483,7 +1498,7 @@ bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgIntersection2D* hit);
  * Returns
  * - Whether the ray and line intersect
  */
-bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgIntersection2D* hit);
+bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgHit2D* hit);
 
 /**
  * Intersect a ray and a circle
@@ -1496,7 +1511,7 @@ bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgIntersection2D* hit);
  * Returns
  * - Whether the ray and circle intersect
  */
-bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgIntersection2D* hit);
+bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgHit2D* hit);
 
 /**
  * Intersect a ray and a rect
@@ -1509,7 +1524,7 @@ bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgIntersection2D* hit);
  * Returns
  * - Whether the ray and rect intersect
  */
-bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgIntersection2D* hit);
+bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgHit2D* hit);
 
 /**
  * Intersect two lines
@@ -1522,7 +1537,7 @@ bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgIntersection2D* hit);
  * Returns
  * - Whether the lines intersect
  */
-bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit);
+bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgHit2D* hit);
 
 /**
  * Intersect a line and a ray
@@ -1535,7 +1550,7 @@ bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgIntersection2D* hit);
  * Returns
  * - Whether the line and ray intersect
  */
-bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgIntersection2D* hit);
+bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgHit2D* hit);
 
 /**
  * Intersect a line and a circle
@@ -1548,7 +1563,7 @@ bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgIntersection2D* hit);
  * Returns
  * - Whether the line and circle intersect
  */
-bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgIntersection2D* hit);
+bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgHit2D* hit);
 
 /**
  * Intersect a line and a rect
@@ -1561,7 +1576,7 @@ bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgIntersection2D* hit
  * Returns
  * - Whether the line and rect intersect
  */
-bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgIntersection2D* hit);
+bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgHit2D* hit);
 
 /**
  * A 3D sphere
@@ -1590,6 +1605,11 @@ bool hgContainsPointSphere(HgVec3 point, HgSphere sphere);
 f32 hgDistSqrPointSphere(HgVec3 point, HgSphere sphere);
 
 /**
+ * Returns the closest point to pos which lies on the sphere
+ */
+HgVec3 hgClosestPointSphere(HgVec3 pos, HgSphere sphere);
+
+/**
  * Returns whether two spheres intersect or not (includes touching)
  */
 bool hgIntersectSpheres(HgSphere a, HgSphere b);
@@ -1616,9 +1636,24 @@ struct HgBox {
 };
 
 /**
+ * Returns an empty box
+ */
+HgBox hgBoxEmpty();
+
+/**
+ * Expands the box to include the point
+ */
+HgBox hgBoxAddPoint(HgBox box, HgVec3 point);
+
+/**
  * Returns whether the box contains the point
  */
 bool hgContainsPointBox(HgVec3 point, HgBox box);
+
+/**
+ * Returns the closest point to pos which lies on the box
+ */
+HgVec3 hgClosestPointBox(HgVec3 pos, HgBox box);
 
 /**
  * Returns whether two boxs intersect or not (includes touching)
@@ -1633,11 +1668,11 @@ bool hgIntersectBoxSphere(HgBox box, HgSphere sphere);
 /**
  * 3D intersection info
  */
-struct HgIntersection3D {
+struct HgHit3D {
     /**
-     * The position of the hit
+     * The hit distance along the ray or line
      */
-    HgVec3 pos;
+    f32 dist;
     /**
      * The normal at the hit position
      */
@@ -1725,7 +1760,7 @@ HgPlane hgPlaneFromTri(HgTri tri);
  * Returns
  * - Whether the ray and sphere intersect
  */
-bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgIntersection3D* hit);
+bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgHit3D* hit);
 
 /**
  * Intersect a ray and a box
@@ -1738,7 +1773,7 @@ bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgIntersection3D* hit);
  * Returns
  * - Whether the ray and box intersect
  */
-bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgIntersection3D* hit);
+bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit);
 
 /**
  * Intersect a ray and a triangle
@@ -1751,7 +1786,7 @@ bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgIntersection3D* hit);
  * Returns
  * - Whether the ray and triangle intersect
  */
-bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgIntersection3D* hit);
+bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgHit3D* hit);
 
 /**
  * Intersect a ray and a plane
@@ -1764,7 +1799,7 @@ bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgIntersection3D* hit);
  * Returns
  * - Whether the ray and plane intersect
  */
-bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgIntersection3D* hit);
+bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgHit3D* hit);
 
 /**
  * Intersect a line and a sphere
@@ -1777,7 +1812,7 @@ bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgIntersection3D* hit);
  * Returns
  * - Whether the line and sphere intersect
  */
-bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgIntersection3D* hit);
+bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgHit3D* hit);
 
 /**
  * Intersect a line and a box
@@ -1790,7 +1825,7 @@ bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgIntersection3D* hit
  * Returns
  * - Whether the line and box intersect
  */
-bool hgIntersectLineBox(HgLine3D line, HgBox box, HgIntersection3D* hit);
+bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit);
 
 /**
  * Intersect a line and a triangle
@@ -1803,7 +1838,7 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgIntersection3D* hit);
  * Returns
  * - Whether the line and triangle intersect
  */
-bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgIntersection3D* hit);
+bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgHit3D* hit);
 
 /**
  * Intersect a line and a plane
@@ -1816,7 +1851,7 @@ bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgIntersection3D* hit);
  * Returns
  * - Whether the line and plane intersect
  */
-bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgIntersection3D* hit);
+bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgHit3D* hit);
 
 /**
  * Generate white noise
