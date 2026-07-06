@@ -106,7 +106,7 @@ void init(HgArena* arena)
     player = hgEcsSpawn(ecs);
     *hgEcsAdd<Name>(ecs, player) = {"player"};
     hgNodeAdd(ecs, player);
-    transform = hgTransformAdd(ecs, player, HgVec3{0, 0, -1});
+    transform = hgTransformAdd(ecs, player, {0, 0, -1});
     camera = hgCameraAdd(ecs, player);
 
     camera->type = HgCameraType_perspective;
@@ -122,20 +122,20 @@ void init(HgArena* arena)
     HgEntity pointLight = hgEcsSpawn(ecs);
     *hgEcsAdd<Name>(ecs, pointLight) = {"pointLight"};
     hgNodeAdd(ecs, pointLight);
-    hgTransformAdd(ecs, pointLight, HgVec3{0, -2, 0});
-    hgPointLightAdd(ecs, pointLight, HgVec4{1, 1, 1, 4});
+    hgTransformAdd(ecs, pointLight, {0, -2, 0});
+    hgPointLightAdd(ecs, pointLight, {1, 1, 1, 4});
 
     HgEntity square = hgEcsSpawn(ecs);
     *hgEcsAdd<Name>(ecs, square) = {"square"};
     hgNodeAdd(ecs, square);
-    hgTransformAdd(ecs, square, HgVec3{-1, 0, 1});
+    hgTransformAdd(ecs, square, {-1, 0, 1});
     hgSpriteAdd(ecs, square, {});
     *hgEcsAdd<Spin>(ecs, square) = {1.0f};
 
     HgEntity cube = hgEcsSpawn(ecs);
     *hgEcsAdd<Name>(ecs, cube) = {"cube"};
     hgNodeAdd(ecs, cube);
-    hgTransformAdd(ecs, cube, HgVec3{1, 0, 1});
+    hgTransformAdd(ecs, cube, {1, 0, 1});
     hgModelAdd(ecs, cube, {}, {}, {});
     *hgEcsAdd<Spin>(ecs, cube) = {1.0f};
 
@@ -143,7 +143,7 @@ void init(HgArena* arena)
     *hgEcsAdd<Name>(ecs, sound) = {"sound"};
     hgNodeAdd(ecs, sound);
     hgTransformAdd(ecs, sound);
-    hgEcsGet<HgTransform>(ecs, sound)->position = HgVec3{0, 0, 1};
+    hgEcsGet<HgTransform>(ecs, sound)->position = {0, 0, 1};
     hgTransformUpdate(ecs, sound);
     hgAudioSourceAdd(ecs, sound, hgAssetCopy(audio), true);
 
@@ -449,8 +449,8 @@ void drawEditor(HgArena* frame)
             ImGui::SeparatorText("Camera");
             if (ImGui::Button("Reset Camera"))
             {
-                transform->position = HgVec3{0, 0, -1};
-                transform->scale = HgVec3{1, 1, 1};
+                transform->position = {0, 0, -1};
+                transform->scale = {1, 1, 1};
                 transform->rotation = HgQuat{1, 0, 0, 0};
                 hgTransformUpdate(ecs, player);
             }
@@ -699,7 +699,7 @@ int main()
 
         hgEcsForEach<Spin, HgTransform>(ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
         {
-            tf->rotation = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
+            tf->rotation = hgQuatAxisAngle({0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
             hgTransformUpdate(ecs, e);
         });
 
@@ -708,8 +708,8 @@ int main()
             if (move3D && hgIsButtonDown(window, HgButton_lmouse))
             {
                 f32 rotSpeed = 2.0f;
-                HgQuat rotX = hgQuatAxisAngle(HgVec3{ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
-                HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
+                HgQuat rotX = hgQuatAxisAngle({ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
+                HgQuat rotY = hgQuatAxisAngle({-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
                 transform->rotation = rotX * transform->rotation * rotY;
             }
 
@@ -727,8 +727,8 @@ int main()
             if (movement != HgVec3{0.0f})
             {
                 f32 moveSpeed = 1.5f * (f32)delta;
-                HgVec3 rotated = hgVecRot3(transform->rotation, HgVec3{movement.x, 0.0f, movement.z});
-                transform->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed;
+                HgVec3 rotated = hgVecRot3(transform->rotation, {movement.x, 0.0f, movement.z});
+                transform->position += hgVecNorm3({rotated.x, movement.y, rotated.z}) * moveSpeed;
             }
 
             hgTransformUpdate(ecs, player);

@@ -2704,27 +2704,32 @@ void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
     }
 }
 
-void hgVecLen(u32 size, f32* dst, const f32* vec)
+void hgVecLenSqr(u32 size, f32* dst, const f32* vec)
 {
     hgAssert(dst != nullptr);
     hgAssert(vec != nullptr);
     hgVecDot(size, dst, vec, vec);
-    *dst = (f32)sqrt(*dst);
+}
+
+void hgVecLen(u32 size, f32* dst, const f32* vec)
+{
+    hgVecLenSqr(size, dst, vec);
+    *dst = std::sqrt(*dst);
 }
 
 f32 hgVecLen2(HgVec2 vec)
 {
-    return sqrtf(hgVecDot2(vec, vec));
+    return std::sqrt(hgVecLenSqr2(vec));
 }
 
 f32 hgVecLen3(HgVec3 vec)
 {
-    return sqrtf(hgVecDot3(vec, vec));
+    return std::sqrt(hgVecLenSqr3(vec));
 }
 
 f32 hgVecLen4(HgVec4 vec)
 {
-    return sqrtf(hgVecDot3(vec, vec));
+    return std::sqrt(hgVecLenSqr4(vec));
 }
 
 void hgVecNorm(u32 size, f32* dst, const f32* vec)
@@ -2744,21 +2749,21 @@ HgVec2 hgVecNorm2(HgVec2 vec)
 {
     f32 len = hgVecLen2(vec);
     hgAssert(len != 0);
-    return HgVec2{vec.x / len, vec.y / len};
+    return {vec.x / len, vec.y / len};
 }
 
 HgVec3 hgVecNorm3(HgVec3 vec)
 {
     f32 len = hgVecLen3(vec);
     hgAssert(len != 0);
-    return HgVec3{vec.x / len, vec.y / len, vec.z / len};
+    return {vec.x / len, vec.y / len, vec.z / len};
 }
 
 HgVec4 hgVecNorm4(HgVec4 vec)
 {
     f32 len = hgVecLen4(vec);
     hgAssert(len != 0);
-    return HgVec4{vec.x / len, vec.y / len, vec.z / len, vec.w / len};
+    return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
 }
 
 void hgVecCross3(f32* dst, const f32* lhs, const f32* rhs)
@@ -2778,7 +2783,7 @@ f32 hgVecCross2(HgVec2 lhs, HgVec2 rhs)
 
 HgVec3 hgVecCross3(HgVec3 lhs, HgVec3 rhs)
 {
-    return HgVec3{
+    return {
         lhs.y * rhs.z - lhs.z * rhs.y,
         lhs.z * rhs.x - lhs.x * rhs.z,
         lhs.x * rhs.y - lhs.y * rhs.x
@@ -2952,7 +2957,7 @@ HgComplex hgComplexNorm(HgComplex comp)
 HgVec2 hgVecRot2(HgComplex lhs, HgVec2 rhs)
 {
     HgComplex c = lhs * HgComplex{rhs.x, rhs.y};
-    return HgVec2{c.r, c.i};
+    return {c.r, c.i};
 }
 
 HgQuat operator*(HgQuat lhs, HgQuat rhs)
@@ -3011,8 +3016,8 @@ HgQuat hgQuatBetween(HgVec3 from, HgVec3 to)
     if (dot < -1 + FLT_EPSILON)
     {
         HgVec3 axis = std::abs(from.x) >= 1 - FLT_EPSILON
-            ? hgVecCross3(from, HgVec3{0, 1, 0})
-            : hgVecCross3(from, HgVec3{1, 0, 0});
+            ? hgVecCross3(from, {0, 1, 0})
+            : hgVecCross3(from, {1, 0, 0});
         return HgQuat(0, axis.x, axis.y, axis.z);
     }
 
@@ -3023,7 +3028,7 @@ HgQuat hgQuatBetween(HgVec3 from, HgVec3 to)
 HgVec3 hgVecRot3(HgQuat lhs, HgVec3 rhs)
 {
     HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hgQuatConj(lhs);
-    return HgVec3{q.i, q.j, q.k};
+    return {q.i, q.j, q.k};
 }
 
 HgMat3 hgMatRot3(HgQuat lhs, HgMat3 rhs)
@@ -3037,10 +3042,10 @@ HgMat3 hgMatRot3(HgQuat lhs, HgMat3 rhs)
 
 HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation)
 {
-    HgMat2 m2{HgVec2{scale.x, 0.0f}, HgVec2{0.0f, scale.y}};
+    HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
     f32 rotSin = sinf(rotation);
     f32 rotCos = cosf(rotation);
-    HgMat2 rot{HgVec2{rotCos, rotSin}, HgVec2{-rotSin, rotCos}};
+    HgMat2 rot{{rotCos, rotSin}, {-rotSin, rotCos}};
     HgMat4 m4 = HgMat4{rot * m2};
     m4.w.x = position.x;
     m4.w.y = position.y;
@@ -3086,17 +3091,17 @@ HgMat4 hgMatModelToView(const HgMat4& model)
         hgVecNorm3(HgVec3{model.z}),
     });
     HgMat4 inv4{inv3};
-    inv4.w = HgVec4{HgVec3{inv3 * HgVec3{model.w} * -1}, 1};
+    inv4.w = HgVec4{inv3 * HgVec3{model.w} * -1, 1};
     return inv4;
 }
 
 HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
 {
     return HgMat4{
-        HgVec4{2.0f / (right - left), 0.0f, 0.0f, 0.0f},
-        HgVec4{0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
-        HgVec4{0.0f, 0.0f, 1.0f / (far - near), 0.0f},
-        HgVec4{-(right + left) / (right - left), -(bottom + top) / (bottom - top), -(near) / (far - near), 1.0f},
+        {2.0f / (right - left), 0.0f, 0.0f, 0.0f},
+        {0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f / (far - near), 0.0f},
+        {-(right + left) / (right - left), -(bottom + top) / (bottom - top), -(near) / (far - near), 1.0f},
     };
 }
 
@@ -3106,39 +3111,36 @@ HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
     hgAssert(far > near);
     f32 scale = 1.0f / (f32)tan(fov * 0.5f);
     return HgMat4{
-        HgVec4{scale / aspect, 0.0f, 0.0f, 0.0f},
-        HgVec4{0.0f, scale, 0.0f, 0.0f},
-        HgVec4{0.0f, 0.0f, far / (far - near), 1.0f},
-        HgVec4{0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
+        {scale / aspect, 0.0f, 0.0f, 0.0f},
+        {0.0f, scale, 0.0f, 0.0f},
+        {0.0f, 0.0f, far / (far - near), 1.0f},
+        {0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
     };
 }
 
 bool hgContainsPointCircle(HgVec2 point, HgCircle circle)
 {
-    return hgDistSqrPointCircle(point, circle) <= FLT_EPSILON;
+    return hgDistPointCircle(point, circle) <= FLT_EPSILON;
 }
 
-f32 hgDistSqrPointCircle(HgVec2 point, HgCircle circle)
+f32 hgDistPointCircle(HgVec2 point, HgCircle circle)
 {
-    HgVec2 relPos = point - circle.pos;
-    return hgVecDot2(relPos, relPos) - hgSquare(circle.radius);
+    return hgVecLen2(point - circle.pos) - circle.radius;
 }
 
 HgVec2 hgClosestPointCircle(HgVec2 pos, HgCircle circle)
 {
-    return circle.radius * hgVecNorm2(pos - circle.pos);
+    return circle.pos + circle.radius * hgVecNorm2(pos - circle.pos);
 }
 
 bool hgIntersectCircles(HgCircle a, HgCircle b)
 {
-    return hgDistSqrCircles(a, b) <= FLT_EPSILON;
+    return hgDistCircles(a, b) <= FLT_EPSILON;
 }
 
-f32 hgDistSqrCircles(HgCircle a, HgCircle b)
+f32 hgDistCircles(HgCircle a, HgCircle b)
 {
-    HgVec2 relPos = a.pos - b.pos;
-    f32 totalRad = std::abs(a.radius) + std::abs(b.radius);
-    return hgVecDot2(relPos, relPos) - totalRad * totalRad;
+    return hgVecLen2(a.pos - b.pos) - a.radius - b.radius;
 }
 
 HgRect hgRectEmpty()
@@ -3149,13 +3151,13 @@ HgRect hgRectEmpty()
     };
 }
 
-HgRect hgRectAddPoint(HgRect rect, HgVec3 point)
+HgRect hgRectAddPoint(HgRect rect, HgVec2 point)
 {
     HgRect newRect;
-    newRect.pos.x = hgMin(rect.pos.x, point.x);
-    newRect.pos.y = hgMin(rect.pos.y, point.y);
-    newRect.size.x = hgMax(rect.size.x, point.x - newRect.pos.x);
-    newRect.size.y = hgMax(rect.size.y, point.y - newRect.pos.y);
+    newRect.pos.x = hgMin(rect.pos.x, point.x - FLT_EPSILON);
+    newRect.pos.y = hgMin(rect.pos.y, point.y - FLT_EPSILON);
+    newRect.size.x = hgMax(rect.size.x + rect.pos.x, point.x + FLT_EPSILON) - newRect.pos.x;
+    newRect.size.y = hgMax(rect.size.y + rect.pos.y, point.y + FLT_EPSILON) - newRect.pos.y;
     return newRect;
 }
 
@@ -3167,7 +3169,7 @@ bool hgContainsPointRect(HgVec2 point, HgRect rect)
 
 HgVec2 hgClosestPointRect(HgVec2 pos, HgRect rect)
 {
-    return HgVec2{
+    return {
         hgClamp(pos.x, rect.pos.x, rect.pos.x + rect.size.x),
         hgClamp(pos.y, rect.pos.y, rect.pos.y + rect.size.y),
     };
@@ -3189,7 +3191,7 @@ bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgHit2D* hit)
     hgAssert(ray.dir != HgVec2{0});
     hgAssert(other.dir != HgVec2{0});
 
-    f32 denom = hgVecCross2(other.dir, ray.dir);
+    f32 denom = hgVecCross2(ray.dir, other.dir);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
@@ -3206,9 +3208,9 @@ bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgHit2D* hit)
     if (hit != nullptr)
     {
         hit->dist = t;
-        hit->normal = denom > 0
-            ? HgVec2{other.dir.y, -other.dir.x}
-            : HgVec2{-other.dir.y, other.dir.x};
+        hit->normal = denom < 0
+            ? hgVecNorm2({other.dir.y, -other.dir.x})
+            : hgVecNorm2({-other.dir.y, other.dir.x});
     }
     return true;
 }
@@ -3221,7 +3223,7 @@ bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgHit2D* hit)
 
     HgVec2 lineDir = line.end - line.begin;
 
-    f32 denom = hgVecCross2(lineDir, ray.dir);
+    f32 denom = hgVecCross2(ray.dir, lineDir);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
@@ -3238,9 +3240,9 @@ bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgHit2D* hit)
     if (hit != nullptr)
     {
         hit->dist = t;
-        hit->normal = denom > 0
-            ? HgVec2{lineDir.y, -lineDir.x}
-            : HgVec2{-lineDir.y, lineDir.x};
+        hit->normal = denom < 0
+            ? hgVecNorm2({lineDir.y, -lineDir.x})
+            : hgVecNorm2({-lineDir.y, lineDir.x});
     }
     return true;
 }
@@ -3297,10 +3299,10 @@ bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgHit2D* hit)
     };
 
     constexpr HgVec2 norms[4] = {
-        HgVec2{-1, 0},
-        HgVec2{0, -1},
-        HgVec2{1, 0},
-        HgVec2{0, 1},
+        {-1, 0},
+        {0, -1},
+        {1, 0},
+        {0, 1},
     };
 
     f32 t = INFINITY;
@@ -3338,26 +3340,26 @@ bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgHit2D* hit)
     HgVec2 lineDir = line.end - line.begin;
     HgVec2 otherDir = other.end - other.begin;
 
-    f32 denom = hgVecCross2(otherDir, lineDir);
+    f32 denom = hgVecCross2(lineDir, otherDir);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
     HgVec2 diff = other.begin - line.begin;
 
     f32 t = hgVecCross2(diff, otherDir) / denom;
-    if (t < -FLT_EPSILON)
+    if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return false;
 
     f32 tOther = hgVecCross2(diff, lineDir) / denom;
-    if (tOther < -FLT_EPSILON)
+    if (tOther < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return false;
 
     if (hit != nullptr)
     {
         hit->dist = t;
-        hit->normal = denom > 0
-            ? HgVec2{otherDir.y, -otherDir.x}
-            : HgVec2{-otherDir.y, otherDir.x};
+        hit->normal = denom < 0
+            ? hgVecNorm2({otherDir.y, -otherDir.x})
+            : hgVecNorm2({-otherDir.y, otherDir.x});
     }
     return true;
 }
@@ -3370,14 +3372,14 @@ bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgHit2D* hit)
 
     HgVec2 lineDir = line.end - line.begin;
 
-    f32 denom = hgVecCross2(ray.dir, lineDir);
+    f32 denom = hgVecCross2(lineDir, ray.dir);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
     HgVec2 diff = ray.pos - line.begin;
 
     f32 t = hgVecCross2(diff, ray.dir) / denom;
-    if (t < -FLT_EPSILON)
+    if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return false;
 
     f32 tRay = hgVecCross2(diff, lineDir) / denom;
@@ -3387,9 +3389,9 @@ bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgHit2D* hit)
     if (hit != nullptr)
     {
         hit->dist = t;
-        hit->normal = denom > 0
-            ? HgVec2{ray.dir.y, -ray.dir.x}
-            : HgVec2{-ray.dir.y, ray.dir.x};
+        hit->normal = denom < 0
+            ? hgVecNorm2({ray.dir.y, -ray.dir.x})
+            : hgVecNorm2({-ray.dir.y, ray.dir.x});
     }
     return true;
 }
@@ -3437,10 +3439,10 @@ bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgHit2D* hit)
     };
 
     constexpr HgVec2 norms[4] = {
-        HgVec2{-1, 0},
-        HgVec2{0, -1},
-        HgVec2{1, 0},
-        HgVec2{0, 1},
+        {-1, 0},
+        {0, -1},
+        {1, 0},
+        {0, 1},
     };
 
     f32 t = INFINITY;
@@ -3472,30 +3474,30 @@ bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgHit2D* hit)
 
 bool hgContainsPointSphere(HgVec3 point, HgSphere sphere)
 {
-    return hgDistSqrPointSphere(point, sphere) <= 0;
+    return hgDistPointSphere(point, sphere) <= 0;
 }
 
-f32 hgDistSqrPointSphere(HgVec3 point, HgSphere sphere)
+f32 hgDistPointSphere(HgVec3 point, HgSphere sphere)
 {
-    HgVec3 rel = point - sphere.pos;
-    return hgVecDot3(rel, rel) - hgSquare(sphere.radius);
+    return hgVecLen3(point - sphere.pos) - sphere.radius;
 }
 
 HgVec3 hgClosestPointSphere(HgVec3 pos, HgSphere sphere)
 {
-    return sphere.radius * hgVecNorm3(pos - sphere.pos);
+    HgVec3 rel = pos - sphere.pos;
+    if (hgVecLenSqr3(rel) <= sphere.radius + FLT_EPSILON)
+        return pos;
+    return sphere.pos + sphere.radius * hgVecNorm3(rel);
 }
 
 bool hgIntersectSpheres(HgSphere a, HgSphere b)
 {
-    return hgDistSqrSpheres(a, b) <= 0;
+    return hgDistSpheres(a, b) <= 0;
 }
 
-f32 hgDistSqrSpheres(HgSphere a, HgSphere b)
+f32 hgDistSpheres(HgSphere a, HgSphere b)
 {
-    HgVec3 rel = a.pos - b.pos;
-    f32 totalRadius = a.radius + b.radius;
-    return hgVecDot3(rel, rel) - hgSquare(totalRadius);
+    return hgVecLen3(a.pos - b.pos) - a.radius - b.radius;
 }
 
 HgBox hgBoxEmpty()
@@ -3509,12 +3511,12 @@ HgBox hgBoxEmpty()
 HgBox hgBoxAddPoint(HgBox box, HgVec3 point)
 {
     HgBox newBox;
-    newBox.pos.x = hgMin(box.pos.x, point.x);
-    newBox.pos.y = hgMin(box.pos.y, point.y);
-    newBox.pos.z = hgMin(box.pos.z, point.z);
-    newBox.size.x = hgMax(box.size.x, point.x - newBox.pos.x);
-    newBox.size.y = hgMax(box.size.y, point.y - newBox.pos.y);
-    newBox.size.z = hgMax(box.size.z, point.z - newBox.pos.z);
+    newBox.pos.x = hgMin(box.pos.x, point.x - FLT_EPSILON);
+    newBox.pos.y = hgMin(box.pos.y, point.y - FLT_EPSILON);
+    newBox.pos.z = hgMin(box.pos.z, point.z - FLT_EPSILON);
+    newBox.size.x = hgMax(box.size.x + box.pos.x, point.x + FLT_EPSILON) - newBox.pos.x;
+    newBox.size.y = hgMax(box.size.y + box.pos.y, point.y + FLT_EPSILON) - newBox.pos.y;
+    newBox.size.z = hgMax(box.size.z + box.pos.z, point.z + FLT_EPSILON) - newBox.pos.z;
     return newBox;
 }
 
@@ -3527,7 +3529,7 @@ bool hgContainsPointBox(HgVec3 point, HgBox box)
 
 HgVec3 hgClosestPointBox(HgVec3 pos, HgBox box)
 {
-    return HgVec3{
+    return {
         hgClamp(pos.x, box.pos.x, box.pos.x + box.size.x),
         hgClamp(pos.y, box.pos.y, box.pos.y + box.size.y),
         hgClamp(pos.z, box.pos.z, box.pos.z + box.size.z),
@@ -3616,12 +3618,12 @@ bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit)
     };
 
     constexpr HgVec3 norms[6] = {
-        HgVec3{-1, 0, 0},
-        HgVec3{0, -1, 0},
-        HgVec3{0, 0, -1},
-        HgVec3{1, 0, 0},
-        HgVec3{0, 1, 0},
-        HgVec3{0, 0, 1},
+        {-1, 0, 0},
+        {0, -1, 0},
+        {0, 0, -1},
+        {1, 0, 0},
+        {0, 1, 0},
+        {0, 0, 1},
     };
 
     f32 t = INFINITY;
@@ -3658,26 +3660,37 @@ bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgHit3D* hit)
     if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
         return false;
 
-    HgHit3D tmp;
-    if (hit == nullptr)
-        hit = &tmp;
+    HgVec3 e1 = tri.b - tri.a;
+    HgVec3 e2 = tri.c - tri.a;
+    HgVec3 q = hgVecCross3(ray.dir, e2);
 
-    HgPlane plane = hgPlaneFromTri(tri);
-    if (!hgIntersectRayPlane(ray, plane, hit))
+    f32 a = hgVecDot3(e1, q);
+    if (std::abs(a) < FLT_EPSILON)
         return false;
 
-    HgVec3 pos = ray.pos + hit->dist * ray.dir;
-    for (u32 i = 0; i < 3; ++i)
-    {
-        HgVec3 v0 = (&tri.a)[(i + 0) % 3];
-        HgVec3 v1 = (&tri.a)[(i + 1) % 3];
-        HgVec3 a = pos - v0;
-        HgVec3 b = v1 - v0;
-        f32 dot = hgVecDot3(a, b);
-        if (dot < -FLT_EPSILON || hgSquare(dot) > hgVecDot3(b, b))
-            return false;
-    }
+    HgVec3 s = ray.pos - tri.a;
 
+    f32 u = hgVecDot3(s, q) / a;
+    if (u < -FLT_EPSILON)
+        return false;
+
+    HgVec3 r = hgVecCross3(s, e1);
+
+    f32 v = hgVecDot3(ray.dir, r) / a;
+    if (v < -FLT_EPSILON || u + v > 1 + FLT_EPSILON)
+        return false;
+
+    f32 t = hgVecDot3(e2, r) / a;
+    if (t < -FLT_EPSILON)
+        return false;
+
+    if (hit != nullptr)
+    {
+        hit->dist = t;
+        hit->normal = a < 0
+            ? hgVecNorm3(hgVecCross3(e2, e1))
+            : hgVecNorm3(hgVecCross3(e1, e2));
+    }
     return true;
 }
 
@@ -3686,8 +3699,6 @@ bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgHit3D* hit)
     hgAssert(ray.dir != HgVec3{0});
     hgAssert(plane.normal != HgVec3{0});
 
-    f32 len = hgVecLen3(ray.dir); // can we omit this? : TODO
-    ray.dir = ray.dir / len;
     plane.normal = hgVecNorm3(plane.normal);
 
     f32 denom = hgVecDot3(ray.dir, plane.normal);
@@ -3700,7 +3711,7 @@ bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgHit3D* hit)
 
     if (hit != nullptr)
     {
-        hit->dist = t * len;
+        hit->dist = t;
         hit->normal = denom < 0
             ? plane.normal
             : -plane.normal;
@@ -3753,19 +3764,19 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit)
     };
 
     constexpr HgVec3 norms[6] = {
-        HgVec3{-1, 0, 0},
-        HgVec3{0, -1, 0},
-        HgVec3{0, 0, -1},
-        HgVec3{1, 0, 0},
-        HgVec3{0, 1, 0},
-        HgVec3{0, 0, 1},
+        {-1, 0, 0},
+        {0, -1, 0},
+        {0, 0, -1},
+        {1, 0, 0},
+        {0, 1, 0},
+        {0, 0, 1},
     };
 
     f32 t = INFINITY;
     HgVec3 norm;
     for (u32 i = 0; i < hgArrayCount(hits); ++i)
     {
-        if (hits[i] < -FLT_EPSILON)
+        if (hits[i] < -FLT_EPSILON || hits[i] > 1 + FLT_EPSILON)
             continue;
 
         if (!hgContainsPointBox(line.begin + hits[i] * (line.end - line.begin), box))
@@ -3796,26 +3807,39 @@ bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgHit3D* hit)
     if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
         return false;
 
-    HgHit3D tmp;
-    if (hit == nullptr)
-        hit = &tmp;
+    HgVec3 lineDir = line.end - line.begin;
 
-    HgPlane plane = hgPlaneFromTri(tri);
-    if (!hgIntersectLinePlane(line, plane, hit))
+    HgVec3 e1 = tri.b - tri.a;
+    HgVec3 e2 = tri.c - tri.a;
+    HgVec3 q = hgVecCross3(lineDir, e2);
+
+    f32 a = hgVecDot3(e1, q);
+    if (std::abs(a) < FLT_EPSILON)
         return false;
 
-    HgVec3 pos = line.begin + hit->dist * (line.end - line.begin);
-    for (u32 i = 0; i < 3; ++i)
-    {
-        HgVec3 v0 = (&tri.a)[(i + 0) % 3];
-        HgVec3 v1 = (&tri.a)[(i + 1) % 3];
-        HgVec3 a = pos - v0;
-        HgVec3 b = v1 - v0;
-        f32 dot = hgVecDot3(a, b);
-        if (dot < -FLT_EPSILON || hgSquare(dot) > hgVecDot3(b, b))
-            return false;
-    }
+    HgVec3 s = line.begin - tri.a;
 
+    f32 u = hgVecDot3(s, q) / a;
+    if (u < -FLT_EPSILON)
+        return false;
+
+    HgVec3 r = hgVecCross3(s, e1);
+
+    f32 v = hgVecDot3(lineDir, r) / a;
+    if (v < -FLT_EPSILON || u + v > 1 + FLT_EPSILON)
+        return false;
+
+    f32 t = hgVecDot3(e2, r) / a;
+    if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
+        return false;
+
+    if (hit != nullptr)
+    {
+        hit->dist = t;
+        hit->normal = a < 0
+            ? hgVecNorm3(hgVecCross3(e2, e1))
+            : hgVecNorm3(hgVecCross3(e1, e2));
+    }
     return true;
 }
 
@@ -3826,9 +3850,7 @@ bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgHit3D* hit)
 
     hgAssert(plane.normal != HgVec3{0});
 
-    HgVec3 lineDiff = line.end - line.begin;
-    f32 len = hgVecLen3(lineDiff);// can we omit this? : TODO
-    HgVec3 lineDir = lineDiff / len;
+    HgVec3 lineDir = line.end - line.begin;
     plane.normal = plane.normal;
 
     f32 denom = hgVecDot3(lineDir, plane.normal);
@@ -3841,7 +3863,7 @@ bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgHit3D* hit)
 
     if (hit != nullptr)
     {
-        hit->dist = t * len;
+        hit->dist = t;
         hit->normal = denom < 0
             ? plane.normal
             : -plane.normal;
@@ -4975,35 +4997,35 @@ void hgModelsInit(
         HgGpuMemoryUsage_frequentUpdate);
 
     HgMeshVertex cubeVertices[]{
-        {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{0,0}},
-        {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{1,0}},
-        {HgVec3{ 0.5f, 0.5f, 0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{1,1}},
-        {HgVec3{ 0.5f,-0.5f, 0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{0,1}},
+        {{ 0.5f,-0.5f,-0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {0,0}},
+        {{ 0.5f, 0.5f,-0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {1,0}},
+        {{ 0.5f, 0.5f, 0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {1,1}},
+        {{ 0.5f,-0.5f, 0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {0,1}},
 
-        {HgVec3{-0.5f,-0.5f, 0.5f}, HgVec3{-1, 0, 0}, HgVec4{ 0, 0,-1, 1}, HgVec2{0,0}},
-        {HgVec3{-0.5f, 0.5f, 0.5f}, HgVec3{-1, 0, 0}, HgVec4{ 0, 0,-1, 1}, HgVec2{1,0}},
-        {HgVec3{-0.5f, 0.5f,-0.5f}, HgVec3{-1, 0, 0}, HgVec4{ 0, 0,-1, 1}, HgVec2{1,1}},
-        {HgVec3{-0.5f,-0.5f,-0.5f}, HgVec3{-1, 0, 0}, HgVec4{ 0, 0,-1, 1}, HgVec2{0,1}},
+        {{-0.5f,-0.5f, 0.5f}, {-1, 0, 0}, { 0, 0,-1, 1}, {0,0}},
+        {{-0.5f, 0.5f, 0.5f}, {-1, 0, 0}, { 0, 0,-1, 1}, {1,0}},
+        {{-0.5f, 0.5f,-0.5f}, {-1, 0, 0}, { 0, 0,-1, 1}, {1,1}},
+        {{-0.5f,-0.5f,-0.5f}, {-1, 0, 0}, { 0, 0,-1, 1}, {0,1}},
 
-        {HgVec3{-0.5f, 0.5f,-0.5f}, HgVec3{ 0, 1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,0}},
-        {HgVec3{-0.5f, 0.5f, 0.5f}, HgVec3{ 0, 1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,0}},
-        {HgVec3{ 0.5f, 0.5f, 0.5f}, HgVec3{ 0, 1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,1}},
-        {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 0, 1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,1}},
+        {{-0.5f, 0.5f,-0.5f}, { 0, 1, 0}, { 1, 0, 0, 1}, {0,0}},
+        {{-0.5f, 0.5f, 0.5f}, { 0, 1, 0}, { 1, 0, 0, 1}, {1,0}},
+        {{ 0.5f, 0.5f, 0.5f}, { 0, 1, 0}, { 1, 0, 0, 1}, {1,1}},
+        {{ 0.5f, 0.5f,-0.5f}, { 0, 1, 0}, { 1, 0, 0, 1}, {0,1}},
 
-        {HgVec3{-0.5f,-0.5f, 0.5f}, HgVec3{ 0,-1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,0}},
-        {HgVec3{-0.5f,-0.5f,-0.5f}, HgVec3{ 0,-1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,0}},
-        {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 0,-1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,1}},
-        {HgVec3{ 0.5f,-0.5f, 0.5f}, HgVec3{ 0,-1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,1}},
+        {{-0.5f,-0.5f, 0.5f}, { 0,-1, 0}, { 1, 0, 0, 1}, {0,0}},
+        {{-0.5f,-0.5f,-0.5f}, { 0,-1, 0}, { 1, 0, 0, 1}, {1,0}},
+        {{ 0.5f,-0.5f,-0.5f}, { 0,-1, 0}, { 1, 0, 0, 1}, {1,1}},
+        {{ 0.5f,-0.5f, 0.5f}, { 0,-1, 0}, { 1, 0, 0, 1}, {0,1}},
 
-        {HgVec3{-0.5f,-0.5f, 0.5f}, HgVec3{ 0, 0, 1}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,0}},
-        {HgVec3{ 0.5f,-0.5f, 0.5f}, HgVec3{ 0, 0, 1}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,0}},
-        {HgVec3{ 0.5f, 0.5f, 0.5f}, HgVec3{ 0, 0, 1}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,1}},
-        {HgVec3{-0.5f, 0.5f, 0.5f}, HgVec3{ 0, 0, 1}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,1}},
+        {{-0.5f,-0.5f, 0.5f}, { 0, 0, 1}, { 1, 0, 0, 1}, {0,0}},
+        {{ 0.5f,-0.5f, 0.5f}, { 0, 0, 1}, { 1, 0, 0, 1}, {1,0}},
+        {{ 0.5f, 0.5f, 0.5f}, { 0, 0, 1}, { 1, 0, 0, 1}, {1,1}},
+        {{-0.5f, 0.5f, 0.5f}, { 0, 0, 1}, { 1, 0, 0, 1}, {0,1}},
 
-        {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{0,0}},
-        {HgVec3{-0.5f,-0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{1,0}},
-        {HgVec3{-0.5f, 0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{1,1}},
-        {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{0,1}},
+        {{ 0.5f,-0.5f,-0.5f}, { 0, 0,-1}, {-1, 0, 0, 1}, {0,0}},
+        {{-0.5f,-0.5f,-0.5f}, { 0, 0,-1}, {-1, 0, 0, 1}, {1,0}},
+        {{-0.5f, 0.5f,-0.5f}, { 0, 0,-1}, {-1, 0, 0, 1}, {1,1}},
+        {{ 0.5f, 0.5f,-0.5f}, { 0, 0,-1}, {-1, 0, 0, 1}, {0,1}},
     };
 
     u32 cubeIndices[]{

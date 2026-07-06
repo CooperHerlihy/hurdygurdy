@@ -104,27 +104,32 @@ struct HgVec2 {
      * Construct uninitialized
      */
     HgVec2() = default;
+
+    /**
+     * Construct from a list of values
+     */
+    constexpr HgVec2(f32 xVal, f32 yVal) : x{xVal}, y{yVal} {}
+
     /**
      * Construct from a single scalar
      */
     explicit constexpr HgVec2(f32 scalar) : x{scalar}, y{scalar} {}
-    /**
-     * Construct from a list of values
-     */
-    explicit constexpr HgVec2(f32 xVal, f32 yVal) : x{xVal}, y{yVal} {}
 
     /**
      * Add another vector in place
      */
     HgVec2& operator+=(HgVec2 other);
+
     /**
      * Subtract another vector in place
      */
     HgVec2& operator-=(HgVec2 other);
+
     /**
      * Multiply another vector in place
      */
     HgVec2& operator*=(HgVec2 other);
+
     /**
      * Divide another vector in place
      */
@@ -153,14 +158,17 @@ struct HgVec3 {
      * Construct uninitialized
      */
     HgVec3() = default;
+
+    /**
+     * Construct from a list of values
+     */
+    constexpr HgVec3(f32 xVal, f32 yVal, f32 zVal) : x{xVal}, y{yVal}, z{zVal} {}
+
     /**
      * Construct from a single scalar
      */
     explicit constexpr HgVec3(f32 scalar) : x{scalar}, y{scalar}, z{scalar} {}
-    /**
-     * Construct from a list of values
-     */
-    explicit constexpr HgVec3(f32 xVal, f32 yVal, f32 zVal) : x{xVal}, y{yVal}, z{zVal} {}
+
     /**
      * Construct from a Vec2 and scalar
      */
@@ -171,21 +179,24 @@ struct HgVec3 {
      */
     explicit constexpr operator HgVec2() const
     {
-        return HgVec2{x, y};
+        return {x, y};
     }
 
     /**
      * Add another vector in place
      */
     HgVec3& operator+=(HgVec3 other);
+
     /**
      * Subtract another vector in place
      */
     HgVec3& operator-=(HgVec3 other);
+
     /**
      * Multiply another vector in place
      */
     HgVec3& operator*=(HgVec3 other);
+
     /**
      * Divide another vector in place
      */
@@ -214,18 +225,22 @@ struct HgVec4 {
      * Construct uninitialized
      */
     HgVec4() = default;
+
+    /**
+     * Construct from a list of values
+     */
+    constexpr HgVec4(f32 xVal, f32 yVal, f32 zVal, f32 wVal) : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
+
     /**
      * Construct from a single scalar
      */
     explicit constexpr HgVec4(f32 scalar) : x{scalar}, y{scalar}, z{scalar}, w{scalar} {}
-    /**
-     * Construct from a list of values
-     */
-    explicit constexpr HgVec4(f32 xVal, f32 yVal, f32 zVal, f32 wVal) : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
+
     /**
      * Construct from a Vec2 and scalars
      */
     explicit constexpr HgVec4(HgVec2 other, f32 zVal, f32 wVal) : x{other.x}, y{other.y}, z{zVal}, w{wVal} {}
+
     /**
      * Construct from a Vec3 and scalar
      */
@@ -236,28 +251,32 @@ struct HgVec4 {
      */
     explicit constexpr operator HgVec2() const
     {
-        return HgVec2{x, y};
+        return {x, y};
     }
+
     /**
      * Downsize to Vec3
      */
     explicit constexpr operator HgVec3() const
     {
-        return HgVec3{x, y, z};
+        return {x, y, z};
     }
 
     /**
      * Add another vector in place
      */
     HgVec4& operator+=(HgVec4 other);
+
     /**
      * Subtract another vector in place
      */
     HgVec4& operator-=(HgVec4 other);
+
     /**
      * Multiply another vector in place
      */
     HgVec4& operator*=(HgVec4 other);
+
     /**
      * Divide another vector in place
      */
@@ -286,23 +305,27 @@ struct HgMat2 {
      * Construct uninitialized
      */
     HgMat2() = default;
+
+    /**
+     * Construct from a list of vectors
+     */
+    constexpr HgMat2(HgVec2 xVal, HgVec2 yVal) : x{xVal}, y{yVal} {}
+
     /**
      * Construct from a single scalar
      */
     explicit constexpr HgMat2(f32 scalar) : x{scalar, 0}, y{0, scalar} {}
+
     /**
      * Construct from a list of values
      */
     explicit constexpr HgMat2(f32 xx, f32 xy, f32 yx, f32 yy) : x{xx, xy}, y{yx, yy} {}
-    /**
-     * Construct from a list of vectors
-     */
-    explicit constexpr HgMat2(HgVec2 xVal, HgVec2 yVal) : x{xVal}, y{yVal} {}
 
     /**
      * Add another matrix in place
      */
     HgMat2& operator+=(const HgMat2& other);
+
     /**
      * Subtract another matrix in place
      */
@@ -331,16 +354,19 @@ struct HgMat3 {
      * Construct uninitialized
      */
     HgMat3() = default;
+
+    /**
+     * Construct from a list of vectors
+     */
+    constexpr HgMat3(HgVec3 xVal, HgVec3 yVal, HgVec3 zVal)
+        : x{xVal}, y{yVal}, z{zVal} {}
+
     /**
      * Construct from a single scalar
      */
     explicit constexpr HgMat3(f32 scalar)
         : x{scalar, 0, 0}, y{0, scalar, 0}, z{0, 0, scalar} {}
-    /**
-     * Construct from a list of vectors
-     */
-    explicit constexpr HgMat3(HgVec3 xVal, HgVec3 yVal, HgVec3 zVal)
-        : x{xVal}, y{yVal}, z{zVal} {}
+
     /**
      * Construct from a Mat2
      */
@@ -359,6 +385,7 @@ struct HgMat3 {
      * Add another matrix in place
      */
     HgMat3& operator+=(const HgMat3& other);
+
     /**
      * Subtract another matrix in place
      */
@@ -387,21 +414,25 @@ struct HgMat4 {
      * Construct uninitialized
      */
     HgMat4() = default;
+
+    /**
+     * Construct from a list of vectors
+     */
+    constexpr HgMat4(HgVec4 xVal, HgVec4 yVal, HgVec4 zVal, HgVec4 wVal)
+        : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
+
     /**
      * Construct from a single scalar
      */
     explicit constexpr HgMat4(f32 scalar)
         : x{scalar, 0, 0, 0}, y{0, scalar, 0, 0}, z{0, 0, scalar, 0}, w{0, 0, 0, scalar} {}
-    /**
-     * Construct from a list of vectors
-     */
-    explicit constexpr HgMat4(HgVec4 xVal, HgVec4 yVal, HgVec4 zVal, HgVec4 wVal)
-        : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
+
     /**
      * Construct from a Mat2
      */
     explicit constexpr HgMat4(const HgMat2& other)
         : x{other.x, 0, 0}, y{other.y, 0, 0}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
+
     /**
      * Construct from a Mat3
      */
@@ -415,6 +446,7 @@ struct HgMat4 {
     {
         return HgMat2{HgVec2{x}, HgVec2{y}};
     }
+
     /**
      * Downsize to Mat3
      */
@@ -427,6 +459,7 @@ struct HgMat4 {
      * Add another matrix in place
      */
     HgMat4& operator+=(const HgMat4& other);
+
     /**
      * Subtract another matrix in place
      */
@@ -459,14 +492,16 @@ struct HgComplex {
      * Construct uninitialized
      */
     HgComplex() = default;
+
     /**
      * Construct from just a real value
      */
-    explicit constexpr HgComplex(f32 rVal) : r{rVal}, i{0} {}
+    constexpr HgComplex(f32 rVal) : r{rVal}, i{0} {}
+
     /**
      * Construct from a list of values
      */
-    explicit constexpr HgComplex(f32 rVal, f32 iVal) : r{rVal}, i{iVal} {}
+    constexpr HgComplex(f32 rVal, f32 iVal) : r{rVal}, i{iVal} {}
 
     /**
      * Add another complex number in place
@@ -495,19 +530,22 @@ struct HgQuat {
      * Construct uninitialized
      */
     HgQuat() = default;
+
     /**
      * Construct from just a real value
      */
-    explicit constexpr HgQuat(f32 rVal) : r{rVal}, i{0}, j{0}, k{0} {}
+    constexpr HgQuat(f32 rVal) : r{rVal}, i{0}, j{0}, k{0} {}
+
     /**
      * Construct from a list of values
      */
-    explicit constexpr HgQuat(f32 rVal, f32 iVal, f32 jVal, f32 kVal) : r{rVal}, i{iVal}, j{jVal}, k{kVal} {}
+    constexpr HgQuat(f32 rVal, f32 iVal, f32 jVal, f32 kVal) : r{rVal}, i{iVal}, j{jVal}, k{kVal} {}
 
     /**
      * Add another quaternion in place
      */
     HgQuat& operator+=(HgQuat other);
+
     /**
      * Subtract another quaternion in place
      */
@@ -688,7 +726,7 @@ void hgVecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs);
  */
 constexpr HgVec2 operator+(HgVec2 lhs, HgVec2 rhs)
 {
-    return HgVec2{lhs.x + rhs.x, lhs.y + rhs.y};
+    return {lhs.x + rhs.x, lhs.y + rhs.y};
 }
 
 /**
@@ -696,7 +734,7 @@ constexpr HgVec2 operator+(HgVec2 lhs, HgVec2 rhs)
  */
 constexpr HgVec3 operator+(HgVec3 lhs, HgVec3 rhs)
 {
-    return HgVec3{lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
+    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
 }
 
 /**
@@ -704,7 +742,7 @@ constexpr HgVec3 operator+(HgVec3 lhs, HgVec3 rhs)
  */
 constexpr HgVec4 operator+(HgVec4 lhs, HgVec4 rhs)
 {
-    return HgVec4{lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
+    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
 }
 
 /**
@@ -723,7 +761,7 @@ void hgVecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs);
  */
 constexpr HgVec2 operator-(HgVec2 lhs, HgVec2 rhs)
 {
-    return HgVec2{lhs.x - rhs.x, lhs.y - rhs.y};
+    return {lhs.x - rhs.x, lhs.y - rhs.y};
 }
 
 /**
@@ -731,7 +769,7 @@ constexpr HgVec2 operator-(HgVec2 lhs, HgVec2 rhs)
  */
 constexpr HgVec3 operator-(HgVec3 lhs, HgVec3 rhs)
 {
-    return HgVec3{lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
+    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
 }
 
 /**
@@ -739,7 +777,7 @@ constexpr HgVec3 operator-(HgVec3 lhs, HgVec3 rhs)
  */
 constexpr HgVec4 operator-(HgVec4 lhs, HgVec4 rhs)
 {
-    return HgVec4{lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
+    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
 }
 
 /**
@@ -747,7 +785,7 @@ constexpr HgVec4 operator-(HgVec4 lhs, HgVec4 rhs)
  */
 constexpr HgVec2 operator-(HgVec2 v)
 {
-    return HgVec2{-v.x, -v.y};
+    return {-v.x, -v.y};
 }
 
 /**
@@ -755,7 +793,7 @@ constexpr HgVec2 operator-(HgVec2 v)
  */
 constexpr HgVec3 operator-(HgVec3 v)
 {
-    return HgVec3{-v.x, -v.y, -v.z};
+    return {-v.x, -v.y, -v.z};
 }
 
 /**
@@ -763,7 +801,7 @@ constexpr HgVec3 operator-(HgVec3 v)
  */
 constexpr HgVec4 operator-(HgVec4 v)
 {
-    return HgVec4{-v.x, -v.y, -v.z, -v.w};
+    return {-v.x, -v.y, -v.z, -v.w};
 }
 
 /**
@@ -782,7 +820,7 @@ void hgVecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
  */
 constexpr HgVec2 operator*(HgVec2 lhs, HgVec2 rhs)
 {
-    return HgVec2{lhs.x * rhs.x, lhs.y * rhs.y};
+    return {lhs.x * rhs.x, lhs.y * rhs.y};
 }
 
 /**
@@ -790,7 +828,7 @@ constexpr HgVec2 operator*(HgVec2 lhs, HgVec2 rhs)
  */
 constexpr HgVec3 operator*(HgVec3 lhs, HgVec3 rhs)
 {
-    return HgVec3{lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
+    return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
 }
 
 /**
@@ -798,7 +836,7 @@ constexpr HgVec3 operator*(HgVec3 lhs, HgVec3 rhs)
  */
 constexpr HgVec4 operator*(HgVec4 lhs, HgVec4 rhs)
 {
-    return HgVec4{lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
+    return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
 }
 
 /**
@@ -811,7 +849,7 @@ void hgVecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec);
  */
 constexpr HgVec2 operator*(f32 scalar, HgVec2 vec)
 {
-    return HgVec2{scalar * vec.x, scalar * vec.y};
+    return {scalar * vec.x, scalar * vec.y};
 }
 
 /**
@@ -819,7 +857,7 @@ constexpr HgVec2 operator*(f32 scalar, HgVec2 vec)
  */
 constexpr HgVec2 operator*(HgVec2 vec, f32 scalar)
 {
-    return HgVec2{scalar * vec.x, scalar * vec.y};
+    return {scalar * vec.x, scalar * vec.y};
 }
 
 /**
@@ -827,7 +865,7 @@ constexpr HgVec2 operator*(HgVec2 vec, f32 scalar)
  */
 constexpr HgVec3 operator*(f32 scalar, HgVec3 vec)
 {
-    return HgVec3{scalar * vec.x, scalar * vec.y, scalar * vec.z};
+    return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
 
 /**
@@ -835,7 +873,7 @@ constexpr HgVec3 operator*(f32 scalar, HgVec3 vec)
  */
 constexpr HgVec3 operator*(HgVec3 vec, f32 scalar)
 {
-    return HgVec3{scalar * vec.x, scalar * vec.y, scalar * vec.z};
+    return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
 
 /**
@@ -843,7 +881,7 @@ constexpr HgVec3 operator*(HgVec3 vec, f32 scalar)
  */
 constexpr HgVec4 operator*(f32 scalar, HgVec4 vec)
 {
-    return HgVec4{scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
+    return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
 
 /**
@@ -851,7 +889,7 @@ constexpr HgVec4 operator*(f32 scalar, HgVec4 vec)
  */
 constexpr HgVec4 operator*(HgVec4 vec, f32 scalar)
 {
-    return HgVec4{scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
+    return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
 
 /**
@@ -875,7 +913,7 @@ void hgVecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 constexpr HgVec2 operator/(HgVec2 lhs, HgVec2 rhs)
 {
     hgAssert(rhs.x != 0 && rhs.y != 0);
-    return HgVec2{lhs.x / rhs.x, lhs.y / rhs.y};
+    return {lhs.x / rhs.x, lhs.y / rhs.y};
 }
 
 /**
@@ -886,7 +924,7 @@ constexpr HgVec2 operator/(HgVec2 lhs, HgVec2 rhs)
 constexpr HgVec3 operator/(HgVec3 lhs, HgVec3 rhs)
 {
     hgAssert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
-    return HgVec3{lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
+    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
 }
 
 /**
@@ -897,7 +935,7 @@ constexpr HgVec3 operator/(HgVec3 lhs, HgVec3 rhs)
 constexpr HgVec4 operator/(HgVec4 lhs, HgVec4 rhs)
 {
     hgAssert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
-    return HgVec4{lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
+    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
 }
 
 /**
@@ -915,7 +953,7 @@ void hgVecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar);
 constexpr HgVec2 operator/(HgVec2 vec, f32 scalar)
 {
     hgAssert(scalar != 0);
-    return HgVec2{vec.x / scalar, vec.y / scalar};
+    return {vec.x / scalar, vec.y / scalar};
 }
 
 /**
@@ -926,7 +964,7 @@ constexpr HgVec2 operator/(HgVec2 vec, f32 scalar)
 constexpr HgVec3 operator/(HgVec3 vec, f32 scalar)
 {
     hgAssert(scalar != 0);
-    return HgVec3{vec.x / scalar, vec.y / scalar, vec.z / scalar};
+    return {vec.x / scalar, vec.y / scalar, vec.z / scalar};
 }
 
 /**
@@ -937,7 +975,7 @@ constexpr HgVec3 operator/(HgVec3 vec, f32 scalar)
 constexpr HgVec4 operator/(HgVec4 vec, f32 scalar)
 {
     hgAssert(scalar != 0);
-    return HgVec4{vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
+    return {vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
 }
 
 /**
@@ -970,9 +1008,43 @@ constexpr f32 hgVecDot3(HgVec3 lhs, HgVec3 rhs)
 /**
  * Compute the dot product of 4D vectors
  */
-constexpr f32 hgVecDot3(HgVec4 lhs, HgVec4 rhs)
+constexpr f32 hgVecDot4(HgVec4 lhs, HgVec4 rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+
+/**
+ * Compute the length squared of a vector
+ *
+ * Parameters
+ * - size The size of the vector
+ * - dst The destination vector, must not be nullptr
+ * - vec The vector to compute the length of, must not be nullptr
+ */
+void hgVecLenSqr(u32 size, f32* dst, const f32* vec);
+
+/**
+ * Compute the length squared of a 2D vector
+ */
+constexpr f32 hgVecLenSqr2(HgVec2 vec)
+{
+    return hgVecDot2(vec, vec);
+}
+
+/**
+ * Compute the length squared of a 3D vector
+ */
+constexpr f32 hgVecLenSqr3(HgVec3 vec)
+{
+    return hgVecDot3(vec, vec);
+}
+
+/**
+ * Compute the length squared of a 4D vector
+ */
+constexpr f32 hgVecLenSqr4(HgVec4 vec)
+{
+    return hgVecDot4(vec, vec);
 }
 
 /**
@@ -1365,11 +1437,11 @@ struct HgCircle {
 bool hgContainsPointCircle(HgVec2 point, HgCircle circle);
 
 /**
- * Returns the distance squared between the point and the circle
+ * Returns the distance between the point and the circle
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 hgDistSqrPointCircle(HgVec2 point, HgCircle circle);
+f32 hgDistPointCircle(HgVec2 point, HgCircle circle);
 
 /**
  * Returns the closest point to pos which lies on the circle
@@ -1386,7 +1458,7 @@ bool hgIntersectCircles(HgCircle a, HgCircle b);
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 hgDistSqrCircles(HgCircle a, HgCircle b);
+f32 hgDistCircles(HgCircle a, HgCircle b);
 
 /**
  * A 2D rectangle
@@ -1410,7 +1482,7 @@ HgRect hgRectEmpty();
 /**
  * Expands the rect to include the point
  */
-HgRect hgRectAddPoint(HgRect rect, HgVec3 point);
+HgRect hgRectAddPoint(HgRect rect, HgVec2 point);
 
 /**
  * Returns whether the rect contains the point
@@ -1438,6 +1510,9 @@ bool hgIntersectRectCircle(HgRect rect, HgCircle circle);
 struct HgHit2D {
     /**
      * The hit distance along the ray or line
+     *
+     * Ray hit pos: pos + dist * dir
+     * Line hit pos: begin + dist * (end - begin)
      */
     f32 dist;
     /**
@@ -1602,7 +1677,7 @@ bool hgContainsPointSphere(HgVec3 point, HgSphere sphere);
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 hgDistSqrPointSphere(HgVec3 point, HgSphere sphere);
+f32 hgDistPointSphere(HgVec3 point, HgSphere sphere);
 
 /**
  * Returns the closest point to pos which lies on the sphere
@@ -1619,7 +1694,7 @@ bool hgIntersectSpheres(HgSphere a, HgSphere b);
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 hgDistSqrSpheres(HgSphere a, HgSphere b);
+f32 hgDistSpheres(HgSphere a, HgSphere b);
 
 /**
  * A 3D box
@@ -1671,6 +1746,9 @@ bool hgIntersectBoxSphere(HgBox box, HgSphere sphere);
 struct HgHit3D {
     /**
      * The hit distance along the ray or line
+     *
+     * Ray hit pos: pos + dist * dir
+     * Line hit pos: begin + dist * (end - begin)
      */
     f32 dist;
     /**

@@ -2078,27 +2078,27 @@ void hgTest()
     // HgMat
     {
         HgMat2 mat{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{1.0f, 0.0f},
+            {1.0f, 0.0f},
+            {1.0f, 0.0f},
         };
         HgVec2 vec{1.0f, 1.0f};
 
         HgMat2 identity{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{0.0f, 1.0f},
+            {1.0f, 0.0f},
+            {0.0f, 1.0f},
         };
         hgAssert(identity * mat == mat);
         hgAssert(identity * vec == vec);
 
         HgMat2 matRotated{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{0.0f, 1.0f},
+            {0.0f, 1.0f},
+            {0.0f, 1.0f},
         };
         HgVec2 vecRotated{-1.0f, 1.0f};
 
         HgMat2 rotation{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{-1.0f, 0.0f},
+            {0.0f, 1.0f},
+            {-1.0f, 0.0f},
         };
         hgAssert(rotation * mat == matRotated);
         hgAssert(rotation * vec == vecRotated);
@@ -2113,7 +2113,7 @@ void hgTest()
     {
         HgMat3 identityMat = HgMat3{1.0f};
         HgVec3 upVec{0.0f, -1.0f, 0.0f};
-        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
+        HgQuat rotation = hgQuatAxisAngle({0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
 
         HgVec3 rotatedVec = hgVecRot3(rotation, upVec);
         HgMat3 rotatedMat = hgMatRot3(rotation, identityMat);
@@ -2129,7 +2129,2483 @@ void hgTest()
               && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
     }
 
-    // geometry : TODO
+    // HgCircle
+    {
+        {
+            HgCircle circle{{0.0f, 0.0f}, 5.0f};
+            hgAssert(hgContainsPointCircle({0.0f, 0.0f}, circle));
+        }
+
+        {
+            HgCircle circle{{0.0f, 0.0f}, 5.0f};
+            hgAssert(hgContainsPointCircle({3.0f, 4.0f}, circle));
+        }
+
+        {
+            HgCircle circle{{0.0f, 0.0f}, 5.0f};
+            hgAssert(hgContainsPointCircle({5.0f, 0.0f}, circle));
+        }
+
+        {
+            HgCircle circle{{0.0f, 0.0f}, 5.0f};
+            hgAssert(!hgContainsPointCircle({5.01f, 0.0f}, circle));
+        }
+
+        {
+            HgCircle circle{{2.0f, -3.0f}, 2.0f};
+            hgAssert(hgContainsPointCircle({2.0f, -3.0f}, circle));
+            hgAssert(hgContainsPointCircle({4.0f, -3.0f}, circle));
+            hgAssert(!hgContainsPointCircle({4.1f, -3.0f}, circle));
+        }
+
+        {
+            HgCircle circle{{0.0f, 0.0f}, 0.0f};
+            hgAssert(hgContainsPointCircle({0.0f, 0.0f}, circle));
+            hgAssert(!hgContainsPointCircle({0.01f, 0.0f}, circle));
+        }
+    }
+
+    // HgRect
+    {
+        {
+            HgRect rect = hgRectEmpty();
+            hgAssert(!hgContainsPointRect({0.0f, 0.0f}, rect));
+            hgAssert(!hgContainsPointRect({1.0f, 1.0f}, rect));
+        }
+
+        {
+            HgRect rect = hgRectEmpty();
+            rect = hgRectAddPoint(rect, {2.0f, 3.0f});
+            hgAssert(hgContainsPointRect({2.0f, 3.0f}, rect));
+        }
+
+        {
+            HgRect rect = hgRectEmpty();
+            rect = hgRectAddPoint(rect, {1.0f, 2.0f});
+            hgAssert(hgContainsPointRect({1.0f, 2.0f}, rect));
+        }
+
+        {
+            HgRect rect = hgRectEmpty();
+            rect = hgRectAddPoint(rect, {2.0f, 2.0f});
+            rect = hgRectAddPoint(rect, {5.0f, 7.0f});
+
+            hgAssert(hgContainsPointRect({2.0f, 2.0f}, rect));
+            hgAssert(hgContainsPointRect({5.0f, 7.0f}, rect));
+            hgAssert(hgContainsPointRect({3.0f, 4.0f}, rect));
+        }
+
+        {
+            HgRect rect = hgRectEmpty();
+            rect = hgRectAddPoint(rect, {5.0f, 5.0f});
+            rect = hgRectAddPoint(rect, {-2.0f, -3.0f});
+
+            hgAssert(hgContainsPointRect({-2.0f, -3.0f}, rect));
+            hgAssert(hgContainsPointRect({5.0f, 5.0f}, rect));
+            hgAssert(hgContainsPointRect({0.0f, 0.0f}, rect));
+        }
+
+        {
+            HgRect rect = hgRectEmpty();
+            rect = hgRectAddPoint(rect, {1.0f, 1.0f});
+            rect = hgRectAddPoint(rect, {1.0f, 1.0f});
+
+            hgAssert(hgContainsPointRect({1.0f, 1.0f}, rect));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 5.0f},
+            };
+
+            hgAssert(hgContainsPointRect({5.0f, 2.5f}, rect));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 5.0f},
+            };
+
+            hgAssert(hgContainsPointRect({0.0f, 0.0f}, rect));
+            hgAssert(hgContainsPointRect({10.0f, 5.0f}, rect));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 5.0f},
+            };
+
+            hgAssert(!hgContainsPointRect({-0.01f, 0.0f}, rect));
+            hgAssert(!hgContainsPointRect({10.01f, 5.0f}, rect));
+            hgAssert(!hgContainsPointRect({5.0f, 5.01f}, rect));
+        }
+
+        {
+            HgRect rect{
+                {-5.0f, -3.0f},
+                {2.0f, 8.0f},
+            };
+
+            hgAssert(hgContainsPointRect({-4.0f, 0.0f}, rect));
+            hgAssert(!hgContainsPointRect({-2.9f, 0.0f}, rect));
+        }
+
+        {
+            HgRect rect{
+                {2.0f, 2.0f},
+                {0.0f, 0.0f},
+            };
+
+            hgAssert(hgContainsPointRect({2.0f, 2.0f}, rect));
+            hgAssert(!hgContainsPointRect({2.01f, 2.0f}, rect));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgVec2 p = hgClosestPointRect({-5.0f, 5.0f}, rect);
+
+            hgAssert(p.x == 0.0f);
+            hgAssert(p.y == 5.0f);
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgVec2 p = hgClosestPointRect({15.0f, 5.0f}, rect);
+
+            hgAssert(p.x == 10.0f);
+            hgAssert(p.y == 5.0f);
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgVec2 p = hgClosestPointRect({5.0f, -3.0f}, rect);
+
+            hgAssert(p.x == 5.0f);
+            hgAssert(p.y == 0.0f);
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgVec2 p = hgClosestPointRect({-3.0f, 15.0f}, rect);
+
+            hgAssert(p.x == 0.0f);
+            hgAssert(p.y == 10.0f);
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgVec2 p = hgClosestPointRect({5.0f, 5.0f}, rect);
+
+            hgAssert(p.x == 5.0f);
+            hgAssert(p.y == 5.0f);
+        }
+
+        {
+            HgRect a{
+                {0.0f, 0.0f},
+                {5.0f, 5.0f},
+
+            };
+
+            HgRect b{
+                {3.0f, 3.0f},
+                {5.0f, 5.0f},
+            };
+
+            hgAssert(hgIntersectRects(a, b));
+            hgAssert(hgIntersectRects(b, a));
+        }
+
+        {
+            HgRect a{
+                {0.0f, 0.0f},
+                {5.0f, 5.0f},
+            };
+
+            HgRect b{
+                {5.0f, 0.0f},
+                {2.0f, 2.0f},
+            };
+
+            hgAssert(hgIntersectRects(a, b));
+        }
+
+        {
+            HgRect a{
+                {0.0f, 0.0f},
+                {5.0f, 5.0f},
+            };
+
+            HgRect b{
+                {5.0f, 5.0f},
+                {2.0f, 2.0f},
+            };
+
+            hgAssert(hgIntersectRects(a, b));
+        }
+
+        {
+            HgRect a{
+                {0.0f, 0.0f},
+                {5.0f, 5.0f},
+            };
+
+            HgRect b{
+                {5.01f, 0.0f},
+                {2.0f, 2.0f},
+            };
+
+            hgAssert(!hgIntersectRects(a, b));
+        }
+
+        {
+            HgRect a{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgRect b{
+                {2.0f, 2.0f},
+                {2.0f, 2.0f},
+            };
+
+            hgAssert(hgIntersectRects(a, b));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgCircle circle{
+                {5.0f, 5.0f},
+                2.0f,
+            };
+
+            hgAssert(hgIntersectRectCircle(rect, circle));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgCircle circle{
+                {12.0f, 5.0f},
+                2.0f,
+            };
+
+            hgAssert(hgIntersectRectCircle(rect, circle));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgCircle circle{
+                {13.0f, 5.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectRectCircle(rect, circle));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgCircle circle{
+                {12.0f, 12.0f},
+                std::sqrt(8.0f) + FLT_EPSILON,
+            };
+
+            hgAssert(hgIntersectRectCircle(rect, circle));
+        }
+
+        {
+            HgRect rect{
+                {0.0f, 0.0f},
+                {10.0f, 10.0f},
+            };
+
+            HgCircle circle{
+                {13.0f, 13.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectRectCircle(rect, circle));
+        }
+    }
+
+    // HgRay2D
+    {
+        {
+            HgRay2D a{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgRay2D b{
+                {5.0f, -5.0f},
+                {0.0f, 1.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRays2D(a, b, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgRay2D a{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgRay2D b{
+                {5.0f, 5.0f},
+                {0.0f, 1.0f},
+            };
+
+            hgAssert(!hgIntersectRays2D(a, b, nullptr));
+        }
+
+        {
+            HgRay2D a{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgRay2D b{
+                {-5.0f, -5.0f},
+                {0.0f, 1.0f},
+            };
+
+            hgAssert(!hgIntersectRays2D(a, b, nullptr));
+        }
+
+        {
+            HgRay2D a{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgRay2D b{
+                {0.0f, 1.0f},
+                {1.0f, 0.0f},
+            };
+
+            hgAssert(!hgIntersectRays2D(a, b, nullptr));
+        }
+
+        {
+            HgRay2D a{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgRay2D b{
+                {0.0f, 0.0f},
+                {0.0f, 1.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRays2D(a, b, &hit));
+            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgLine2D line{
+                {5.0f, -2.0f},
+                {5.0f, 2.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayLine2D(ray, line, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgLine2D line{
+                {-5.0f, -2.0f},
+                {-5.0f, 2.0f},
+            };
+
+            hgAssert(!hgIntersectRayLine2D(ray, line, nullptr));
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgLine2D line{
+                {5.0f, 1.0f},
+                {8.0f, 1.0f},
+            };
+
+            hgAssert(!hgIntersectRayLine2D(ray, line, nullptr));
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgLine2D line{
+                {5.0f, 0.0f},
+                {5.0f, 5.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayLine2D(ray, line, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay2D ray{
+                {5.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgLine2D line{
+                {5.0f, -5.0f},
+                {5.0f, 5.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayLine2D(ray, line, &hit));
+            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayCircle(ray, circle, &hit));
+            hgAssert(std::abs(hit.dist - 8.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 2.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayCircle(ray, circle, &hit));
+            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 3.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectRayCircle(ray, circle, nullptr));
+        }
+
+        {
+            HgRay2D ray{
+                {10.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayCircle(ray, circle, &hit));
+            hgAssert(std::abs(hit.dist - 2.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+        }
+
+        {
+            HgRay2D ray{
+                {20.0f, 0.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectRayCircle(ray, circle, nullptr));
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 5.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayRect(ray, rect, &hit));
+            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgRay2D ray{
+                {20.0f, 5.0f},
+                {-1.0f, 0.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayRect(ray, rect, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+        }
+
+        {
+            HgRay2D ray{
+                {12.5f, -5.0f},
+                {0.0f, 1.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayRect(ray, rect, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {0.0f, -1.0f}));
+        }
+
+        {
+            HgRay2D ray{
+                {12.5f, 20.0f},
+                {0.0f, -1.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayRect(ray, rect, &hit));
+            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {0.0f, 1.0f}));
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 0.0f},
+                {1.0f, 1.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 10.0f},
+                {5.0f, 5.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayRect(ray, rect, &hit));
+            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 5.0f},
+                {-1.0f, 0.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            hgAssert(!hgIntersectRayRect(ray, rect, nullptr));
+        }
+
+        {
+            HgRay2D ray{
+                {12.5f, 5.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectRayRect(ray, rect, &hit));
+            hgAssert(hit.dist == 0.0f);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgRay2D ray{
+                {0.0f, 20.0f},
+                {1.0f, 0.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            hgAssert(!hgIntersectRayRect(ray, rect, nullptr));
+        }
+
+    }
+
+    // HgLine2D
+    {
+        {
+            HgLine2D a{
+                {0.0f, 0.0f},
+                {10.0f, 0.0f},
+            };
+
+            HgLine2D b{
+                {5.0f, -5.0f},
+                {5.0f, 5.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLines2D(a, b, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgLine2D a{
+                {0.0f, 0.0f},
+                {10.0f, 0.0f},
+            };
+
+            HgLine2D b{
+                {15.0f, -5.0f},
+                {15.0f, 5.0f},
+            };
+
+            hgAssert(!hgIntersectLines2D(a, b, nullptr));
+        }
+
+        {
+            HgLine2D a{
+                {0.0f, 0.0f},
+                {10.0f, 0.0f},
+            };
+
+            HgLine2D b{
+                {10.0f, 0.0f},
+                {10.0f, 5.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLines2D(a, b, &hit));
+            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgLine2D a{
+                {0.0f, 0.0f},
+                {10.0f, 0.0f},
+            };
+
+            HgLine2D b{
+                {0.0f, 1.0f},
+                {10.0f, 1.0f},
+            };
+
+            hgAssert(!hgIntersectLines2D(a, b, nullptr));
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 0.0f},
+                {10.0f, 0.0f},
+            };
+
+            HgRay2D ray{
+                {5.0f, -5.0f},
+                {0.0f, 1.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineRay2D(line, ray, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 0.0f},
+                {10.0f, 0.0f},
+            };
+
+            HgRay2D ray{
+                {15.0f, -5.0f},
+                {0.0f, 1.0f},
+            };
+
+            hgAssert(!hgIntersectLineRay2D(line, ray, nullptr));
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 0.0f},
+                {10.0f, 0.0f},
+            };
+
+            HgRay2D ray{
+                {10.0f, -5.0f},
+                {0.0f, 1.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineRay2D(line, ray, &hit));
+            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 0.0f},
+                {10.0f, 0.0f},
+            };
+
+            HgRay2D ray{
+                {5.0f, 5.0f},
+                {0.0f, 1.0f},
+            };
+
+            hgAssert(!hgIntersectLineRay2D(line, ray, nullptr));
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 0.0f},
+                {20.0f, 0.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineCircle(line, circle, &hit));
+            hgAssert(std::abs(hit.dist - 0.4f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 2.0f},
+                {20.0f, 2.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineCircle(line, circle, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 3.0f},
+                {20.0f, 3.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectLineCircle(line, circle, nullptr));
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 0.0f},
+                {5.0f, 0.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectLineCircle(line, circle, nullptr));
+        }
+
+        {
+            HgLine2D line{
+                {10.0f, 0.0f},
+                {20.0f, 0.0f},
+            };
+
+            HgCircle circle{
+                {10.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineCircle(line, circle, &hit));
+            hgAssert(std::abs(hit.dist - 0.2f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 5.0f},
+                {20.0f, 5.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineRect(line, rect, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+        }
+
+        {
+            HgLine2D line{
+                {20.0f, 5.0f},
+                {0.0f, 5.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineRect(line, rect, &hit));
+            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+        }
+
+        {
+            HgLine2D line{
+                {12.5f, -5.0f},
+                {12.5f, 15.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineRect(line, rect, &hit));
+            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {0.0f, -1.0f}));
+        }
+
+        {
+            HgLine2D line{
+                {0.0f, 20.0f},
+                {20.0f, 20.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            hgAssert(!hgIntersectLineRect(line, rect, nullptr));
+        }
+
+        {
+            HgLine2D line{
+                {12.5f, 5.0f},
+                {17.5f, 5.0f},
+            };
+
+            HgRect rect{
+                {10.0f, 0.0f},
+                {5.0f, 10.0f},
+            };
+
+            HgHit2D hit;
+            hgAssert(hgIntersectLineRect(line, rect, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+        }
+    }
+
+    // HgSphere
+    {
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(hgContainsPointSphere({0.0f, 0.0f, 0.0f}, sphere));
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(hgContainsPointSphere({3.0f, 4.0f, 0.0f}, sphere));
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(hgContainsPointSphere({5.0f, 0.0f, 0.0f}, sphere));
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(!hgContainsPointSphere({5.01f, 0.0f, 0.0f}, sphere));
+        }
+
+        {
+            HgSphere sphere{
+                {2.0f, -3.0f, 4.0f},
+                2.0f,
+            };
+
+            hgAssert(hgContainsPointSphere({2.0f, -3.0f, 4.0f}, sphere));
+            hgAssert(hgContainsPointSphere({4.0f, -3.0f, 4.0f}, sphere));
+            hgAssert(!hgContainsPointSphere({4.1f, -3.0f, 4.0f}, sphere));
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                0.0f,
+            };
+
+            hgAssert(hgContainsPointSphere({0.0f, 0.0f, 0.0f}, sphere));
+            hgAssert(!hgContainsPointSphere({0.01f, 0.0f, 0.0f}, sphere));
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(std::abs(hgDistPointSphere({10.0f, 0.0f, 0.0f}, sphere) - 5.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(std::abs(hgDistPointSphere({5.0f, 0.0f, 0.0f}, sphere)) <= FLT_EPSILON);
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(std::abs(hgDistPointSphere({0.0f, 0.0f, 0.0f}, sphere) + 5.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgSphere sphere{
+                {2.0f, 3.0f, 4.0f},
+                2.0f,
+            };
+
+            hgAssert(std::abs(hgDistPointSphere({6.0f, 3.0f, 4.0f}, sphere) - 2.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgVec3 p = hgClosestPointSphere({10.0f, 0.0f, 0.0f}, sphere);
+
+            hgAssert(hgVecEq3(p, {5.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgVec3 p = hgClosestPointSphere({0.0f, 10.0f, 0.0f}, sphere);
+
+            hgAssert(hgVecEq3(p, {0.0f, 5.0f, 0.0f}));
+        }
+
+        {
+            HgSphere sphere{
+                {2.0f, 1.0f, -3.0f},
+                3.0f,
+            };
+
+            HgVec3 p = hgClosestPointSphere({5.0f, 1.0f, -3.0f}, sphere);
+
+            hgAssert(hgVecEq3(p, {5.0f, 1.0f, -3.0f}));
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgVec3 p = hgClosestPointSphere({0.0f, 0.0f, 0.0f}, sphere);
+
+            hgAssert(hgDistPointSphere(p, sphere) <= FLT_EPSILON);
+        }
+
+        {
+            HgSphere sphere{
+                {0.0f, 0.0f, 0.0f},
+                0.0f,
+            };
+
+            HgVec3 p = hgClosestPointSphere({10.0f, 2.0f, -5.0f}, sphere);
+
+            hgAssert(hgVecEq3(p, {0.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgSphere b{
+                {8.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(hgIntersectSpheres(a, b));
+            hgAssert(hgIntersectSpheres(b, a));
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgSphere b{
+                {10.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(hgIntersectSpheres(a, b));
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgSphere b{
+                {10.1f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(!hgIntersectSpheres(a, b));
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgSphere b{
+                {0.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(hgIntersectSpheres(a, b));
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                0.0f,
+            };
+
+            HgSphere b{
+                {0.0f, 0.0f, 0.0f},
+                0.0f,
+            };
+
+            hgAssert(hgIntersectSpheres(a, b));
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgSphere b{
+                {20.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(std::abs(hgDistSpheres(a, b) - 10.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgSphere b{
+                {10.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(std::abs(hgDistSpheres(a, b)) <= FLT_EPSILON);
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgSphere b{
+                {5.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            hgAssert(hgDistSpheres(a, b) < 0.0f);
+        }
+
+        {
+            HgSphere a{
+                {0.0f, 0.0f, 0.0f},
+                5.0f,
+            };
+
+            HgSphere b{
+                {0.0f, 0.0f, 0.0f},
+                1.0f,
+            };
+
+            hgAssert(hgDistSpheres(a, b) < 0.0f);
+        }
+    }
+
+    // HgBox
+    {
+        {
+            HgBox box = hgBoxEmpty();
+
+            hgAssert(!hgContainsPointBox({0.0f, 0.0f, 0.0f}, box));
+            hgAssert(!hgContainsPointBox({1.0f, 1.0f, 1.0f}, box));
+        }
+
+        {
+            HgBox box = hgBoxEmpty();
+            box = hgBoxAddPoint(box, {2.0f, 3.0f, 4.0f});
+
+            hgAssert(hgContainsPointBox({2.0f, 3.0f, 4.0f}, box));
+        }
+
+        {
+            HgBox box = hgBoxEmpty();
+
+            box = hgBoxAddPoint(box, {1.0f, 2.0f, 3.0f});
+
+            hgAssert(hgContainsPointBox({1.0f, 2.0f, 3.0f}, box));
+        }
+
+        {
+            HgBox box = hgBoxEmpty();
+
+            box = hgBoxAddPoint(box, {2.0f, 2.0f, 2.0f});
+            box = hgBoxAddPoint(box, {5.0f, 7.0f, 11.0f});
+
+            hgAssert(hgContainsPointBox({2.0f, 2.0f, 2.0f}, box));
+            hgAssert(hgContainsPointBox({5.0f, 7.0f, 11.0f}, box));
+            hgAssert(hgContainsPointBox({3.0f, 4.0f, 5.0f}, box));
+        }
+
+        {
+            HgBox box = hgBoxEmpty();
+
+            box = hgBoxAddPoint(box, {5.0f, 5.0f, 5.0f});
+            box = hgBoxAddPoint(box, {-2.0f, -3.0f, -4.0f});
+
+            hgAssert(hgContainsPointBox({-2.0f, -3.0f, -4.0f}, box));
+            hgAssert(hgContainsPointBox({5.0f, 5.0f, 5.0f}, box));
+            hgAssert(hgContainsPointBox({0.0f, 0.0f, 0.0f}, box));
+        }
+
+        {
+            HgBox box = hgBoxEmpty();
+
+            box = hgBoxAddPoint(box, {1.0f, 1.0f, 1.0f});
+            box = hgBoxAddPoint(box, {1.0f, 1.0f, 1.0f});
+
+            hgAssert(hgContainsPointBox({1.0f, 1.0f, 1.0f}, box));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 5.0f, 8.0f},
+            };
+
+            hgAssert(hgContainsPointBox({5.0f, 2.5f, 4.0f}, box));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 5.0f, 8.0f},
+            };
+
+            hgAssert(hgContainsPointBox({0.0f, 0.0f, 0.0f}, box));
+            hgAssert(hgContainsPointBox({10.0f, 5.0f, 8.0f}, box));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 5.0f, 8.0f},
+            };
+
+            hgAssert(!hgContainsPointBox({-0.01f, 0.0f, 0.0f}, box));
+            hgAssert(!hgContainsPointBox({10.01f, 5.0f, 8.0f}, box));
+            hgAssert(!hgContainsPointBox({5.0f, 5.01f, 4.0f}, box));
+            hgAssert(!hgContainsPointBox({5.0f, 2.5f, 8.01f}, box));
+        }
+
+        {
+            HgBox box{
+                {-5.0f, -3.0f, -2.0f},
+                {2.0f, 8.0f, 6.0f},
+            };
+
+            hgAssert(hgContainsPointBox({-4.0f, 0.0f, 0.0f}, box));
+            hgAssert(!hgContainsPointBox({-2.9f, 0.0f, 0.0f}, box));
+        }
+
+        {
+            HgBox box{
+                {2.0f, 2.0f, 2.0f},
+                {0.0f, 0.0f, 0.0f},
+            };
+
+            hgAssert(hgContainsPointBox({2.0f, 2.0f, 2.0f}, box));
+            hgAssert(!hgContainsPointBox({2.01f, 2.0f, 2.0f}, box));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgVec3 p = hgClosestPointBox({-5.0f, 5.0f, 5.0f}, box);
+
+            hgAssert(hgVecEq3(p, {0.0f, 5.0f, 5.0f}));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgVec3 p = hgClosestPointBox({15.0f, 5.0f, 5.0f}, box);
+
+            hgAssert(hgVecEq3(p, {10.0f, 5.0f, 5.0f}));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgVec3 p = hgClosestPointBox({5.0f, -3.0f, 5.0f}, box);
+
+            hgAssert(hgVecEq3(p, {5.0f, 0.0f, 5.0f}));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgVec3 p = hgClosestPointBox({5.0f, 5.0f, 15.0f}, box);
+
+            hgAssert(hgVecEq3(p, {5.0f, 5.0f, 10.0f}));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgVec3 p = hgClosestPointBox({-5.0f, 15.0f, -3.0f}, box);
+
+            hgAssert(hgVecEq3(p, {0.0f, 10.0f, 0.0f}));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgVec3 p = hgClosestPointBox({5.0f, 5.0f, 5.0f}, box);
+
+            hgAssert(hgVecEq3(p, {5.0f, 5.0f, 5.0f}));
+        }
+
+        {
+            HgBox a{
+                {0.0f, 0.0f, 0.0f},
+                {5.0f, 5.0f, 5.0f},
+            };
+
+            HgBox b{
+                {3.0f, 3.0f, 3.0f},
+                {5.0f, 5.0f, 5.0f},
+            };
+
+            hgAssert(hgIntersectBox(a, b));
+            hgAssert(hgIntersectBox(b, a));
+        }
+
+        {
+            HgBox a{
+                {0.0f, 0.0f, 0.0f},
+                {5.0f, 5.0f, 5.0f},
+            };
+
+            HgBox b{
+                {5.0f, 0.0f, 0.0f},
+                {2.0f, 2.0f, 2.0f},
+            };
+
+            hgAssert(hgIntersectBox(a, b));
+        }
+
+        {
+            HgBox a{
+                {0.0f, 0.0f, 0.0f},
+                {5.0f, 5.0f, 5.0f},
+            };
+
+            HgBox b{
+                {0.0f, 5.0f, 0.0f},
+                {2.0f, 2.0f, 2.0f},
+            };
+
+            hgAssert(hgIntersectBox(a, b));
+        }
+
+        {
+            HgBox a{
+                {0.0f, 0.0f, 0.0f},
+                {5.0f, 5.0f, 5.0f},
+            };
+
+            HgBox b{
+                {0.0f, 0.0f, 5.0f},
+                {2.0f, 2.0f, 2.0f},
+            };
+
+            hgAssert(hgIntersectBox(a, b));
+        }
+
+        {
+            HgBox a{
+                {0.0f, 0.0f, 0.0f},
+                {5.0f, 5.0f, 5.0f},
+            };
+
+            HgBox b{
+                {5.0f, 5.0f, 5.0f},
+                {2.0f, 2.0f, 2.0f},
+            };
+
+            hgAssert(hgIntersectBox(a, b));
+        }
+
+        {
+            HgBox a{
+                {0.0f, 0.0f, 0.0f},
+                {5.0f, 5.0f, 5.0f},
+            };
+
+            HgBox b{
+                {5.01f, 0.0f, 0.0f},
+                {2.0f, 2.0f, 2.0f},
+            };
+
+            hgAssert(!hgIntersectBox(a, b));
+        }
+
+        {
+            HgBox a{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgBox b{
+                {2.0f, 2.0f, 2.0f},
+                {2.0f, 2.0f, 2.0f},
+            };
+
+            hgAssert(hgIntersectBox(a, b));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgSphere sphere{
+                {5.0f, 5.0f, 5.0f},
+                2.0f,
+            };
+
+            hgAssert(hgIntersectBoxSphere(box, sphere));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgSphere sphere{
+                {12.0f, 5.0f, 5.0f},
+                2.0f,
+            };
+
+            hgAssert(hgIntersectBoxSphere(box, sphere));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgSphere sphere{
+                {5.0f, 12.0f, 5.0f},
+                2.0f,
+            };
+
+            hgAssert(hgIntersectBoxSphere(box, sphere));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgSphere sphere{
+                {5.0f, 5.0f, 12.0f},
+                2.0f,
+            };
+
+            hgAssert(hgIntersectBoxSphere(box, sphere));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgSphere sphere{
+                {13.0f, 5.0f, 5.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectBoxSphere(box, sphere));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgSphere sphere{
+                {12.0f, 12.0f, 12.0f},
+                std::sqrt(12.0f),
+            };
+
+            hgAssert(hgIntersectBoxSphere(box, sphere));
+        }
+
+        {
+            HgBox box{
+                {0.0f, 0.0f, 0.0f},
+                {10.0f, 10.0f, 10.0f},
+            };
+
+            HgSphere sphere{
+                {13.0f, 13.0f, 13.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectBoxSphere(box, sphere));
+        }
+    }
+
+    // HgPlane
+    {
+        {
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            hgAssert(hgVecEq3(plane.normal, {0.0f, 1.0f, 0.0f}));
+            hgAssert(std::abs(plane.dist) <= FLT_EPSILON);
+        }
+
+        {
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            hgAssert(hgVecEq3(plane.normal, {0.0f, 1.0f, 0.0f}));
+            hgAssert(std::abs(plane.dist - 5.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgPlane plane = hgPlaneFromPoint(
+                {3.0f, 2.0f, -1.0f},
+                {1.0f, 0.0f, 0.0f}
+            );
+
+            hgAssert(hgVecEq3(plane.normal, {1.0f, 0.0f, 0.0f}));
+            hgAssert(std::abs(plane.dist - 3.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromTri(tri);
+
+            hgAssert(hgVecEq3(plane.normal, {0.0f, 0.0f, 1.0f}));
+            hgAssert(std::abs(plane.dist) <= FLT_EPSILON);
+        }
+
+        {
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromTri(tri);
+
+            hgAssert(hgVecEq3(plane.normal, {0.0f, 0.0f, -1.0f}));
+            hgAssert(std::abs(plane.dist) <= FLT_EPSILON);
+        }
+
+        {
+            HgTri tri{
+                {1.0f, 2.0f, 5.0f},
+                {4.0f, 2.0f, 5.0f},
+                {1.0f, 6.0f, 5.0f},
+            };
+
+            HgPlane plane = hgPlaneFromTri(tri);
+
+            hgAssert(hgVecEq3(plane.normal, {0.0f, 0.0f, 1.0f}));
+            hgAssert(std::abs(plane.dist - 5.0f) <= FLT_EPSILON);
+        }
+    }
+
+    // HgRay3D
+    {
+        {
+            HgRay3D ray{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRaySphere(ray, sphere, &hit));
+            hgAssert(std::abs(hit.dist - 8.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 2.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRaySphere(ray, sphere, &hit));
+            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 3.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectRaySphere(ray, sphere, nullptr));
+        }
+
+        {
+            HgRay3D ray{
+                {10.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRaySphere(ray, sphere, &hit));
+            hgAssert(std::abs(hit.dist - 2.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {20.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectRaySphere(ray, sphere, nullptr));
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 5.0f, 5.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayBox(ray, box, &hit));
+            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {20.0f, 5.0f, 5.0f},
+                {-1.0f, 0.0f, 0.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayBox(ray, box, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {12.5f, -5.0f, 5.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayBox(ray, box, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {12.5f, 5.0f, -5.0f},
+                {0.0f, 0.0f, 1.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayBox(ray, box, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 20.0f, 5.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            hgAssert(!hgIntersectRayBox(ray, box, nullptr));
+        }
+
+        {
+            HgRay3D ray{
+                {12.5f, 5.0f, 5.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayBox(ray, box, &hit));
+            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {0.25f, 0.25f, -1.0f},
+                {0.0f, 0.0f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayTri(ray, tri, &hit));
+            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {0.5f, 0.0f, -1.0f},
+                {0.0f, 0.0f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayTri(ray, tri, &hit));
+            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 0.0f, -1.0f},
+                {0.0f, 0.0f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayTri(ray, tri, &hit));
+            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay3D ray{
+                {0.75f, 0.75f, -1.0f},
+                {0.0f, 0.0f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            hgAssert(!hgIntersectRayTri(ray, tri, nullptr));
+        }
+
+        {
+            HgRay3D ray{
+                {0.25f, 0.25f, 1.0f},
+                {0.0f, 0.0f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            hgAssert(!hgIntersectRayTri(ray, tri, nullptr));
+        }
+
+        {
+            HgRay3D ray{
+                {0.25f, 0.25f, -1.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            hgAssert(!hgIntersectRayTri(ray, tri, nullptr));
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 10.0f, 0.0f},
+                {0.0f, -1.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayPlane(ray, plane, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, 1.0f, 0.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayPlane(ray, plane, &hit));
+            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 10.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            hgAssert(!hgIntersectRayPlane(ray, plane, nullptr));
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 2.0f, 0.0f},
+                {0.0f, -1.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            hgAssert(!hgIntersectRayPlane(ray, plane, nullptr));
+        }
+
+        {
+            HgRay3D ray{
+                {1.0f, 5.0f, 2.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayPlane(ray, plane, &hit));
+            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+        }
+
+        {
+            HgRay3D ray{
+                {0.0f, 10.0f, 0.0f},
+                {0.0f, -2.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectRayPlane(ray, plane, &hit));
+            hgAssert(std::abs(hit.dist - 2.5f) <= FLT_EPSILON);
+        }
+    }
+
+    // HgLine3D
+    {
+        {
+            HgLine3D line{
+                {0.0f, 0.0f, 0.0f},
+                {20.0f, 0.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineSphere(line, sphere, &hit));
+            hgAssert(std::abs(hit.dist - 0.4f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 2.0f, 0.0f},
+                {20.0f, 2.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineSphere(line, sphere, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 3.0f, 0.0f},
+                {20.0f, 3.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectLineSphere(line, sphere, nullptr));
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 0.0f, 0.0f},
+                {5.0f, 0.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            hgAssert(!hgIntersectLineSphere(line, sphere, nullptr));
+        }
+
+        {
+            HgLine3D line{
+                {10.0f, 0.0f, 0.0f},
+                {20.0f, 0.0f, 0.0f},
+            };
+
+            HgSphere sphere{
+                {10.0f, 0.0f, 0.0f},
+                2.0f,
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineSphere(line, sphere, &hit));
+            hgAssert(std::abs(hit.dist - 0.2f) <= FLT_EPSILON);
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 5.0f, 5.0f},
+                {20.0f, 5.0f, 5.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineBox(line, box, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {20.0f, 5.0f, 5.0f},
+                {0.0f, 5.0f, 5.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineBox(line, box, &hit));
+            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {12.5f, -5.0f, 5.0f},
+                {12.5f, 15.0f, 5.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineBox(line, box, &hit));
+            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {12.5f, 5.0f, -5.0f},
+                {12.5f, 5.0f, 15.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineBox(line, box, &hit));
+            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 20.0f, 5.0f},
+                {20.0f, 20.0f, 5.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            hgAssert(!hgIntersectLineBox(line, box, nullptr));
+        }
+
+        {
+            HgLine3D line{
+                {12.5f, 5.0f, 5.0f},
+                {17.5f, 5.0f, 5.0f},
+            };
+
+            HgBox box{
+                {10.0f, 0.0f, 0.0f},
+                {5.0f, 10.0f, 10.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineBox(line, box, &hit));
+            hgAssert(std::abs(hit.dist - 0.5) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {0.25f, 0.25f, -1.0f},
+                {0.25f, 0.25f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineTri(line, tri, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {0.5f, 0.0f, -1.0f},
+                {0.5f, 0.0f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineTri(line, tri, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 0.0f, -1.0f},
+                {0.0f, 0.0f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineTri(line, tri, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+        }
+
+        {
+            HgLine3D line{
+                {0.75f, 0.75f, -1.0f},
+                {0.75f, 0.75f, 1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            hgAssert(!hgIntersectLineTri(line, tri, nullptr));
+        }
+
+        {
+            HgLine3D line{
+                {0.25f, 0.25f, -1.0f},
+                {0.25f, 0.25f, -0.5f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            hgAssert(!hgIntersectLineTri(line, tri, nullptr));
+        }
+
+        {
+            HgLine3D line{
+                {0.25f, 0.25f, 1.0f},
+                {0.25f, 0.25f, -1.0f},
+            };
+
+            HgTri tri{
+                {0.0f, 0.0f, 0.0f},
+                {1.0f, 0.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f},
+            };
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLineTri(line, tri, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, 1.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 10.0f, 0.0f},
+                {0.0f, 0.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLinePlane(line, plane, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, 1.0f, 0.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 0.0f, 0.0f},
+                {0.0f, 10.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLinePlane(line, plane, &hit));
+            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 10.0f, 0.0f},
+                {10.0f, 10.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            hgAssert(!hgIntersectLinePlane(line, plane, nullptr));
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 0.0f, 0.0f},
+                {0.0f, 4.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            hgAssert(!hgIntersectLinePlane(line, plane, nullptr));
+        }
+
+        {
+            HgLine3D line{
+                {1.0f, 5.0f, 2.0f},
+                {1.0f, 10.0f, 2.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            HgHit3D hit;
+
+            hgAssert(hgIntersectLinePlane(line, plane, &hit));
+            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
+            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+        }
+
+        {
+            HgLine3D line{
+                {0.0f, 10.0f, 0.0f},
+                {0.0f, 20.0f, 0.0f},
+            };
+
+            HgPlane plane = hgPlaneFromPoint(
+                {0.0f, 5.0f, 0.0f},
+                {0.0f, 1.0f, 0.0f}
+            );
+
+            hgAssert(!hgIntersectLinePlane(line, plane, nullptr));
+        }
+    }
 
     // HgAssetManager and HgBinary
     {

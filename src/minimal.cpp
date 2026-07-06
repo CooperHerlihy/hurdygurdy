@@ -75,8 +75,8 @@ int main()
 
     hgLayerClear2D(&backgroundLayer);
     hgDrawRect2D(&backgroundLayer,
-        HgVec4{.002f, 0, .012f, 1},
-        HgRect{
+        {.002f, 0, .012f, 1},
+        {
             HgVec2{
                 (f32)width / (f32)height - 0.5f,
                 0.5f,
@@ -147,7 +147,7 @@ int main()
 
         hgCameraUpdate(&camera);
 
-        HgVec2 spriteMove = HgVec2{
+        HgVec2 spriteMove = {
             (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a)),
             (f32)(hgIsButtonDown(window, HgButton_s) - hgIsButtonDown(window, HgButton_w)),
         };

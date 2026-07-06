@@ -89,7 +89,7 @@ int main()
 
     HgEntity camera = hgEcsSpawn(&ecs);
     HgCamera* cameraC = hgCameraAdd(&ecs, camera);
-    HgTransform* cameraTf = hgTransformAdd(&ecs, camera, HgVec3{0, 0, -1});
+    HgTransform* cameraTf = hgTransformAdd(&ecs, camera, {0, 0, -1});
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
     cameraC->perspective.near = 0.1f;
@@ -129,12 +129,12 @@ int main()
             if (hgIsButtonDown(window, HgButton_lmouse))
             {
                 f32 rotSpeed = 2.0f;
-                HgQuat rotX = hgQuatAxisAngle(HgVec3{ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
-                HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
+                HgQuat rotX = hgQuatAxisAngle({ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
+                HgQuat rotY = hgQuatAxisAngle({-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
                 cameraTf->rotation = rotX * cameraTf->rotation * rotY;
             }
 
-            HgVec3 movement = HgVec3{
+            HgVec3 movement = {
                 (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a)),
                 (f32)(hgIsButtonDown(window, HgButton_lshift) - hgIsButtonDown(window, HgButton_space)),
                 (f32)(hgIsButtonDown(window, HgButton_w) - hgIsButtonDown(window, HgButton_s)),
@@ -142,8 +142,8 @@ int main()
             if (movement != HgVec3{0.0f})
             {
                 f32 moveSpeed = 1.5f;
-                HgVec3 rotated = hgVecRot3(cameraTf->rotation, HgVec3{movement.x, 0.0f, movement.z});
-                cameraTf->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
+                HgVec3 rotated = hgVecRot3(cameraTf->rotation, {movement.x, 0.0f, movement.z});
+                cameraTf->position += hgVecNorm3({rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
             }
 
             hgTransformUpdate(&ecs, camera);
