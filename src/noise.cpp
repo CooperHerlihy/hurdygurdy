@@ -53,13 +53,13 @@ int main()
     HgTextureAsset* noiseTex = hgAssetCreate<HgTexture>();
     hgDefer(hgAssetUnload(noiseTex));
 
-    noiseTex->data.image = hgGpuImageCreate(
+    noiseTex->asset.image = hgGpuImageCreate(
         noiseWidth,
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
 
-    noiseTex->data.view = hgGpuViewCreate(noiseTex->data.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    noiseTex->asset.view = hgGpuViewCreate(noiseTex->asset.image, HgGpuAspect_color, HgGpuFilter_nearest);
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -169,7 +169,7 @@ int main()
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
 
         HgGpuComputePass computePass{};
-        computePass.storageImages = noiseTex->data.view;
+        computePass.storageImages = noiseTex->asset.view;
         computePass.storageImageCount = 1;
 
         hgGpuComputePass(cmd, &computePass);
@@ -183,7 +183,7 @@ int main()
         noisePush.scaleEnd = noiseScaleEnd;
         noisePush.tiling = noiseTiling;
         noisePush.seed = noiseSeed;
-        noisePush.outImageIdx = hgGpuImageStorageDescriptor(noiseTex->data.view);
+        noisePush.outImageIdx = hgGpuImageStorageDescriptor(noiseTex->asset.view);
 
         hgGpuPushConstants(cmd, noisePipeline, &noisePush, sizeof(noisePush));
 
@@ -202,7 +202,7 @@ int main()
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
             pass.depthAttachment = &depthAttachment;
-            pass.sampledImages = noiseTex->data.view;
+            pass.sampledImages = noiseTex->asset.view;
             pass.sampledImageCount = 1;
 
             hgGpuRenderPassBegin(cmd, &pass);

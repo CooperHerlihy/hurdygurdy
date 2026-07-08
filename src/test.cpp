@@ -3567,8 +3567,8 @@ void hgTest()
 
         {
             HgBinaryAsset* bin = hgAssetLoad<HgBinary>("file_does_not_exist.bin");
-            hgAssert(bin->data.data == nullptr);
-            hgAssert(bin->data.size == 0);
+            hgAssert(bin->asset.data == nullptr);
+            hgAssert(bin->asset.size == 0);
             hgAssetUnload(bin);
         }
 
@@ -3592,10 +3592,10 @@ void hgTest()
 
             HgBinaryAsset* newBin = hgAssetLoad<HgBinary>(filePath);
 
-            hgAssert(newBin->data.data != nullptr);
-            hgAssert(newBin->data.data != saveData);
-            hgAssert(newBin->data.size == sizeof(saveData));
-            hgAssert(hgMemEqual(saveData, newBin->data.data, newBin->data.size));
+            hgAssert(newBin->asset.data != nullptr);
+            hgAssert(newBin->asset.data != saveData);
+            hgAssert(newBin->asset.size == sizeof(saveData));
+            hgAssert(hgMemEqual(saveData, newBin->asset.data, newBin->asset.size));
 
             HgBinaryAsset* newBin2 = hgAssetLoad<HgBinary>(filePath);
             hgAssert(newBin2 == newBin);
@@ -3637,9 +3637,9 @@ void hgTest()
 
             HgTextureDataAsset* image = hgAssetLoad<HgTextureData>(path);
             hgDefer(hgAssetUnload(image));
-            hgAssert(image->data.width == testImage.width);
-            hgAssert(image->data.height == testImage.height);
-            hgAssert(hgMemEqual(image->data.pixels, saveData, sizeof(saveData)));
+            hgAssert(image->asset.width == testImage.width);
+            hgAssert(image->asset.height == testImage.height);
+            hgAssert(hgMemEqual(image->asset.pixels, saveData, sizeof(saveData)));
         }
     }
 

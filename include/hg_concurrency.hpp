@@ -116,12 +116,12 @@ bool hgFenceIsComplete(HgFence* fence);
  *
  * Parameters
  * - fence The fence to wait on
- * - timeoutSeconds The time in seconds to wait before timing out
+ * - timeout The time in seconds to wait before timing out
  *
  * Returns
  * - true if the fence was completed, false if the timeout was triggered
  */
-bool hgFenceWait(HgFence* fence, f64 timeoutSeconds);
+bool hgFenceWait(HgFence* fence, f64 timeout);
 
 /**
  * Spin waits for all work submissions to be completed

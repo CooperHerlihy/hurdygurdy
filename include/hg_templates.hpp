@@ -717,12 +717,12 @@ void hgAssetUnloadImpl(HgAsset<T>* data)
 template<typename T>
 HgAsset<T>* hgAssetCreate()
 {
-    HgAsset<T>* asset = (HgAsset<T>*)hgPoolAlloc(&hgAssets<T>.pool);
-    asset->data = {};
-    asset->refCount = 1;
-    asset->path = {};
+    HgAsset<T>* data = (HgAsset<T>*)hgPoolAlloc(&hgAssets<T>.pool);
+    data->asset = {};
+    data->refCount = 1;
+    data->path = {};
 
-    return asset;
+    return data;
 }
 
 template<typename T>
@@ -735,17 +735,17 @@ HgAsset<T>* hgAssetLoad(HgString path)
         return *asset;
     }
 
-    HgAsset<T>* asset = (HgAsset<T>*)hgPoolAlloc(&hgAssets<T>.pool);
-    asset->data = {};
-    asset->refCount = 1;
-    asset->path = hgStringCreate(path);
+    HgAsset<T>* data = (HgAsset<T>*)hgPoolAlloc(&hgAssets<T>.pool);
+    data->asset = {};
+    data->refCount = 1;
+    data->path = hgStringCreate(path);
 
     if (hgAssets<T>.map.count * 2 > hgAssets<T>.map.capacity)
         hgMapResize(&hgAssets<T>.map, hgAssets<T>.map.capacity * 2);
-    hgMapAdd(&hgAssets<T>.map, asset->path, asset);
+    hgMapAdd(&hgAssets<T>.map, data->path, data);
 
-    hgAssetLoadImpl(asset);
-    return asset;
+    hgAssetLoadImpl(data);
+    return data;
 }
 
 template<typename T>

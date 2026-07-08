@@ -27,10 +27,10 @@ int main()
 
     f32 musicData[2000];
     HgSoundAsset* music = hgAssetCreate<HgSound>();
-    music->data.data = musicData;
-    music->data.size = sizeof(musicData);
-    music->data.frequency = 8000;
-    music->data.channels = 1;
+    music->asset.data = musicData;
+    music->asset.size = sizeof(musicData);
+    music->asset.frequency = 8000;
+    music->asset.channels = 1;
 
     for (u32 i = 0; i < hgArrayCount(musicData); ++i)
     {
@@ -45,10 +45,10 @@ int main()
 
     f32 soundData[2000];
     HgSoundAsset* sound = hgAssetCreate<HgSound>();
-    sound->data.data = soundData;
-    sound->data.size = sizeof(soundData);
-    sound->data.frequency = 8000;
-    sound->data.channels = 1;
+    sound->asset.data = soundData;
+    sound->asset.size = sizeof(soundData);
+    sound->asset.frequency = 8000;
+    sound->asset.channels = 1;
 
     for (u32 i = 0; i < hgArrayCount(soundData); ++i)
     {

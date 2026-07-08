@@ -9,6 +9,9 @@
 #include <mutex>
 #include <thread>
 
+#include <chrono>
+#include <ctime>
+
 #include <emmintrin.h>
 
 struct HgMutex {
@@ -235,11 +238,11 @@ bool hgFenceIsComplete(HgFence* fence)
     return fence->counter.load() == 0;
 }
 
-bool hgFenceWait(HgFence* fence, f64 timeoutSeconds)
+bool hgFenceWait(HgFence* fence, f64 timeout)
 {
     hgAssert(fence != nullptr);
 
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
     while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
     {
         _mm_pause();
@@ -346,5 +349,10 @@ f64 hgClockTick(HgClock* clock)
     timespec_get(&ts, TIME_UTC);
     clock->time = (f64)ts.tv_sec + (f64)ts.tv_nsec * 1e-9;
     return clock->time - prev;
+}
+
+void hgSleep(f64 time)
+{
+    std::this_thread::sleep_for(std::chrono::duration<f64>(time));
 }
 

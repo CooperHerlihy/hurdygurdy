@@ -49,6 +49,14 @@ struct HgClock {
 f64 hgClockTick(HgClock* clock);
 
 /**
+ * Put this thread to sleep
+ *
+ * Parameters
+ * - time The time in seconds to sleep for
+ */
+void hgSleep(f64 time);
+
+/**
  * A simple performance measurement tool
  */
 struct HgPerf {

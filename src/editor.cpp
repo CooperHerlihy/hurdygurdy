@@ -74,10 +74,10 @@ void init(HgArena* arena)
     hgImGuiInit(window, hgWindowImageFormat(window));
 
     audio = hgAssetCreate<HgSound>();
-    audio->data.data = audioData;
-    audio->data.size = sizeof(audioData);
-    audio->data.frequency = 8000;
-    audio->data.channels = 1;
+    audio->asset.data = audioData;
+    audio->asset.size = sizeof(audioData);
+    audio->asset.frequency = 8000;
+    audio->asset.channels = 1;
 
     hgSpritesInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);

@@ -27,7 +27,6 @@
 #ifndef HG_ASSETS_HPP
 #define HG_ASSETS_HPP
 
-#include "hg_concurrency.hpp"
 #include "hg_containers.hpp"
 #include "hg_core.hpp"
 #include "hg_serialization.hpp"
@@ -56,9 +55,9 @@ void hgAssetDeinitDefaults();
 template<typename T>
 struct HgAsset {
     /**
-     * The asset
+     * The asset data
      */
-    T data;
+    T asset;
     /**
      * The reference count
      */
@@ -87,37 +86,37 @@ struct HgAssetManager {
 };
 
 /**
- * The global asset managers
+ * Global per type asset managers
  */
 template<typename T>
 inline HgAssetManager<T> hgAssets{};
 
 /**
- * Initialize an asset manager
+ * Initialize a type's asset manager
  */
 template<typename T>
 void hgAssetInit();
 
 /**
- * Detsroy an asset manager
+ * Deinitialize an type's asset manager
  */
 template<typename T>
 void hgAssetDeinit();
 
 /**
- * Load an asset, implemented per asset type, blocking
+ * Load an asset, implemented per asset type, should be blocking
  */
 template<typename T>
 void hgAssetLoadImpl(HgAsset<T>* data);
 
 /**
- * Unload an asset, implemented per asset type, blocking
+ * Unload an asset, implemented per asset type, should be blocking
  */
 template<typename T>
 void hgAssetUnloadImpl(HgAsset<T>* data);
 
 /**
- * Create a unique empty asset
+ * Create a unique empty asset (does not load)
  */
 template<typename T>
 HgAsset<T>* hgAssetCreate();

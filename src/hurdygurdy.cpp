@@ -2065,15 +2065,15 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
         return;
     }
 
-    data->data.size = (u32)ftell(fileHandle);
-    data->data.data = hgGpaAlloc(data->data.size, 1);
+    data->asset.size = (u32)ftell(fileHandle);
+    data->asset.data = hgGpaAlloc(data->asset.size, 1);
 
     rewind(fileHandle);
-    if (fread((void*)data->data.data, 1, data->data.size, fileHandle) != data->data.size)
+    if (fread((void*)data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
     {
-        hgGpaFree((void*)data->data.data, data->data.size);
+        hgGpaFree((void*)data->asset.data, data->asset.size);
         hgErrorFormat("Failed to read binary from file: %s", cpath);
-        data->data = {};
+        data->asset = {};
         return;
     }
 }
@@ -2081,7 +2081,7 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
 template<>
 void hgAssetUnloadImpl(HgAsset<HgBinary>* data)
 {
-    hgGpaFree((void*)data->data.data, data->data.size);
+    hgGpaFree((void*)data->asset.data, data->asset.size);
 }
 
 bool hgBinaryStore(HgBinary bin, HgString path)
@@ -2118,7 +2118,7 @@ void hgAssetLoadImpl(HgAsset<HgJson>* data)
     u64 head = scratch->head;
     hgDefer(scratch->head = head);
 
-    HgString jsonStr = {(char*)bin->data.data, bin->data.size};
+    HgString jsonStr = {(char*)bin->asset.data, bin->asset.size};
     HgJson parse = hgParseJson(scratch, jsonStr);
 
     HgJsonError* e = parse.errors;
@@ -2130,24 +2130,24 @@ void hgAssetLoadImpl(HgAsset<HgJson>* data)
         e = e->next;
     }
 
-    data->data.file = (HgJsonNode*)malloc(scratch->head - head);
+    data->asset.file = (HgJsonNode*)malloc(scratch->head - head);
     if (parse.errors != nullptr)
     {
-        data->data.errors = (HgJsonError*)(
-            (u8*)data->data.file +
+        data->asset.errors = (HgJsonError*)(
+            (u8*)data->asset.file +
                 ((uptr)parse.errors - (uptr)parse.file));
     }
     else
     {
-        data->data.errors = nullptr;
+        data->asset.errors = nullptr;
     }
-    hgMemCopy((void*)data->data.file, (void*)parse.file, scratch->head - head);
+    hgMemCopy((void*)data->asset.file, (void*)parse.file, scratch->head - head);
 }
 
 template<>
 void hgAssetUnloadImpl(HgAsset<HgJson>* data)
 {
-    free(data->data.file);
+    free(data->asset.file);
 }
 
 template<>
@@ -3653,6 +3653,7 @@ bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit)
     return true;
 }
 
+// Moller-Trumbore, Real Time Rendering 4th Edition
 bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgHit3D* hit)
 {
     hgAssert(ray.dir != HgVec3{0});
@@ -3799,6 +3800,7 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit)
     return true;
 }
 
+// Moller-Trumbore, Real Time Rendering 4th Edition
 bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgHit3D* hit)
 {
     if (hgVecEq3(line.begin, line.end))
@@ -4062,22 +4064,22 @@ void hgAssetLoadImpl(HgAsset<HgTextureData>* data)
     char* cpath = hgCString(scratch, data->path);
 
     int x, y, channels;
-    data->data.pixels = stbi_load(cpath, &x, &y, &channels, 4);
-    if (data->data.pixels == nullptr)
+    data->asset.pixels = stbi_load(cpath, &x, &y, &channels, 4);
+    if (data->asset.pixels == nullptr)
     {
         hgErrorFormat("Could not load image: %s", cpath);
         return;
     }
-    data->data.width = (u32)x;
-    data->data.height = (u32)y;
-    data->data.depth = 1;
-    data->data.format = HgFormat_r8g8b8a8_srgb;
+    data->asset.width = (u32)x;
+    data->asset.height = (u32)y;
+    data->asset.depth = 1;
+    data->asset.format = HgFormat_r8g8b8a8_srgb;
 }
 
 template<>
 void hgAssetUnloadImpl(HgAsset<HgTextureData>* data)
 {
-    free(data->data.pixels);
+    free(data->asset.pixels);
 }
 
 bool hgTextureStorePng(HgTextureData* texture, HgString path)
@@ -4106,27 +4108,27 @@ void hgAssetLoadImpl(HgAsset<HgTexture>* data)
 {
     HgTextureDataAsset* tex = hgAssetLoad<HgTextureData>(data->path);
     hgDefer(hgAssetUnload(tex));
-    if (tex->data.pixels == nullptr)
+    if (tex->asset.pixels == nullptr)
         return;
 
     HgGpuImageCreateEx imageInfo{};
-    imageInfo.format = tex->data.format;
-    imageInfo.width = tex->data.width;
-    imageInfo.height = tex->data.height;
-    imageInfo.depth = tex->data.depth;
+    imageInfo.format = tex->asset.format;
+    imageInfo.width = tex->asset.width;
+    imageInfo.height = tex->asset.height;
+    imageInfo.depth = tex->asset.depth;
     imageInfo.usage = HgGpuImageUsage_transferDst | HgGpuImageUsage_sampled;
 
-    data->data.image = hgGpuImageCreateEx(&imageInfo);
-    data->data.view = hgGpuViewCreate(data->data.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    data->asset.image = hgGpuImageCreateEx(&imageInfo);
+    data->asset.view = hgGpuViewCreate(data->asset.image, HgGpuAspect_color, HgGpuFilter_nearest);
 
-    hgGpuImageWrite(data->data.view, tex->data.pixels);
+    hgGpuImageWrite(data->asset.view, tex->asset.pixels);
 }
 
 template<>
 void hgAssetUnloadImpl(HgAsset<HgTexture>* data)
 {
-    hgGpuViewDestroy(data->data.view);
-    hgGpuImageDestroy(data->data.image);
+    hgGpuViewDestroy(data->asset.view);
+    hgGpuImageDestroy(data->asset.image);
 }
 
 template<>
@@ -4139,8 +4141,8 @@ void hgAssetLoadImpl(HgAsset<HgMeshData>* data)
 template<>
 void hgAssetUnloadImpl(HgAsset<HgMeshData>* data)
 {
-    hgGpaFree(data->data.indices, data->data.indexCount);
-    hgGpaFree(data->data.vertices, data->data.vertexCount);
+    hgGpaFree(data->asset.indices, data->asset.indexCount);
+    hgGpaFree(data->asset.vertices, data->asset.vertexCount);
 }
 
 void hgMeshStoreGltf(HgMeshData* data, HgString path, HgFence* fence)
@@ -4157,39 +4159,39 @@ void hgAssetLoadImpl(HgAsset<HgMesh>* data)
     HgMeshDataAsset* mesh = hgAssetLoad<HgMeshData>(data->path);
     hgDefer(hgAssetUnload(mesh));
 
-    if (mesh->data.vertices == nullptr || mesh->data.indices == nullptr)
+    if (mesh->asset.vertices == nullptr || mesh->asset.indices == nullptr)
         return;
 
-    data->data.vertexCount = mesh->data.vertexCount;
-    data->data.vertexWidth = mesh->data.vertexWidth;
-    data->data.indexCount = mesh->data.indexCount;
+    data->asset.vertexCount = mesh->asset.vertexCount;
+    data->asset.vertexWidth = mesh->asset.vertexWidth;
+    data->asset.indexCount = mesh->asset.indexCount;
 
-    data->data.vertexBuffer = hgGpuBufferCreate(
-        data->data.vertexCount * data->data.vertexWidth,
+    data->asset.vertexBuffer = hgGpuBufferCreate(
+        data->asset.vertexCount * data->asset.vertexWidth,
         HgGpuBufferUsage_storageBuffer | HgGpuBufferUsage_transferDst);
 
-    data->data.indexBuffer = hgGpuBufferCreate(
-        data->data.indexCount * sizeof(u32),
+    data->asset.indexBuffer = hgGpuBufferCreate(
+        data->asset.indexCount * sizeof(u32),
         HgGpuBufferUsage_storageBuffer | HgGpuBufferUsage_transferDst);
 
     hgGpuBufferWrite(
-        data->data.vertexBuffer,
+        data->asset.vertexBuffer,
         0,
-        mesh->data.vertices,
-        data->data.vertexCount * data->data.vertexWidth);
+        mesh->asset.vertices,
+        data->asset.vertexCount * data->asset.vertexWidth);
 
     hgGpuBufferWrite(
-        data->data.indexBuffer,
+        data->asset.indexBuffer,
         0,
-        mesh->data.indices,
-        data->data.indexCount * sizeof(u32));
+        mesh->asset.indices,
+        data->asset.indexCount * sizeof(u32));
 }
 
 template<>
 void hgAssetUnloadImpl(HgAsset<HgMesh>* data)
 {
-    hgGpuBufferDestroy(data->data.vertexBuffer);
-    hgGpuBufferDestroy(data->data.indexBuffer);
+    hgGpuBufferDestroy(data->asset.vertexBuffer);
+    hgGpuBufferDestroy(data->asset.indexBuffer);
 }
 
 template<>
@@ -4515,7 +4517,7 @@ void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect dst)
 
     HgTexture* texture = sprite->texture == nullptr
         ? &render2D.defaultTex
-        : &sprite->texture->data;
+        : &sprite->texture->asset;
 
     HgRender2DInstance instance{};
     instance.sprite.pos = dst.pos;
@@ -4743,7 +4745,7 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     {
         HgTexture* texture = sprite->texture == nullptr
             ? &spritePipeline.defaultTex
-            : &sprite->texture->data;
+            : &sprite->texture->asset;
 
         SpritePipelinePush push{};
         push.model = tf->mat;
@@ -4871,7 +4873,7 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     {
         HgTexture* texture = skybox->texture == nullptr
             ? &skyboxPipeline.defaultTex
-            : &skybox->texture->data;
+            : &skybox->texture->asset;
 
         SkyboxPipelinePush push{};
         push.viewProj = hgGpuBufferUniformDescriptor(hgEcsGet<HgCamera>(ecs, camera)->vpBuffer);
@@ -5213,15 +5215,15 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     {
         HgTexture* colorMap = model->colorMap == nullptr
             ? &modelPipeline.defaultColorMap
-            : &model->colorMap->data;
+            : &model->colorMap->asset;
 
         HgTexture* normalMap = model->normalMap == nullptr
             ? &modelPipeline.defaultNormalMap
-            : &model->normalMap->data;
+            : &model->normalMap->asset;
 
         HgMesh* gpuModel = model->mesh == nullptr
             ? &modelPipeline.defaultModel
-            : &model->mesh->data;
+            : &model->mesh->asset;
 
         ModelPipelinePush push{};
         push.model = tf->mat;
@@ -5307,7 +5309,7 @@ void hgAudioPlayerUpdate(HgAudioPlayer* player)
         if (!music->playing)
             continue;
 
-        HgSound* sound = &music->sound->data;
+        HgSound* sound = &music->sound->asset;
 
         HgArena* scratch = hgScratch();
         hgArenaScope(scratch);
@@ -5351,7 +5353,7 @@ void hgAudioPlayerMusic(HgAudioPlayer* player, HgSoundAsset* music)
     }
 
     HgAudioPlayerMusic* track = hgArrayPush(&player->music);
-    track->stream = hgAudioStreamCreate(music->data.frequency, music->data.channels);
+    track->stream = hgAudioStreamCreate(music->asset.frequency, music->asset.channels);
     track->sound = music;
     track->pos = 0;
     track->playing = true;
@@ -5397,9 +5399,9 @@ void hgAudioPlayerSetMusicGain(HgAudioPlayer* player, HgSoundAsset* music, f32 g
 void hgAudioPlayerSound(HgAudioPlayer* player, HgSoundAsset* sound, f32 gain)
 {
     HgAudioStream** stream = hgArrayPush(&player->sounds);
-    *stream = hgAudioStreamCreate(sound->data.frequency, sound->data.channels);
+    *stream = hgAudioStreamCreate(sound->asset.frequency, sound->asset.channels);
     hgAudioStreamSetGain(*stream, gain);
-    hgAudioStreamPush(*stream, sound->data.data, sound->data.size);
+    hgAudioStreamPush(*stream, sound->asset.data, sound->asset.size);
 }
 
 HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgSoundAsset* audio, bool repeat)
@@ -5428,7 +5430,7 @@ void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
 {
     hgEcsForEach<HgAudioSource>(ecs, [&](HgEntity e, HgAudioSource* src)
     {
-        HgSound* audio = &src->audio->data;
+        HgSound* audio = &src->audio->asset;
         if (src->position == audio->size && !src->repeat)
             return;
 
