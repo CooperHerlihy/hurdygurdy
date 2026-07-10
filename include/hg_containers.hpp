@@ -557,10 +557,10 @@ constexpr u64 hgHash(f32 val)
 {
     union {
         f32 asFloat;
-        u64 asHash;
+        u32 asHash;
     } u{};
     u.asFloat = val;
-    return u.asHash;
+    return (u64)u.asHash;
 }
 
 /**

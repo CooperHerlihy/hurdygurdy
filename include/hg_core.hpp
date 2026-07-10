@@ -142,11 +142,11 @@ typedef intptr_t iptr;
 /**
  * A 32 bit, 4 byte floating point value
  */
-typedef float_t f32;
+typedef float f32;
 /**
  * A 64 bit, 8 byte floating point value
  */
-typedef double_t f64;
+typedef double f64;
 
 /**
  * A block of binary data
@@ -242,7 +242,7 @@ void hgWarnInternal(HgString format, ...);
 
 #else
 
-#define hgWarn(...) do {} while(0)
+#define hgLog(...) do {} while(0)
 #define hgWarn(...) do {} while(0)
 #define hgPanic(...) do { abort(); } while(0)
 

@@ -79,7 +79,7 @@ void hgSerialize(HgSerializer* s, HgArray<T>* arr)
         arr->vals = hgGpaAlloc<T>(arr->capacity);
     for (u32 i = 0; i < arr->count; ++i)
     {
-        hgSerialize(s, &arr[i]);
+        hgSerialize(s, &(*arr)[i]);
     }
     hgSerializeEnd(s);
 }
@@ -147,7 +147,7 @@ T* hgArrayPush(HgArray<T>* arr)
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        hgGpaRealloc(arr->vals, arr->capacity, newCapacity);
+        arr->vals = hgGpaRealloc(arr->vals, arr->capacity, newCapacity);
         arr->capacity = newCapacity;
     }
     return &arr->vals[arr->count++];
@@ -157,7 +157,11 @@ template<typename T>
 T* hgArrayPushTemp(HgArena* arena, HgArray<T>* arr)
 {
     if (arr->count == arr->capacity)
-        hgArenaRealloc(arena, arr->vals, arr->capacity, arr->capacity == 0 ? 16 : arr->capacity * 2);
+    {
+        u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
+        arr->vals = hgArenaRealloc(arena, arr->vals, arr->capacity, newCapacity);
+        arr->capacity = newCapacity;
+    }
     return &arr->vals[arr->count++];
 }
 
@@ -310,6 +314,7 @@ void hgSerialize(HgSerializer* s, HgSet<V>* set)
     else
     {
         u32 count = set->count;
+        hgSetDestroy(set);
         *set = hgSetCreate(set->capacity);
         for (u32 i = 0; i < count; ++i)
         {
@@ -498,6 +503,7 @@ void hgSerialize(HgSerializer* s, HgMap<K, V>* map)
     else
     {
         u32 count = map->count;
+        hgMapDestroy(map);
         *map = hgMapCreate(map->capacity);
         for (u32 i = 0; i < count; ++i)
         {
@@ -665,7 +671,7 @@ V* hgMapGet(const HgMap<K, V>* map, const T& key)
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    for (u32 idx = (u32)(hgHash(key) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    for (u32 idx = (u32)(hgHash(k) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
     {
         if (map->keys[idx] == k)
             return map->vals + idx;

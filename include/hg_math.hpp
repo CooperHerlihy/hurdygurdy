@@ -72,7 +72,7 @@ constexpr f32 hgSquare(f32 x)
  */
 constexpr f32 hgLerp(f32 a, f32 b, f32 t)
 {
-    return a - (a + b) * t;
+    return a + (b - a) * t;
 }
 
 /**
@@ -141,7 +141,13 @@ struct HgVec2 {
     constexpr f32& operator[](u32 idx)
     {
         hgAssert(idx < 2);
-        return *(&x + idx);
+        return ((f32*)this)[idx];
+    }
+
+    constexpr const f32& operator[](u32 idx) const
+    {
+        hgAssert(idx < 2);
+        return ((const f32*)this)[idx];
     }
 };
 
@@ -208,7 +214,13 @@ struct HgVec3 {
     constexpr f32& operator[](u32 idx)
     {
         hgAssert(idx < 3);
-        return *(&x + idx);
+        return ((f32*)this)[idx];
+    }
+
+    constexpr const f32& operator[](u32 idx) const
+    {
+        hgAssert(idx < 3);
+        return ((const f32*)this)[idx];
     }
 };
 
@@ -288,7 +300,13 @@ struct HgVec4 {
     constexpr f32& operator[](u32 idx)
     {
         hgAssert(idx < 4);
-        return *(&x + idx);
+        return ((f32*)this)[idx];
+    }
+
+    constexpr const f32& operator[](u32 idx) const
+    {
+        hgAssert(idx < 4);
+        return ((const f32*)this)[idx];
     }
 };
 
@@ -337,7 +355,13 @@ struct HgMat2 {
     constexpr HgVec2& operator[](u32 idx)
     {
         hgAssert(idx < 2);
-        return *(&x + idx);
+        return ((HgVec2*)this)[idx];
+    }
+
+    constexpr const HgVec2& operator[](u32 idx) const
+    {
+        hgAssert(idx < 2);
+        return ((const HgVec2*)this)[idx];
     }
 };
 
@@ -397,7 +421,13 @@ struct HgMat3 {
     constexpr HgVec3& operator[](u32 idx)
     {
         hgAssert(idx < 3);
-        return *(&x + idx);
+        return ((HgVec3*)this)[idx];
+    }
+
+    constexpr const HgVec3& operator[](u32 idx) const
+    {
+        hgAssert(idx < 3);
+        return ((const HgVec3*)this)[idx];
     }
 };
 
@@ -471,7 +501,13 @@ struct HgMat4 {
     constexpr HgVec4& operator[](u32 idx)
     {
         hgAssert(idx < 4);
-        return *(&x + idx);
+        return ((HgVec4*)this)[idx];
+    }
+
+    constexpr const HgVec4& operator[](u32 idx) const
+    {
+        hgAssert(idx < 4);
+        return ((const HgVec4*)this)[idx];
     }
 };
 

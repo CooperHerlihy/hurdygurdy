@@ -112,7 +112,7 @@ constexpr uptr hgAlign(uptr val, uptr align)
  */
 constexpr u16 hgEndianReverse16(u16 val)
 {
-    return (val & 0xff00 >> 8) & (val & 0x00ff << 8);
+    return (val >> 8) | (val << 8);
 }
 
 /**
@@ -120,7 +120,7 @@ constexpr u16 hgEndianReverse16(u16 val)
  */
 constexpr u32 hgEndianReverse32(u32 val)
 {
-    return (val & 0xff0000 >> 16) & (val & 0x00ff00) & (val & 0x0000ff << 16);
+    return (val >> 24) | ((val >> 8) & 0xff00) | ((val & 0xff00) << 8) | (val << 24);
 }
 
 /**
@@ -128,10 +128,9 @@ constexpr u32 hgEndianReverse32(u32 val)
  */
 constexpr u64 hgEndianReverse64(u64 val)
 {
-    return (val & (u32)0xff000000 >> 24) &
-           (val & (u32)0x00ff0000 >> 8) &
-           (val & (u32)0x0000ff00 << 8) &
-           (val & (u32)0x000000ff << 24);
+    u64 swapped = ((val << 8) & 0xFF00FF00FF00FF00ULL) | ((val >> 8) & 0x00FF00FF00FF00FFULL);
+    swapped = ((swapped << 16) & 0xFFFF0000FFFF0000ULL) | ((swapped >> 16) & 0x0000FFFF0000FFFFULL);
+    return (swapped << 32) | (swapped >> 32);
 }
 
 /**

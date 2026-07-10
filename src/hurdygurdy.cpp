@@ -155,14 +155,14 @@ bool hgInit(HgSubsystemFlags init)
     if (init & HgSubsystem_windowing)
     {
         hgWindowsInit();
-        initialized |= HgSubsystem_assets;
+        initialized |= HgSubsystem_windowing;
     }
 
     if (init & HgSubsystem_audio)
     {
         if (!hgAudioInit())
             goto audioFailed;
-        initialized |= HgSubsystem_assets;
+        initialized |= HgSubsystem_audio;
     }
 
     return true;
@@ -278,7 +278,7 @@ void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment)
     hgAssert(arena != nullptr);
 
     u64 newHead = hgAlign((u64)arena->head, alignment) + size;
-    if (arena->head > arena->capacity)
+    if (newHead > arena->capacity)
     {
         hgErrorSet("Arena out of memory");
         return nullptr;
@@ -297,7 +297,7 @@ void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize,
         if ((uptr)allocation + oldSize - (uptr)arena->memory == (uptr)arena->head)
         {
             u64 newHead = (uptr)allocation + newSize - (uptr)arena->memory;
-            if (arena->head > arena->capacity)
+            if (newHead > arena->capacity)
             {
                 hgErrorSet("Arena out of memory");
                 return nullptr;
@@ -442,8 +442,8 @@ HgStringBuilder hgStringFormatVar(HgArena* arena, HgString fmt, va_list args)
     if (len < 0)
         hgPanic("snprintf returned an error");
 
-    HgStringBuilder ret{(char*)arena->memory + arena->head, (u32)len};
-    arena->head += (u32)len;
+    HgStringBuilder ret{(char*)arena->memory + arena->head, (u64)len};
+    arena->head += (u64)len;
 
     return ret;
 }
@@ -469,7 +469,7 @@ void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgString src)
 
 bool hgIsWhitespace(char c)
 {
-    return c == ' ' || c == '\t' || c == '\n';
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
 bool hgIsNumeral(char c)
@@ -1935,7 +1935,7 @@ static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state)
 
 static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
 {
-    if (state->head + 4 < state->text.length && HgString{&state->text[state->head], 4} == "true")
+    if (state->head + 4 <= state->text.length && HgString{&state->text[state->head], 4} == "true")
     {
         state->head += 4;
         while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
@@ -1952,7 +1952,7 @@ static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
         node->boolean = true;
         return {node, nullptr};
     }
-    if (state->head + 5 < state->text.length && HgString{&state->text[state->head], 5} == "false")
+    if (state->head + 5 <= state->text.length && HgString{&state->text[state->head], 5} == "false")
     {
         state->head += 5;
         while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
@@ -2065,7 +2065,7 @@ void hgAssetLoadImpl(HgAsset<HgBinary>* data)
         return;
     }
 
-    data->asset.size = (u32)ftell(fileHandle);
+    data->asset.size = (u64)ftell(fileHandle);
     data->asset.data = hgGpaAlloc(data->asset.size, 1);
 
     rewind(fileHandle);
@@ -2235,10 +2235,10 @@ void* hgArrayAnyPush(HgArrayAny* arr)
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        hgGpaRealloc(
+        arr->vals = hgGpaRealloc(
             arr->vals,
             arr->capacity * arr->width,
-            (arr->capacity == 0 ? 16 : arr->capacity * 2) * arr->width,
+            newCapacity * arr->width,
             arr->align);
         arr->capacity = newCapacity;
     }
@@ -2250,11 +2250,11 @@ void* hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr)
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        hgArenaRealloc(
+        arr->vals = hgArenaRealloc(
             arena,
             arr->vals,
             arr->capacity * arr->width,
-            (arr->capacity == 0 ? 16 : arr->capacity * 2) * arr->width,
+            newCapacity * arr->width,
             arr->align);
         arr->capacity = newCapacity;
     }
@@ -3351,7 +3351,7 @@ bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgHit2D* hit)
         return false;
 
     f32 tOther = hgVecCross2(diff, lineDir) / denom;
-    if (tOther < -FLT_EPSILON || t > 1 + FLT_EPSILON)
+    if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
         return false;
 
     if (hit != nullptr)
@@ -3700,8 +3700,6 @@ bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgHit3D* hit)
     hgAssert(ray.dir != HgVec3{0});
     hgAssert(plane.normal != HgVec3{0});
 
-    plane.normal = hgVecNorm3(plane.normal);
-
     f32 denom = hgVecDot3(ray.dir, plane.normal);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
@@ -3761,7 +3759,7 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit)
         (box.pos.z - line.begin.z) / (line.end.z - line.begin.z),
         (box.pos.x + box.size.x - line.begin.x) / (line.end.x - line.begin.x),
         (box.pos.y + box.size.y - line.begin.y) / (line.end.y - line.begin.y),
-        (box.pos.z + box.size.z - line.begin.y) / (line.end.z - line.begin.z),
+        (box.pos.z + box.size.z - line.begin.z) / (line.end.z - line.begin.z),
     };
 
     constexpr HgVec3 norms[6] = {
@@ -3853,7 +3851,6 @@ bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgHit3D* hit)
     hgAssert(plane.normal != HgVec3{0});
 
     HgVec3 lineDir = line.end - line.begin;
-    plane.normal = plane.normal;
 
     f32 denom = hgVecDot3(lineDir, plane.normal);
     if (std::abs(denom) < FLT_EPSILON)
