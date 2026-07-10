@@ -141,13 +141,7 @@ struct HgVec2 {
     constexpr f32& operator[](u32 idx)
     {
         hgAssert(idx < 2);
-        return ((f32*)this)[idx];
-    }
-
-    constexpr const f32& operator[](u32 idx) const
-    {
-        hgAssert(idx < 2);
-        return ((const f32*)this)[idx];
+        return *(&x + idx);
     }
 };
 
@@ -214,13 +208,7 @@ struct HgVec3 {
     constexpr f32& operator[](u32 idx)
     {
         hgAssert(idx < 3);
-        return ((f32*)this)[idx];
-    }
-
-    constexpr const f32& operator[](u32 idx) const
-    {
-        hgAssert(idx < 3);
-        return ((const f32*)this)[idx];
+        return *(&x + idx);
     }
 };
 
@@ -300,13 +288,7 @@ struct HgVec4 {
     constexpr f32& operator[](u32 idx)
     {
         hgAssert(idx < 4);
-        return ((f32*)this)[idx];
-    }
-
-    constexpr const f32& operator[](u32 idx) const
-    {
-        hgAssert(idx < 4);
-        return ((const f32*)this)[idx];
+        return *(&x + idx);
     }
 };
 
@@ -355,13 +337,7 @@ struct HgMat2 {
     constexpr HgVec2& operator[](u32 idx)
     {
         hgAssert(idx < 2);
-        return ((HgVec2*)this)[idx];
-    }
-
-    constexpr const HgVec2& operator[](u32 idx) const
-    {
-        hgAssert(idx < 2);
-        return ((const HgVec2*)this)[idx];
+        return *(&x + idx);
     }
 };
 
@@ -421,13 +397,7 @@ struct HgMat3 {
     constexpr HgVec3& operator[](u32 idx)
     {
         hgAssert(idx < 3);
-        return ((HgVec3*)this)[idx];
-    }
-
-    constexpr const HgVec3& operator[](u32 idx) const
-    {
-        hgAssert(idx < 3);
-        return ((const HgVec3*)this)[idx];
+        return *(&x + idx);
     }
 };
 
@@ -501,13 +471,7 @@ struct HgMat4 {
     constexpr HgVec4& operator[](u32 idx)
     {
         hgAssert(idx < 4);
-        return ((HgVec4*)this)[idx];
-    }
-
-    constexpr const HgVec4& operator[](u32 idx) const
-    {
-        hgAssert(idx < 4);
-        return ((const HgVec4*)this)[idx];
+        return *(&x + idx);
     }
 };
 

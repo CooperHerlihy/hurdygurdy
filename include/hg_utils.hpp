@@ -112,7 +112,7 @@ constexpr uptr hgAlign(uptr val, uptr align)
  */
 constexpr u16 hgEndianReverse16(u16 val)
 {
-    return (val >> 8) | (val << 8);
+    return (u16)(val >> 8) | (u16)(val << 8);
 }
 
 /**
