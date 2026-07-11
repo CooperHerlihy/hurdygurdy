@@ -88,10 +88,18 @@ set(IMGUI_BACKEND_SOURCES
 )
 
 set(CORE_SOURCES
-    src/hurdygurdy.cpp
-    src/concurrency.cpp
-    src/platform.cpp
-    src/test.cpp
+    src/hg_audio.cpp
+    src/hg_concurrency.cpp
+    src/hg_containers.cpp
+    src/hg_core.cpp
+    src/hg_ecs.cpp
+    src/hg_gpu.cpp
+    src/hg_math.cpp
+    src/hg_rendering.cpp
+    src/hg_serialization.cpp
+    src/hg_strings.cpp
+    src/hg_test.cpp
+    src/hg_time.cpp
 )
 
 set(VENDOR_SOURCES
