@@ -18,6 +18,7 @@
 
 #include <cstdio>
 #include <cstring>
+
 #include <random>
 
 #include "stb_image.h"
