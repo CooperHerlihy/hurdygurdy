@@ -23,6 +23,8 @@
 #include "stb_image.h"
 #include "stb_image_write.h"
 
+namespace hg {
+
 thread_local static char errorMessageData[4096];
 thread_local static u64 errorMessageLength = 0;
 
@@ -6122,4 +6124,6 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
         tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
     }
 }
+
+} // namespace hg
 

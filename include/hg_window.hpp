@@ -30,6 +30,8 @@
 #include "hg_core.hpp"
 #include "hg_gpu.hpp"
 
+namespace hg {
+
 /**
  * Initialize the windowing subsystem
  */
@@ -337,5 +339,7 @@ bool hgIsButtonDown(HgWindow* window, HgButton key);
  * Get the key events since last event processing
  */
 HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count);
+
+} // namespace hg
 
 #endif // HG_WINDOW_HPP

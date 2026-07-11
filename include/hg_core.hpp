@@ -34,6 +34,8 @@
 
 #include <type_traits>
 
+namespace hg {
+
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
 #endif
@@ -376,5 +378,7 @@ void hgDeinit();
  * Run Hurdy Gurdy tests, asserting success
  */
 void hgTest();
+
+} // namespace hg
 
 #endif // HG_CORE_HPP

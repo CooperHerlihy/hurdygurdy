@@ -29,6 +29,8 @@
 
 #include "hg_core.hpp"
 
+namespace hg {
+
 /**
  * Initializes the graphics subsystem, loading all global Vulkan resources
  *
@@ -1263,5 +1265,7 @@ void hgGpuSetViewport(HgGpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 ne
  * Set the rendering scissor, should be called after hgGpuRenderPassBegin
  */
 void hgGpuSetScissor(HgGpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
+
+} // namespace hg
 
 #endif // HG_GPU_HPP

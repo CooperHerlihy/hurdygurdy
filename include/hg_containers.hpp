@@ -32,6 +32,8 @@
 #include "hg_serialization.hpp"
 #include "hg_strings.hpp"
 
+namespace hg {
+
 /**
  * A dynamic array
  */
@@ -799,5 +801,7 @@ bool hgHandlePoolAlive(HgHandlePool* pool, HgHandle handle);
  * Note, the object handle must be valid and alive
  */
 void hgHandlePoolFree(HgHandlePool* pool, HgHandle handle);
+
+} // namespace hg
 
 #endif // HG_CONTAINERS_HPP

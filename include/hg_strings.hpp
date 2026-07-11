@@ -31,6 +31,8 @@
 #include "hg_memory.hpp"
 #include "hg_utils.hpp"
 
+namespace hg {
+
 /**
  * Read data at index into a buffer
  *
@@ -340,5 +342,7 @@ HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
+
+} // namespace hg
 
 #endif // HG_STRINGS_HPP

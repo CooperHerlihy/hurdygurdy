@@ -1,5 +1,7 @@
 #include "hurdygurdy.hpp"
 
+using namespace hg;
+
 #include <random>
 
 #define IM_ASSERT hgAssert

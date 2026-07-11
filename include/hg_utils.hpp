@@ -29,6 +29,8 @@
 
 #include "hg_core.hpp"
 
+namespace hg {
+
 /**
  * Returns the size of a stack array
  */
@@ -152,5 +154,7 @@ void hgMemMove(void* dst, const void* src, u64 size);
  * Check if two regions of memory are identical
  */
 bool hgMemEqual(const void* dst, const void* src, u64 size);
+
+} // namespace hg
 
 #endif // HG_UTILS_HPP

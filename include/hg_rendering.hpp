@@ -36,6 +36,8 @@
 #include "hg_serialization.hpp"
 #include "hg_window.hpp"
 
+namespace hg {
+
 /**
  * The types of camera projections
  */
@@ -920,5 +922,7 @@ void hgImGuiNewFrame();
  * - cmd The command buffer to record to
  */
 void hgImGuiDraw(HgGpuCmd* cmd);
+
+} // namespace hg
 
 #endif // HG_RENDERING_HPP

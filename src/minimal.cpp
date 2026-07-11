@@ -1,5 +1,7 @@
 #include "hurdygurdy.hpp"
 
+using namespace hg;
+
 #define IM_ASSERT hgAssert
 #include "imgui.h"
 

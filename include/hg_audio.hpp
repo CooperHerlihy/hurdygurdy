@@ -29,7 +29,10 @@
 
 #include "hg_assets.hpp"
 #include "hg_core.hpp"
+#include "hg_ecs.hpp"
 #include "hg_serialization.hpp"
+
+namespace hg {
 
 /**
  * Initialize the audio subsystem
@@ -206,8 +209,6 @@ void hgAudioPlayerSetMusicGain(HgAudioPlayer* player, HgSoundAsset* music, f32 g
  */
 void hgAudioPlayerSound(HgAudioPlayer* player, HgSoundAsset* sound, f32 gain);
 
-#include "hg_ecs.hpp"
-
 /**
  * An audio source component
  */
@@ -251,5 +252,7 @@ void hgEcsDtor(HgAudioSource* src);
  * Update all audio sources, playing sound if needed
  */
 void hgAudioUpdate(HgEcs* ecs, HgEntity listener);
+
+} // namespace hg
 
 #endif // HG_AUDIO_HPP

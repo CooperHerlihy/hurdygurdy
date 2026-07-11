@@ -29,6 +29,8 @@
 
 #include "hg_core.hpp"
 
+namespace hg {
+
 /**
  * The value of Pi
  */
@@ -2022,5 +2024,7 @@ u64 hgRngNext64(HgRng* rng);
  * - depth The depth of the image
  */
 u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth);
+
+} // namespace hg
 
 #endif // HG_MATH_HPP

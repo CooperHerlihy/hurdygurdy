@@ -33,6 +33,8 @@
 #include "hg_core.hpp"
 #include "hg_ecs.hpp"
 
+namespace hg {
+
 template<typename F>
 void hgThreadsFor(u64 begin, u64 end, F fn)
 {
@@ -908,5 +910,7 @@ void hgEcsForPar(HgEcs* ecs, Fn fn)
         hgEcsForParMulti<Ts...>(ecs, fn);
     }
 }
+
+} // namespace hg
 
 #endif // HG_TEMPLATES_HPP

@@ -32,6 +32,8 @@
 #include "hg_strings.hpp"
 #include "hg_math.hpp"
 
+namespace hg {
+
 /**
  * The primitive serializable types
  */
@@ -485,5 +487,7 @@ struct HgJson {
  * - The parsed json, errors contained inside
  */
 HgJson hgParseJson(HgArena* arena, HgString text);
+
+} // namespace hg
 
 #endif // HG_SERIALIZATION_HPP

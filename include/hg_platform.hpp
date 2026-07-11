@@ -30,6 +30,7 @@
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
 
+namespace hg {
 
 /**
  * Initialize the platform
@@ -55,5 +56,7 @@ void hgPlatformDeinit();
  * - The number of required extensions
  */
 u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgString** extBuffer);
+
+} // namespace hg
 
 #endif // HG_PLATFORM_HPP

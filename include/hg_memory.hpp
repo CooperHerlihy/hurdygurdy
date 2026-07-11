@@ -29,6 +29,8 @@
 
 #include "hg_core.hpp"
 
+namespace hg {
+
 /**
  * Allocates memory from a general purpose allocator
  *
@@ -234,5 +236,7 @@ void hgScratchDeinit();
  * - A scratch arena, never nullptr
  */
 HgArena* hgScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
+
+} // namespace hg
 
 #endif // HG_MEMORY_HPP

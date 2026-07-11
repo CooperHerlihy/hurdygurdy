@@ -32,6 +32,8 @@
 #include "hg_math.hpp"
 #include "hg_serialization.hpp"
 
+namespace hg {
+
 /**
  * An entity in the ecs
  */
@@ -623,6 +625,6 @@ constexpr HgVec3 hgTransformWorldPos(HgTransform& tf)
  * Update HgTransform for the entity and its children to the HgTransformLocal
  */
 void hgTransformUpdate(HgEcs* ecs, HgEntity e);
-
+} // namespace hg
 
 #endif // HG_ECS_HPP

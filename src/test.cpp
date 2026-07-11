@@ -11,6 +11,8 @@
 
 #include <emmintrin.h>
 
+namespace hg {
+
 void hgTest()
 {
     hgLog("Tests Begun\n");
@@ -4229,4 +4231,6 @@ void hgTest()
 
     printf("HurdyGurdy: Tests Complete in %fms\n", hgClockTick(&timer) * 1000.0f);
 }
+
+} // namespace hg
 

@@ -14,6 +14,8 @@
 
 #include <emmintrin.h>
 
+namespace hg {
+
 struct HgMutex {
     std::atomic_bool acquired;
 };
@@ -355,4 +357,6 @@ void hgSleep(f64 time)
 {
     std::this_thread::sleep_for(std::chrono::duration<f64>(time));
 }
+
+} // namespace hg
 

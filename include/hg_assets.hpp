@@ -31,6 +31,8 @@
 #include "hg_core.hpp"
 #include "hg_serialization.hpp"
 
+namespace hg {
+
 /**
  * Initialize all default asset types
  *
@@ -175,5 +177,7 @@ void hgAssetUnloadImpl(HgAsset<HgBinary>* data);
  * - Whether the write succeeded
  */
 bool hgBinaryStore(HgBinary bin, HgString path);
+
+} // namespace hg
 
 #endif // HG_ASSETS_HPP

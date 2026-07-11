@@ -29,6 +29,8 @@
 
 #include "hg_core.hpp"
 
+namespace hg {
+
 /**
  * A dynamically loaded library
  */
@@ -58,5 +60,7 @@ void hgLibraryUnload(HgLibrary* lib);
  * - A function pointer to the found symbol, or nullptr not found
  */
 void* hgLibraryFindFunction(HgLibrary* lib, HgString symbol);
+
+} // namespace hg
 
 #endif // HG_LIBRARY_HPP

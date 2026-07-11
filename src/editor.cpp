@@ -1,5 +1,7 @@
 #include "hurdygurdy.hpp"
 
+using namespace hg;
+
 #include "stb_image_write.h"
 
 #define IM_ASSERT hgAssert

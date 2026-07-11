@@ -46,4 +46,8 @@
 #include "hg_utils.hpp"
 #include "hg_window.hpp"
 
+namespace hg {
+
+} // namespace hg
+
 #endif // HURDYGURDY_HPP

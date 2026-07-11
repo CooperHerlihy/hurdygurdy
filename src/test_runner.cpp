@@ -1,5 +1,7 @@
 #include "hurdygurdy.hpp"
 
+using namespace hg;
+
 int main()
 {
     hgInit();

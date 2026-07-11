@@ -29,6 +29,8 @@
 
 #include "hg_core.hpp"
 
+namespace hg {
+
 /**
  * Initialize synchronization and threads
  */
@@ -176,5 +178,7 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
  */
 template<typename F>
 void hgThreadsFor(u64 begin, u64 end, F fn);
+
+} // namespace hg
 
 #endif // HG_CONCURRENCY_HPP
