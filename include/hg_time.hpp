@@ -35,7 +35,7 @@ namespace hg {
 /**
  * A high precision clock for timers and game deltas
  */
-struct HgClock {
+struct Clock {
     /**
      * The begin time
      */
@@ -48,7 +48,7 @@ struct HgClock {
  * Returns
  * - The time in seconds since the last tick
  */
-f64 hgClockTick(HgClock* clock);
+f64 clockTick(Clock* clock);
 
 /**
  * Put this thread to sleep
@@ -56,16 +56,16 @@ f64 hgClockTick(HgClock* clock);
  * Parameters
  * - time The time in seconds to sleep for
  */
-void hgSleep(f64 time);
+void sleep(f64 time);
 
 /**
  * A simple performance measurement tool
  */
-struct HgPerf {
+struct Perf {
     /**
      * The clock to keep track of each time
      */
-    HgClock clock;
+    Clock clock;
     /**
      * The measured time for each iteration
      */
@@ -83,12 +83,12 @@ struct HgPerf {
 /**
  * Create a performance measurer
  */
-HgPerf hgPerfCreate(HgArena* arena, u32 count);
+Perf perfCreate(Arena* arena, u32 count);
 
 /**
  * Begin the timer for a measurement
  */
-void hgPerfBegin(HgPerf* perf);
+void perfBegin(Perf* perf);
 
 /**
  * End the timer for a measurement
@@ -96,12 +96,12 @@ void hgPerfBegin(HgPerf* perf);
  * Returns
  * - The time this measurement took
  */
-f64 hgPerfEnd(HgPerf* perf);
+f64 perfEnd(Perf* perf);
 
 /**
  * A set of statistics from performance measurements
  */
-struct HgPerfStats {
+struct PerfStats {
     /**
      * The average time of all measurements
      */
@@ -119,23 +119,23 @@ struct HgPerfStats {
 /**
  * Analyzes the performance measurements for statistics
  */
-HgPerfStats hgPerfAnalyze(const HgPerf* perf);
+PerfStats perfAnalyze(const Perf* perf);
 
 /**
  * The scale to log performance metrics at
  */
-enum HgPerfScale : u32 {
-    HgPerfScale_seconds,
-    HgPerfScale_milli,
-    HgPerfScale_micro,
-    HgPerfScale_nano,
+enum PerfScale : u32 {
+    PerfScale_seconds,
+    PerfScale_milli,
+    PerfScale_micro,
+    PerfScale_nano,
 };
 
 /**
  * Logs performance statistics to stdout
  */
-void hgPerfLog(HgString title, const HgPerfStats* stats, HgPerfScale scale);
+void perfLog(String title, const PerfStats* stats, PerfScale scale);
 
 } // namespace hg
 
-#endif // HG_TIME_HPP
+#endif // TIME_HPP

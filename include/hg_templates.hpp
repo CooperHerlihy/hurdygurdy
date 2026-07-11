@@ -36,64 +36,64 @@
 namespace hg {
 
 template<typename F>
-void hgThreadsFor(u64 begin, u64 end, F fn)
+void threadsFor(u64 begin, u64 end, F fn)
 {
     static_assert(std::is_invocable_r_v<void, F, u64>);
 
-    hgThreadsFor(begin, end, &fn, [](void* pfn, u64 idx)
+    threadsFor(begin, end, &fn, [](void* pfn, u64 idx)
     {
         (*(F*)pfn)(idx);
     });
 }
 
 template<typename T>
-void hgSerialize(HgSerializer* s, T* val)
+void serialize(Serializer* s, T* val)
 {
-    hgSerializeVoid(s, val, sizeof(*val));
+    serializeVoid(s, val, sizeof(*val));
 }
 
 template<typename... Ts>
-void hgSerializeObject(HgSerializer* s, Ts*... vals)
+void serializeObject(Serializer* s, Ts*... vals)
 {
-    hgSerializeBegin(s);
-    (hgSerialize(s, vals), ...);
-    hgSerializeEnd(s);
+    serializeBegin(s);
+    (serialize(s, vals), ...);
+    serializeEnd(s);
 }
 
 template<typename T, u64 N>
-void hgSerialize(HgSerializer* s, T (*arr)[N])
+void serialize(Serializer* s, T (*arr)[N])
 {
-    hgSerializeBegin(s);
+    serializeBegin(s);
     for (u64 i = 0; i < N; ++i)
     {
-        hgSerialize(s, &(*arr)[i]);
+        serialize(s, &(*arr)[i]);
     }
-    hgSerializeEnd(s);
+    serializeEnd(s);
 }
 
 template<typename T>
-void hgSerialize(HgSerializer* s, HgArray<T>* arr)
+void serialize(Serializer* s, Array<T>* arr)
 {
-    hgSerializeBegin(s);
-    hgSerialize(s, &arr->count);
-    hgSerialize(s, &arr->capacity);
+    serializeBegin(s);
+    serialize(s, &arr->count);
+    serialize(s, &arr->capacity);
     if (!s->writing)
-        arr->vals = hgGpaAlloc<T>(arr->capacity);
+        arr->vals = gpaAlloc<T>(arr->capacity);
     for (u32 i = 0; i < arr->count; ++i)
     {
-        hgSerialize(s, &(*arr)[i]);
+        serialize(s, &(*arr)[i]);
     }
-    hgSerializeEnd(s);
+    serializeEnd(s);
 }
 
 template<typename T>
-HgArray<T> hgArrayCreate(u32 count, u32 capacity)
+Array<T> arrayCreate(u32 count, u32 capacity)
 {
     if (capacity < count)
         capacity = count;
 
-    HgArray<T> arr{};
-    arr.vals = hgGpaAlloc<T>(capacity);
+    Array<T> arr{};
+    arr.vals = gpaAlloc<T>(capacity);
     arr.count = count;
     arr.capacity = capacity;
 
@@ -101,20 +101,20 @@ HgArray<T> hgArrayCreate(u32 count, u32 capacity)
 }
 
 template<typename T>
-void hgArrayDestroy(HgArray<T>* arr)
+void arrayDestroy(Array<T>* arr)
 {
-    hgAssert(arr != nullptr);
-    hgGpaFree(arr->vals, arr->capacity);
+    HG_ASSERT(arr != nullptr);
+    gpaFree(arr->vals, arr->capacity);
 }
 
 template<typename T>
-HgArray<T> hgArrayTemp(HgArena* arena, u32 count, u32 capacity)
+Array<T> arrayTemp(Arena* arena, u32 count, u32 capacity)
 {
-    hgAssert(arena != nullptr);
-    hgAssert(count <= capacity);
+    HG_ASSERT(arena != nullptr);
+    HG_ASSERT(count <= capacity);
 
-    HgArray<T> arr{};
-    arr.vals = hgArenaAlloc<T>(arena, capacity);
+    Array<T> arr{};
+    arr.vals = arenaAlloc<T>(arena, capacity);
     arr.count = count;
     arr.capacity = capacity;
 
@@ -122,60 +122,60 @@ HgArray<T> hgArrayTemp(HgArena* arena, u32 count, u32 capacity)
 }
 
 template<typename T>
-void hgArrayResize(HgArray<T>* arr, u32 newCount)
+void arrayResize(Array<T>* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = hgGpaRealloc(arr->vals, arr->capacity, newCount * 2);
+        arr->vals = gpaRealloc(arr->vals, arr->capacity, newCount * 2);
         arr->capacity = newCount * 2;
     }
     arr->count = newCount;
 }
 
 template<typename T>
-void hgArrayResizeTemp(HgArena* arena, HgArray<T>* arr, u32 newCount)
+void arrayResizeTemp(Arena* arena, Array<T>* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = hgArenaRealloc(arena, arr->vals, arr->capacity, newCount * 2);
+        arr->vals = arenaRealloc(arena, arr->vals, arr->capacity, newCount * 2);
         arr->capacity = newCount * 2;
     }
     arr->count = newCount;
 }
 
 template<typename T>
-T* hgArrayPush(HgArray<T>* arr)
+T* arrayPush(Array<T>* arr)
 {
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = hgGpaRealloc(arr->vals, arr->capacity, newCapacity);
+        arr->vals = gpaRealloc(arr->vals, arr->capacity, newCapacity);
         arr->capacity = newCapacity;
     }
     return &arr->vals[arr->count++];
 }
 
 template<typename T>
-T* hgArrayPushTemp(HgArena* arena, HgArray<T>* arr)
+T* arrayPushTemp(Arena* arena, Array<T>* arr)
 {
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = hgArenaRealloc(arena, arr->vals, arr->capacity, newCapacity);
+        arr->vals = arenaRealloc(arena, arr->vals, arr->capacity, newCapacity);
         arr->capacity = newCapacity;
     }
     return &arr->vals[arr->count++];
 }
 
 template<typename T>
-T hgArrayRemove(HgArray<T>* arr, u32 idx)
+T arrayRemove(Array<T>* arr, u32 idx)
 {
-    hgAssert(idx < arr->count);
+    HG_ASSERT(idx < arr->count);
 
     T val = (*arr)[idx];
     if (idx + 1 < arr->count)
     {
-        hgMemCopy(
+        memCopy(
             &(*arr)[idx],
             &(*arr)[idx + 1],
             (arr->count - (idx + 1)) * sizeof(T));
@@ -185,12 +185,12 @@ T hgArrayRemove(HgArray<T>* arr, u32 idx)
 }
 
 template<typename T>
-T hgArrayRemoveSwap(HgArray<T>* arr, u32 idx)
+T arrayRemoveSwap(Array<T>* arr, u32 idx)
 {
     T val = (*arr)[idx];
     if (idx + 1 < arr->count)
     {
-        hgMemCopy(
+        memCopy(
             &(*arr)[idx],
             &(*arr)[arr->count - 1],
             sizeof(T));
@@ -200,17 +200,17 @@ T hgArrayRemoveSwap(HgArray<T>* arr, u32 idx)
 }
 
 template<typename T>
-T hgArrayPop(HgArray<T>* arr)
+T arrayPop(Array<T>* arr)
 {
-    hgAssert(arr->count > 0);
+    HG_ASSERT(arr->count > 0);
     return arr->vals[--arr->count];
 }
 
 template<typename T>
-HgQueue<T> hgQueueCreate(u32 capacity)
+Queue<T> queueCreate(u32 capacity)
 {
-    HgQueue<T> queue{};
-    queue.vals = hgGpaAlloc<T>(capacity);
+    Queue<T> queue{};
+    queue.vals = gpaAlloc<T>(capacity);
     queue.front = 0;
     queue.back = 0;
     queue.count = 0;
@@ -219,29 +219,29 @@ HgQueue<T> hgQueueCreate(u32 capacity)
 }
 
 template<typename T>
-void hgQueueDestroy(HgQueue<T>* queue)
+void queueDestroy(Queue<T>* queue)
 {
     if (queue != nullptr)
     {
-        hgGpaFree(queue->vals, queue->capacity);
+        gpaFree(queue->vals, queue->capacity);
     }
 }
 
 template<typename T, typename U>
-void hgQueuePushFront(HgQueue<T>* queue, U val)
+void queuePushFront(Queue<T>* queue, U val)
 {
-    hgAssert(queue != nullptr);
+    HG_ASSERT(queue != nullptr);
     static_assert(std::is_convertible_v<U, T>);
 
     ++queue->count;
     if (queue->count == queue->capacity)
     {
         u32 newCapacity = queue->capacity * 2;
-        queue->vals = hgGpaRealloc(queue->vals, queue->capacity, newCapacity);
+        queue->vals = gpaRealloc(queue->vals, queue->capacity, newCapacity);
 
         if (queue->back < queue->front)
         {
-            hgMemCopy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
+            memCopy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
             queue->back += queue->capacity;
         }
 
@@ -253,20 +253,20 @@ void hgQueuePushFront(HgQueue<T>* queue, U val)
 }
 
 template<typename T, typename U>
-void hgQueuePushBack(HgQueue<T>* queue, U val)
+void queuePushBack(Queue<T>* queue, U val)
 {
-    hgAssert(queue != nullptr);
+    HG_ASSERT(queue != nullptr);
     static_assert(std::is_convertible_v<U, T>);
 
     ++queue->count;
     if (queue->count == queue->capacity)
     {
         u32 newCapacity = queue->capacity * 2;
-        queue->vals = hgGpaRealloc(queue->vals, queue->capacity, newCapacity);
+        queue->vals = gpaRealloc(queue->vals, queue->capacity, newCapacity);
 
         if (queue->back < queue->front)
         {
-            hgMemCopy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
+            memCopy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
             queue->back += queue->capacity;
         }
 
@@ -278,9 +278,9 @@ void hgQueuePushBack(HgQueue<T>* queue, U val)
 }
 
 template<typename T>
-T hgQueuePopFront(HgQueue<T>* queue)
+T queuePopFront(Queue<T>* queue)
 {
-    hgAssert(queue->count > 0);
+    HG_ASSERT(queue->count > 0);
     --queue->count;
 
     T ret = queue->vals[queue->front];
@@ -289,9 +289,9 @@ T hgQueuePopFront(HgQueue<T>* queue)
 }
 
 template<typename T>
-T hgQueuePopBack(HgQueue<T>* queue)
+T queuePopBack(Queue<T>* queue)
 {
-    hgAssert(queue->count > 0);
+    HG_ASSERT(queue->count > 0);
     --queue->count;
 
     queue->back = (queue->back == 0 ? queue->capacity : queue->back) - 1;
@@ -299,95 +299,95 @@ T hgQueuePopBack(HgQueue<T>* queue)
 }
 
 template<typename V>
-void hgSerialize(HgSerializer* s, HgSet<V>* set)
+void serialize(Serializer* s, Set<V>* set)
 {
-    hgSerializeBegin(s);
+    serializeBegin(s);
 
-    hgSerialize(s, &set->count);
-    hgSerialize(s, &set->capacity);
+    serialize(s, &set->count);
+    serialize(s, &set->capacity);
 
     if (s->writing)
     {
-        hgSetForEach(set, [&](V* val)
+        setForEach(set, [&](V* val)
         {
-            hgSerialize(s, val);
+            serialize(s, val);
         });
     }
     else
     {
         u32 count = set->count;
-        hgSetDestroy(set);
-        *set = hgSetCreate(set->capacity);
+        setDestroy(set);
+        *set = setCreate(set->capacity);
         for (u32 i = 0; i < count; ++i)
         {
             V val;
-            hgSerialize(s, &val);
-            hgSetAdd(set, val);
+            serialize(s, &val);
+            setAdd(set, val);
         }
     }
 
-    hgSerializeEnd(s);
+    serializeEnd(s);
 }
 
 template<typename V>
-HgSet<V> hgSetCreate(u32 slotCount)
+Set<V> setCreate(u32 slotCount)
 {
-    hgAssert(slotCount > 0);
+    HG_ASSERT(slotCount > 0);
 
-    HgSet<V> set;
-    set.hasVal = hgGpaAlloc<bool>(slotCount);
-    set.vals = hgGpaAlloc<V>(slotCount);
+    Set<V> set;
+    set.hasVal = gpaAlloc<bool>(slotCount);
+    set.vals = gpaAlloc<V>(slotCount);
     set.capacity = slotCount;
-    hgSetReset(&set);
+    setReset(&set);
     return set;
 }
 
 template<typename V>
-void hgSetDestroy(HgSet<V>* set)
+void setDestroy(Set<V>* set)
 {
-    hgAssert(set != nullptr);
+    HG_ASSERT(set != nullptr);
 
-    hgGpaFree(set->hasVal);
-    hgGpaFree(set->vals);
+    gpaFree(set->hasVal);
+    gpaFree(set->vals);
 }
 
 template<typename V>
-HgSet<V> hgSetTemp(HgArena* arena, u32 slotCount)
+Set<V> setTemp(Arena* arena, u32 slotCount)
 {
-    hgAssert(slotCount > 0);
+    HG_ASSERT(slotCount > 0);
 
-    HgSet<V> set;
-    set.hasVal = hgArenaAlloc<bool>(arena, slotCount);
-    set.vals = hgArenaAlloc<V>(arena, slotCount);
+    Set<V> set;
+    set.hasVal = arenaAlloc<bool>(arena, slotCount);
+    set.vals = arenaAlloc<V>(arena, slotCount);
     set.capacity = slotCount;
-    hgSetReset(&set);
+    setReset(&set);
     return set;
 }
 
 template<typename V>
-void hgSetResize(HgSet<V>* set, u32 newSize)
+void setResize(Set<V>* set, u32 newSize)
 {
-    hgAssert(set != nullptr);
+    HG_ASSERT(set != nullptr);
 
     if (newSize > set->capacity)
     {
-        HgSet<V> newSet = hgSetCreate<V>(newSize);
+        Set<V> newSet = setCreate<V>(newSize);
 
         for (u32 i = 0; i < set->capacity; ++i)
         {
             if (set->hasVal[i])
-                hgSetAdd(&newSet, set->vals[i]);
+                setAdd(&newSet, set->vals[i]);
         }
 
-        hgSetDestroy(set);
+        setDestroy(set);
         *set = newSet;
     }
 }
 
 template<typename V>
-void hgSetReset(HgSet<V>* set)
+void setReset(Set<V>* set)
 {
-    hgAssert(set != nullptr);
+    HG_ASSERT(set != nullptr);
 
     for (u32 i = 0; i < set->capacity; ++i)
     {
@@ -397,24 +397,24 @@ void hgSetReset(HgSet<V>* set)
 }
 
 template<typename V, typename T>
-void hgSetAdd(HgSet<V>* set, const T& val)
+void setAdd(Set<V>* set, const T& val)
 {
-    hgAssert(set != nullptr);
-    hgAssert(set->count < set->capacity - 1);
+    HG_ASSERT(set != nullptr);
+    HG_ASSERT(set->count < set->capacity - 1);
 
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    u32 idx = (u32)(hgHash(v) % set->capacity);
+    u32 idx = (u32)(hash(v) % set->capacity);
     for (u32 dist = 0; set->hasVal[idx] && !(set->vals[idx] == v); ++dist)
     {
-        u32 otherDist = (u32)(hgHash(set->vals[idx]) % set->capacity) - idx;
+        u32 otherDist = (u32)(hash(set->vals[idx]) % set->capacity) - idx;
         if (otherDist > set->capacity)
             otherDist += set->capacity;
 
         if (otherDist < dist)
         {
-            hgSwap(&v, &set->vals[idx]);
+            swap(&v, &set->vals[idx]);
             dist = otherDist;
         }
 
@@ -427,14 +427,14 @@ void hgSetAdd(HgSet<V>* set, const T& val)
 }
 
 template<typename V, typename T>
-void hgSetRemove(HgSet<V>* set, const T& val)
+void setRemove(Set<V>* set, const T& val)
 {
-    hgAssert(set != nullptr);
+    HG_ASSERT(set != nullptr);
 
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    u32 idx = (u32)(hgHash(v) % set->capacity);
+    u32 idx = (u32)(hash(v) % set->capacity);
     while (set->hasVal[idx])
     {
         if (set->vals[idx] == v)
@@ -447,7 +447,7 @@ void hgSetRemove(HgSet<V>* set, const T& val)
     u32 next = (idx + 1) % set->capacity;
     while (set->hasVal[next])
     {
-        if (hgHash(set->vals[next]) % set->capacity != next)
+        if (hash(set->vals[next]) % set->capacity != next)
         {
             set->vals[idx] = set->vals[next];
             idx = next;
@@ -459,14 +459,14 @@ void hgSetRemove(HgSet<V>* set, const T& val)
 }
 
 template<typename V, typename T>
-bool hgSetHas(const HgSet<V>* set, const T& val)
+bool setHas(const Set<V>* set, const T& val)
 {
-    hgAssert(set != nullptr);
+    HG_ASSERT(set != nullptr);
 
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    for (u32 idx = (u32)(hgHash(v) % set->capacity); set->hasVal[idx]; idx = (idx + 1) % set->capacity)
+    for (u32 idx = (u32)(hash(v) % set->capacity); set->hasVal[idx]; idx = (idx + 1) % set->capacity)
     {
         if (set->vals[idx] == v)
             return true;
@@ -475,9 +475,9 @@ bool hgSetHas(const HgSet<V>* set, const T& val)
 }
 
 template<typename V, typename F>
-void hgSetForEach(HgSet<V>* set, F fn)
+void setForEach(Set<V>* set, F fn)
 {
-    hgAssert(set != nullptr);
+    HG_ASSERT(set != nullptr);
     static_assert(std::is_invocable_r_v<void, F, V*>);
 
     for (u32 i = 0; i < set->capacity; ++i)
@@ -488,102 +488,102 @@ void hgSetForEach(HgSet<V>* set, F fn)
 }
 
 template<typename K, typename V>
-void hgSerialize(HgSerializer* s, HgMap<K, V>* map)
+void serialize(Serializer* s, Map<K, V>* map)
 {
-    hgSerializeBegin(s);
+    serializeBegin(s);
 
-    hgSerialize(s, &map->count);
-    hgSerialize(s, &map->capacity);
+    serialize(s, &map->count);
+    serialize(s, &map->capacity);
 
     if (s->writing)
     {
-        hgMapForEach(map, [&](K* key, V* val)
+        mapForEach(map, [&](K* key, V* val)
         {
-            hgSerializeObject(s, key, val);
+            serializeObject(s, key, val);
         });
     }
     else
     {
         u32 count = map->count;
-        hgMapDestroy(map);
-        *map = hgMapCreate(map->capacity);
+        mapDestroy(map);
+        *map = mapCreate(map->capacity);
         for (u32 i = 0; i < count; ++i)
         {
             K key;
             V val;
-            hgSerializeObject(s, &key, &val);
-            hgMapAdd(map, key, val);
+            serializeObject(s, &key, &val);
+            mapAdd(map, key, val);
         }
     }
 
-    hgSerializeEnd(s);
+    serializeEnd(s);
 }
 
 template<typename K, typename V>
-HgMap<K, V> hgMapCreate(u32 slotCount)
+Map<K, V> mapCreate(u32 slotCount)
 {
-    hgAssert(slotCount > 0);
+    HG_ASSERT(slotCount > 0);
 
-    HgMap<K, V> map;
-    map.hasVal = hgGpaAlloc<bool>(slotCount);
-    map.keys = hgGpaAlloc<K>(slotCount);
-    map.vals = hgGpaAlloc<V>(slotCount);
+    Map<K, V> map;
+    map.hasVal = gpaAlloc<bool>(slotCount);
+    map.keys = gpaAlloc<K>(slotCount);
+    map.vals = gpaAlloc<V>(slotCount);
     map.capacity = slotCount;
-    hgMapReset(&map);
+    mapReset(&map);
 
     return map;
 }
 
 template<typename K, typename V>
-void hgMapDestroy(HgMap<K, V>* map)
+void mapDestroy(Map<K, V>* map)
 {
-    hgAssert(map != nullptr);
+    HG_ASSERT(map != nullptr);
 
-    hgGpaFree(map->hasVal, map->capacity);
-    hgGpaFree(map->keys, map->capacity);
-    hgGpaFree(map->vals, map->capacity);
+    gpaFree(map->hasVal, map->capacity);
+    gpaFree(map->keys, map->capacity);
+    gpaFree(map->vals, map->capacity);
 }
 
 template<typename K, typename V>
-HgMap<K, V> hgMapTemp(HgArena* arena, u32 slotCount)
+Map<K, V> mapTemp(Arena* arena, u32 slotCount)
 {
-    hgAssert(arena != nullptr);
-    hgAssert(slotCount > 0);
+    HG_ASSERT(arena != nullptr);
+    HG_ASSERT(slotCount > 0);
 
-    HgMap<K, V> map;
-    map.hasVal = hgArenaAlloc<bool>(arena, slotCount);
-    map.keys = hgArenaAlloc<K>(arena, slotCount);
-    map.vals = hgArenaAlloc<V>(arena, slotCount);
+    Map<K, V> map;
+    map.hasVal = arenaAlloc<bool>(arena, slotCount);
+    map.keys = arenaAlloc<K>(arena, slotCount);
+    map.vals = arenaAlloc<V>(arena, slotCount);
     map.capacity = slotCount;
-    hgMapReset(&map);
+    mapReset(&map);
 
     return map;
 }
 
 template<typename K, typename V>
-void hgMapResize(HgMap<K, V>* map, u32 newSize)
+void mapResize(Map<K, V>* map, u32 newSize)
 {
-    hgAssert(map != nullptr);
+    HG_ASSERT(map != nullptr);
 
     if (newSize > map->capacity)
     {
-        HgMap<K, V> newMap = hgMapCreate<K, V>(newSize);
+        Map<K, V> newMap = mapCreate<K, V>(newSize);
 
         for (u32 i = 0; i < map->capacity; ++i)
         {
             if (map->hasVal[i])
-                hgMapAdd(&newMap, map->keys[i], map->vals[i]);
+                mapAdd(&newMap, map->keys[i], map->vals[i]);
         }
 
-        hgMapDestroy(map);
+        mapDestroy(map);
         *map = newMap;
     }
 }
 
 template<typename K, typename V>
-void hgMapReset(HgMap<K, V>* map)
+void mapReset(Map<K, V>* map)
 {
-    hgAssert(map != nullptr);
+    HG_ASSERT(map != nullptr);
 
     for (u32 i = 0; i < map->capacity; ++i)
     {
@@ -593,26 +593,26 @@ void hgMapReset(HgMap<K, V>* map)
 }
 
 template<typename K, typename V, typename T, typename U>
-V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
+V* mapAdd(Map<K, V>* map, const T& key, const U& val)
 {
-    hgAssert(map != nullptr);
-    hgAssert(map->count < map->capacity - 1);
+    HG_ASSERT(map != nullptr);
+    HG_ASSERT(map->count < map->capacity - 1);
 
     static_assert(std::is_convertible_v<T, K> && std::is_convertible_v<U, V>);
     K k = (K)key;
     V v = (V)val;
 
-    u32 idx = (u32)(hgHash(k) % map->capacity);
+    u32 idx = (u32)(hash(k) % map->capacity);
     for (u32 dist = 0; map->hasVal[idx] && !(map->keys[idx] == k); ++dist)
     {
-        u32 otherDist = (u32)(hgHash(map->keys[idx]) % map->capacity) - idx;
+        u32 otherDist = (u32)(hash(map->keys[idx]) % map->capacity) - idx;
         if (otherDist > map->capacity)
             otherDist += map->capacity;
 
         if (otherDist < dist)
         {
-            hgSwap(&k, &map->keys[idx]);
-            hgSwap(&v, &map->vals[idx]);
+            swap(&k, &map->keys[idx]);
+            swap(&v, &map->vals[idx]);
             dist = otherDist;
         }
 
@@ -628,14 +628,14 @@ V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
 }
 
 template<typename K, typename V, typename T>
-bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val)
+bool mapRemove(Map<K, V>* map, const T& key, V* val)
 {
-    hgAssert(map != nullptr);
+    HG_ASSERT(map != nullptr);
 
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    u32 idx = (u32)(hgHash(k) % map->capacity);
+    u32 idx = (u32)(hash(k) % map->capacity);
     while (map->hasVal[idx])
     {
         if (map->keys[idx] == k)
@@ -651,7 +651,7 @@ bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val)
     u32 next = (idx + 1) % map->capacity;
     while (map->hasVal[next])
     {
-        if (hgHash(map->keys[next]) % map->capacity != next)
+        if (hash(map->keys[next]) % map->capacity != next)
         {
             map->keys[idx] = map->keys[next];
             map->vals[idx] = map->vals[next];
@@ -666,14 +666,14 @@ bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val)
 }
 
 template<typename K, typename V, typename T>
-V* hgMapGet(const HgMap<K, V>* map, const T& key)
+V* mapGet(const Map<K, V>* map, const T& key)
 {
-    hgAssert(map != nullptr);
+    HG_ASSERT(map != nullptr);
 
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    for (u32 idx = (u32)(hgHash(k) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    for (u32 idx = (u32)(hash(k) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
     {
         if (map->keys[idx] == k)
             return map->vals + idx;
@@ -682,9 +682,9 @@ V* hgMapGet(const HgMap<K, V>* map, const T& key)
 }
 
 template<typename K, typename V, typename F>
-void hgMapForEach(HgMap<K, V>* map, F fn)
+void mapForEach(Map<K, V>* map, F fn)
 {
-    hgAssert(map != nullptr);
+    HG_ASSERT(map != nullptr);
     static_assert(std::is_invocable_r_v<void, F, K*, V*>);
 
     for (u32 i = 0; i < map->capacity; ++i)
@@ -695,37 +695,37 @@ void hgMapForEach(HgMap<K, V>* map, F fn)
 }
 
 template<typename T>
-void hgAssetInit()
+void assetInit()
 {
-    hgAssets<T>.map = hgMapCreate<HgString, HgAsset<T>*>();
-    hgAssets<T>.pool = hgPoolCreate<HgAsset<T>>();
+    assets<T>.map = mapCreate<String, Asset<T>*>();
+    assets<T>.pool = poolCreate<Asset<T>>();
 }
 
 template<typename T>
-void hgAssetDeinit()
+void assetDeinit()
 {
-    hgPoolDestroy(&hgAssets<T>.pool);
-    hgMapDestroy(&hgAssets<T>.map);
+    poolDestroy(&assets<T>.pool);
+    mapDestroy(&assets<T>.map);
 }
 
 template<typename T>
-void hgAssetLoadImpl(HgAsset<T>* data)
+void assetLoadImpl(Asset<T>* data)
 {
     (void)data;
     static_assert(false, "Asset type cannot be loaded without implementation");
 }
 
 template<typename T>
-void hgAssetUnloadImpl(HgAsset<T>* data)
+void assetUnloadImpl(Asset<T>* data)
 {
     (void)data;
     static_assert(false, "Asset type cannot be unloaded without implementation");
 }
 
 template<typename T>
-HgAsset<T>* hgAssetCreate()
+Asset<T>* assetCreate()
 {
-    HgAsset<T>* data = (HgAsset<T>*)hgPoolAlloc(&hgAssets<T>.pool);
+    Asset<T>* data = (Asset<T>*)poolAlloc(&assets<T>.pool);
     data->asset = {};
     data->refCount = 1;
     data->path = {};
@@ -734,89 +734,89 @@ HgAsset<T>* hgAssetCreate()
 }
 
 template<typename T>
-HgAsset<T>* hgAssetLoad(HgString path)
+Asset<T>* assetLoad(String path)
 {
-    if (HgAsset<T>** asset = hgMapGet(&hgAssets<T>.map, path);
+    if (Asset<T>** asset = mapGet(&assets<T>.map, path);
         asset != nullptr)
     {
         ++(*asset)->refCount;
         return *asset;
     }
 
-    HgAsset<T>* data = (HgAsset<T>*)hgPoolAlloc(&hgAssets<T>.pool);
+    Asset<T>* data = (Asset<T>*)poolAlloc(&assets<T>.pool);
     data->asset = {};
     data->refCount = 1;
-    data->path = hgStringCreate(path);
+    data->path = stringCreate(path);
 
-    if (hgAssets<T>.map.count * 2 > hgAssets<T>.map.capacity)
-        hgMapResize(&hgAssets<T>.map, hgAssets<T>.map.capacity * 2);
-    hgMapAdd(&hgAssets<T>.map, data->path, data);
+    if (assets<T>.map.count * 2 > assets<T>.map.capacity)
+        mapResize(&assets<T>.map, assets<T>.map.capacity * 2);
+    mapAdd(&assets<T>.map, data->path, data);
 
-    hgAssetLoadImpl(data);
+    assetLoadImpl(data);
     return data;
 }
 
 template<typename T>
-void hgAssetUnload(HgAsset<T>* asset)
+void assetUnload(Asset<T>* asset)
 {
     if (asset != nullptr && --asset->refCount == 0)
     {
-        hgAssetUnloadImpl(asset);
+        assetUnloadImpl(asset);
 
         if (asset->path != nullptr)
         {
-            hgMapRemove(&hgAssets<T>.map, asset->path);
-            hgStringDestroy(&asset->path);
+            mapRemove(&assets<T>.map, asset->path);
+            stringDestroy(&asset->path);
         }
-        hgPoolFree(&hgAssets<T>.pool, asset);
+        poolFree(&assets<T>.pool, asset);
     }
 }
 
 template<typename T>
-void hgAssetReload(HgAsset<T>* asset)
+void assetReload(Asset<T>* asset)
 {
-    hgAssert(asset != nullptr);
+    HG_ASSERT(asset != nullptr);
 
-    hgAssetUnloadImpl(asset);
-    hgAssetLoadImpl(asset);
+    assetUnloadImpl(asset);
+    assetLoadImpl(asset);
 }
 
 template<typename T>
-HgAsset<T>* hgAssetCopy(HgAsset<T>* asset)
+Asset<T>* assetCopy(Asset<T>* asset)
 {
-    hgAssert(asset != nullptr);
+    HG_ASSERT(asset != nullptr);
     ++asset->refCount;
     return asset;
 }
 
 template<typename T>
-void hgSerialize(HgSerializer* s, HgAsset<T>** asset)
+void serialize(Serializer* s, Asset<T>** asset)
 {
     if (s->writing)
     {
-        HgString path = (*asset)->path;
-        hgSerialize(s, &path);
+        String path = (*asset)->path;
+        serialize(s, &path);
     }
     else
     {
-        hgArenaScope(s->arena);
-        HgStringBuilder path;
-        hgSerialize(s, &path);
+        HG_ARENA_SCOPE(s->arena);
+        StringBuilder path;
+        serialize(s, &path);
         if (path != "")
-            *asset = hgAssetLoad<T>(path);
+            *asset = assetLoad<T>(path);
         else
             *asset = nullptr;
     }
 }
 
 template<typename T, typename Fn>
-void hgEcsForEachSingle(HgEcs* ecs, Fn& fn)
+void ecsForEachSingle(Ecs* ecs, Fn& fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T*>);
+    static_assert(std::is_invocable_r_v<void, Fn, Entity, T*>);
 
-    HgEntity* e = hgEcsEntities<T>(ecs);
-    HgEntity* end = e + hgEcsCount<T>(ecs);
-    T* c = hgEcsComponents<T>(ecs);
+    Entity* e = ecsEntities<T>(ecs);
+    Entity* end = e + ecsCount<T>(ecs);
+    T* c = ecsComponents<T>(ecs);
     for (; e != end; ++e, ++c)
     {
         fn(*e, c);
@@ -824,93 +824,93 @@ void hgEcsForEachSingle(HgEcs* ecs, Fn& fn)
 }
 
 template<typename... Ts, typename Fn>
-void hgEcsForEachMulti(HgEcs* ecs, Fn& fn)
+void ecsForEachMulti(Ecs* ecs, Fn& fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts*...>);
+    static_assert(std::is_invocable_r_v<void, Fn, Entity, Ts*...>);
 
-    u64 id = hgEcsFindSmallest<Ts...>(ecs);
-    HgComponent* system = hgMapGet(&ecs->components, id);
-    hgAssert(system != nullptr);
+    u64 id = ecsFindSmallest<Ts...>(ecs);
+    Component* system = mapGet(&ecs->components, id);
+    HG_ASSERT(system != nullptr);
 
-    HgEntity* e = system->entities.vals + 1;
-    HgEntity* end = e + system->entities.count - 1;
+    Entity* e = system->entities.vals + 1;
+    Entity* end = e + system->entities.count - 1;
     for (; e != end; ++e)
     {
-        if (hgEcsHasAll<Ts...>(ecs, *e))
-            fn(*e, hgEcsGet<Ts>(ecs, *e)...);
+        if (ecsHasAll<Ts...>(ecs, *e))
+            fn(*e, ecsGet<Ts>(ecs, *e)...);
     }
 }
 
 template<typename... Ts, typename Fn>
-void hgEcsForEach(HgEcs* ecs, Fn fn)
+void ecsForEach(Ecs* ecs, Fn fn)
 {
     static_assert(sizeof...(Ts) != 0);
 
     if constexpr (sizeof...(Ts) == 1)
     {
-        hgEcsForEachSingle<Ts...>(ecs, fn);
+        ecsForEachSingle<Ts...>(ecs, fn);
     } else {
-        hgEcsForEachMulti<Ts...>(ecs, fn);
+        ecsForEachMulti<Ts...>(ecs, fn);
     }
 }
 
 template<typename T, typename Fn>
-void hgEcsForParSingle(HgEcs* ecs, Fn& fn)
+void ecsForParSingle(Ecs* ecs, Fn& fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T*>);
+    static_assert(std::is_invocable_r_v<void, Fn, Entity, T*>);
 
     struct Capture {
-        HgEcs* ecs;
+        Ecs* ecs;
         Fn* fn;
     };
     Capture capture{ecs, &fn};
 
-    hgThreadsFor(0, hgEcsCount<T>(ecs), &capture, [](void* pcapture, u64 idx)
+    threadsFor(0, ecsCount<T>(ecs), &capture, [](void* pcapture, u64 idx)
     {
         Capture* capture = (Capture*)pcapture;
         (*capture->fn)(
-            hgEcsEntities<T>(capture->ecs)[idx],
-            &hgEcsComponents<T>(capture->ecs)[idx]);
+            ecsEntities<T>(capture->ecs)[idx],
+            &ecsComponents<T>(capture->ecs)[idx]);
     });
 }
 
 template<typename... Ts, typename Fn>
-void hgEcsForParMulti(HgEcs* ecs, Fn& fn)
+void ecsForParMulti(Ecs* ecs, Fn& fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts*...>);
+    static_assert(std::is_invocable_r_v<void, Fn, Entity, Ts*...>);
 
-    HgComponent* system = hgMapGet(&ecs->components, hgEcsFindSmallest<Ts...>(ecs));
-    hgAssert(system != nullptr);
+    Component* system = mapGet(&ecs->components, ecsFindSmallest<Ts...>(ecs));
+    HG_ASSERT(system != nullptr);
 
     struct Capture {
-        HgEcs* ecs;
-        HgComponent* system;
+        Ecs* ecs;
+        Component* system;
         Fn* fn;
     };
     Capture capture{ecs, system, &fn};
 
-    hgThreadsFor(1, system->entities.count, &capture, [](void* pcapture, u64 idx)
+    threadsFor(1, system->entities.count, &capture, [](void* pcapture, u64 idx)
     {
         Capture* capture = (Capture*)pcapture;
-        HgEntity e = capture->system->entities[idx];
-        if (hgEcsHasAll<Ts...>(capture->ecs, e))
-            (*capture->fn)(e, hgEcsGet<Ts>(capture->ecs, e)...);
+        Entity e = capture->system->entities[idx];
+        if (ecsHasAll<Ts...>(capture->ecs, e))
+            (*capture->fn)(e, ecsGet<Ts>(capture->ecs, e)...);
     });
 }
 
 template<typename... Ts, typename Fn>
-void hgEcsForPar(HgEcs* ecs, Fn fn)
+void ecsForPar(Ecs* ecs, Fn fn)
 {
     static_assert(sizeof...(Ts) != 0);
 
     if constexpr (sizeof...(Ts) == 1)
     {
-        hgEcsForParSingle<Ts...>(ecs, fn);
+        ecsForParSingle<Ts...>(ecs, fn);
     } else {
-        hgEcsForParMulti<Ts...>(ecs, fn);
+        ecsForParMulti<Ts...>(ecs, fn);
     }
 }
 
 } // namespace hg
 
-#endif // HG_TEMPLATES_HPP
+#endif // TEMPLATES_HPP

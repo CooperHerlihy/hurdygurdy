@@ -37,291 +37,291 @@ namespace hg {
  * Returns
  * - Whether init succeeded
  */
-bool hgGpuInit();
+bool gpuInit();
 
 /**
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources
  */
-void hgGpuDeinit();
+void gpuDeinit();
 
 /**
  * Wait for the GPU to finish work
  */
-void hgGpuWaitIdle();
+void gpuWaitIdle();
 
 /**
  * Pixel formats
  */
-enum HgFormat : u32 {
-    HgFormat_undefined = 0,
-    HgFormat_r4g4_unorm_pack8 = 1,
-    HgFormat_r4g4b4a4_unorm_pack16 = 2,
-    HgFormat_b4g4r4a4_unorm_pack16 = 3,
-    HgFormat_r5g6b5_unorm_pack16 = 4,
-    HgFormat_b5g6r5_unorm_pack16 = 5,
-    HgFormat_r5g5b5a1_unorm_pack16 = 6,
-    HgFormat_b5g5r5a1_unorm_pack16 = 7,
-    HgFormat_a1r5g5b5_unorm_pack16 = 8,
-    HgFormat_r8_unorm = 9,
-    HgFormat_r8_snorm = 10,
-    HgFormat_r8_uscaled = 11,
-    HgFormat_r8_sscaled = 12,
-    HgFormat_r8_uint = 13,
-    HgFormat_r8_sint = 14,
-    HgFormat_r8_srgb = 15,
-    HgFormat_r8g8_unorm = 16,
-    HgFormat_r8g8_snorm = 17,
-    HgFormat_r8g8_uscaled = 18,
-    HgFormat_r8g8_sscaled = 19,
-    HgFormat_r8g8_uint = 20,
-    HgFormat_r8g8_sint = 21,
-    HgFormat_r8g8_srgb = 22,
-    HgFormat_r8g8b8_unorm = 23,
-    HgFormat_r8g8b8_snorm = 24,
-    HgFormat_r8g8b8_uscaled = 25,
-    HgFormat_r8g8b8_sscaled = 26,
-    HgFormat_r8g8b8_uint = 27,
-    HgFormat_r8g8b8_sint = 28,
-    HgFormat_r8g8b8_srgb = 29,
-    HgFormat_b8g8r8_unorm = 30,
-    HgFormat_b8g8r8_snorm = 31,
-    HgFormat_b8g8r8_uscaled = 32,
-    HgFormat_b8g8r8_sscaled = 33,
-    HgFormat_b8g8r8_uint = 34,
-    HgFormat_b8g8r8_sint = 35,
-    HgFormat_b8g8r8_srgb = 36,
-    HgFormat_r8g8b8a8_unorm = 37,
-    HgFormat_r8g8b8a8_snorm = 38,
-    HgFormat_r8g8b8a8_uscaled = 39,
-    HgFormat_r8g8b8a8_sscaled = 40,
-    HgFormat_r8g8b8a8_uint = 41,
-    HgFormat_r8g8b8a8_sint = 42,
-    HgFormat_r8g8b8a8_srgb = 43,
-    HgFormat_b8g8r8a8_unorm = 44,
-    HgFormat_b8g8r8a8_snorm = 45,
-    HgFormat_b8g8r8a8_uscaled = 46,
-    HgFormat_b8g8r8a8_sscaled = 47,
-    HgFormat_b8g8r8a8_uint = 48,
-    HgFormat_b8g8r8a8_sint = 49,
-    HgFormat_b8g8r8a8_srgb = 50,
-    HgFormat_a8b8g8r8_unorm_pack32 = 51,
-    HgFormat_a8b8g8r8_snorm_pack32 = 52,
-    HgFormat_a8b8g8r8_uscaled_pack32 = 53,
-    HgFormat_a8b8g8r8_sscaled_pack32 = 54,
-    HgFormat_a8b8g8r8_uint_pack32 = 55,
-    HgFormat_a8b8g8r8_sint_pack32 = 56,
-    HgFormat_a8b8g8r8_srgb_pack32 = 57,
-    HgFormat_a2r10g10b10_unorm_pack32 = 58,
-    HgFormat_a2r10g10b10_snorm_pack32 = 59,
-    HgFormat_a2r10g10b10_uscaled_pack32 = 60,
-    HgFormat_a2r10g10b10_sscaled_pack32 = 61,
-    HgFormat_a2r10g10b10_uint_pack32 = 62,
-    HgFormat_a2r10g10b10_sint_pack32 = 63,
-    HgFormat_a2b10g10r10_unorm_pack32 = 64,
-    HgFormat_a2b10g10r10_snorm_pack32 = 65,
-    HgFormat_a2b10g10r10_uscaled_pack32 = 66,
-    HgFormat_a2b10g10r10_sscaled_pack32 = 67,
-    HgFormat_a2b10g10r10_uint_pack32 = 68,
-    HgFormat_a2b10g10r10_sint_pack32 = 69,
-    HgFormat_r16_unorm = 70,
-    HgFormat_r16_snorm = 71,
-    HgFormat_r16_uscaled = 72,
-    HgFormat_r16_sscaled = 73,
-    HgFormat_r16_uint = 74,
-    HgFormat_r16_sint = 75,
-    HgFormat_r16_sfloat = 76,
-    HgFormat_r16g16_unorm = 77,
-    HgFormat_r16g16_snorm = 78,
-    HgFormat_r16g16_uscaled = 79,
-    HgFormat_r16g16_sscaled = 80,
-    HgFormat_r16g16_uint = 81,
-    HgFormat_r16g16_sint = 82,
-    HgFormat_r16g16_sfloat = 83,
-    HgFormat_r16g16b16_unorm = 84,
-    HgFormat_r16g16b16_snorm = 85,
-    HgFormat_r16g16b16_uscaled = 86,
-    HgFormat_r16g16b16_sscaled = 87,
-    HgFormat_r16g16b16_uint = 88,
-    HgFormat_r16g16b16_sint = 89,
-    HgFormat_r16g16b16_sfloat = 90,
-    HgFormat_r16g16b16a16_unorm = 91,
-    HgFormat_r16g16b16a16_snorm = 92,
-    HgFormat_r16g16b16a16_uscaled = 93,
-    HgFormat_r16g16b16a16_sscaled = 94,
-    HgFormat_r16g16b16a16_uint = 95,
-    HgFormat_r16g16b16a16_sint = 96,
-    HgFormat_r16g16b16a16_sfloat = 97,
-    HgFormat_r32_uint = 98,
-    HgFormat_r32_sint = 99,
-    HgFormat_r32_sfloat = 100,
-    HgFormat_r32g32_uint = 101,
-    HgFormat_r32g32_sint = 102,
-    HgFormat_r32g32_sfloat = 103,
-    HgFormat_r32g32b32_uint = 104,
-    HgFormat_r32g32b32_sint = 105,
-    HgFormat_r32g32b32_sfloat = 106,
-    HgFormat_r32g32b32a32_uint = 107,
-    HgFormat_r32g32b32a32_sint = 108,
-    HgFormat_r32g32b32a32_sfloat = 109,
-    HgFormat_r64_uint = 110,
-    HgFormat_r64_sint = 111,
-    HgFormat_r64_sfloat = 112,
-    HgFormat_r64g64_uint = 113,
-    HgFormat_r64g64_sint = 114,
-    HgFormat_r64g64_sfloat = 115,
-    HgFormat_r64g64b64_uint = 116,
-    HgFormat_r64g64b64_sint = 117,
-    HgFormat_r64g64b64_sfloat = 118,
-    HgFormat_r64g64b64a64_uint = 119,
-    HgFormat_r64g64b64a64_sint = 120,
-    HgFormat_r64g64b64a64_sfloat = 121,
-    HgFormat_b10g11r11_ufloat_pack32 = 122,
-    HgFormat_e5b9g9r9_ufloat_pack32 = 123,
-    HgFormat_d16_unorm = 124,
-    HgFormat_x8_d24_unorm_pack32 = 125,
-    HgFormat_d32_sfloat = 126,
-    HgFormat_s8_uint = 127,
-    HgFormat_d16_unorm_s8_uint = 128,
-    HgFormat_d24_unorm_s8_uint = 129,
-    HgFormat_d32_sfloat_s8_uint = 130,
-    HgFormat_bc1_rgb_unorm_block = 131,
-    HgFormat_bc1_rgb_srgb_block = 132,
-    HgFormat_bc1_rgba_unorm_block = 133,
-    HgFormat_bc1_rgba_srgb_block = 134,
-    HgFormat_bc2_unorm_block = 135,
-    HgFormat_bc2_srgb_block = 136,
-    HgFormat_bc3_unorm_block = 137,
-    HgFormat_bc3_srgb_block = 138,
-    HgFormat_bc4_unorm_block = 139,
-    HgFormat_bc4_snorm_block = 140,
-    HgFormat_bc5_unorm_block = 141,
-    HgFormat_bc5_snorm_block = 142,
-    HgFormat_bc6h_ufloat_block = 143,
-    HgFormat_bc6h_sfloat_block = 144,
-    HgFormat_bc7_unorm_block = 145,
-    HgFormat_bc7_srgb_block = 146,
-    HgFormat_etc2_r8g8b8_unorm_block = 147,
-    HgFormat_etc2_r8g8b8_srgb_block = 148,
-    HgFormat_etc2_r8g8b8a1_unorm_block = 149,
-    HgFormat_etc2_r8g8b8a1_srgb_block = 150,
-    HgFormat_etc2_r8g8b8a8_unorm_block = 151,
-    HgFormat_etc2_r8g8b8a8_srgb_block = 152,
-    HgFormat_eac_r11_unorm_block = 153,
-    HgFormat_eac_r11_snorm_block = 154,
-    HgFormat_eac_r11g11_unorm_block = 155,
-    HgFormat_eac_r11g11_snorm_block = 156,
-    HgFormat_astc_4x4_unorm_block = 157,
-    HgFormat_astc_4x4_srgb_block = 158,
-    HgFormat_astc_5x4_unorm_block = 159,
-    HgFormat_astc_5x4_srgb_block = 160,
-    HgFormat_astc_5x5_unorm_block = 161,
-    HgFormat_astc_5x5_srgb_block = 162,
-    HgFormat_astc_6x5_unorm_block = 163,
-    HgFormat_astc_6x5_srgb_block = 164,
-    HgFormat_astc_6x6_unorm_block = 165,
-    HgFormat_astc_6x6_srgb_block = 166,
-    HgFormat_astc_8x5_unorm_block = 167,
-    HgFormat_astc_8x5_srgb_block = 168,
-    HgFormat_astc_8x6_unorm_block = 169,
-    HgFormat_astc_8x6_srgb_block = 170,
-    HgFormat_astc_8x8_unorm_block = 171,
-    HgFormat_astc_8x8_srgb_block = 172,
-    HgFormat_astc_10x5_unorm_block = 173,
-    HgFormat_astc_10x5_srgb_block = 174,
-    HgFormat_astc_10x6_unorm_block = 175,
-    HgFormat_astc_10x6_srgb_block = 176,
-    HgFormat_astc_10x8_unorm_block = 177,
-    HgFormat_astc_10x8_srgb_block = 178,
-    HgFormat_astc_10x10_unorm_block = 179,
-    HgFormat_astc_10x10_srgb_block = 180,
-    HgFormat_astc_12x10_unorm_block = 181,
-    HgFormat_astc_12x10_srgb_block = 182,
-    HgFormat_astc_12x12_unorm_block = 183,
-    HgFormat_astc_12x12_srgb_block = 184,
-    HgFormat_g8b8g8r8_422_unorm = 1000156000,
-    HgFormat_b8g8r8g8_422_unorm = 1000156001,
-    HgFormat_g8_b8_r8_3plane_420_unorm = 1000156002,
-    HgFormat_g8_b8r8_2plane_420_unorm = 1000156003,
-    HgFormat_g8_b8_r8_3plane_422_unorm = 1000156004,
-    HgFormat_g8_b8r8_2plane_422_unorm = 1000156005,
-    HgFormat_g8_b8_r8_3plane_444_unorm = 1000156006,
-    HgFormat_r10x6_unorm_pack16 = 1000156007,
-    HgFormat_r10x6g10x6_unorm_2pack16 = 1000156008,
-    HgFormat_r10x6g10x6b10x6a10x6_unorm_4pack16 = 1000156009,
-    HgFormat_g10x6b10x6g10x6r10x6_422_unorm_4pack16 = 1000156010,
-    HgFormat_b10x6g10x6r10x6g10x6_422_unorm_4pack16 = 1000156011,
-    HgFormat_g10x6_b10x6_r10x6_3plane_420_unorm_3pack16 = 1000156012,
-    HgFormat_g10x6_b10x6r10x6_2plane_420_unorm_3pack16 = 1000156013,
-    HgFormat_g10x6_b10x6_r10x6_3plane_422_unorm_3pack16 = 1000156014,
-    HgFormat_g10x6_b10x6r10x6_2plane_422_unorm_3pack16 = 1000156015,
-    HgFormat_g10x6_b10x6_r10x6_3plane_444_unorm_3pack16 = 1000156016,
-    HgFormat_r12x4_unorm_pack16 = 1000156017,
-    HgFormat_r12x4g12x4_unorm_2pack16 = 1000156018,
-    HgFormat_r12x4g12x4b12x4a12x4_unorm_4pack16 = 1000156019,
-    HgFormat_g12x4b12x4g12x4r12x4_422_unorm_4pack16 = 1000156020,
-    HgFormat_b12x4g12x4r12x4g12x4_422_unorm_4pack16 = 1000156021,
-    HgFormat_g12x4_b12x4_r12x4_3plane_420_unorm_3pack16 = 1000156022,
-    HgFormat_g12x4_b12x4r12x4_2plane_420_unorm_3pack16 = 1000156023,
-    HgFormat_g12x4_b12x4_r12x4_3plane_422_unorm_3pack16 = 1000156024,
-    HgFormat_g12x4_b12x4r12x4_2plane_422_unorm_3pack16 = 1000156025,
-    HgFormat_g12x4_b12x4_r12x4_3plane_444_unorm_3pack16 = 1000156026,
-    HgFormat_g16b16g16r16_422_unorm = 1000156027,
-    HgFormat_b16g16r16g16_422_unorm = 1000156028,
-    HgFormat_g16_b16_r16_3plane_420_unorm = 1000156029,
-    HgFormat_g16_b16r16_2plane_420_unorm = 1000156030,
-    HgFormat_g16_b16_r16_3plane_422_unorm = 1000156031,
-    HgFormat_g16_b16r16_2plane_422_unorm = 1000156032,
-    HgFormat_g16_b16_r16_3plane_444_unorm = 1000156033,
-    HgFormat_g8_b8r8_2plane_444_unorm = 1000330000,
-    HgFormat_g10x6_b10x6r10x6_2plane_444_unorm_3pack16 = 1000330001,
-    HgFormat_g12x4_b12x4r12x4_2plane_444_unorm_3pack16 = 1000330002,
-    HgFormat_g16_b16r16_2plane_444_unorm = 1000330003,
-    HgFormat_a4r4g4b4_unorm_pack16 = 1000340000,
-    HgFormat_a4b4g4r4_unorm_pack16 = 1000340001,
-    HgFormat_astc_4x4_sfloat_block = 1000066000,
-    HgFormat_astc_5x4_sfloat_block = 1000066001,
-    HgFormat_astc_5x5_sfloat_block = 1000066002,
-    HgFormat_astc_6x5_sfloat_block = 1000066003,
-    HgFormat_astc_6x6_sfloat_block = 1000066004,
-    HgFormat_astc_8x5_sfloat_block = 1000066005,
-    HgFormat_astc_8x6_sfloat_block = 1000066006,
-    HgFormat_astc_8x8_sfloat_block = 1000066007,
-    HgFormat_astc_10x5_sfloat_block = 1000066008,
-    HgFormat_astc_10x6_sfloat_block = 1000066009,
-    HgFormat_astc_10x8_sfloat_block = 1000066010,
-    HgFormat_astc_10x10_sfloat_block = 1000066011,
-    HgFormat_astc_12x10_sfloat_block = 1000066012,
-    HgFormat_astc_12x12_sfloat_block = 1000066013,
-    HgFormat_a1b5g5r5_unorm_pack16 = 1000470000,
-    HgFormat_a8_unorm = 1000470001,
-    HgFormat_pvrtc1_2bpp_unorm_block_img = 1000054000,
-    HgFormat_pvrtc1_4bpp_unorm_block_img = 1000054001,
-    HgFormat_pvrtc2_2bpp_unorm_block_img = 1000054002,
-    HgFormat_pvrtc2_4bpp_unorm_block_img = 1000054003,
-    HgFormat_pvrtc1_2bpp_srgb_block_img = 1000054004,
-    HgFormat_pvrtc1_4bpp_srgb_block_img = 1000054005,
-    HgFormat_pvrtc2_2bpp_srgb_block_img = 1000054006,
-    HgFormat_pvrtc2_4bpp_srgb_block_img = 1000054007,
-    HgFormat_r8_bool_arm = 1000460000,
-    HgFormat_r16g16_sfixed5_nv = 1000464000,
-    HgFormat_r10x6_uint_pack16_arm = 1000609000,
-    HgFormat_r10x6g10x6_uint_2pack16_arm = 1000609001,
-    HgFormat_r10x6g10x6b10x6a10x6_uint_4pack16_arm = 1000609002,
-    HgFormat_r12x4_uint_pack16_arm = 1000609003,
-    HgFormat_r12x4g12x4_uint_2pack16_arm = 1000609004,
-    HgFormat_r12x4g12x4b12x4a12x4_uint_4pack16_arm = 1000609005,
-    HgFormat_r14x2_uint_pack16_arm = 1000609006,
-    HgFormat_r14x2g14x2_uint_2pack16_arm = 1000609007,
-    HgFormat_r14x2g14x2b14x2a14x2_uint_4pack16_arm = 1000609008,
-    HgFormat_r14x2_unorm_pack16_arm = 1000609009,
-    HgFormat_r14x2g14x2_unorm_2pack16_arm = 1000609010,
-    HgFormat_r14x2g14x2b14x2a14x2_unorm_4pack16_arm = 1000609011,
-    HgFormat_g14x2_b14x2r14x2_2plane_420_unorm_3pack16_arm = 1000609012,
-    HgFormat_g14x2_b14x2r14x2_2plane_422_unorm_3pack16_arm = 1000609013,
+enum Format : u32 {
+    Format_undefined = 0,
+    Format_r4g4_unorm_pack8 = 1,
+    Format_r4g4b4a4_unorm_pack16 = 2,
+    Format_b4g4r4a4_unorm_pack16 = 3,
+    Format_r5g6b5_unorm_pack16 = 4,
+    Format_b5g6r5_unorm_pack16 = 5,
+    Format_r5g5b5a1_unorm_pack16 = 6,
+    Format_b5g5r5a1_unorm_pack16 = 7,
+    Format_a1r5g5b5_unorm_pack16 = 8,
+    Format_r8_unorm = 9,
+    Format_r8_snorm = 10,
+    Format_r8_uscaled = 11,
+    Format_r8_sscaled = 12,
+    Format_r8_uint = 13,
+    Format_r8_sint = 14,
+    Format_r8_srgb = 15,
+    Format_r8g8_unorm = 16,
+    Format_r8g8_snorm = 17,
+    Format_r8g8_uscaled = 18,
+    Format_r8g8_sscaled = 19,
+    Format_r8g8_uint = 20,
+    Format_r8g8_sint = 21,
+    Format_r8g8_srgb = 22,
+    Format_r8g8b8_unorm = 23,
+    Format_r8g8b8_snorm = 24,
+    Format_r8g8b8_uscaled = 25,
+    Format_r8g8b8_sscaled = 26,
+    Format_r8g8b8_uint = 27,
+    Format_r8g8b8_sint = 28,
+    Format_r8g8b8_srgb = 29,
+    Format_b8g8r8_unorm = 30,
+    Format_b8g8r8_snorm = 31,
+    Format_b8g8r8_uscaled = 32,
+    Format_b8g8r8_sscaled = 33,
+    Format_b8g8r8_uint = 34,
+    Format_b8g8r8_sint = 35,
+    Format_b8g8r8_srgb = 36,
+    Format_r8g8b8a8_unorm = 37,
+    Format_r8g8b8a8_snorm = 38,
+    Format_r8g8b8a8_uscaled = 39,
+    Format_r8g8b8a8_sscaled = 40,
+    Format_r8g8b8a8_uint = 41,
+    Format_r8g8b8a8_sint = 42,
+    Format_r8g8b8a8_srgb = 43,
+    Format_b8g8r8a8_unorm = 44,
+    Format_b8g8r8a8_snorm = 45,
+    Format_b8g8r8a8_uscaled = 46,
+    Format_b8g8r8a8_sscaled = 47,
+    Format_b8g8r8a8_uint = 48,
+    Format_b8g8r8a8_sint = 49,
+    Format_b8g8r8a8_srgb = 50,
+    Format_a8b8g8r8_unorm_pack32 = 51,
+    Format_a8b8g8r8_snorm_pack32 = 52,
+    Format_a8b8g8r8_uscaled_pack32 = 53,
+    Format_a8b8g8r8_sscaled_pack32 = 54,
+    Format_a8b8g8r8_uint_pack32 = 55,
+    Format_a8b8g8r8_sint_pack32 = 56,
+    Format_a8b8g8r8_srgb_pack32 = 57,
+    Format_a2r10g10b10_unorm_pack32 = 58,
+    Format_a2r10g10b10_snorm_pack32 = 59,
+    Format_a2r10g10b10_uscaled_pack32 = 60,
+    Format_a2r10g10b10_sscaled_pack32 = 61,
+    Format_a2r10g10b10_uint_pack32 = 62,
+    Format_a2r10g10b10_sint_pack32 = 63,
+    Format_a2b10g10r10_unorm_pack32 = 64,
+    Format_a2b10g10r10_snorm_pack32 = 65,
+    Format_a2b10g10r10_uscaled_pack32 = 66,
+    Format_a2b10g10r10_sscaled_pack32 = 67,
+    Format_a2b10g10r10_uint_pack32 = 68,
+    Format_a2b10g10r10_sint_pack32 = 69,
+    Format_r16_unorm = 70,
+    Format_r16_snorm = 71,
+    Format_r16_uscaled = 72,
+    Format_r16_sscaled = 73,
+    Format_r16_uint = 74,
+    Format_r16_sint = 75,
+    Format_r16_sfloat = 76,
+    Format_r16g16_unorm = 77,
+    Format_r16g16_snorm = 78,
+    Format_r16g16_uscaled = 79,
+    Format_r16g16_sscaled = 80,
+    Format_r16g16_uint = 81,
+    Format_r16g16_sint = 82,
+    Format_r16g16_sfloat = 83,
+    Format_r16g16b16_unorm = 84,
+    Format_r16g16b16_snorm = 85,
+    Format_r16g16b16_uscaled = 86,
+    Format_r16g16b16_sscaled = 87,
+    Format_r16g16b16_uint = 88,
+    Format_r16g16b16_sint = 89,
+    Format_r16g16b16_sfloat = 90,
+    Format_r16g16b16a16_unorm = 91,
+    Format_r16g16b16a16_snorm = 92,
+    Format_r16g16b16a16_uscaled = 93,
+    Format_r16g16b16a16_sscaled = 94,
+    Format_r16g16b16a16_uint = 95,
+    Format_r16g16b16a16_sint = 96,
+    Format_r16g16b16a16_sfloat = 97,
+    Format_r32_uint = 98,
+    Format_r32_sint = 99,
+    Format_r32_sfloat = 100,
+    Format_r32g32_uint = 101,
+    Format_r32g32_sint = 102,
+    Format_r32g32_sfloat = 103,
+    Format_r32g32b32_uint = 104,
+    Format_r32g32b32_sint = 105,
+    Format_r32g32b32_sfloat = 106,
+    Format_r32g32b32a32_uint = 107,
+    Format_r32g32b32a32_sint = 108,
+    Format_r32g32b32a32_sfloat = 109,
+    Format_r64_uint = 110,
+    Format_r64_sint = 111,
+    Format_r64_sfloat = 112,
+    Format_r64g64_uint = 113,
+    Format_r64g64_sint = 114,
+    Format_r64g64_sfloat = 115,
+    Format_r64g64b64_uint = 116,
+    Format_r64g64b64_sint = 117,
+    Format_r64g64b64_sfloat = 118,
+    Format_r64g64b64a64_uint = 119,
+    Format_r64g64b64a64_sint = 120,
+    Format_r64g64b64a64_sfloat = 121,
+    Format_b10g11r11_ufloat_pack32 = 122,
+    Format_e5b9g9r9_ufloat_pack32 = 123,
+    Format_d16_unorm = 124,
+    Format_x8_d24_unorm_pack32 = 125,
+    Format_d32_sfloat = 126,
+    Format_s8_uint = 127,
+    Format_d16_unorm_s8_uint = 128,
+    Format_d24_unorm_s8_uint = 129,
+    Format_d32_sfloat_s8_uint = 130,
+    Format_bc1_rgb_unorm_block = 131,
+    Format_bc1_rgb_srgb_block = 132,
+    Format_bc1_rgba_unorm_block = 133,
+    Format_bc1_rgba_srgb_block = 134,
+    Format_bc2_unorm_block = 135,
+    Format_bc2_srgb_block = 136,
+    Format_bc3_unorm_block = 137,
+    Format_bc3_srgb_block = 138,
+    Format_bc4_unorm_block = 139,
+    Format_bc4_snorm_block = 140,
+    Format_bc5_unorm_block = 141,
+    Format_bc5_snorm_block = 142,
+    Format_bc6h_ufloat_block = 143,
+    Format_bc6h_sfloat_block = 144,
+    Format_bc7_unorm_block = 145,
+    Format_bc7_srgb_block = 146,
+    Format_etc2_r8g8b8_unorm_block = 147,
+    Format_etc2_r8g8b8_srgb_block = 148,
+    Format_etc2_r8g8b8a1_unorm_block = 149,
+    Format_etc2_r8g8b8a1_srgb_block = 150,
+    Format_etc2_r8g8b8a8_unorm_block = 151,
+    Format_etc2_r8g8b8a8_srgb_block = 152,
+    Format_eac_r11_unorm_block = 153,
+    Format_eac_r11_snorm_block = 154,
+    Format_eac_r11g11_unorm_block = 155,
+    Format_eac_r11g11_snorm_block = 156,
+    Format_astc_4x4_unorm_block = 157,
+    Format_astc_4x4_srgb_block = 158,
+    Format_astc_5x4_unorm_block = 159,
+    Format_astc_5x4_srgb_block = 160,
+    Format_astc_5x5_unorm_block = 161,
+    Format_astc_5x5_srgb_block = 162,
+    Format_astc_6x5_unorm_block = 163,
+    Format_astc_6x5_srgb_block = 164,
+    Format_astc_6x6_unorm_block = 165,
+    Format_astc_6x6_srgb_block = 166,
+    Format_astc_8x5_unorm_block = 167,
+    Format_astc_8x5_srgb_block = 168,
+    Format_astc_8x6_unorm_block = 169,
+    Format_astc_8x6_srgb_block = 170,
+    Format_astc_8x8_unorm_block = 171,
+    Format_astc_8x8_srgb_block = 172,
+    Format_astc_10x5_unorm_block = 173,
+    Format_astc_10x5_srgb_block = 174,
+    Format_astc_10x6_unorm_block = 175,
+    Format_astc_10x6_srgb_block = 176,
+    Format_astc_10x8_unorm_block = 177,
+    Format_astc_10x8_srgb_block = 178,
+    Format_astc_10x10_unorm_block = 179,
+    Format_astc_10x10_srgb_block = 180,
+    Format_astc_12x10_unorm_block = 181,
+    Format_astc_12x10_srgb_block = 182,
+    Format_astc_12x12_unorm_block = 183,
+    Format_astc_12x12_srgb_block = 184,
+    Format_g8b8g8r8_422_unorm = 1000156000,
+    Format_b8g8r8g8_422_unorm = 1000156001,
+    Format_g8_b8_r8_3plane_420_unorm = 1000156002,
+    Format_g8_b8r8_2plane_420_unorm = 1000156003,
+    Format_g8_b8_r8_3plane_422_unorm = 1000156004,
+    Format_g8_b8r8_2plane_422_unorm = 1000156005,
+    Format_g8_b8_r8_3plane_444_unorm = 1000156006,
+    Format_r10x6_unorm_pack16 = 1000156007,
+    Format_r10x6g10x6_unorm_2pack16 = 1000156008,
+    Format_r10x6g10x6b10x6a10x6_unorm_4pack16 = 1000156009,
+    Format_g10x6b10x6g10x6r10x6_422_unorm_4pack16 = 1000156010,
+    Format_b10x6g10x6r10x6g10x6_422_unorm_4pack16 = 1000156011,
+    Format_g10x6_b10x6_r10x6_3plane_420_unorm_3pack16 = 1000156012,
+    Format_g10x6_b10x6r10x6_2plane_420_unorm_3pack16 = 1000156013,
+    Format_g10x6_b10x6_r10x6_3plane_422_unorm_3pack16 = 1000156014,
+    Format_g10x6_b10x6r10x6_2plane_422_unorm_3pack16 = 1000156015,
+    Format_g10x6_b10x6_r10x6_3plane_444_unorm_3pack16 = 1000156016,
+    Format_r12x4_unorm_pack16 = 1000156017,
+    Format_r12x4g12x4_unorm_2pack16 = 1000156018,
+    Format_r12x4g12x4b12x4a12x4_unorm_4pack16 = 1000156019,
+    Format_g12x4b12x4g12x4r12x4_422_unorm_4pack16 = 1000156020,
+    Format_b12x4g12x4r12x4g12x4_422_unorm_4pack16 = 1000156021,
+    Format_g12x4_b12x4_r12x4_3plane_420_unorm_3pack16 = 1000156022,
+    Format_g12x4_b12x4r12x4_2plane_420_unorm_3pack16 = 1000156023,
+    Format_g12x4_b12x4_r12x4_3plane_422_unorm_3pack16 = 1000156024,
+    Format_g12x4_b12x4r12x4_2plane_422_unorm_3pack16 = 1000156025,
+    Format_g12x4_b12x4_r12x4_3plane_444_unorm_3pack16 = 1000156026,
+    Format_g16b16g16r16_422_unorm = 1000156027,
+    Format_b16g16r16g16_422_unorm = 1000156028,
+    Format_g16_b16_r16_3plane_420_unorm = 1000156029,
+    Format_g16_b16r16_2plane_420_unorm = 1000156030,
+    Format_g16_b16_r16_3plane_422_unorm = 1000156031,
+    Format_g16_b16r16_2plane_422_unorm = 1000156032,
+    Format_g16_b16_r16_3plane_444_unorm = 1000156033,
+    Format_g8_b8r8_2plane_444_unorm = 1000330000,
+    Format_g10x6_b10x6r10x6_2plane_444_unorm_3pack16 = 1000330001,
+    Format_g12x4_b12x4r12x4_2plane_444_unorm_3pack16 = 1000330002,
+    Format_g16_b16r16_2plane_444_unorm = 1000330003,
+    Format_a4r4g4b4_unorm_pack16 = 1000340000,
+    Format_a4b4g4r4_unorm_pack16 = 1000340001,
+    Format_astc_4x4_sfloat_block = 1000066000,
+    Format_astc_5x4_sfloat_block = 1000066001,
+    Format_astc_5x5_sfloat_block = 1000066002,
+    Format_astc_6x5_sfloat_block = 1000066003,
+    Format_astc_6x6_sfloat_block = 1000066004,
+    Format_astc_8x5_sfloat_block = 1000066005,
+    Format_astc_8x6_sfloat_block = 1000066006,
+    Format_astc_8x8_sfloat_block = 1000066007,
+    Format_astc_10x5_sfloat_block = 1000066008,
+    Format_astc_10x6_sfloat_block = 1000066009,
+    Format_astc_10x8_sfloat_block = 1000066010,
+    Format_astc_10x10_sfloat_block = 1000066011,
+    Format_astc_12x10_sfloat_block = 1000066012,
+    Format_astc_12x12_sfloat_block = 1000066013,
+    Format_a1b5g5r5_unorm_pack16 = 1000470000,
+    Format_a8_unorm = 1000470001,
+    Format_pvrtc1_2bpp_unorm_block_img = 1000054000,
+    Format_pvrtc1_4bpp_unorm_block_img = 1000054001,
+    Format_pvrtc2_2bpp_unorm_block_img = 1000054002,
+    Format_pvrtc2_4bpp_unorm_block_img = 1000054003,
+    Format_pvrtc1_2bpp_srgb_block_img = 1000054004,
+    Format_pvrtc1_4bpp_srgb_block_img = 1000054005,
+    Format_pvrtc2_2bpp_srgb_block_img = 1000054006,
+    Format_pvrtc2_4bpp_srgb_block_img = 1000054007,
+    Format_r8_bool_arm = 1000460000,
+    Format_r16g16_sfixed5_nv = 1000464000,
+    Format_r10x6_uint_pack16_arm = 1000609000,
+    Format_r10x6g10x6_uint_2pack16_arm = 1000609001,
+    Format_r10x6g10x6b10x6a10x6_uint_4pack16_arm = 1000609002,
+    Format_r12x4_uint_pack16_arm = 1000609003,
+    Format_r12x4g12x4_uint_2pack16_arm = 1000609004,
+    Format_r12x4g12x4b12x4a12x4_uint_4pack16_arm = 1000609005,
+    Format_r14x2_uint_pack16_arm = 1000609006,
+    Format_r14x2g14x2_uint_2pack16_arm = 1000609007,
+    Format_r14x2g14x2b14x2a14x2_uint_4pack16_arm = 1000609008,
+    Format_r14x2_unorm_pack16_arm = 1000609009,
+    Format_r14x2g14x2_unorm_2pack16_arm = 1000609010,
+    Format_r14x2g14x2b14x2a14x2_unorm_4pack16_arm = 1000609011,
+    Format_g14x2_b14x2r14x2_2plane_420_unorm_3pack16_arm = 1000609012,
+    Format_g14x2_b14x2r14x2_2plane_422_unorm_3pack16_arm = 1000609013,
 };
 
 /**
- * Turns a HgFormat into the size in bytes
+ * Turns a Format into the size in bytes
  *
  * Parameters
  * - format The format to get the size of
@@ -329,117 +329,117 @@ enum HgFormat : u32 {
  * Returns
  * - The size of the format in bytes
  */
-u32 hgFormatToSize(HgFormat format);
+u32 formatToSize(Format format);
 
 // Vulkan allocator : TODO?
 
 /**
  * Where in the pipeline a resource can be accessed
  */
-enum HgGpuStage : u32 {
-    HgGpuStage_none = 0,
-    HgGpuStage_topOfPipe = 0x00000001,
-    HgGpuStage_drawIndirect = 0x00000002,
-    HgGpuStage_vertexInput = 0x00000004,
-    HgGpuStage_vertexShader = 0x00000008,
-    HgGpuStage_tessellationControlShader = 0x00000010,
-    HgGpuStage_tessellationEvaluationShader = 0x00000020,
-    HgGpuStage_geometryShader = 0x00000040,
-    HgGpuStage_fragmentShader = 0x00000080,
-    HgGpuStage_earlyFragmentTests = 0x00000100,
-    HgGpuStage_lateFragmentTests = 0x00000200,
-    HgGpuStage_colorAttachmentOutput = 0x00000400,
-    HgGpuStage_computeShader = 0x00000800,
-    HgGpuStage_transfer = 0x00001000,
-    HgGpuStage_bottomOfPipe = 0x00002000,
-    HgGpuStage_host = 0x00004000,
-    HgGpuStage_allGraphics = 0x00008000,
-    HgGpuStage_allCommands = 0x00010000,
+enum GpuStage : u32 {
+    GpuStage_none = 0,
+    GpuStage_topOfPipe = 0x00000001,
+    GpuStage_drawIndirect = 0x00000002,
+    GpuStage_vertexInput = 0x00000004,
+    GpuStage_vertexShader = 0x00000008,
+    GpuStage_tessellationControlShader = 0x00000010,
+    GpuStage_tessellationEvaluationShader = 0x00000020,
+    GpuStage_geometryShader = 0x00000040,
+    GpuStage_fragmentShader = 0x00000080,
+    GpuStage_earlyFragmentTests = 0x00000100,
+    GpuStage_lateFragmentTests = 0x00000200,
+    GpuStage_colorAttachmentOutput = 0x00000400,
+    GpuStage_computeShader = 0x00000800,
+    GpuStage_transfer = 0x00001000,
+    GpuStage_bottomOfPipe = 0x00002000,
+    GpuStage_host = 0x00004000,
+    GpuStage_allGraphics = 0x00008000,
+    GpuStage_allCommands = 0x00010000,
 };
-typedef u32 HgGpuStageFlags;
+typedef u32 GpuStageFlags;
 
 /**
  * How a resource can be accessed
  */
-enum HgGpuAccess : u32 {
-    HgGpuAccess_none = 0,
-    HgGpuAccess_indirectCommandRead = 0x00000001,
-    HgGpuAccess_indexRead = 0x00000002,
-    HgGpuAccess_vertexAttributeRead = 0x00000004,
-    HgGpuAccess_uniformRead = 0x00000008,
-    HgGpuAccess_inputAttachmentRead = 0x00000010,
-    HgGpuAccess_shaderRead = 0x00000020,
-    HgGpuAccess_shaderWrite = 0x00000040,
-    HgGpuAccess_colorAttachmentRead = 0x00000080,
-    HgGpuAccess_colorAttachmentWrite = 0x00000100,
-    HgGpuAccess_depthStencilAttachmentRead = 0x00000200,
-    HgGpuAccess_depthStencilAttachmentWrite = 0x00000400,
-    HgGpuAccess_transferRead = 0x00000800,
-    HgGpuAccess_transferWrite = 0x00001000,
-    HgGpuAccess_hostRead = 0x00002000,
-    HgGpuAccess_hostWrite = 0x00004000,
-    HgGpuAccess_memoryRead = 0x00008000,
-    HgGpuAccess_memoryWrite = 0x00010000,
+enum GpuAccess : u32 {
+    GpuAccess_none = 0,
+    GpuAccess_indirectCommandRead = 0x00000001,
+    GpuAccess_indexRead = 0x00000002,
+    GpuAccess_vertexAttributeRead = 0x00000004,
+    GpuAccess_uniformRead = 0x00000008,
+    GpuAccess_inputAttachmentRead = 0x00000010,
+    GpuAccess_shaderRead = 0x00000020,
+    GpuAccess_shaderWrite = 0x00000040,
+    GpuAccess_colorAttachmentRead = 0x00000080,
+    GpuAccess_colorAttachmentWrite = 0x00000100,
+    GpuAccess_depthStencilAttachmentRead = 0x00000200,
+    GpuAccess_depthStencilAttachmentWrite = 0x00000400,
+    GpuAccess_transferRead = 0x00000800,
+    GpuAccess_transferWrite = 0x00001000,
+    GpuAccess_hostRead = 0x00002000,
+    GpuAccess_hostWrite = 0x00004000,
+    GpuAccess_memoryRead = 0x00008000,
+    GpuAccess_memoryWrite = 0x00010000,
 };
-typedef u32 HgGpuAccessFlags;
+typedef u32 GpuAccessFlags;
 
 /**
  * A gpu buffer
  */
-struct HgGpuBuffer;
+struct GpuBuffer;
 
 /**
  * How a gpu buffer will be used
  */
-enum HgGpuBufferUsage : u32 {
-    HgGpuBufferUsage_transferSrc = 0x00000001,
-    HgGpuBufferUsage_transferDst = 0x00000002,
-    HgGpuBufferUsage_uniformTexelBuffer = 0x00000004,
-    HgGpuBufferUsage_storageTexelBuffer = 0x00000008,
-    HgGpuBufferUsage_uniformBuffer = 0x00000010,
-    HgGpuBufferUsage_storageBuffer = 0x00000020,
-    HgGpuBufferUsage_indirectBuffer = 0x00000100,
+enum GpuBufferUsage : u32 {
+    GpuBufferUsage_transferSrc = 0x00000001,
+    GpuBufferUsage_transferDst = 0x00000002,
+    GpuBufferUsage_uniformTexelBuffer = 0x00000004,
+    GpuBufferUsage_storageTexelBuffer = 0x00000008,
+    GpuBufferUsage_uniformBuffer = 0x00000010,
+    GpuBufferUsage_storageBuffer = 0x00000020,
+    GpuBufferUsage_indirectBuffer = 0x00000100,
 };
-typedef u32 HgGpuBufferUsageFlags;
+typedef u32 GpuBufferUsageFlags;
 
 /**
  * How a gpu buffer will be accessed
  */
-enum HgGpuMemoryUsage : u32 {
+enum GpuMemoryUsage : u32 {
     /**
      * It will only be accessed from the device
      */
-    HgGpuMemoryUsage_deviceOnly = 0,
+    GpuMemoryUsage_deviceOnly = 0,
     /**
      * It will be used as a staging buffer to transfer from host to device
      */
-    HgGpuMemoryUsage_stagingWrite = 1,
+    GpuMemoryUsage_stagingWrite = 1,
     /**
      * It will be used as a staging buffer to transfer from device to host
      */
-    HgGpuMemoryUsage_stagingRead = 2,
+    GpuMemoryUsage_stagingRead = 2,
     /**
      * It will be frequently written from the host and read on the device
      */
-    HgGpuMemoryUsage_frequentUpdate = 3,
+    GpuMemoryUsage_frequentUpdate = 3,
 };
 
 /**
  * How a gpu buffer can be accessed
  */
-enum HgGpuMemoryHostAccess : u32 {
+enum GpuMemoryHostAccess : u32 {
     /**
      * The buffer cannot be accessed by the host
      */
-    HgGpuMemoryHostAccess_none = 0x0,
+    GpuMemoryHostAccess_none = 0x0,
     /**
      * The buffer can be written to by the host
      */
-    HgGpuMemoryHostAccess_write = 0x1,
+    GpuMemoryHostAccess_write = 0x1,
     /**
      * The buffer can be read from by the host
      */
-    HgGpuMemoryHostAccess_read = 0x2,
+    GpuMemoryHostAccess_read = 0x2,
 };
 
 /**
@@ -450,25 +450,25 @@ enum HgGpuMemoryHostAccess : u32 {
  * - usageFlags How the buffer will be used
  * - access How the buffer should be accessed
  */
-HgGpuBuffer* hgGpuBufferCreate(
+GpuBuffer* gpuBufferCreate(
     u64 size,
-    HgGpuBufferUsageFlags usageFlags,
-    HgGpuMemoryUsage access = HgGpuMemoryUsage_deviceOnly);
+    GpuBufferUsageFlags usageFlags,
+    GpuMemoryUsage access = GpuMemoryUsage_deviceOnly);
 
 /**
  * Destroy a gpu buffer
  */
-void hgGpuBufferDestroy(HgGpuBuffer* buffer);
+void gpuBufferDestroy(GpuBuffer* buffer);
 
 /**
  * Get the uniform buffer descriptor index from the buffer
  */
-u32 hgGpuBufferUniformDescriptor(HgGpuBuffer* buffer);
+u32 gpuBufferUniformDescriptor(GpuBuffer* buffer);
 
 /**
  * Get the storage buffer descriptor index from the buffer
  */
-u32 hgGpuBufferStorageDescriptor(HgGpuBuffer* buffer);
+u32 gpuBufferStorageDescriptor(GpuBuffer* buffer);
 
 /**
  * Writes to a gpu buffer
@@ -479,7 +479,7 @@ u32 hgGpuBufferStorageDescriptor(HgGpuBuffer* buffer);
  * - src The data to write, must not be nullptr
  * - size The size in bytes to write
  */
-void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size);
+void gpuBufferWrite(GpuBuffer* dst, u64 offset, const void* src, u64 size);
 
 /**
  * Reads from a Vulkan device local buffer through a staging buffer
@@ -490,62 +490,62 @@ void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size);
  * - offset The offset in bytes into the dst buffer
  * - size The size in bytes to read
  */
-void hgGpuBufferRead(void* dst, HgGpuBuffer* src, u64 offset, u64 size);
+void gpuBufferRead(void* dst, GpuBuffer* src, u64 offset, u64 size);
 
 /**
  * A gpu image
  */
-struct HgGpuImage;
+struct GpuImage;
 
 /**
  * How an image will be used
  */
-enum HgGpuImageUsage : u32 {
-    HgGpuImageUsage_transferSrc = 0x00000001,
-    HgGpuImageUsage_transferDst = 0x00000002,
-    HgGpuImageUsage_sampled = 0x00000004,
-    HgGpuImageUsage_storage = 0x00000008,
-    HgGpuImageUsage_colorAttachment = 0x00000010,
-    HgGpuImageUsage_depthStencilAttachment = 0x00000020,
-    HgGpuImageUsage_transientAttachment = 0x00000040,
-    HgGpuImageUsage_inputAttachment = 0x00000080,
-    HgGpuImageUsage_hostTransfer = 0x00400000,
+enum GpuImageUsage : u32 {
+    GpuImageUsage_transferSrc = 0x00000001,
+    GpuImageUsage_transferDst = 0x00000002,
+    GpuImageUsage_sampled = 0x00000004,
+    GpuImageUsage_storage = 0x00000008,
+    GpuImageUsage_colorAttachment = 0x00000010,
+    GpuImageUsage_depthStencilAttachment = 0x00000020,
+    GpuImageUsage_transientAttachment = 0x00000040,
+    GpuImageUsage_inputAttachment = 0x00000080,
+    GpuImageUsage_hostTransfer = 0x00400000,
 };
-typedef u32 HgGpuImageUsageFlags;
+typedef u32 GpuImageUsageFlags;
 
 /**
  * The layout of an image
  */
-enum HgGpuLayout : u32 {
-    HgGpuLayout_undefined = 0,
-    HgGpuLayout_general = 1,
-    HgGpuLayout_colorAttachment = 2,
-    HgGpuLayout_depthStencilAttachment = 3,
-    HgGpuLayout_depthStencilReadOnly = 4,
-    HgGpuLayout_shaderReadOnly = 5,
-    HgGpuLayout_transferSrc = 6,
-    HgGpuLayout_transferDst = 7,
-    HgGpuLayout_preinitialized = 8,
-    HgGpuLayout_presentSrc = 1000001002,
+enum GpuLayout : u32 {
+    GpuLayout_undefined = 0,
+    GpuLayout_general = 1,
+    GpuLayout_colorAttachment = 2,
+    GpuLayout_depthStencilAttachment = 3,
+    GpuLayout_depthStencilReadOnly = 4,
+    GpuLayout_shaderReadOnly = 5,
+    GpuLayout_transferSrc = 6,
+    GpuLayout_transferDst = 7,
+    GpuLayout_preinitialized = 8,
+    GpuLayout_presentSrc = 1000001002,
 };
 
 /**
  * Extra config flags for image creation
  */
-enum HgGpuImageConfig : u32 {
-    HgGpuImageConfig_cubeCompatible = 0x00000010,
+enum GpuImageConfig : u32 {
+    GpuImageConfig_cubeCompatible = 0x00000010,
 };
-typedef u32 HgGpuImageConfigFlags;
+typedef u32 GpuImageConfigFlags;
 
 /**
  * Create a gpu image assuming most defaults
  */
-HgGpuImage* hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage);
+GpuImage* gpuImageCreate(u32 width, u32 height, Format format, GpuImageUsageFlags usage);
 
 /**
- * Config for hgGpuImageCreateEx
+ * Config for gpuImageCreateEx
  */
-struct HgGpuImageCreateEx {
+struct GpuImageCreateEx {
     /**
      * The dimensions of the image
      */
@@ -565,7 +565,7 @@ struct HgGpuImageCreateEx {
     /**
      * The format of the image, must not be undefined
      */
-    HgFormat format = HgFormat_undefined;
+    Format format = Format_undefined;
     /**
      * The number of mip level
      */
@@ -581,153 +581,153 @@ struct HgGpuImageCreateEx {
     /**
      * How the image will be used, must not be 0
      */
-    HgGpuImageUsageFlags usage = 0;
+    GpuImageUsageFlags usage = 0;
     /**
      * Extra config flags
      */
-    HgGpuImageConfigFlags flags = 0;
+    GpuImageConfigFlags flags = 0;
 };
 
 /**
  * Create a gpu image with extended options
  */
-HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create);
+GpuImage* gpuImageCreateEx(const GpuImageCreateEx* create);
 
 /**
  * Destroy a gpu image
  */
-void hgGpuImageDestroy(HgGpuImage* image);
+void gpuImageDestroy(GpuImage* image);
 
 /**
  * Get the width of an image
  */
-u32 hgGpuImageWidth(HgGpuImage* image);
+u32 gpuImageWidth(GpuImage* image);
 
 /**
  * Get the height of an image
  */
-u32 hgGpuImageHeight(HgGpuImage* image);
+u32 gpuImageHeight(GpuImage* image);
 
 /**
  * A gpu view
  */
-struct HgGpuView;
+struct GpuView;
 
 /**
  * The dimensionality of an image
  */
-enum HgGpuViewType : u32 {
-    HgGpuViewType_1D = 0,
-    HgGpuViewType_2D = 1,
-    HgGpuViewType_3D = 2,
-    HgGpuViewType_cube = 3,
-    HgGpuViewType_1DArray = 4,
-    HgGpuViewType_2DArray = 5,
-    HgGpuViewType_cubeArray = 6,
+enum GpuViewType : u32 {
+    GpuViewType_1D = 0,
+    GpuViewType_2D = 1,
+    GpuViewType_3D = 2,
+    GpuViewType_cube = 3,
+    GpuViewType_1DArray = 4,
+    GpuViewType_2DArray = 5,
+    GpuViewType_cubeArray = 6,
 };
 
 /**
  * The aspect the image will be accessed in
  */
-enum HgGpuAspect : u32 {
-    HgGpuAspect_none = 0,
-    HgGpuAspect_color = 0x00000001,
-    HgGpuAspect_depth = 0x00000002,
-    HgGpuAspect_stencil = 0x00000004,
-    HgGpuAspect_metadata = 0x00000008,
-    HgGpuAspect_plane0 = 0x00000010,
-    HgGpuAspect_plane1 = 0x00000020,
-    HgGpuAspect_plane2 = 0x00000040,
+enum GpuAspect : u32 {
+    GpuAspect_none = 0,
+    GpuAspect_color = 0x00000001,
+    GpuAspect_depth = 0x00000002,
+    GpuAspect_stencil = 0x00000004,
+    GpuAspect_metadata = 0x00000008,
+    GpuAspect_plane0 = 0x00000010,
+    GpuAspect_plane1 = 0x00000020,
+    GpuAspect_plane2 = 0x00000040,
 };
-typedef u32 HgGpuAspectFlags;
+typedef u32 GpuAspectFlags;
 
 /**
  * How a sampler interpolates between pixels
  */
-enum HgGpuFilter : u32 {
-    HgGpuFilter_nearest = 0,
-    HgGpuFilter_linear = 1,
-    HgGpuFilter_count,
+enum GpuFilter : u32 {
+    GpuFilter_nearest = 0,
+    GpuFilter_linear = 1,
+    GpuFilter_count,
 };
 
 /**
  * How a sampler samples off the image's edge
  */
-enum HgGpuSamplerEdgeMode : u32 {
-    HgGpuSamplerEdgeMode_repeat = 0,
-    HgGpuSamplerEdgeMode_mirroredRepeat = 1,
-    HgGpuSamplerEdgeMode_clampToEdge = 2,
-    HgGpuSamplerEdgeMode_clampToBorder = 3,
-    HgGpuSamplerEdgeMode_mirrorClampToEdge = 4,
-    HgGpuSamplerEdgeMode_count,
+enum GpuSamplerEdgeMode : u32 {
+    GpuSamplerEdgeMode_repeat = 0,
+    GpuSamplerEdgeMode_mirroredRepeat = 1,
+    GpuSamplerEdgeMode_clampToEdge = 2,
+    GpuSamplerEdgeMode_clampToBorder = 3,
+    GpuSamplerEdgeMode_mirrorClampToEdge = 4,
+    GpuSamplerEdgeMode_count,
 };
 
 /**
  * The border color if the sampler edge mode has a border
  */
-enum HgGpuSamplerBorder : u32 {
-    HgGpuSamplerBorder_floatTransparentBlack = 0,
-    HgGpuSamplerBorder_intTransparentBlack = 1,
-    HgGpuSamplerBorder_floatOpaqueBlack = 2,
-    HgGpuSamplerBorder_intOpaqueBlack = 3,
-    HgGpuSamplerBorder_floatOpaqueWhite = 4,
-    HgGpuSamplerBorder_intOpaqueWhite = 5,
-    HgGpuSamplerBorder_count,
+enum GpuSamplerBorder : u32 {
+    GpuSamplerBorder_floatTransparentBlack = 0,
+    GpuSamplerBorder_intTransparentBlack = 1,
+    GpuSamplerBorder_floatOpaqueBlack = 2,
+    GpuSamplerBorder_intOpaqueBlack = 3,
+    GpuSamplerBorder_floatOpaqueWhite = 4,
+    GpuSamplerBorder_intOpaqueWhite = 5,
+    GpuSamplerBorder_count,
 };
 
 /**
  * Create a gpu image view
  */
-HgGpuView* hgGpuViewCreate(
-    HgGpuImage* image,
-    HgGpuAspectFlags aspectFlags,
-    HgGpuFilter filter = HgGpuFilter_nearest);
+GpuView* gpuViewCreate(
+    GpuImage* image,
+    GpuAspectFlags aspectFlags,
+    GpuFilter filter = GpuFilter_nearest);
 
 /**
- * Config for hgGpuViewCreateEx
+ * Config for gpuViewCreateEx
  */
-struct HgGpuViewCreateEx {
-    HgGpuImage* image;
+struct GpuViewCreateEx {
+    GpuImage* image;
     u32 baseMipLevel;
     u32 levelCount;
     u32 baseArrayLayer;
     u32 layerCount;
-    HgGpuAspectFlags aspectFlags;
-    HgGpuViewType type;
-    HgGpuFilter filter;
-    HgGpuSamplerEdgeMode edgeMode;
-    HgGpuSamplerBorder border;
+    GpuAspectFlags aspectFlags;
+    GpuViewType type;
+    GpuFilter filter;
+    GpuSamplerEdgeMode edgeMode;
+    GpuSamplerBorder border;
 };
 
 /**
  * Create a gpu image view with extended config
  */
-HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config);
+GpuView* gpuViewCreateEx(const GpuViewCreateEx* config);
 
 /**
  * Destroy a gpu image view
  */
-void hgGpuViewDestroy(HgGpuView* view);
+void gpuViewDestroy(GpuView* view);
 
 /**
  * Get the width of an image
  */
-u32 hgGpuViewWidth(HgGpuView* view);
+u32 gpuViewWidth(GpuView* view);
 
 /**
  * Get the height of an image
  */
-u32 hgGpuViewHeight(HgGpuView* view);
+u32 gpuViewHeight(GpuView* view);
 
 /**
  * Get the image sampler descriptor index from the image view
  */
-u32 hgGpuImageSamplerDescriptor(HgGpuView* view);
+u32 gpuImageSamplerDescriptor(GpuView* view);
 
 /**
  * Get the storage image descriptor index from the image view
  */
-u32 hgGpuImageStorageDescriptor(HgGpuView* view);
+u32 gpuImageStorageDescriptor(GpuView* view);
 
 /**
  * Write to a gpu image
@@ -738,7 +738,7 @@ u32 hgGpuImageStorageDescriptor(HgGpuView* view);
  * - dst The image to write to
  * - src The data to read from
  */
-void hgGpuImageWrite(HgGpuView* dst, const void* src);
+void gpuImageWrite(GpuView* dst, const void* src);
 
 /**
  * Write to a gpu image cubemap
@@ -757,7 +757,7 @@ void hgGpuImageWrite(HgGpuView* dst, const void* src);
  * - subresource The subresource of the image to write to
  * - src The data to read from
  */
-void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src);
+void gpuImageWriteCubemap(GpuView* dst, const void* src);
 
 /**
  * Read from a gpu image
@@ -769,7 +769,7 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src);
  * - dst The image to read from
  * - subresource The subresource of the image to read from
  */
-void hgGpuImageRead(void* dst, HgGpuView* src);
+void gpuImageRead(void* dst, GpuView* src);
 
 /**
  * Generates mipmaps from the base level
@@ -779,17 +779,17 @@ void hgGpuImageRead(void* dst, HgGpuView* src);
  * Parameters
  * - image The image to generate mipmaps for
  */
-void hgGpuImageGenMipmaps(HgGpuView* dst);
+void gpuImageGenMipmaps(GpuView* dst);
 
 /**
  * A gpu pipeline
  */
-struct HgGpuPipeline;
+struct GpuPipeline;
 
 /**
  * A push constant range in a pipeline
  */
-struct HgGpuPushRange {
+struct GpuPushRange {
     /**
      * The offset in bytes
      */
@@ -803,41 +803,41 @@ struct HgGpuPushRange {
 /**
  * How the vertex list is interpreted
  */
-enum HgGpuTopology : u32 {
-    HgGpuTopology_pointList = 0,
-    HgGpuTopology_lineList = 1,
-    HgGpuTopology_lineStrip = 2,
-    HgGpuTopology_triangleList = 3,
-    HgGpuTopology_triangleStrip = 4,
-    HgGpuTopology_triangleFan = 5,
-    HgGpuTopology_lineListWithAdjacency = 6,
-    HgGpuTopology_lineStripWithAdjacency = 7,
-    HgGpuTopology_triangleListWithAdjacency = 8,
-    HgGpuTopology_triangleStripWithAdjacency = 9,
-    HgGpuTopology_patchList = 10,
+enum GpuTopology : u32 {
+    GpuTopology_pointList = 0,
+    GpuTopology_lineList = 1,
+    GpuTopology_lineStrip = 2,
+    GpuTopology_triangleList = 3,
+    GpuTopology_triangleStrip = 4,
+    GpuTopology_triangleFan = 5,
+    GpuTopology_lineListWithAdjacency = 6,
+    GpuTopology_lineStripWithAdjacency = 7,
+    GpuTopology_triangleListWithAdjacency = 8,
+    GpuTopology_triangleStripWithAdjacency = 9,
+    GpuTopology_patchList = 10,
 };
 
 /**
  * How to treat vertices
  */
-enum HgGpuPolygonMode : u32 {
-    HgGpuPolygonMode_fill = 0,
-    HgGpuPolygonMode_line = 1,
-    HgGpuPolygonMode_point = 2,
+enum GpuPolygonMode : u32 {
+    GpuPolygonMode_fill = 0,
+    GpuPolygonMode_line = 1,
+    GpuPolygonMode_point = 2,
 };
 
-enum HgGpuCull : u32 {
-    HgGpuCull_none = 0,
-    HgGpuCull_front = 0x00000001,
-    HgGpuCull_back = 0x00000002,
-    HgGpuCull_both = 0x00000003,
+enum GpuCull : u32 {
+    GpuCull_none = 0,
+    GpuCull_front = 0x00000001,
+    GpuCull_back = 0x00000002,
+    GpuCull_both = 0x00000003,
 };
-typedef u32 HgGpuCullFlags;
+typedef u32 GpuCullFlags;
 
 /**
- * Config for hgCreateGraphicsPipeline
+ * Config for createGraphicsPipeline
  */
-struct HgCreateGpuGraphicsPipeline {
+struct CreateGpuGraphicsPipeline {
     /**
      * The vertex shader code
      */
@@ -861,7 +861,7 @@ struct HgCreateGpuGraphicsPipeline {
     /**
      * The format of the color attachments, none can be UNDEFINED
      */
-    const HgFormat* colorAttachmentFormats = nullptr;
+    const Format* colorAttachmentFormats = nullptr;
     /**
      * The number of color attachment formats
      */
@@ -869,15 +869,15 @@ struct HgCreateGpuGraphicsPipeline {
     /**
      * The format of the depth attachment, no depth attachment if UNDEFINED
      */
-    HgFormat depthAttachmentFormat = HgFormat_undefined;
+    Format depthAttachmentFormat = Format_undefined;
     /**
      * The format of the stencil attachment, no stencil attachment if UNDEFINED
      */
-    HgFormat stencilAttachmentFormat = HgFormat_undefined;
+    Format stencilAttachmentFormat = Format_undefined;
     /**
      * How to interpret vertices into topology
      */
-    HgGpuTopology topology = HgGpuTopology_triangleList;
+    GpuTopology topology = GpuTopology_triangleList;
     /**
      * The number of patch control points in the tesselation stage
      */
@@ -885,11 +885,11 @@ struct HgCreateGpuGraphicsPipeline {
     /**
      * How polygons are drawn
      */
-    HgGpuPolygonMode polygonMode = HgGpuPolygonMode_fill;
+    GpuPolygonMode polygonMode = GpuPolygonMode_fill;
     /**
      * Enables back/front face culling
      */
-    HgGpuCullFlags cullMode = HgGpuCull_none;
+    GpuCullFlags cullMode = GpuCull_none;
     /**
      * How many samples are used in MSAA
      */
@@ -914,7 +914,7 @@ struct HgCreateGpuGraphicsPipeline {
  * Parameters
  * - config The pipeline configuration
  */
-HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config);
+GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config);
 
 /**
  * Create a compute pipeline
@@ -924,17 +924,17 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
  * - shaderCode The compute shader, must not be nullptr
  * - shaderCodeSize The size in bytes of shaderCode
  */
-HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
+GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
 
 /**
  * Destroy a graphics or compute pipeline
  */
-void hgGpuPipelineDestroy(HgGpuPipeline* pipeline);
+void gpuPipelineDestroy(GpuPipeline* pipeline);
 
 /**
  * A gpu command buffer
  */
-struct HgGpuCmd;
+struct GpuCmd;
 
 /**
  * Begin a command buffer to be executed once
@@ -942,20 +942,20 @@ struct HgGpuCmd;
  * Returns
  * - The command buffer to record, will never be nullptr
  */
-HgGpuCmd* hgGpuCmdBegin();
+GpuCmd* gpuCmdBegin();
 
 /**
  * Execute the command buffer and wait for completion
  *
  * Parameters
- * - cmd The command buffer from hgBeginGpuCommands, must not be nullptr
+ * - cmd The command buffer from beginGpuCommands, must not be nullptr
  */
-void hgGpuCmdEnd(HgGpuCmd* cmd);
+void gpuCmdEnd(GpuCmd* cmd);
 
 /**
  * Bind a graphics or compute pipeline
  */
-void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline);
+void gpuBindPipeline(GpuCmd* cmd, GpuPipeline* pipeline);
 
 /**
  * Push constants to the shader
@@ -967,7 +967,7 @@ void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline);
  * - size The size of the data
  * - push The data to push
  */
-void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, void* push, u32 size);
+void gpuPushConstants(GpuCmd* cmd, GpuPipeline* pipeline, void* push, u32 size);
 
 /**
  * Issue a draw call
@@ -979,7 +979,7 @@ void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, void* push, u32 
  * - instanceBegin The index of the first instance to draw
  * - instanceCount The number of instances to draw
  */
-void hgGpuDraw(HgGpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount);
+void gpuDraw(GpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount);
 
 /**
  * Dispatch a compute shader
@@ -990,46 +990,46 @@ void hgGpuDraw(HgGpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegi
  * - groupCountY The number of workgroups in the y dimension
  * - groupCountZ The number of workgroups in the z dimension
  */
-void hgGpuDispatch(HgGpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
+void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
 
 /**
  * An image dependency barrier
  */
-struct HgGpuImageBarrier {
+struct GpuImageBarrier {
     /**
      * The image to sychronize
      */
-    HgGpuView* image;
+    GpuView* image;
     /**
      * Where the image will be used next
      */
-    HgGpuStageFlags nextStage;
+    GpuStageFlags nextStage;
     /**
      * How the image will be accessed next
      */
-    HgGpuAccessFlags nextAccess;
+    GpuAccessFlags nextAccess;
     /**
      * The next layout the image needs to be in
      */
-    HgGpuLayout nextLayout;
+    GpuLayout nextLayout;
 };
 
 /**
  * A buffer dependency barrier
  */
-struct HgGpuBufferBarrier {
+struct GpuBufferBarrier {
     /**
      * The buffer to sychronize
      */
-    HgGpuBuffer* buffer;
+    GpuBuffer* buffer;
     /**
      * Where the image will be used next
      */
-    HgGpuStageFlags nextStage;
+    GpuStageFlags nextStage;
     /**
      * How the image will be accessed next
      */
-    HgGpuAccessFlags nextAccess;
+    GpuAccessFlags nextAccess;
 };
 
 /**
@@ -1042,21 +1042,21 @@ struct HgGpuBufferBarrier {
  * - imageBarriers The image barriers
  * - imageBarrierCount The number of image barriers
  */
-void hgGpuMemoryBarrier(
-    HgGpuCmd* cmd,
-    const HgGpuBufferBarrier* bufferBarriers,
+void gpuMemoryBarrier(
+    GpuCmd* cmd,
+    const GpuBufferBarrier* bufferBarriers,
     u32 bufferBarrierCount,
-    const HgGpuImageBarrier* imageBarriers,
+    const GpuImageBarrier* imageBarriers,
     u32 imageBarrierCount);
 
 /**
  * A compute pass description
  */
-struct HgGpuComputePass {
+struct GpuComputePass {
     /**
      * The uniforms buffer dependencies
      */
-    HgGpuBuffer* uniformBuffers = nullptr;
+    GpuBuffer* uniformBuffers = nullptr;
     /**
      * The number of uniform buffers
      */
@@ -1064,7 +1064,7 @@ struct HgGpuComputePass {
     /**
      * The storage buffer dependencies
      */
-    HgGpuBuffer* storageBuffers = nullptr;
+    GpuBuffer* storageBuffers = nullptr;
     /**
      * The number of storage buffers
      */
@@ -1072,7 +1072,7 @@ struct HgGpuComputePass {
     /**
      * The sampled image dependencies
      */
-    HgGpuView* sampledImages = nullptr;
+    GpuView* sampledImages = nullptr;
     /**
      * The number of sampled images
      */
@@ -1080,7 +1080,7 @@ struct HgGpuComputePass {
     /**
      * The storage image dependencies
      */
-    HgGpuView* storageImages = nullptr;
+    GpuView* storageImages = nullptr;
     /**
      * The number of storage images
      */
@@ -1094,29 +1094,29 @@ struct HgGpuComputePass {
  * - cmd The command buffer
  * - pass The compute pass description
  */
-void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass);
+void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass);
 
 /**
  * The operation to load a render attachment
  */
-enum HgGpuLoadOp : u32 {
-    HgGpuLoadOp_load = 0,
-    HgGpuLoadOp_clear = 1,
-    HgGpuLoadOp_dontCare = 2,
+enum GpuLoadOp : u32 {
+    GpuLoadOp_load = 0,
+    GpuLoadOp_clear = 1,
+    GpuLoadOp_dontCare = 2,
 };
 
 /**
  * The operation to store a render attachment
  */
-enum HgGpuStoreOp : u32 {
-    HgGpuStoreOp_store = 0,
-    HgGpuStoreOp_dontCare = 1,
+enum GpuStoreOp : u32 {
+    GpuStoreOp_store = 0,
+    GpuStoreOp_dontCare = 1,
 };
 
 /**
  * The value to clear color attachments to
  */
-union HgGpuClearValueVolor {
+union GpuClearValueVolor {
     /**
      * The value as f32
      */
@@ -1134,7 +1134,7 @@ union HgGpuClearValueVolor {
 /**
  * The value to clear depth and stencil attachments to
  */
-struct HgGpuClearValueDepthStencil {
+struct GpuClearValueDepthStencil {
     /**
      * The depth value
      */
@@ -1148,47 +1148,47 @@ struct HgGpuClearValueDepthStencil {
 /**
  * The value to clear a render attachment to
  */
-union HgGpuClearValue {
+union GpuClearValue {
     /**
      * The value for color attachments
      */
-    HgGpuClearValueVolor color;
+    GpuClearValueVolor color;
     /**
      * The value for depth and stencil attachments
      */
-    HgGpuClearValueDepthStencil depthStencil;
+    GpuClearValueDepthStencil depthStencil;
 };
 
 /**
  * A rendering attachment
  */
-struct HgGpuRenderAttachment {
+struct GpuRenderAttachment {
     /**
      * The image attached, must not be nullptr
      */
-    HgGpuView* image = nullptr;
+    GpuView* image = nullptr;
     /**
      * How the image will be loaded
      */
-    HgGpuLoadOp loadOp = HgGpuLoadOp_clear;
+    GpuLoadOp loadOp = GpuLoadOp_clear;
     /**
      * How the image will be stored
      */
-    HgGpuStoreOp storeOp = HgGpuStoreOp_store;
+    GpuStoreOp storeOp = GpuStoreOp_store;
     /**
      * What to clear the image to if cleared
      */
-    HgGpuClearValue clearValue = {};
+    GpuClearValue clearValue = {};
 };
 
 /**
  * A render pass description
  */
-struct HgGpuRenderPass {
+struct GpuRenderPass {
     /**
      * The uniforms buffer dependencies
      */
-    HgGpuBuffer* uniformBuffers = nullptr;
+    GpuBuffer* uniformBuffers = nullptr;
     /**
      * The number of uniform buffers
      */
@@ -1196,7 +1196,7 @@ struct HgGpuRenderPass {
     /**
      * The storage buffer dependencies
      */
-    HgGpuBuffer* storageBuffers = nullptr;
+    GpuBuffer* storageBuffers = nullptr;
     /**
      * The number of storage buffers
      */
@@ -1204,7 +1204,7 @@ struct HgGpuRenderPass {
     /**
      * The sampled image dependencies
      */
-    HgGpuView* sampledImages = nullptr;
+    GpuView* sampledImages = nullptr;
     /**
      * The number of sampled images
      */
@@ -1212,7 +1212,7 @@ struct HgGpuRenderPass {
     /**
      * The storage image dependencies
      */
-    HgGpuView* storageImages = nullptr;
+    GpuView* storageImages = nullptr;
     /**
      * The number of storage images
      */
@@ -1220,7 +1220,7 @@ struct HgGpuRenderPass {
     /**
      * The color images to write to
      */
-    const HgGpuRenderAttachment* colorAttachments = nullptr;
+    const GpuRenderAttachment* colorAttachments = nullptr;
     /**
      * The number of color attachments
      */
@@ -1232,11 +1232,11 @@ struct HgGpuRenderPass {
     /**
      * The depth attachment, if any
      */
-    const HgGpuRenderAttachment* depthAttachment = nullptr;
+    const GpuRenderAttachment* depthAttachment = nullptr;
     /**
      * The stencil attachment, if any
      */
-    const HgGpuRenderAttachment* stencilAttachment = nullptr;
+    const GpuRenderAttachment* stencilAttachment = nullptr;
 };
 
 /**
@@ -1246,7 +1246,7 @@ struct HgGpuRenderPass {
  * - cmd The command buffer
  * - pass The render pass description
  */
-void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass);
+void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass);
 
 /**
  * Ends the render pass
@@ -1254,18 +1254,18 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass);
  * Parameters
  * - cmd The command buffer
  */
-void hgGpuRenderPassEnd(HgGpuCmd* cmd);
+void gpuRenderPassEnd(GpuCmd* cmd);
 
 /**
- * Set the rendering viewport, should be called after hgGpuRenderPassBegin
+ * Set the rendering viewport, should be called after gpuRenderPassBegin
  */
-void hgGpuSetViewport(HgGpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near = 0.0f, f32 far = 1.0f);
+void gpuSetViewport(GpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near = 0.0f, f32 far = 1.0f);
 
 /**
- * Set the rendering scissor, should be called after hgGpuRenderPassBegin
+ * Set the rendering scissor, should be called after gpuRenderPassBegin
  */
-void hgGpuSetScissor(HgGpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
+void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
 
 } // namespace hg
 
-#endif // HG_GPU_HPP
+#endif // GPU_HPP

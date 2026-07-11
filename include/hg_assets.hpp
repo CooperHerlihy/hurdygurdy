@@ -37,25 +37,25 @@ namespace hg {
  * Initialize all default asset types
  *
  * Asset types:
- * - HgBinary
- * - HgTexture
- * - HgGpuTexture
- * - HgMesh
- * - HgGpuMesh
- * - HgAudio
+ * - Binary
+ * - Texture
+ * - GpuTexture
+ * - Mesh
+ * - GpuMesh
+ * - Audio
  */
-void hgAssetInitDefaults();
+void assetInitDefaults();
 
 /**
  * Deinitialize all default asset types
  */
-void hgAssetDeinitDefaults();
+void assetDeinitDefaults();
 
 /**
  * The data associated with assets
  */
 template<typename T>
-struct HgAsset {
+struct Asset {
     /**
      * The asset data
      */
@@ -67,108 +67,108 @@ struct HgAsset {
     /**
      * The unique path for caching
      */
-    HgString path;
+    String path;
 };
 
 /**
  * An asset manager
  */
 template<typename T>
-struct HgAssetManager {
+struct AssetManager {
     static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
 
     /**
      * The asset lookup
      */
-    HgMap<HgString, HgAsset<T>*> map;
+    Map<String, Asset<T>*> map;
     /**
      * The asset pool
      */
-    HgPool pool;
+    Pool pool;
 };
 
 /**
  * Global per type asset managers
  */
 template<typename T>
-inline HgAssetManager<T> hgAssets{};
+inline AssetManager<T> assets{};
 
 /**
  * Initialize a type's asset manager
  */
 template<typename T>
-void hgAssetInit();
+void assetInit();
 
 /**
  * Deinitialize an type's asset manager
  */
 template<typename T>
-void hgAssetDeinit();
+void assetDeinit();
 
 /**
  * Load an asset, implemented per asset type, should be blocking
  */
 template<typename T>
-void hgAssetLoadImpl(HgAsset<T>* data);
+void assetLoadImpl(Asset<T>* data);
 
 /**
  * Unload an asset, implemented per asset type, should be blocking
  */
 template<typename T>
-void hgAssetUnloadImpl(HgAsset<T>* data);
+void assetUnloadImpl(Asset<T>* data);
 
 /**
  * Create a unique empty asset (does not load)
  */
 template<typename T>
-HgAsset<T>* hgAssetCreate();
+Asset<T>* assetCreate();
 
 /**
  * Load an asset (or increment the ref count)
  */
 template<typename T>
-HgAsset<T>* hgAssetLoad(HgString path);
+Asset<T>* assetLoad(String path);
 
 /**
  * Destroy an asset and unload it (or decrement the ref count)
  */
 template<typename T>
-void hgAssetUnload(HgAsset<T>* asset);
+void assetUnload(Asset<T>* asset);
 
 /**
  * Hot reload an asset
  */
 template<typename T>
-void hgAssetReload(HgAsset<T>* asset);
+void assetReload(Asset<T>* asset);
 
 /**
  * Increment the asset's reference count
  */
 template<typename T>
-HgAsset<T>* hgAssetCopy(HgAsset<T>* asset);
+Asset<T>* assetCopy(Asset<T>* asset);
 
 /**
- * HgAssetHandle serialization
+ * AssetHandle serialization
  */
 template<typename T>
-void hgSerialize(HgSerializer* s, HgAsset<T>** asset);
+void serialize(Serializer* s, Asset<T>** asset);
 
 /**
  * A binary file asset handle
  */
-typedef HgAsset<HgBinary> HgBinaryAsset;
+typedef Asset<Binary> BinaryAsset;
 
 /**
- * HgBinary asset load implementation
+ * Binary asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgBinary>* data);
+void assetLoadImpl(Asset<Binary>* data);
 
 /**
- * HgBinary asset unload implementation
+ * Binary asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgBinary>* data);
+void assetUnloadImpl(Asset<Binary>* data);
 
 /**
  * Store a binary file to disc
@@ -176,8 +176,8 @@ void hgAssetUnloadImpl(HgAsset<HgBinary>* data);
  * Returns
  * - Whether the write succeeded
  */
-bool hgBinaryStore(HgBinary bin, HgString path);
+bool binaryStore(Binary bin, String path);
 
 } // namespace hg
 
-#endif // HG_ASSETS_HPP
+#endif // ASSETS_HPP

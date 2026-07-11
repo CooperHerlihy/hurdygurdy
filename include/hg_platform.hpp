@@ -38,12 +38,12 @@ namespace hg {
  * Returns
  * - Whether init succeeded
  */
-bool hgPlatformInit();
+bool platformInit();
 
 /**
  * Deinitialize the platform
  */
-void hgPlatformDeinit();
+void platformDeinit();
 
 /**
  * Get the platform's required instance extensions for windowing
@@ -55,8 +55,8 @@ void hgPlatformDeinit();
  * Returns
  * - The number of required extensions
  */
-u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgString** extBuffer);
+u32 platformGetVulkanExtensions(Arena* arena, String** extBuffer);
 
 } // namespace hg
 
-#endif // HG_PLATFORM_HPP
+#endif // PLATFORM_HPP

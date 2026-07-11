@@ -28,7 +28,7 @@ On Nix, use `nix develop` to create a shell with all dependencies
 ### Compilation
 
 ```bash
-cmake -B build -S .
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j8
 ```
 

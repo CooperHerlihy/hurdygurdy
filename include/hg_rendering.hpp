@@ -41,15 +41,15 @@ namespace hg {
 /**
  * The types of camera projections
  */
-enum HgCameraType : u32 {
-    HgCameraType_perspective,
-    HgCameraType_orthographic,
+enum CameraType : u32 {
+    CameraType_perspective,
+    CameraType_orthographic,
 };
 
 /**
  * A perspective camera
  */
-struct HgCameraPerspective {
+struct CameraPerspective {
     /**
      * The aspect ratio
      */
@@ -71,7 +71,7 @@ struct HgCameraPerspective {
 /**
  * An orthographic camera
  */
-struct HgCameraOrthographic {
+struct CameraOrthographic {
     /**
      * The clipping planes in each direction
      */
@@ -81,23 +81,23 @@ struct HgCameraOrthographic {
 /**
  * A camera component
  */
-struct HgCamera {
+struct Camera {
     /**
      * The gpu view projection data
      */
-    HgGpuBuffer* vpBuffer;
+    GpuBuffer* vpBuffer;
     /**
      * The current rotation
      */
-    HgQuat rotation;
+    Quat rotation;
     /**
      * The current position
      */
-    HgVec3 position;
+    Vec3 position;
     /**
      * The type of projection
      */
-    HgCameraType type;
+    CameraType type;
     /**
      * The projection data
      */
@@ -105,37 +105,37 @@ struct HgCamera {
         /**
          * An orthographic camera
          */
-        HgCameraOrthographic orthographic;
+        CameraOrthographic orthographic;
         /**
          * A perspective camera
          */
-        HgCameraPerspective perspective;
+        CameraPerspective perspective;
     };
 };
 
 /**
- * HgCamera serialization
+ * Camera serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgCamera* camera);
+void serialize(Serializer* s, Camera* camera);
 
 /**
  * Create a camera
  */
-HgCamera hgCameraCreate();
+Camera cameraCreate();
 
 /**
  * Destroy a camera
  */
-void hgCameraDestroy(HgCamera* camera);
+void cameraDestroy(Camera* camera);
 
 /**
  * The the camera to a perspective projection
  */
-void hgCameraSetPerspective(
-    HgCamera* camera,
+void cameraSetPerspective(
+    Camera* camera,
     f32 aspect,
-    f32 fov = (f32)hgPi / 2.0f,
+    f32 fov = (f32)HG_PI / 2.0f,
     f32 near = 0.01f,
     f32 far = 1000.0f);
 
@@ -148,33 +148,33 @@ void hgCameraSetPerspective(
  * - height The desired height of the render space
  * - actualAspect The actual aspect, so margins can be added, or 0 to ignore
  */
-void hgCameraSetOrthographic(HgCamera* camera, f32 width, f32 height, f32 actualAspect = 0.0f);
+void cameraSetOrthographic(Camera* camera, f32 width, f32 height, f32 actualAspect = 0.0f);
 
 /**
  * Update the camera's gpu side data
  */
-void hgCameraUpdate(HgCamera* camera);
+void cameraUpdate(Camera* camera);
 
 /**
- * HgCamera ecs add implementation
+ * Camera ecs add implementation
  */
-HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e);
+Camera* cameraAdd(Ecs* ecs, Entity e);
 
 /**
- * HgCamera ecs destructor
+ * Camera ecs destructor
  */
 template<>
-void hgEcsDtor(HgCamera* camera);
+void ecsDtor(Camera* camera);
 
 /**
  * Update the camera's gpu side data, must have a camera and transform
  */
-void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e);
+void cameraUpdateEcs(Ecs* ecs, Entity e);
 
 /**
  * A texture asset
  */
-struct HgTextureData {
+struct TextureData {
     /**
      * The width of the texture in pixels
      */
@@ -190,7 +190,7 @@ struct HgTextureData {
     /**
      * The format of each pixel
      */
-    HgFormat format;
+    Format format;
     /**
      * The pixel data, aligned to 16 bytes
      */
@@ -200,19 +200,19 @@ struct HgTextureData {
 /**
  * A handle to a texture
  */
-typedef HgAsset<HgTextureData> HgTextureDataAsset;
+typedef Asset<TextureData> TextureDataAsset;
 
 /**
- * HgTexture asset load implementation
+ * Texture asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgTextureData>* data);
+void assetLoadImpl(Asset<TextureData>* data);
 
 /**
- * HgTexture asset unload implementation
+ * Texture asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgTextureData>* data);
+void assetUnloadImpl(Asset<TextureData>* data);
 
 /**
  * Store an image to disc in the png format
@@ -220,75 +220,75 @@ void hgAssetUnloadImpl(HgAsset<HgTextureData>* data);
  * Returns
  * - Whether the write succeeded
  */
-bool hgTextureStorePng(HgTextureData* texture, HgString path);
+bool textureStorePng(TextureData* texture, String path);
 
 /**
  * A texture asset stored on the gpu
  */
-struct HgTexture {
+struct Texture {
     /**
      * The image
      */
-    HgGpuImage* image;
+    GpuImage* image;
     /**
      * The image view
      */
-    HgGpuView* view;
+    GpuView* view;
 };
 
 /**
  * A handle to a texture asset
  */
-typedef HgAsset<HgTexture> HgTextureAsset;
+typedef Asset<Texture> TextureAsset;
 
 /**
- * HgGpuTexture asset load implementation
+ * GpuTexture asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgTexture>* data);
+void assetLoadImpl(Asset<Texture>* data);
 
 /**
- * HgGpuTexture asset unload implementation
+ * GpuTexture asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgTexture>* data);
+void assetUnloadImpl(Asset<Texture>* data);
 
 /**
  * Initialize the 2D renderer
  */
-void hgRendererInit2D(HgFormat colorFormat);
+void rendererInit2D(Format colorFormat);
 
 /**
  * Deinitialize the 2D renderer
  */
-void hgRendererDeinit2D();
+void rendererDeinit2D();
 
 /**
  * The 2D instance types
  */
-enum HgRender2DInstanceType : u32 {
+enum Render2DInstanceType : u32 {
     /**
      * A instance with a color value
      */
-    HgRender2DInstanceType_color = 0,
+    Render2DInstanceType_color = 0,
     /**
      * A instance with a sprite
      */
-    HgRender2DInstanceType_sprite = 1,
+    Render2DInstanceType_sprite = 1,
 };
 
 /**
  * A rectangle instance
  */
-struct HgRect2DInstance {
+struct Rect2DInstance {
     /**
      * The instance position
      */
-    HgVec2 pos;
+    Vec2 pos;
     /**
      * The instance size
      */
-    HgVec2 size;
+    Vec2 size;
     /**
      * The instance type
      */
@@ -300,21 +300,21 @@ struct HgRect2DInstance {
     /**
      * The rectangle fill color
      */
-    HgVec4 color;
+    Vec4 color;
 };
 
 /**
  * A sprite instance
  */
-struct HgSprite2DInstance {
+struct Sprite2DInstance {
     /**
      * The instance position
      */
-    HgVec2 pos;
+    Vec2 pos;
     /**
      * The instance size
      */
-    HgVec2 size;
+    Vec2 size;
     /**
      * The instance type
      */
@@ -330,43 +330,43 @@ struct HgSprite2DInstance {
     /**
      * The texture uv coordinates
      */
-    HgVec2 uvPos;
+    Vec2 uvPos;
     /**
      * The texture uv coordinates
      */
-    HgVec2 uvSize;
+    Vec2 uvSize;
 };
 
 /**
  * An instance in a 2D layer
  */
-union HgRender2DInstance {
+union Render2DInstance {
     /**
      * The rectangle data
      */
-    HgRect2DInstance rect;
+    Rect2DInstance rect;
     /**
      * The sprite data
      */
-    HgSprite2DInstance sprite;
+    Sprite2DInstance sprite;
 };
 
 /**
  * A 2D render layer
  */
-struct HgLayer2D {
+struct Layer2D {
     /**
      * The transform, does not affect changed
      */
-    HgMat4 transform;
+    Mat4 transform;
     /**
      * The instance data
      */
-    HgArray<HgRender2DInstance> instances;
+    Array<Render2DInstance> instances;
     /**
      * The gpu side instance buffer
      */
-    HgGpuBuffer* instanceBuffer;
+    GpuBuffer* instanceBuffer;
     /**
      * The capacity of the instance buffer
      */
@@ -380,80 +380,80 @@ struct HgLayer2D {
 /**
  * Create a 2D render layer
  */
-HgLayer2D hgLayerCreate2D();
+Layer2D layerCreate2D();
 
 /**
  * Destroy a 2D render layer
  */
-void hgLayerDestroy2D(HgLayer2D* layer);
+void layerDestroy2D(Layer2D* layer);
 
 /**
  * Remove all drawings from the layer
  */
-void hgLayerClear2D(HgLayer2D* layer);
+void layerClear2D(Layer2D* layer);
 
 /**
  * Issue draw commands for a 2D layer
  */
-void hgRenderLayer2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
+void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer);
 
 /**
  * Issue draw commands for a 2D layer using debug lines
  */
-void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer);
+void renderDebug2D(GpuCmd* cmd, Camera* camera, Layer2D* layer);
 
 /**
  * Draw a rectangle on the layer
  */
-void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect dst);
+void drawRect2D(Layer2D* layer, Vec4 color, Rect dst);
 
 /**
  * A 2D sprite which can be drawn
  */
-struct HgSprite2D {
+struct Sprite2D {
     /**
      * The sprite's texture
      */
-    HgTextureAsset* texture;
+    TextureAsset* texture;
     /**
      * The uv coords in the texture
      */
-    HgRect uv;
+    Rect uv;
 };
 
 /**
  *  Draw the sprite on the layer
  */
-void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect dst);
+void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst);
 
 /**
  * A texture atlas
  */
-struct HgAtlas2D {
+struct Atlas2D {
     /**
      * The texture
      */
-    HgTextureAsset* texture;
+    TextureAsset* texture;
     /**
      * The sprites
      */
-    HgArray<HgRect> sprites;
+    Array<Rect> sprites;
 };
 
 /**
  * Create a new texture atlas
  */
-HgAtlas2D hgAtlasCreate2D(HgTextureAsset* texture);
+Atlas2D atlasCreate2D(TextureAsset* texture);
 
 /**
  * Destroy a texture atlas
  */
-void hgAtlasDestroy2D(HgAtlas2D* atlas);
+void atlasDestroy2D(Atlas2D* atlas);
 
 /**
  * Add a sprite to the atlas
  */
-u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect sprite);
+u32 atlasAdd2D(Atlas2D* atlas, Rect sprite);
 
 /**
  * Add a grid of sprites to the atlas
@@ -467,17 +467,17 @@ u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect sprite);
  * Returns
  * - The first sprite index
  */
-u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect grid, u32 width, u32 height);
+u32 atlasAddGrid2D(Atlas2D* atlas, Rect grid, u32 width, u32 height);
 
 /**
  * Get a sprite from the atlas
  */
-HgSprite2D hgAtlasGet2D(HgAtlas2D* atlas, u32 idx);
+Sprite2D atlasGet2D(Atlas2D* atlas, u32 idx);
 
 /**
  * A world map of tiles
  */
-struct HgTilemap2D {
+struct Tilemap2D {
     /**
      * The tilemap data
      */
@@ -495,36 +495,36 @@ struct HgTilemap2D {
 /**
  * Create an empty tilemap
  */
-HgTilemap2D hgTilemapCreate2D(u32 width, u32 height);
+Tilemap2D tilemapCreate2D(u32 width, u32 height);
 
 /**
  * Destroy a tilemap
  */
-void hgTilemapDestroy2D(HgTilemap2D* tilemap);
+void tilemapDestroy2D(Tilemap2D* tilemap);
 
 /**
  * Get the value of a tile in a tilemap
  */
-u32 hgTilemapGet2D(HgTilemap2D* tilemap, u32 x, u32 y);
+u32 tilemapGet2D(Tilemap2D* tilemap, u32 x, u32 y);
 
 /**
  * Set the value of a tile in a tilemap
  */
-void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile);
+void tilemapSet2D(Tilemap2D* tilemap, u32 x, u32 y, u32 tile);
 
 /**
  * Draw a tilemap to the layer
  */
-void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, HgRect dst);
+void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst);
 
 /**
  * A vertex in a mesh
  */
-struct HgMeshVertex {
+struct MeshVertex {
     /**
      * The vertex position
      */
-    HgVec3 pos;
+    Vec3 pos;
     /**
      * The u part of the vertex uv coordinate
      */
@@ -532,7 +532,7 @@ struct HgMeshVertex {
     /**
      * The vertex normal
      */
-    HgVec3 norm;
+    Vec3 norm;
     /**
      * The v part of the vertex uv coordinate
      */
@@ -540,23 +540,23 @@ struct HgMeshVertex {
     /**
      * The vertex tangent
      */
-    HgVec4 tan;
+    Vec4 tan;
 
     /**
      * Construct the vertex
      */
-    HgMeshVertex(HgVec3 pos, HgVec3 norm, HgVec4 tan, HgVec2 uv)
+    MeshVertex(Vec3 pos, Vec3 norm, Vec4 tan, Vec2 uv)
         : pos{pos}, uvU{uv.x}, norm{norm}, uvV{uv.y}, tan{tan} {}
 };
 
 /**
  * A 3d mesh asset
  */
-struct HgMeshData {
+struct MeshData {
     /**
      * The file index of the first vertex
      */
-    HgMeshVertex* vertices;
+    MeshVertex* vertices;
     /**
      * The file index of the first geometry index
      */
@@ -576,43 +576,43 @@ struct HgMeshData {
     /**
      * How the vertices should be interpreted in sequence
      */
-    HgGpuTopology topology;
+    GpuTopology topology;
 };
 
 /**
  * A handle to a 3d mesh asset
  */
-typedef HgAsset<HgMeshData> HgMeshDataAsset;
+typedef Asset<MeshData> MeshDataAsset;
 
 /**
- * HgMesh asset load implementation
+ * Mesh asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgMeshData>* data);
+void assetLoadImpl(Asset<MeshData>* data);
 
 /**
- * HgMesh asset unload implementation
+ * Mesh asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgMeshData>* data);
+void assetUnloadImpl(Asset<MeshData>* data);
 
 /**
  * Store the model data to disc in gltf format : TODO
  */
-void hgMeshStoreGltf(HgMeshData* data, HgString path, HgFence* fence);
+void meshStoreGltf(MeshData* data, String path, Fence* fence);
 
 /**
  * A 3d mesh asset stored on the gpu
  */
-struct HgMesh {
+struct Mesh {
     /**
      * The vertex buffer
      */
-    HgGpuBuffer* vertexBuffer;
+    GpuBuffer* vertexBuffer;
     /**
      * The index buffer
      **/
-    HgGpuBuffer* indexBuffer;
+    GpuBuffer* indexBuffer;
     /**
      * The number of vertices
      */
@@ -630,19 +630,19 @@ struct HgMesh {
 /**
  * A gpu mesh asset handle
  */
-typedef HgAsset<HgMesh> HgMeshAsset;
+typedef Asset<Mesh> MeshAsset;
 
 /**
- * HgGpuMesh asset load implementation
+ * GpuMesh asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgMesh>* data);
+void assetLoadImpl(Asset<Mesh>* data);
 
 /**
- * HgGpuMesh asset unload implementation
+ * GpuMesh asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgMesh>* data);
+void assetUnloadImpl(Asset<Mesh>* data);
 
 
 /**
@@ -652,36 +652,36 @@ void hgAssetUnloadImpl(HgAsset<HgMesh>* data);
  * - colorFormat The format of the color attachment, must not be undefined
  * - depthFormat The format of the depth attachment, must not be undefined
  */
-void hgSpritesInit(HgFormat colorFormat, HgFormat depthFormat);
+void spritesInit(Format colorFormat, Format depthFormat);
 
 /**
  * Deinitialize the sprite pipeline
  */
-void hgSpritesDeinit();
+void spritesDeinit();
 
 /**
  * A sprite component
  */
-struct HgSprite {
+struct Sprite {
     /**
      * The texture to draw from
      */
-    HgTextureAsset* texture = nullptr;
+    TextureAsset* texture = nullptr;
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
-    HgVec2 uvPos{0.0f, 0.0f};
+    Vec2 uvPos{0.0f, 0.0f};
     /**
      * The size of the region to read from texture, [0.0, 1.0]
      */
-    HgVec2 uvSize{1.0f, 1.0f};
+    Vec2 uvSize{1.0f, 1.0f};
 };
 
 /**
- * HgSprite serialization
+ * Sprite serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgSprite* sprite);
+void serialize(Serializer* s, Sprite* sprite);
 
 /**
  * Add a sprite to an entity
@@ -691,28 +691,28 @@ void hgSerialize(HgSerializer* s, HgSprite* sprite);
  * - e The entity to add to
  * - texture A copy of the sprite's texture
  */
-HgSprite* hgSpriteAdd(
-    HgEcs* ecs,
-    HgEntity e,
-    HgTextureAsset* texture,
-    HgVec2 uvPos = HgVec2{0.0f},
-    HgVec2 uvSize = HgVec2{1.0f});
+Sprite* spriteAdd(
+    Ecs* ecs,
+    Entity e,
+    TextureAsset* texture,
+    Vec2 uvPos = Vec2{0.0f},
+    Vec2 uvSize = Vec2{1.0f});
 
 /**
- * HgSprite ecs destructor
+ * Sprite ecs destructor
  */
 template<>
-void hgEcsDtor(HgSprite* sprite);
+void ecsDtor(Sprite* sprite);
 
 /**
- * Issue draw commands for all HgSprite2D components in the ecs
+ * Issue draw commands for all Sprite2D components in the ecs
  *
  * Parameters
  * - ecs The ecs to draw
  * - camera The camera entity to use
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
+void spritesDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
 
 /**
  * Initialize the skybox pipeline
@@ -721,28 +721,28 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
  * - colorFormat The format of the color attachment, must not be undefined
  * - depthFormat The format of the depth attachment, if used
  */
-void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat);
+void skyboxInit(Format colorFormat, Format depthFormat);
 
 /**
  * Deinitialize the skybox pipeline
  */
-void hgSkyboxDeinit();
+void skyboxDeinit();
 
 /**
  * A skybox component
  */
-struct HgSkybox {
+struct Skybox {
     /**
      * The cubemap texture
      */
-    HgTextureAsset* texture;
+    TextureAsset* texture;
 };
 
 /**
- * HgSkybox serialization
+ * Skybox serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgSkybox* skybox);
+void serialize(Serializer* s, Skybox* skybox);
 
 /**
  * Add a skybox to an entity
@@ -752,13 +752,13 @@ void hgSerialize(HgSerializer* s, HgSkybox* skybox);
  * - e The entity to add to
  * - texture A copy of the skybox's texture
  */
-HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgTextureAsset* texture);
+Skybox* skyboxAdd(Ecs* ecs, Entity e, TextureAsset* texture);
 
 /**
- * HgSkybox ecs destructor
+ * Skybox ecs destructor
  */
 template<>
-void hgEcsDtor(HgSkybox* skybox);
+void ecsDtor(Skybox* skybox);
 
 /**
  * Draw a skybox from a texture
@@ -768,53 +768,53 @@ void hgEcsDtor(HgSkybox* skybox);
  * - camera The camera entity to use
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
+void skyboxDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
 
 /**
  * A directional light component
  */
-struct HgDirLight {
+struct DirLight {
     /**
      * The direction of the light
      */
-    HgVec3 dir;
+    Vec3 dir;
     /**
      * The color of the light
      */
-    HgVec4 color;
+    Vec4 color;
 };
 
 /**
- * HgDirLight serialization
+ * DirLight serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgDirLight* light);
+void serialize(Serializer* s, DirLight* light);
 
 /**
  * Add a directional light to an entity
  */
-HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color);
+DirLight* dirLightAdd(Ecs* ecs, Entity e, Vec3 dir, Vec4 color);
 
 /**
  * A point light component, should have a transform
  */
-struct HgPointLight {
+struct PointLight {
     /**
      * The color of the light
      */
-    HgVec4 color;
+    Vec4 color;
 };
 
 /**
- * HgPointLight serialization
+ * PointLight serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgPointLight* light);
+void serialize(Serializer* s, PointLight* light);
 
 /**
  * Add a point light to an entity
  */
-HgPointLight* hgPointLightAdd(HgEcs* ecs, HgEntity e, HgVec4 color);
+PointLight* pointLightAdd(Ecs* ecs, Entity e, Vec4 color);
 
 /**
  * Initialize the 3D model pipeline
@@ -823,62 +823,62 @@ HgPointLight* hgPointLightAdd(HgEcs* ecs, HgEntity e, HgVec4 color);
  * - colorFormat The format of the color attachment, must not be undefined
  * - depthFormat The format of the depth attachment, must not be undefined
  */
-void hgModelsInit(HgFormat colorFormat, HgFormat depthFormat);
+void modelsInit(Format colorFormat, Format depthFormat);
 
 /**
  * Deinitialize the 3D model pipeline
  */
-void hgModelsDeinit();
+void modelsDeinit();
 
 /**
  * A 3D model component
  */
-struct HgModel {
+struct Model {
     /**
      * The model to render
      */
-    HgMeshAsset* mesh;
+    MeshAsset* mesh;
     /**
      * The model's color map
      */
-    HgTextureAsset* colorMap;
+    TextureAsset* colorMap;
     /**
      * The model's normal map
      */
-    HgTextureAsset* normalMap;
+    TextureAsset* normalMap;
 };
 
 /**
- * HgModel serialization
+ * Model serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgModel* model);
+void serialize(Serializer* s, Model* model);
 
 /**
  * Add a model to an entity
  */
-HgModel* hgModelAdd(
-    HgEcs* ecs,
-    HgEntity e,
-    HgMeshAsset* mesh,
-    HgTextureAsset* colorMap,
-    HgTextureAsset* normalMap);
+Model* modelAdd(
+    Ecs* ecs,
+    Entity e,
+    MeshAsset* mesh,
+    TextureAsset* colorMap,
+    TextureAsset* normalMap);
 
 /**
- * HgModel ecs destructor
+ * Model ecs destructor
  */
 template<>
-void hgEcsDtor(HgModel* model);
+void ecsDtor(Model* model);
 
 /**
- * Issue draw commands for all HgModel3D components in the ecs
+ * Issue draw commands for all Model3D components in the ecs
  *
  * Parameters
  * - ecs The ecs to draw
  * - camera The camera entity to use
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
+void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
 
 /**
  * Initialize ImGui platform backend
@@ -889,31 +889,31 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
  * - depthFormat The format the depth buffer will be in, if used
  * - stencilFormat The format the stencil will be in, if used
  */
-void hgImGuiInit(
-    HgWindow* window,
-    HgFormat colorFormat,
-    HgFormat depthFormat = HgFormat_undefined,
-    HgFormat stencilFormat = HgFormat_undefined);
+void imGuiInit(
+    Window* window,
+    Format colorFormat,
+    Format depthFormat = Format_undefined,
+    Format stencilFormat = Format_undefined);
 
 /**
  * Deinitializes ImGui platform backend
  */
-void hgImGuiDeinit();
+void imGuiDeinit();
 
 /**
  * Create an ImGui texture
  */
-void* hgImGuiTextureCreate(HgGpuView* view, HgGpuLayout layout);
+void* imGuiTextureCreate(GpuView* view, GpuLayout layout);
 
 /**
  * Create an ImGui texture
  */
-void hgImGuiTextureDestroy(void* texture);
+void imGuiTextureDestroy(void* texture);
 
 /**
  * Create a new ImGui frame for the platform backend
  */
-void hgImGuiNewFrame();
+void imGuiNewFrame();
 
 /**
  * Draw the ImGui frame
@@ -921,8 +921,8 @@ void hgImGuiNewFrame();
  * Parameters
  * - cmd The command buffer to record to
  */
-void hgImGuiDraw(HgGpuCmd* cmd);
+void imGuiDraw(GpuCmd* cmd);
 
 } // namespace hg
 
-#endif // HG_RENDERING_HPP
+#endif // RENDERING_HPP

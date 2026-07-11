@@ -4,41 +4,41 @@ using namespace hg;
 
 #include <random>
 
-#define IM_ASSERT hgAssert
+#define IM_ASSERT HG_ASSERT
 #include "imgui.h"
 
 #include "noise.comp.spv.h"
 
 int main()
 {
-    if (!hgInit())
-        hgPanic("Could not initialize Hurdy Gurdy\n");
-    hgDefer(hgDeinit());
+    if (!init())
+        HG_PANIC("Could not initialize Hurdy Gurdy\n");
+    HG_DEFER(deinit());
 
-    hgTest();
+    test();
 
-    HgArena* arena = hgScratch();
-    hgArenaScope(arena);
+    Arena* arena = scratch();
+    HG_ARENA_SCOPE(arena);
 
-    HgWindow* window = hgWindowCreate("Hg Noise Test", 1200, 800, nullptr);
+    Window* window = windowCreate("Hg Noise Test", 1200, 800, nullptr);
     if (window == nullptr)
-        hgPanic("Could not create window\n");
-    hgDefer(hgWindowDestroy(window));
+        HG_PANIC("Could not create window\n");
+    HG_DEFER(windowDestroy(window));
 
     u32 width = 0;
     u32 height = 0;
 
-    HgGpuImage* depthImage = nullptr;
-    HgGpuView* depthView = nullptr;
-    hgDefer(hgGpuImageDestroy(depthImage));
-    hgDefer(hgGpuViewDestroy(depthView));
+    GpuImage* depthImage = nullptr;
+    GpuView* depthView = nullptr;
+    HG_DEFER(gpuImageDestroy(depthImage));
+    HG_DEFER(gpuViewDestroy(depthView));
 
-    hgSpritesInit(hgWindowImageFormat(window), HgFormat_d32_sfloat);
-    hgDefer(hgSpritesDeinit());
+    spritesInit(windowImageFormat(window), Format_d32_sfloat);
+    HG_DEFER(spritesDeinit());
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    hgDefer(ImGui::DestroyContext());
+    HG_DEFER(ImGui::DestroyContext());
 
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
@@ -46,22 +46,22 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    hgImGuiInit(window, hgWindowImageFormat(window), HgFormat_d32_sfloat);
-    hgDefer(hgImGuiDeinit());
+    imGuiInit(window, windowImageFormat(window), Format_d32_sfloat);
+    HG_DEFER(imGuiDeinit());
 
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
 
-    HgTextureAsset* noiseTex = hgAssetCreate<HgTexture>();
-    hgDefer(hgAssetUnload(noiseTex));
+    TextureAsset* noiseTex = assetCreate<Texture>();
+    HG_DEFER(assetUnload(noiseTex));
 
-    noiseTex->asset.image = hgGpuImageCreate(
+    noiseTex->asset.image = gpuImageCreate(
         noiseWidth,
         noiseHeight,
-        HgFormat_r8g8b8a8_unorm,
-        HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
+        Format_r8g8b8a8_unorm,
+        GpuImageUsage_storage | GpuImageUsage_sampled);
 
-    noiseTex->asset.view = hgGpuViewCreate(noiseTex->asset.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    noiseTex->asset.view = gpuViewCreate(noiseTex->asset.image, GpuAspect_color, GpuFilter_nearest);
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -78,80 +78,80 @@ int main()
         u32 outImageIdx;
     };
 
-    HgGpuPipeline* noisePipeline =
-        hgGpuPipelineCreateCompute(sizeof(NoisePush), noise_comp_spv, sizeof(noise_comp_spv));
-    hgDefer(hgGpuPipelineDestroy(noisePipeline));
+    GpuPipeline* noisePipeline =
+        gpuPipelineCreateCompute(sizeof(NoisePush), noise_comp_spv, sizeof(noise_comp_spv));
+    HG_DEFER(gpuPipelineDestroy(noisePipeline));
 
-    HgEcs ecs = hgEcsCreate();
-    hgDefer(hgEcsDestroy(&ecs));
+    Ecs ecs = ecsCreate();
+    HG_DEFER(ecsDestroy(&ecs));
 
-    hgEcsRegisterType(&ecs, HgCamera);
-    hgEcsRegisterType(&ecs, HgTransform);
-    hgEcsRegisterType(&ecs, HgSprite);
+    HG_ECS_REGISTER_TYPE(&ecs, Camera);
+    HG_ECS_REGISTER_TYPE(&ecs, Transform);
+    HG_ECS_REGISTER_TYPE(&ecs, Sprite);
 
-    HgEntity camera = hgEcsSpawn(&ecs);
-    HgCamera* cameraC = hgCameraAdd(&ecs, camera);
-    HgTransform* cameraTf = hgTransformAdd(&ecs, camera, {0, 0, -1});
-    cameraC->type = HgCameraType_perspective;
-    cameraC->perspective.fov = (f32)hgPi * 0.5f;
+    Entity camera = ecsSpawn(&ecs);
+    Camera* cameraC = cameraAdd(&ecs, camera);
+    Transform* cameraTf = transformAdd(&ecs, camera, {0, 0, -1});
+    cameraC->type = CameraType_perspective;
+    cameraC->perspective.fov = (f32)HG_PI * 0.5f;
     cameraC->perspective.near = 0.1f;
     cameraC->perspective.far = 1000.0f;
 
-    HgEntity noiseSquare = hgEcsSpawn(&ecs);
-    hgTransformAdd(&ecs, noiseSquare);
-    hgSpriteAdd(&ecs, noiseSquare, hgAssetCopy(noiseTex));
+    Entity noiseSquare = ecsSpawn(&ecs);
+    transformAdd(&ecs, noiseSquare);
+    spriteAdd(&ecs, noiseSquare, assetCopy(noiseTex));
 
-    HgClock gameClock;
-    hgClockTick(&gameClock);
+    Clock gameClock;
+    clockTick(&gameClock);
     for (;;)
     {
-        f64 delta = hgClockTick(&gameClock);
+        f64 delta = clockTick(&gameClock);
 
-        hgProcessEvents();
-        if (hgWasQuit() || hgWindowWasClosed(window))
+        processEvents();
+        if (wasQuit() || windowWasClosed(window))
             goto quit;
 
-        if (width != hgWindowWidth(window) || height != hgWindowHeight(window))
+        if (width != windowWidth(window) || height != windowHeight(window))
         {
-            width = hgWindowWidth(window);
-            height = hgWindowHeight(window);
+            width = windowWidth(window);
+            height = windowHeight(window);
 
-            hgGpuWaitIdle();
-            hgGpuViewDestroy(depthView);
-            hgGpuImageDestroy(depthImage);
+            gpuWaitIdle();
+            gpuViewDestroy(depthView);
+            gpuImageDestroy(depthImage);
 
-            depthImage = hgGpuImageCreate(width, height, HgFormat_d32_sfloat, HgGpuImageUsage_depthStencilAttachment);
-            depthView = hgGpuViewCreate(depthImage, HgGpuAspect_depth);
+            depthImage = gpuImageCreate(width, height, Format_d32_sfloat, GpuImageUsage_depthStencilAttachment);
+            depthView = gpuViewCreate(depthImage, GpuAspect_depth);
 
             cameraC->perspective.aspect = (f32)width / (f32)height;
         }
 
         if (!ImGui::GetIO().WantCaptureMouse)
         {
-            if (hgIsButtonDown(window, HgButton_lmouse))
+            if (isButtonDown(window, Button_lmouse))
             {
                 f32 rotSpeed = 2.0f;
-                HgQuat rotX = hgQuatAxisAngle({ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
-                HgQuat rotY = hgQuatAxisAngle({-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
+                Quat rotX = quatAxisAngle({ 0, 1, 0}, mouseDeltaX(window) * rotSpeed);
+                Quat rotY = quatAxisAngle({-1, 0, 0}, mouseDeltaY(window) * rotSpeed);
                 cameraTf->rotation = rotX * cameraTf->rotation * rotY;
             }
 
-            HgVec3 movement = {
-                (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a)),
-                (f32)(hgIsButtonDown(window, HgButton_lshift) - hgIsButtonDown(window, HgButton_space)),
-                (f32)(hgIsButtonDown(window, HgButton_w) - hgIsButtonDown(window, HgButton_s)),
+            Vec3 movement = {
+                (f32)(isButtonDown(window, Button_d) - isButtonDown(window, Button_a)),
+                (f32)(isButtonDown(window, Button_lshift) - isButtonDown(window, Button_space)),
+                (f32)(isButtonDown(window, Button_w) - isButtonDown(window, Button_s)),
             };
-            if (movement != HgVec3{0.0f})
+            if (movement != Vec3{0.0f})
             {
                 f32 moveSpeed = 1.5f;
-                HgVec3 rotated = hgVecRot3(cameraTf->rotation, {movement.x, 0.0f, movement.z});
-                cameraTf->position += hgVecNorm3({rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
+                Vec3 rotated = vecRot3(cameraTf->rotation, {movement.x, 0.0f, movement.z});
+                cameraTf->position += vecNorm3({rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
             }
 
-            hgTransformUpdate(&ecs, camera);
+            transformUpdate(&ecs, camera);
         }
 
-        hgImGuiNewFrame();
+        imGuiNewFrame();
         ImGui::NewFrame();
 
         if (ImGui::Begin("Options"))
@@ -168,15 +168,15 @@ int main()
 
         ImGui::Render();
 
-        HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
+        GpuCmd* cmd = gpuFrameBegin(&window, 1);
 
-        HgGpuComputePass computePass{};
+        GpuComputePass computePass{};
         computePass.storageImages = noiseTex->asset.view;
         computePass.storageImageCount = 1;
 
-        hgGpuComputePass(cmd, &computePass);
+        gpuComputePass(cmd, &computePass);
 
-        hgGpuBindPipeline(cmd, noisePipeline);
+        gpuBindPipeline(cmd, noisePipeline);
 
         NoisePush noisePush{};
         noisePush.width = noiseWidth;
@@ -185,42 +185,42 @@ int main()
         noisePush.scaleEnd = noiseScaleEnd;
         noisePush.tiling = noiseTiling;
         noisePush.seed = noiseSeed;
-        noisePush.outImageIdx = hgGpuImageStorageDescriptor(noiseTex->asset.view);
+        noisePush.outImageIdx = gpuImageStorageDescriptor(noiseTex->asset.view);
 
-        hgGpuPushConstants(cmd, noisePipeline, &noisePush, sizeof(noisePush));
+        gpuPushConstants(cmd, noisePipeline, &noisePush, sizeof(noisePush));
 
-        hgGpuDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
+        gpuDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
-        if (hgWindowImageView(window) != nullptr)
+        if (windowImageView(window) != nullptr)
         {
-            HgGpuRenderAttachment colorAttachment{};
-            colorAttachment.image = hgWindowImageView(window);
+            GpuRenderAttachment colorAttachment{};
+            colorAttachment.image = windowImageView(window);
 
-            HgGpuRenderAttachment depthAttachment{};
+            GpuRenderAttachment depthAttachment{};
             depthAttachment.image = depthView;
             depthAttachment.clearValue.depthStencil.depth = 1.0f;
 
-            HgGpuRenderPass pass{};
+            GpuRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
             pass.depthAttachment = &depthAttachment;
             pass.sampledImages = noiseTex->asset.view;
             pass.sampledImageCount = 1;
 
-            hgGpuRenderPassBegin(cmd, &pass);
+            gpuRenderPassBegin(cmd, &pass);
 
-            hgCameraUpdateEcs(&ecs, camera);
-            hgSpritesDraw(&ecs, camera, cmd);
+            cameraUpdateEcs(&ecs, camera);
+            spritesDraw(&ecs, camera, cmd);
 
-            hgImGuiDraw(cmd);
+            imGuiDraw(cmd);
 
-            hgGpuRenderPassEnd(cmd);
+            gpuRenderPassEnd(cmd);
         }
 
-        hgGpuFrameEnd(cmd);
+        gpuFrameEnd(cmd);
     }
 
 quit:
-    hgGpuWaitIdle();
+    gpuWaitIdle();
 }
 

@@ -34,32 +34,32 @@ namespace hg {
 /**
  * Initialize synchronization and threads
  */
-void hgConcurrencyInit();
+void concurrencyInit();
 
 /**
  * Deinitialize synchronization and threads
  */
-void hgConcurrencyDeinit();
+void concurrencyDeinit();
 
 /**
  * A spinlock mutex for basic thread synchronization
  */
-struct HgMutex;
+struct Mutex;
 
 /**
  * Create a new mutex
  */
-HgMutex* hgMutexCreate();
+Mutex* mutexCreate();
 
 /**
  * Destroy a mutex
  */
-void hgMutexDestroy(HgMutex* mtx);
+void mutexDestroy(Mutex* mtx);
 
 /**
  * Wait until the mutex is acquired
  */
-void hgMutexAcquire(HgMutex* mtx);
+void mutexAcquire(Mutex* mtx);
 
 /**
  * Try to acquire the mutex
@@ -68,27 +68,27 @@ void hgMutexAcquire(HgMutex* mtx);
  * - true if acquisition succeeded
  * - false if the mutex was already in use
  */
-bool hgMutexTryAcquire(HgMutex* mtx);
+bool mutexTryAcquire(Mutex* mtx);
 
 /**
  * Release the mutex lock
  */
-void hgMutexRelease(HgMutex* mtx);
+void mutexRelease(Mutex* mtx);
 
 /**
  * A spinlock fence for basic thread synchronization
  */
-struct HgFence;
+struct Fence;
 
 /**
  * Create a new fence
  */
-HgFence* hgFenceCreate();
+Fence* fenceCreate();
 
 /**
  * Destroy a fence
  */
-void hgFenceDestroy(HgFence* fence);
+void fenceDestroy(Fence* fence);
 
 /**
  * Add more events for the fence to wait on
@@ -97,7 +97,7 @@ void hgFenceDestroy(HgFence* fence);
  * - fence The fence to attach to
  * - count The number of added events
  */
-void hgFenceAttach(HgFence* fence, u32 count = 1);
+void fenceAttach(Fence* fence, u32 count = 1);
 
 /**
  * Signal that events have completed
@@ -106,12 +106,12 @@ void hgFenceAttach(HgFence* fence, u32 count = 1);
  * - fence The fence to signal
  * - count The number of signaled events
  */
-void hgFenceSignal(HgFence* fence, u32 count = 1);
+void fenceSignal(Fence* fence, u32 count = 1);
 
 /**
  * Returns whether all work has been completed
  */
-bool hgFenceIsComplete(HgFence* fence);
+bool fenceIsComplete(Fence* fence);
 
 /**
  * Spin waits for all work submissions to be completed
@@ -123,12 +123,12 @@ bool hgFenceIsComplete(HgFence* fence);
  * Returns
  * - true if the fence was completed, false if the timeout was triggered
  */
-bool hgFenceWait(HgFence* fence, f64 timeout);
+bool fenceWait(Fence* fence, f64 timeout);
 
 /**
  * Spin waits for all work submissions to be completed
  */
-void hgFenceWaitIndefinite(HgFence* fence);
+void fenceWaitIndefinite(Fence* fence);
 
 /**
  * Pushes work to the thread pool queue to be executed
@@ -138,7 +138,7 @@ void hgFenceWaitIndefinite(HgFence* fence);
  * - data The data passed to the function
  * - work The function to be executed
  */
-void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data));
+void threadsCall(Fence* fence, void* data, void (*fn)(void* data));
 
 /**
  * Wait on a fence, and help complete work in the meantime
@@ -151,7 +151,7 @@ void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data));
  * - true if the fence was completed
  * - false if the timeout was reached
  */
-bool hgThreadsHelp(HgFence* fence, f64 timeout);
+bool threadsHelp(Fence* fence, f64 timeout);
 
 /**
  * Iterates in parallel over a function n times using the thread pool
@@ -164,7 +164,7 @@ bool hgThreadsHelp(HgFence* fence, f64 timeout);
  * - data The data pointer passed to fn
  * - fn The function to use to iterate, takes the index
  */
-void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
+void threadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
 
 /**
  * Iterates in parallel over a function n times using the thread pool
@@ -177,8 +177,8 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
  * - fn The function to use to iterate, takes the index
  */
 template<typename F>
-void hgThreadsFor(u64 begin, u64 end, F fn);
+void threadsFor(u64 begin, u64 end, F fn);
 
 } // namespace hg
 
-#endif // HG_CONCURRENCY_HPP
+#endif // CONCURRENCY_HPP

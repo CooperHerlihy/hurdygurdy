@@ -34,7 +34,7 @@ namespace hg {
 /**
  * A dynamically loaded library
  */
-struct HgLibrary;
+struct Library;
 
 /**
  * Load a dynamic library
@@ -42,12 +42,12 @@ struct HgLibrary;
  * Returns
  * - The loaded library, or nullptr on failure
  */
-HgLibrary* hgLibraryLoad(HgString path);
+Library* libraryLoad(String path);
 
 /**
  * Unload a dynamic library
  */
-void hgLibraryUnload(HgLibrary* lib);
+void libraryUnload(Library* lib);
 
 /**
  * Find a function from a dynamic library
@@ -59,8 +59,8 @@ void hgLibraryUnload(HgLibrary* lib);
  * Returns
  * - A function pointer to the found symbol, or nullptr not found
  */
-void* hgLibraryFindFunction(HgLibrary* lib, HgString symbol);
+void* libraryFindFunction(Library* lib, String symbol);
 
 } // namespace hg
 
-#endif // HG_LIBRARY_HPP
+#endif // LIBRARY_HPP

@@ -34,24 +34,24 @@ namespace hg {
 /**
  * The value of Pi
  */
-#define hgPi 3.1415926535897932
+#define HG_PI 3.1415926535897932
 /**
  * The value of Euler's number
  */
-#define hgEuler 2.7182818284590452
+#define HG_EULER 2.7182818284590452
 /**
  * The value of square root 2
  */
-#define hgRoot2 1.4142135623730951
+#define HG_ROOT2 1.4142135623730951
 /**
  * The value of square root 3
  */
-#define hgRoot3 1.7320508075688772
+#define HG_ROOT3 1.7320508075688772
 
 /**
  * Returns base to the positive integer exp power
  */
-constexpr f32 hgPow(f32 base, u32 exp)
+constexpr f32 pow(f32 base, u32 exp)
 {
     f32 ret = 1.0f;
     for (u32 i = 0; i < exp; ++i)
@@ -64,7 +64,7 @@ constexpr f32 hgPow(f32 base, u32 exp)
 /**
  * Squares a number
  */
-constexpr f32 hgSquare(f32 x)
+constexpr f32 square(f32 x)
 {
     return x * x;
 }
@@ -72,7 +72,7 @@ constexpr f32 hgSquare(f32 x)
 /**
  * Interpolates between two values
  */
-constexpr f32 hgLerp(f32 a, f32 b, f32 t)
+constexpr f32 lerp(f32 a, f32 b, f32 t)
 {
     return a + (b - a) * t;
 }
@@ -80,7 +80,7 @@ constexpr f32 hgLerp(f32 a, f32 b, f32 t)
 /**
  * Smooth a t value for interpolation
  */
-constexpr f32 hgSmooth(f32 t)
+constexpr f32 smooth(f32 t)
 {
     return t * t * (3.0f - 2.0f * t);
 }
@@ -88,7 +88,7 @@ constexpr f32 hgSmooth(f32 t)
 /**
  * Smooth a t value for interpolation using a quintic formula
  */
-constexpr f32 hgSmoothQuintic(f32 t)
+constexpr f32 smoothQuintic(f32 t)
 {
     return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
 }
@@ -96,7 +96,7 @@ constexpr f32 hgSmoothQuintic(f32 t)
 /**
  * A 2D vector
  */
-struct HgVec2 {
+struct Vec2 {
     /**
      * The vector components
      */
@@ -105,44 +105,44 @@ struct HgVec2 {
     /**
      * Construct uninitialized
      */
-    HgVec2() = default;
+    Vec2() = default;
 
     /**
      * Construct from a list of values
      */
-    constexpr HgVec2(f32 xVal, f32 yVal) : x{xVal}, y{yVal} {}
+    constexpr Vec2(f32 xVal, f32 yVal) : x{xVal}, y{yVal} {}
 
     /**
      * Construct from a single scalar
      */
-    explicit constexpr HgVec2(f32 scalar) : x{scalar}, y{scalar} {}
+    explicit constexpr Vec2(f32 scalar) : x{scalar}, y{scalar} {}
 
     /**
      * Add another vector in place
      */
-    HgVec2& operator+=(HgVec2 other);
+    Vec2& operator+=(Vec2 other);
 
     /**
      * Subtract another vector in place
      */
-    HgVec2& operator-=(HgVec2 other);
+    Vec2& operator-=(Vec2 other);
 
     /**
      * Multiply another vector in place
      */
-    HgVec2& operator*=(HgVec2 other);
+    Vec2& operator*=(Vec2 other);
 
     /**
      * Divide another vector in place
      */
-    HgVec2& operator/=(HgVec2 other);
+    Vec2& operator/=(Vec2 other);
 
     /**
      * Access by index
      */
     constexpr f32& operator[](u32 idx)
     {
-        hgAssert(idx < 2);
+        HG_ASSERT(idx < 2);
         return *(&x + idx);
     }
 };
@@ -150,7 +150,7 @@ struct HgVec2 {
 /**
  * A 3D vector
  */
-struct HgVec3 {
+struct Vec3 {
     /**
      * The vector components
      */
@@ -159,27 +159,27 @@ struct HgVec3 {
     /**
      * Construct uninitialized
      */
-    HgVec3() = default;
+    Vec3() = default;
 
     /**
      * Construct from a list of values
      */
-    constexpr HgVec3(f32 xVal, f32 yVal, f32 zVal) : x{xVal}, y{yVal}, z{zVal} {}
+    constexpr Vec3(f32 xVal, f32 yVal, f32 zVal) : x{xVal}, y{yVal}, z{zVal} {}
 
     /**
      * Construct from a single scalar
      */
-    explicit constexpr HgVec3(f32 scalar) : x{scalar}, y{scalar}, z{scalar} {}
+    explicit constexpr Vec3(f32 scalar) : x{scalar}, y{scalar}, z{scalar} {}
 
     /**
      * Construct from a Vec2 and scalar
      */
-    explicit constexpr HgVec3(HgVec2 other, f32 zVal) : x{other.x}, y{other.y}, z{zVal} {}
+    explicit constexpr Vec3(Vec2 other, f32 zVal) : x{other.x}, y{other.y}, z{zVal} {}
 
     /**
      * Downsize to Vec2
      */
-    explicit constexpr operator HgVec2() const
+    explicit constexpr operator Vec2() const
     {
         return {x, y};
     }
@@ -187,29 +187,29 @@ struct HgVec3 {
     /**
      * Add another vector in place
      */
-    HgVec3& operator+=(HgVec3 other);
+    Vec3& operator+=(Vec3 other);
 
     /**
      * Subtract another vector in place
      */
-    HgVec3& operator-=(HgVec3 other);
+    Vec3& operator-=(Vec3 other);
 
     /**
      * Multiply another vector in place
      */
-    HgVec3& operator*=(HgVec3 other);
+    Vec3& operator*=(Vec3 other);
 
     /**
      * Divide another vector in place
      */
-    HgVec3& operator/=(HgVec3 other);
+    Vec3& operator/=(Vec3 other);
 
     /**
      * Access by index
      */
     constexpr f32& operator[](u32 idx)
     {
-        hgAssert(idx < 3);
+        HG_ASSERT(idx < 3);
         return *(&x + idx);
     }
 };
@@ -217,7 +217,7 @@ struct HgVec3 {
 /**
  * A 4D vector
  */
-struct HgVec4 {
+struct Vec4 {
     /**
      * The vector components
      */
@@ -226,32 +226,32 @@ struct HgVec4 {
     /**
      * Construct uninitialized
      */
-    HgVec4() = default;
+    Vec4() = default;
 
     /**
      * Construct from a list of values
      */
-    constexpr HgVec4(f32 xVal, f32 yVal, f32 zVal, f32 wVal) : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
+    constexpr Vec4(f32 xVal, f32 yVal, f32 zVal, f32 wVal) : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
 
     /**
      * Construct from a single scalar
      */
-    explicit constexpr HgVec4(f32 scalar) : x{scalar}, y{scalar}, z{scalar}, w{scalar} {}
+    explicit constexpr Vec4(f32 scalar) : x{scalar}, y{scalar}, z{scalar}, w{scalar} {}
 
     /**
      * Construct from a Vec2 and scalars
      */
-    explicit constexpr HgVec4(HgVec2 other, f32 zVal, f32 wVal) : x{other.x}, y{other.y}, z{zVal}, w{wVal} {}
+    explicit constexpr Vec4(Vec2 other, f32 zVal, f32 wVal) : x{other.x}, y{other.y}, z{zVal}, w{wVal} {}
 
     /**
      * Construct from a Vec3 and scalar
      */
-    explicit constexpr HgVec4(HgVec3 other, f32 wVal) : x{other.x}, y{other.y}, z{other.z}, w{wVal} {}
+    explicit constexpr Vec4(Vec3 other, f32 wVal) : x{other.x}, y{other.y}, z{other.z}, w{wVal} {}
 
     /**
      * Downsize to Vec2
      */
-    explicit constexpr operator HgVec2() const
+    explicit constexpr operator Vec2() const
     {
         return {x, y};
     }
@@ -259,7 +259,7 @@ struct HgVec4 {
     /**
      * Downsize to Vec3
      */
-    explicit constexpr operator HgVec3() const
+    explicit constexpr operator Vec3() const
     {
         return {x, y, z};
     }
@@ -267,29 +267,29 @@ struct HgVec4 {
     /**
      * Add another vector in place
      */
-    HgVec4& operator+=(HgVec4 other);
+    Vec4& operator+=(Vec4 other);
 
     /**
      * Subtract another vector in place
      */
-    HgVec4& operator-=(HgVec4 other);
+    Vec4& operator-=(Vec4 other);
 
     /**
      * Multiply another vector in place
      */
-    HgVec4& operator*=(HgVec4 other);
+    Vec4& operator*=(Vec4 other);
 
     /**
      * Divide another vector in place
      */
-    HgVec4& operator/=(HgVec4 other);
+    Vec4& operator/=(Vec4 other);
 
     /**
      * Access by index
      */
     constexpr f32& operator[](u32 idx)
     {
-        hgAssert(idx < 4);
+        HG_ASSERT(idx < 4);
         return *(&x + idx);
     }
 };
@@ -297,48 +297,48 @@ struct HgVec4 {
 /**
  * A 2x2 matrix
  */
-struct HgMat2 {
+struct Mat2 {
     /**
      * The matrix components
      */
-    HgVec2 x, y;
+    Vec2 x, y;
 
     /**
      * Construct uninitialized
      */
-    HgMat2() = default;
+    Mat2() = default;
 
     /**
      * Construct from a list of vectors
      */
-    constexpr HgMat2(HgVec2 xVal, HgVec2 yVal) : x{xVal}, y{yVal} {}
+    constexpr Mat2(Vec2 xVal, Vec2 yVal) : x{xVal}, y{yVal} {}
 
     /**
      * Construct from a single scalar
      */
-    explicit constexpr HgMat2(f32 scalar) : x{scalar, 0}, y{0, scalar} {}
+    explicit constexpr Mat2(f32 scalar) : x{scalar, 0}, y{0, scalar} {}
 
     /**
      * Construct from a list of values
      */
-    explicit constexpr HgMat2(f32 xx, f32 xy, f32 yx, f32 yy) : x{xx, xy}, y{yx, yy} {}
+    explicit constexpr Mat2(f32 xx, f32 xy, f32 yx, f32 yy) : x{xx, xy}, y{yx, yy} {}
 
     /**
      * Add another matrix in place
      */
-    HgMat2& operator+=(const HgMat2& other);
+    Mat2& operator+=(const Mat2& other);
 
     /**
      * Subtract another matrix in place
      */
-    HgMat2& operator-=(const HgMat2& other);
+    Mat2& operator-=(const Mat2& other);
 
     /**
      * Access by index
      */
-    constexpr HgVec2& operator[](u32 idx)
+    constexpr Vec2& operator[](u32 idx)
     {
-        hgAssert(idx < 2);
+        HG_ASSERT(idx < 2);
         return *(&x + idx);
     }
 };
@@ -346,59 +346,59 @@ struct HgMat2 {
 /**
  * A 3x3 matrix
  */
-struct HgMat3 {
+struct Mat3 {
     /**
      * The matrix components
      */
-    HgVec3 x, y, z;
+    Vec3 x, y, z;
 
     /**
      * Construct uninitialized
      */
-    HgMat3() = default;
+    Mat3() = default;
 
     /**
      * Construct from a list of vectors
      */
-    constexpr HgMat3(HgVec3 xVal, HgVec3 yVal, HgVec3 zVal)
+    constexpr Mat3(Vec3 xVal, Vec3 yVal, Vec3 zVal)
         : x{xVal}, y{yVal}, z{zVal} {}
 
     /**
      * Construct from a single scalar
      */
-    explicit constexpr HgMat3(f32 scalar)
+    explicit constexpr Mat3(f32 scalar)
         : x{scalar, 0, 0}, y{0, scalar, 0}, z{0, 0, scalar} {}
 
     /**
      * Construct from a Mat2
      */
-    explicit constexpr HgMat3(const HgMat2& other)
+    explicit constexpr Mat3(const Mat2& other)
         : x{other.x, 0}, y{other.y, 0}, z{0, 0, 1} {}
 
     /**
      * Downsize to Mat2
      */
-    explicit constexpr operator HgMat2() const
+    explicit constexpr operator Mat2() const
     {
-        return HgMat2{HgVec2{x}, HgVec2{y}};
+        return Mat2{Vec2{x}, Vec2{y}};
     }
 
     /**
      * Add another matrix in place
      */
-    HgMat3& operator+=(const HgMat3& other);
+    Mat3& operator+=(const Mat3& other);
 
     /**
      * Subtract another matrix in place
      */
-    HgMat3& operator-=(const HgMat3& other);
+    Mat3& operator-=(const Mat3& other);
 
     /**
      * Access by index
      */
-    constexpr HgVec3& operator[](u32 idx)
+    constexpr Vec3& operator[](u32 idx)
     {
-        hgAssert(idx < 3);
+        HG_ASSERT(idx < 3);
         return *(&x + idx);
     }
 };
@@ -406,73 +406,73 @@ struct HgMat3 {
 /**
  * A 4x4 matrix
  */
-struct HgMat4 {
+struct Mat4 {
     /**
      * The matrix components
      */
-    HgVec4 x, y, z, w;
+    Vec4 x, y, z, w;
 
     /**
      * Construct uninitialized
      */
-    HgMat4() = default;
+    Mat4() = default;
 
     /**
      * Construct from a list of vectors
      */
-    constexpr HgMat4(HgVec4 xVal, HgVec4 yVal, HgVec4 zVal, HgVec4 wVal)
+    constexpr Mat4(Vec4 xVal, Vec4 yVal, Vec4 zVal, Vec4 wVal)
         : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
 
     /**
      * Construct from a single scalar
      */
-    explicit constexpr HgMat4(f32 scalar)
+    explicit constexpr Mat4(f32 scalar)
         : x{scalar, 0, 0, 0}, y{0, scalar, 0, 0}, z{0, 0, scalar, 0}, w{0, 0, 0, scalar} {}
 
     /**
      * Construct from a Mat2
      */
-    explicit constexpr HgMat4(const HgMat2& other)
+    explicit constexpr Mat4(const Mat2& other)
         : x{other.x, 0, 0}, y{other.y, 0, 0}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
 
     /**
      * Construct from a Mat3
      */
-    explicit constexpr HgMat4(const HgMat3& other)
+    explicit constexpr Mat4(const Mat3& other)
         : x{other.x, 0}, y{other.y, 0}, z{other.z, 0}, w{0, 0, 0, 1} {}
 
     /**
      * Downsize to Mat2
      */
-    explicit constexpr operator HgMat2() const
+    explicit constexpr operator Mat2() const
     {
-        return HgMat2{HgVec2{x}, HgVec2{y}};
+        return Mat2{Vec2{x}, Vec2{y}};
     }
 
     /**
      * Downsize to Mat3
      */
-    explicit constexpr operator HgMat3() const
+    explicit constexpr operator Mat3() const
     {
-        return HgMat3{HgVec3{x}, HgVec3{y}, HgVec3{z}};
+        return Mat3{Vec3{x}, Vec3{y}, Vec3{z}};
     }
 
     /**
      * Add another matrix in place
      */
-    HgMat4& operator+=(const HgMat4& other);
+    Mat4& operator+=(const Mat4& other);
 
     /**
      * Subtract another matrix in place
      */
-    HgMat4& operator-=(const HgMat4& other);
+    Mat4& operator-=(const Mat4& other);
 
     /**
      * Access by index
      */
-    constexpr HgVec4& operator[](u32 idx)
+    constexpr Vec4& operator[](u32 idx)
     {
-        hgAssert(idx < 4);
+        HG_ASSERT(idx < 4);
         return *(&x + idx);
     }
 };
@@ -480,7 +480,7 @@ struct HgMat4 {
 /**
  * A complex number
  */
-struct HgComplex {
+struct Complex {
     /**
      * The real part
      */
@@ -493,32 +493,32 @@ struct HgComplex {
     /**
      * Construct uninitialized
      */
-    HgComplex() = default;
+    Complex() = default;
 
     /**
      * Construct from just a real value
      */
-    constexpr HgComplex(f32 rVal) : r{rVal}, i{0} {}
+    constexpr Complex(f32 rVal) : r{rVal}, i{0} {}
 
     /**
      * Construct from a list of values
      */
-    constexpr HgComplex(f32 rVal, f32 iVal) : r{rVal}, i{iVal} {}
+    constexpr Complex(f32 rVal, f32 iVal) : r{rVal}, i{iVal} {}
 
     /**
      * Add another complex number in place
      */
-    HgComplex& operator+=(HgComplex other);
+    Complex& operator+=(Complex other);
     /**
      * Subtract another complex number in place
      */
-    HgComplex& operator-=(HgComplex other);
+    Complex& operator-=(Complex other);
 };
 
 /**
  * A quaternion
  */
-struct HgQuat {
+struct Quat {
     /**
      * The real part
      */
@@ -531,33 +531,33 @@ struct HgQuat {
     /**
      * Construct uninitialized
      */
-    HgQuat() = default;
+    Quat() = default;
 
     /**
      * Construct from just a real value
      */
-    constexpr HgQuat(f32 rVal) : r{rVal}, i{0}, j{0}, k{0} {}
+    constexpr Quat(f32 rVal) : r{rVal}, i{0}, j{0}, k{0} {}
 
     /**
      * Construct from a list of values
      */
-    constexpr HgQuat(f32 rVal, f32 iVal, f32 jVal, f32 kVal) : r{rVal}, i{iVal}, j{jVal}, k{kVal} {}
+    constexpr Quat(f32 rVal, f32 iVal, f32 jVal, f32 kVal) : r{rVal}, i{iVal}, j{jVal}, k{kVal} {}
 
     /**
      * Add another quaternion in place
      */
-    HgQuat& operator+=(HgQuat other);
+    Quat& operator+=(Quat other);
 
     /**
      * Subtract another quaternion in place
      */
-    HgQuat& operator-=(HgQuat other);
+    Quat& operator-=(Quat other);
 };
 
 /**
  * Compare vectors
  */
-constexpr bool operator==(HgVec2 lhs, HgVec2 rhs)
+constexpr bool operator==(Vec2 lhs, Vec2 rhs)
 {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
@@ -565,7 +565,7 @@ constexpr bool operator==(HgVec2 lhs, HgVec2 rhs)
 /**
  * Compare vectors
  */
-constexpr bool operator!=(HgVec2 lhs, HgVec2 rhs)
+constexpr bool operator!=(Vec2 lhs, Vec2 rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y;
 }
@@ -573,7 +573,7 @@ constexpr bool operator!=(HgVec2 lhs, HgVec2 rhs)
 /**
  * Compare vectors, treating values within FLT_EPSILON as the same
  */
-constexpr bool hgVecEq2(HgVec2 lhs, HgVec2 rhs)
+constexpr bool vecEq2(Vec2 lhs, Vec2 rhs)
 {
     return std::abs(lhs.x - rhs.x) < 1e-6 &&
            std::abs(lhs.y - rhs.y) < 1e-6;
@@ -582,7 +582,7 @@ constexpr bool hgVecEq2(HgVec2 lhs, HgVec2 rhs)
 /**
  * Compare vectors, treating values within FLT_EPSILON as the same
  */
-constexpr bool hgVecEq3(HgVec3 lhs, HgVec3 rhs)
+constexpr bool vecEq3(Vec3 lhs, Vec3 rhs)
 {
     return std::abs(lhs.x - rhs.x) < 1e-6 &&
            std::abs(lhs.y - rhs.y) < 1e-6 &&
@@ -592,7 +592,7 @@ constexpr bool hgVecEq3(HgVec3 lhs, HgVec3 rhs)
 /**
  * Compare vectors, treating values within FLT_EPSILON as the same
  */
-constexpr bool hgVecEq4(HgVec4 lhs, HgVec4 rhs)
+constexpr bool vecEq4(Vec4 lhs, Vec4 rhs)
 {
     return std::abs(lhs.x - rhs.x) < 1e-6 &&
            std::abs(lhs.y - rhs.y) < 1e-6 &&
@@ -603,7 +603,7 @@ constexpr bool hgVecEq4(HgVec4 lhs, HgVec4 rhs)
 /**
  * Compare vectors
  */
-constexpr bool operator==(HgVec3 lhs, HgVec3 rhs)
+constexpr bool operator==(Vec3 lhs, Vec3 rhs)
 {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
 }
@@ -611,7 +611,7 @@ constexpr bool operator==(HgVec3 lhs, HgVec3 rhs)
 /**
  * Compare vectors
  */
-constexpr bool operator!=(HgVec3 lhs, HgVec3 rhs)
+constexpr bool operator!=(Vec3 lhs, Vec3 rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
 }
@@ -619,7 +619,7 @@ constexpr bool operator!=(HgVec3 lhs, HgVec3 rhs)
 /**
  * Compare vectors
  */
-constexpr bool operator==(HgVec4 lhs, HgVec4 rhs)
+constexpr bool operator==(Vec4 lhs, Vec4 rhs)
 {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
 }
@@ -627,7 +627,7 @@ constexpr bool operator==(HgVec4 lhs, HgVec4 rhs)
 /**
  * Compare vectors
  */
-constexpr bool operator!=(HgVec4 lhs, HgVec4 rhs)
+constexpr bool operator!=(Vec4 lhs, Vec4 rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
 }
@@ -635,7 +635,7 @@ constexpr bool operator!=(HgVec4 lhs, HgVec4 rhs)
 /**
  * Compare matrices
  */
-constexpr bool operator==(const HgMat2& lhs, const HgMat2& rhs)
+constexpr bool operator==(const Mat2& lhs, const Mat2& rhs)
 {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
@@ -643,7 +643,7 @@ constexpr bool operator==(const HgMat2& lhs, const HgMat2& rhs)
 /**
  * Compare matrices
  */
-constexpr bool operator!=(const HgMat2& lhs, const HgMat2& rhs)
+constexpr bool operator!=(const Mat2& lhs, const Mat2& rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y;
 }
@@ -651,7 +651,7 @@ constexpr bool operator!=(const HgMat2& lhs, const HgMat2& rhs)
 /**
  * Compare matrices
  */
-constexpr bool operator==(const HgMat3& lhs, const HgMat3& rhs)
+constexpr bool operator==(const Mat3& lhs, const Mat3& rhs)
 {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
 }
@@ -659,7 +659,7 @@ constexpr bool operator==(const HgMat3& lhs, const HgMat3& rhs)
 /**
  * Compare matrices
  */
-constexpr bool operator!=(const HgMat3& lhs, const HgMat3& rhs)
+constexpr bool operator!=(const Mat3& lhs, const Mat3& rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
 }
@@ -667,7 +667,7 @@ constexpr bool operator!=(const HgMat3& lhs, const HgMat3& rhs)
 /**
  * Compare matrices
  */
-constexpr bool operator==(const HgMat4& lhs, const HgMat4& rhs)
+constexpr bool operator==(const Mat4& lhs, const Mat4& rhs)
 {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
 }
@@ -675,7 +675,7 @@ constexpr bool operator==(const HgMat4& lhs, const HgMat4& rhs)
 /**
  * Compare matrices
  */
-constexpr bool operator!=(const HgMat4& lhs, const HgMat4& rhs)
+constexpr bool operator!=(const Mat4& lhs, const Mat4& rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
 }
@@ -683,7 +683,7 @@ constexpr bool operator!=(const HgMat4& lhs, const HgMat4& rhs)
 /**
  * Compare complex numbers
  */
-constexpr bool operator==(HgComplex lhs, HgComplex rhs)
+constexpr bool operator==(Complex lhs, Complex rhs)
 {
     return lhs.r == rhs.r && lhs.i == rhs.i;
 }
@@ -691,7 +691,7 @@ constexpr bool operator==(HgComplex lhs, HgComplex rhs)
 /**
  * Compare complex numbers
  */
-constexpr bool operator!=(HgComplex lhs, HgComplex rhs)
+constexpr bool operator!=(Complex lhs, Complex rhs)
 {
     return lhs.r != rhs.r || lhs.i != rhs.i;
 }
@@ -699,7 +699,7 @@ constexpr bool operator!=(HgComplex lhs, HgComplex rhs)
 /**
  * Compare quaternions
  */
-constexpr bool operator==(HgQuat lhs, HgQuat rhs)
+constexpr bool operator==(Quat lhs, Quat rhs)
 {
     return lhs.r == rhs.r && lhs.i == rhs.i && lhs.j == rhs.j && lhs.k == rhs.k;
 }
@@ -707,7 +707,7 @@ constexpr bool operator==(HgQuat lhs, HgQuat rhs)
 /**
  * Compare quaternions
  */
-constexpr bool operator!=(HgQuat lhs, HgQuat rhs)
+constexpr bool operator!=(Quat lhs, Quat rhs)
 {
     return lhs.r != rhs.r || lhs.i != rhs.i || lhs.j != rhs.j || lhs.k != rhs.k;
 }
@@ -721,12 +721,12 @@ constexpr bool operator!=(HgQuat lhs, HgQuat rhs)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgVecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void vecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Add 2D vectors
  */
-constexpr HgVec2 operator+(HgVec2 lhs, HgVec2 rhs)
+constexpr Vec2 operator+(Vec2 lhs, Vec2 rhs)
 {
     return {lhs.x + rhs.x, lhs.y + rhs.y};
 }
@@ -734,7 +734,7 @@ constexpr HgVec2 operator+(HgVec2 lhs, HgVec2 rhs)
 /**
  * Add 3D vectors
  */
-constexpr HgVec3 operator+(HgVec3 lhs, HgVec3 rhs)
+constexpr Vec3 operator+(Vec3 lhs, Vec3 rhs)
 {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
 }
@@ -742,7 +742,7 @@ constexpr HgVec3 operator+(HgVec3 lhs, HgVec3 rhs)
 /**
  * Add 4D vectors
  */
-constexpr HgVec4 operator+(HgVec4 lhs, HgVec4 rhs)
+constexpr Vec4 operator+(Vec4 lhs, Vec4 rhs)
 {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
 }
@@ -756,12 +756,12 @@ constexpr HgVec4 operator+(HgVec4 lhs, HgVec4 rhs)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgVecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void vecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Subtract 2D vectors
  */
-constexpr HgVec2 operator-(HgVec2 lhs, HgVec2 rhs)
+constexpr Vec2 operator-(Vec2 lhs, Vec2 rhs)
 {
     return {lhs.x - rhs.x, lhs.y - rhs.y};
 }
@@ -769,7 +769,7 @@ constexpr HgVec2 operator-(HgVec2 lhs, HgVec2 rhs)
 /**
  * Subtract 3D vectors
  */
-constexpr HgVec3 operator-(HgVec3 lhs, HgVec3 rhs)
+constexpr Vec3 operator-(Vec3 lhs, Vec3 rhs)
 {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
 }
@@ -777,7 +777,7 @@ constexpr HgVec3 operator-(HgVec3 lhs, HgVec3 rhs)
 /**
  * Subtract 4D vectors
  */
-constexpr HgVec4 operator-(HgVec4 lhs, HgVec4 rhs)
+constexpr Vec4 operator-(Vec4 lhs, Vec4 rhs)
 {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
 }
@@ -785,7 +785,7 @@ constexpr HgVec4 operator-(HgVec4 lhs, HgVec4 rhs)
 /**
  * Multiple a 2D vector by -1
  */
-constexpr HgVec2 operator-(HgVec2 v)
+constexpr Vec2 operator-(Vec2 v)
 {
     return {-v.x, -v.y};
 }
@@ -793,7 +793,7 @@ constexpr HgVec2 operator-(HgVec2 v)
 /**
  * Multiple a 3D vector by -1
  */
-constexpr HgVec3 operator-(HgVec3 v)
+constexpr Vec3 operator-(Vec3 v)
 {
     return {-v.x, -v.y, -v.z};
 }
@@ -801,7 +801,7 @@ constexpr HgVec3 operator-(HgVec3 v)
 /**
  * Multiple a 4D vector by -1
  */
-constexpr HgVec4 operator-(HgVec4 v)
+constexpr Vec4 operator-(Vec4 v)
 {
     return {-v.x, -v.y, -v.z, -v.w};
 }
@@ -815,12 +815,12 @@ constexpr HgVec4 operator-(HgVec4 v)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgVecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void vecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Multiply pairwise 2D vectors
  */
-constexpr HgVec2 operator*(HgVec2 lhs, HgVec2 rhs)
+constexpr Vec2 operator*(Vec2 lhs, Vec2 rhs)
 {
     return {lhs.x * rhs.x, lhs.y * rhs.y};
 }
@@ -828,7 +828,7 @@ constexpr HgVec2 operator*(HgVec2 lhs, HgVec2 rhs)
 /**
  * Multiply pairwise 3D vectors
  */
-constexpr HgVec3 operator*(HgVec3 lhs, HgVec3 rhs)
+constexpr Vec3 operator*(Vec3 lhs, Vec3 rhs)
 {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
 }
@@ -836,7 +836,7 @@ constexpr HgVec3 operator*(HgVec3 lhs, HgVec3 rhs)
 /**
  * Multiply pairwise 4D vectors
  */
-constexpr HgVec4 operator*(HgVec4 lhs, HgVec4 rhs)
+constexpr Vec4 operator*(Vec4 lhs, Vec4 rhs)
 {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
 }
@@ -844,12 +844,12 @@ constexpr HgVec4 operator*(HgVec4 lhs, HgVec4 rhs)
 /**
  * Multiply a scalar and a vector
  */
-void hgVecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec);
+void vecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec);
 
 /**
  * Multiply a scalar and a 2D vector
  */
-constexpr HgVec2 operator*(f32 scalar, HgVec2 vec)
+constexpr Vec2 operator*(f32 scalar, Vec2 vec)
 {
     return {scalar * vec.x, scalar * vec.y};
 }
@@ -857,7 +857,7 @@ constexpr HgVec2 operator*(f32 scalar, HgVec2 vec)
 /**
  * Multiply a scalar and a 2D vector
  */
-constexpr HgVec2 operator*(HgVec2 vec, f32 scalar)
+constexpr Vec2 operator*(Vec2 vec, f32 scalar)
 {
     return {scalar * vec.x, scalar * vec.y};
 }
@@ -865,7 +865,7 @@ constexpr HgVec2 operator*(HgVec2 vec, f32 scalar)
 /**
  * Multiply a scalar and a 3D vector
  */
-constexpr HgVec3 operator*(f32 scalar, HgVec3 vec)
+constexpr Vec3 operator*(f32 scalar, Vec3 vec)
 {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
@@ -873,7 +873,7 @@ constexpr HgVec3 operator*(f32 scalar, HgVec3 vec)
 /**
  * Multiply a scalar and a 3D vector
  */
-constexpr HgVec3 operator*(HgVec3 vec, f32 scalar)
+constexpr Vec3 operator*(Vec3 vec, f32 scalar)
 {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
@@ -881,7 +881,7 @@ constexpr HgVec3 operator*(HgVec3 vec, f32 scalar)
 /**
  * Multiply a scalar and a 4D vector
  */
-constexpr HgVec4 operator*(f32 scalar, HgVec4 vec)
+constexpr Vec4 operator*(f32 scalar, Vec4 vec)
 {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
@@ -889,7 +889,7 @@ constexpr HgVec4 operator*(f32 scalar, HgVec4 vec)
 /**
  * Multiply a scalar and a 4D vector
  */
-constexpr HgVec4 operator*(HgVec4 vec, f32 scalar)
+constexpr Vec4 operator*(Vec4 vec, f32 scalar)
 {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
@@ -905,16 +905,16 @@ constexpr HgVec4 operator*(HgVec4 vec, f32 scalar)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgVecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void vecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Divide pairwise 2D vectors
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec2 operator/(HgVec2 lhs, HgVec2 rhs)
+constexpr Vec2 operator/(Vec2 lhs, Vec2 rhs)
 {
-    hgAssert(rhs.x != 0 && rhs.y != 0);
+    HG_ASSERT(rhs.x != 0 && rhs.y != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y};
 }
 
@@ -923,9 +923,9 @@ constexpr HgVec2 operator/(HgVec2 lhs, HgVec2 rhs)
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec3 operator/(HgVec3 lhs, HgVec3 rhs)
+constexpr Vec3 operator/(Vec3 lhs, Vec3 rhs)
 {
-    hgAssert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
+    HG_ASSERT(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
 }
 
@@ -934,9 +934,9 @@ constexpr HgVec3 operator/(HgVec3 lhs, HgVec3 rhs)
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec4 operator/(HgVec4 lhs, HgVec4 rhs)
+constexpr Vec4 operator/(Vec4 lhs, Vec4 rhs)
 {
-    hgAssert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
+    HG_ASSERT(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
 }
 
@@ -945,16 +945,16 @@ constexpr HgVec4 operator/(HgVec4 lhs, HgVec4 rhs)
  *
  * Note, cannot divide by 0
  */
-void hgVecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar);
+void vecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar);
 
 /**
  * Divide a 2D vector by a scalar
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec2 operator/(HgVec2 vec, f32 scalar)
+constexpr Vec2 operator/(Vec2 vec, f32 scalar)
 {
-    hgAssert(scalar != 0);
+    HG_ASSERT(scalar != 0);
     return {vec.x / scalar, vec.y / scalar};
 }
 
@@ -963,9 +963,9 @@ constexpr HgVec2 operator/(HgVec2 vec, f32 scalar)
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec3 operator/(HgVec3 vec, f32 scalar)
+constexpr Vec3 operator/(Vec3 vec, f32 scalar)
 {
-    hgAssert(scalar != 0);
+    HG_ASSERT(scalar != 0);
     return {vec.x / scalar, vec.y / scalar, vec.z / scalar};
 }
 
@@ -974,9 +974,9 @@ constexpr HgVec3 operator/(HgVec3 vec, f32 scalar)
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec4 operator/(HgVec4 vec, f32 scalar)
+constexpr Vec4 operator/(Vec4 vec, f32 scalar)
 {
-    hgAssert(scalar != 0);
+    HG_ASSERT(scalar != 0);
     return {vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
 }
 
@@ -989,12 +989,12 @@ constexpr HgVec4 operator/(HgVec4 vec, f32 scalar)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void vecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Compute the dot product of 2D vectors
  */
-constexpr f32 hgVecDot2(HgVec2 lhs, HgVec2 rhs)
+constexpr f32 vecDot2(Vec2 lhs, Vec2 rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y;
 }
@@ -1002,7 +1002,7 @@ constexpr f32 hgVecDot2(HgVec2 lhs, HgVec2 rhs)
 /**
  * Compute the dot product of 3D vectors
  */
-constexpr f32 hgVecDot3(HgVec3 lhs, HgVec3 rhs)
+constexpr f32 vecDot3(Vec3 lhs, Vec3 rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 }
@@ -1010,7 +1010,7 @@ constexpr f32 hgVecDot3(HgVec3 lhs, HgVec3 rhs)
 /**
  * Compute the dot product of 4D vectors
  */
-constexpr f32 hgVecDot4(HgVec4 lhs, HgVec4 rhs)
+constexpr f32 vecDot4(Vec4 lhs, Vec4 rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
@@ -1023,30 +1023,30 @@ constexpr f32 hgVecDot4(HgVec4 lhs, HgVec4 rhs)
  * - dst The destination vector, must not be nullptr
  * - vec The vector to compute the length of, must not be nullptr
  */
-void hgVecLenSqr(u32 size, f32* dst, const f32* vec);
+void vecLenSqr(u32 size, f32* dst, const f32* vec);
 
 /**
  * Compute the length squared of a 2D vector
  */
-constexpr f32 hgVecLenSqr2(HgVec2 vec)
+constexpr f32 vecLenSqr2(Vec2 vec)
 {
-    return hgVecDot2(vec, vec);
+    return vecDot2(vec, vec);
 }
 
 /**
  * Compute the length squared of a 3D vector
  */
-constexpr f32 hgVecLenSqr3(HgVec3 vec)
+constexpr f32 vecLenSqr3(Vec3 vec)
 {
-    return hgVecDot3(vec, vec);
+    return vecDot3(vec, vec);
 }
 
 /**
  * Compute the length squared of a 4D vector
  */
-constexpr f32 hgVecLenSqr4(HgVec4 vec)
+constexpr f32 vecLenSqr4(Vec4 vec)
 {
-    return hgVecDot4(vec, vec);
+    return vecDot4(vec, vec);
 }
 
 /**
@@ -1057,60 +1057,60 @@ constexpr f32 hgVecLenSqr4(HgVec4 vec)
  * - dst The destination vector, must not be nullptr
  * - vec The vector to compute the length of, must not be nullptr
  */
-void hgVecLen(u32 size, f32* dst, const f32* vec);
+void vecLen(u32 size, f32* dst, const f32* vec);
 
 /**
  * Compute the length of a 2D vector
  */
-f32 hgVecLen2(HgVec2 vec);
+f32 vecLen2(Vec2 vec);
 
 /**
  * Compute the length of a 3D vector
  */
-f32 hgVecLen3(HgVec3 vec);
+f32 vecLen3(Vec3 vec);
 
 /**
  * Compute the length of a 4D vector
  */
-f32 hgVecLen4(HgVec4 vec);
+f32 vecLen4(Vec4 vec);
 
 /**
  * Normalize a vector
  *
  * Note, cannot normalize 0
  */
-void hgVecNorm(u32 size, f32* dst, const f32* vec);
+void vecNorm(u32 size, f32* dst, const f32* vec);
 
 /**
  * Normalize a 2D vector
  *
  * Note, cannot normalize 0
  */
-HgVec2 hgVecNorm2(HgVec2 vec);
+Vec2 vecNorm2(Vec2 vec);
 
 /**
  * Normalize a 3D vector
  *
  * Note, cannot normalize 0
  */
-HgVec3 hgVecNorm3(HgVec3 vec);
+Vec3 vecNorm3(Vec3 vec);
 
 /**
  * Normalize a 4D vector
  *
  * Note, cannot normalize 0
  */
-HgVec4 hgVecNorm4(HgVec4 vec);
+Vec4 vecNorm4(Vec4 vec);
 
 /**
  * Compute the cross product of 2D vectors
  */
-f32 hgVecCross2(HgVec2 lhs, HgVec2 rhs);
+f32 vecCross2(Vec2 lhs, Vec2 rhs);
 
 /**
  * Compute the cross product of 3D vectors
  */
-HgVec3 hgVecCross3(HgVec3 lhs, HgVec3 rhs);
+Vec3 vecCross3(Vec3 lhs, Vec3 rhs);
 
 /**
  * Add arbitrary size matrices
@@ -1122,22 +1122,22 @@ HgVec3 hgVecCross3(HgVec3 lhs, HgVec3 rhs);
  * - lhs The left-hand side matrix, must not be nullptr
  * - rhs The right-hand side matrix, must not be nullptr
  */
-void hgMatAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
+void matAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Add 2x2 matrices
  */
-HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs);
+Mat2 operator+(const Mat2& lhs, const Mat2& rhs);
 
 /**
  * Add 3x3 matrices
  */
-HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs);
+Mat3 operator+(const Mat3& lhs, const Mat3& rhs);
 
 /**
  * Add 4x4 matrices
  */
-HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs);
+Mat4 operator+(const Mat4& lhs, const Mat4& rhs);
 
 /**
  * Subtract arbitrary size matrices
@@ -1149,22 +1149,22 @@ HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs);
  * - lhs The left-hand side matrix, must not be nullptr
  * - rhs The right-hand side matrix, must not be nullptr
  */
-void hgMatSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
+void matSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Subtract 2x2 matrices
  */
-HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs);
+Mat2 operator-(const Mat2& lhs, const Mat2& rhs);
 
 /**
  * Subtract 3x3 matrices
  */
-HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs);
+Mat3 operator-(const Mat3& lhs, const Mat3& rhs);
 
 /**
  * Subtract 4x4 matrices
  */
-HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs);
+Mat4 operator-(const Mat4& lhs, const Mat4& rhs);
 
 /**
  * Multiply arbitrary size matrices
@@ -1178,22 +1178,22 @@ HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs);
  * - hr The height of the right-hand side matrix
  * - rhs The right-hand side matrix, must not be nullptr
  */
-void hgMatMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs);
+void matMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs);
 
 /**
  * Multiply 2x2 matrices
  */
-HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs);
+Mat2 operator*(const Mat2& lhs, const Mat2& rhs);
 
 /**
  * Multiply 3x3 matrices
  */
-HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs);
+Mat3 operator*(const Mat3& lhs, const Mat3& rhs);
 
 /**
  * Multiply 4x4 matrices
  */
-HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs);
+Mat4 operator*(const Mat4& lhs, const Mat4& rhs);
 
 /**
  * Multiply a matrix and a vector
@@ -1205,158 +1205,158 @@ HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs);
  * - mat The matrix to multiply with, must not be nullptr
  * - vec The vector to multiply with, must not be nullptr
  */
-void hgMatMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec);
+void matMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec);
 
 /**
  * Multiply a 2x2 matrix and a 2D vector
  */
-HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs);
+Vec2 operator*(const Mat2& lhs, Vec2 rhs);
 
 /**
  * Multiply a 3x3 matrix and a 3D vector
  */
-HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs);
+Vec3 operator*(const Mat3& lhs, Vec3 rhs);
 
 /**
  * Multiply a 4x4 matrix and a 4D vector
  */
-HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs);
+Vec4 operator*(const Mat4& lhs, Vec4 rhs);
 
 /**
  * Transpose the matrix
  */
-void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat);
+void matTranspose(u32 width, u32 height, f32* dst, const f32* mat);
 
 /**
  * Transpose the matrix
  */
-HgMat2 hgMatTranspose2(const HgMat2& mat);
+Mat2 matTranspose2(const Mat2& mat);
 
 /**
  * Transpose the matrix
  */
-HgMat3 hgMatTranspose3(const HgMat3& mat);
+Mat3 matTranspose3(const Mat3& mat);
 
 /**
  * Transpose the matrix
  */
-HgMat4 hgMatTranspose4(const HgMat4& mat);
+Mat4 matTranspose4(const Mat4& mat);
 
 /**
  * Add complex numbers
  */
-constexpr HgComplex operator+(HgComplex lhs, HgComplex rhs)
+constexpr Complex operator+(Complex lhs, Complex rhs)
 {
-    return HgComplex{lhs.r + rhs.r, lhs.i + rhs.i};
+    return Complex{lhs.r + rhs.r, lhs.i + rhs.i};
 }
 
 /**
  * Subtract complex numbers
  */
-constexpr HgComplex operator-(HgComplex lhs, HgComplex rhs)
+constexpr Complex operator-(Complex lhs, Complex rhs)
 {
-    return HgComplex{lhs.r - rhs.r, lhs.i - rhs.i};
+    return Complex{lhs.r - rhs.r, lhs.i - rhs.i};
 }
 
 /**
  * Multiply complex numbers
  */
-constexpr HgComplex operator*(HgComplex lhs, HgComplex rhs)
+constexpr Complex operator*(Complex lhs, Complex rhs)
 {
-    return HgComplex{lhs.r * rhs.r - lhs.i * rhs.i, lhs.r * rhs.i + lhs.i * rhs.r};
+    return Complex{lhs.r * rhs.r - lhs.i * rhs.i, lhs.r * rhs.i + lhs.i * rhs.r};
 }
 
 /**
  * Compute the conjugate of a complex number
  */
-constexpr HgComplex hgComplexConj(HgComplex comp)
+constexpr Complex complexConj(Complex comp)
 {
-    return HgComplex{comp.r, -comp.i};
+    return Complex{comp.r, -comp.i};
 }
 
 /**
  * Compute the absolute value squared of a complex number
  */
-f32 hgComplexAbsSqr(HgComplex comp);
+f32 complexAbsSqr(Complex comp);
 
 /**
  * Compute the absolute value of a complex number
  */
-f32 hgComplexAbs(HgComplex comp);
+f32 complexAbs(Complex comp);
 
 /**
  * Normalize a complex number
  */
-HgComplex hgComplexNorm(HgComplex comp);
+Complex complexNorm(Complex comp);
 
 /**
  * Rotate a 2D vector using a complex number
  */
-HgVec2 hgVecRot2(HgComplex lhs, HgVec2 rhs);
+Vec2 vecRot2(Complex lhs, Vec2 rhs);
 
 /**
  * Add quaternions
  */
-constexpr HgQuat operator+(HgQuat lhs, HgQuat rhs)
+constexpr Quat operator+(Quat lhs, Quat rhs)
 {
-    return HgQuat{lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
+    return Quat{lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
 }
 
 /**
  * Subtract quaternions
  */
-constexpr HgQuat operator-(HgQuat lhs, HgQuat rhs)
+constexpr Quat operator-(Quat lhs, Quat rhs)
 {
-    return HgQuat{lhs.r - rhs.r, lhs.i - rhs.i, lhs.j - rhs.j, lhs.k - rhs.k};
+    return Quat{lhs.r - rhs.r, lhs.i - rhs.i, lhs.j - rhs.j, lhs.k - rhs.k};
 }
 
 /**
  * Multiply quaternions
  */
-HgQuat operator*(HgQuat lhs, HgQuat rhs);
+Quat operator*(Quat lhs, Quat rhs);
 
 /**
  * Compute the conjugate of a quaternion
  */
-constexpr HgQuat hgQuatConj(HgQuat quat)
+constexpr Quat quatConj(Quat quat)
 {
-    return HgQuat{quat.r, -quat.i, -quat.j, -quat.k};
+    return Quat{quat.r, -quat.i, -quat.j, -quat.k};
 }
 
 /**
  * Return the absolute value squared of a quaternion
  */
-f32 hgQuatAbsSqr(HgQuat quat);
+f32 quatAbsSqr(Quat quat);
 
 /**
  * Return the absolute value of a quaternion
  */
-f32 hgQuatAbs(HgQuat quat);
+f32 quatAbs(Quat quat);
 
 /**
  * Return a normalized quaternion
  */
-HgQuat hgQuatNorm(HgQuat q);
+Quat quatNorm(Quat q);
 
 /**
  * Create a rotation quaternion from an axis and angle
  */
-HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle);
+Quat quatAxisAngle(Vec3 axis, f32 angle);
 
 /**
  * Create a rotation quaternion between two directions
  */
-HgQuat hgQuatBetween(HgVec3 from, HgVec3 to);
+Quat quatBetween(Vec3 from, Vec3 to);
 
 /**
  * Rotate a 3D vector using a quaternion
  */
-HgVec3 hgVecRot3(HgQuat lhs, HgVec3 rhs);
+Vec3 vecRot3(Quat lhs, Vec3 rhs);
 
 /**
  * Rotate a 3x3 matrix using a quaternion
  */
-HgMat3 hgMatRot3(HgQuat lhs, HgMat3 rhs);
+Mat3 matRot3(Quat lhs, Mat3 rhs);
 
 /**
  * Creates a model matrix for 2D graphics
@@ -1366,7 +1366,7 @@ HgMat3 hgMatRot3(HgQuat lhs, HgMat3 rhs);
  * - scale The scale of the model
  * - rotation The rotation of the model
  */
-HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation);
+Mat4 matModel2D(Vec3 position, Vec2 scale, f32 rotation);
 
 /**
  * Creates a model matrix for 3D graphics
@@ -1376,7 +1376,7 @@ HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation);
  * - scale The scale of the model
  * - rotation The rotation of the model
  */
-HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation);
+Mat4 matModel3D(const Vec3& position, const Vec3& scale, const Quat& rotation);
 
 /**
  * Creates a view matrix
@@ -1386,14 +1386,14 @@ HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& r
  * - zoom The zoom of the camera
  * - rotation The rotation of the camera
  */
-HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation);
+Mat4 matView(const Vec3& position, const Vec3& zoom, const Quat& rotation);
 
 /**
  * Creates a view matrix from a model matrix
  *
  * Note, shearing causes distortion
  */
-HgMat4 hgMatModelToView(const HgMat4& model);
+Mat4 matModelToView(const Mat4& model);
 
 /**
  * Creates an orthographic projection matrix
@@ -1406,7 +1406,7 @@ HgMat4 hgMatModelToView(const HgMat4& model);
  * - near The near plane of the view frustum
  * - far The far plane of the view frustum
  */
-HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
+Mat4 matOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
 
 /**
  * Creates a perspective projection matrix
@@ -1417,16 +1417,16 @@ HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32
  * - near The near plane of the projection, must be greater than 0.0f
  * - far The far plane of the projection, must be greater than near
  */
-HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far);
+Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 /**
  * A 2D circle
  */
-struct HgCircle {
+struct Circle {
     /**
      * The center position
      */
-    HgVec2 pos;
+    Vec2 pos;
     /**
      * The radius
      */
@@ -1436,80 +1436,80 @@ struct HgCircle {
 /**
  * Returns whether the circle contains the point
  */
-bool hgContainsPointCircle(HgVec2 point, HgCircle circle);
+bool containsPointCircle(Vec2 point, Circle circle);
 
 /**
  * Returns the distance between the point and the circle
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 hgDistPointCircle(HgVec2 point, HgCircle circle);
+f32 distPointCircle(Vec2 point, Circle circle);
 
 /**
  * Returns the closest point to pos which lies on the circle
  */
-HgVec2 hgClosestPointCircle(HgVec2 pos, HgCircle circle);
+Vec2 closestPointCircle(Vec2 pos, Circle circle);
 
 /**
  * Returns whether two circles intersect or not (includes touching)
  */
-bool hgIntersectCircles(HgCircle a, HgCircle b);
+bool intersectCircles(Circle a, Circle b);
 
 /**
  * Returns the distance squared between the circles
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 hgDistCircles(HgCircle a, HgCircle b);
+f32 distCircles(Circle a, Circle b);
 
 /**
  * A 2D rectangle
  */
-struct HgRect {
+struct Rect {
     /**
      * The origin position
      */
-    HgVec2 pos;
+    Vec2 pos;
     /**
      * The extent in each dimension
      */
-    HgVec2 size;
+    Vec2 size;
 };
 
 /**
  * Returns an empty rect
  */
-HgRect hgRectEmpty();
+Rect rectEmpty();
 
 /**
  * Expands the rect to include the point
  */
-HgRect hgRectAddPoint(HgRect rect, HgVec2 point);
+Rect rectAddPoint(Rect rect, Vec2 point);
 
 /**
  * Returns whether the rect contains the point
  */
-bool hgContainsPointRect(HgVec2 point, HgRect rect);
+bool containsPointRect(Vec2 point, Rect rect);
 
 /**
  * Returns the closest point to pos which lies on the rect
  */
-HgVec2 hgClosestPointRect(HgVec2 pos, HgRect rect);
+Vec2 closestPointRect(Vec2 pos, Rect rect);
 
 /**
  * Returns whether two rects intersect or not (includes touching)
  */
-bool hgIntersectRects(HgRect a, HgRect b);
+bool intersectRects(Rect a, Rect b);
 
 /**
  * Returns whether a rect and a circle intersect or not (includes touching)
  */
-bool hgIntersectRectCircle(HgRect rect, HgCircle circle);
+bool intersectRectCircle(Rect rect, Circle circle);
 
 /**
  * 2D intersection info
  */
-struct HgHit2D {
+struct Hit2D {
     /**
      * The hit distance along the ray or line
      *
@@ -1520,35 +1520,35 @@ struct HgHit2D {
     /**
      * The normal at the hit position
      */
-    HgVec2 normal;
+    Vec2 normal;
 };
 
 /**
  * A 2D ray
  */
-struct HgRay2D {
+struct Ray2D {
     /**
      * The origin position
      */
-    HgVec2 pos;
+    Vec2 pos;
     /**
      * The direction
      */
-    HgVec2 dir;
+    Vec2 dir;
 };
 
 /**
  * A 2D line
  */
-struct HgLine2D {
+struct Line2D {
     /**
      * The begin vertex
      */
-    HgVec2 begin;
+    Vec2 begin;
     /**
      * The end vertex
      */
-    HgVec2 end;
+    Vec2 end;
 };
 
 /**
@@ -1562,7 +1562,7 @@ struct HgLine2D {
  * Returns
  * - Whether the rays intersect
  */
-bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgHit2D* hit);
+bool intersectRays2D(Ray2D ray, Ray2D other, Hit2D* hit);
 
 /**
  * Intersect a ray and a line
@@ -1575,7 +1575,7 @@ bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgHit2D* hit);
  * Returns
  * - Whether the ray and line intersect
  */
-bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgHit2D* hit);
+bool intersectRayLine2D(Ray2D ray, Line2D line, Hit2D* hit);
 
 /**
  * Intersect a ray and a circle
@@ -1588,7 +1588,7 @@ bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgHit2D* hit);
  * Returns
  * - Whether the ray and circle intersect
  */
-bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgHit2D* hit);
+bool intersectRayCircle(Ray2D ray, Circle circle, Hit2D* hit);
 
 /**
  * Intersect a ray and a rect
@@ -1601,7 +1601,7 @@ bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgHit2D* hit);
  * Returns
  * - Whether the ray and rect intersect
  */
-bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgHit2D* hit);
+bool intersectRayRect(Ray2D ray, Rect rect, Hit2D* hit);
 
 /**
  * Intersect two lines
@@ -1614,7 +1614,7 @@ bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgHit2D* hit);
  * Returns
  * - Whether the lines intersect
  */
-bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgHit2D* hit);
+bool intersectLines2D(Line2D line, Line2D other, Hit2D* hit);
 
 /**
  * Intersect a line and a ray
@@ -1627,7 +1627,7 @@ bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgHit2D* hit);
  * Returns
  * - Whether the line and ray intersect
  */
-bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgHit2D* hit);
+bool intersectLineRay2D(Line2D line, Ray2D ray, Hit2D* hit);
 
 /**
  * Intersect a line and a circle
@@ -1640,7 +1640,7 @@ bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgHit2D* hit);
  * Returns
  * - Whether the line and circle intersect
  */
-bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgHit2D* hit);
+bool intersectLineCircle(Line2D line, Circle circle, Hit2D* hit);
 
 /**
  * Intersect a line and a rect
@@ -1653,16 +1653,16 @@ bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgHit2D* hit);
  * Returns
  * - Whether the line and rect intersect
  */
-bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgHit2D* hit);
+bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit);
 
 /**
  * A 3D sphere
  */
-struct HgSphere {
+struct Sphere {
     /**
      * The center position
      */
-    HgVec3 pos;
+    Vec3 pos;
     /**
      * The radius from the center
      */
@@ -1672,80 +1672,80 @@ struct HgSphere {
 /**
  * Returns whether the sphere contains the point
  */
-bool hgContainsPointSphere(HgVec3 point, HgSphere sphere);
+bool containsPointSphere(Vec3 point, Sphere sphere);
 
 /**
  * Returns the distance squared between the point and the sphere
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 hgDistPointSphere(HgVec3 point, HgSphere sphere);
+f32 distPointSphere(Vec3 point, Sphere sphere);
 
 /**
  * Returns the closest point to pos which lies on the sphere
  */
-HgVec3 hgClosestPointSphere(HgVec3 pos, HgSphere sphere);
+Vec3 closestPointSphere(Vec3 pos, Sphere sphere);
 
 /**
  * Returns whether two spheres intersect or not (includes touching)
  */
-bool hgIntersectSpheres(HgSphere a, HgSphere b);
+bool intersectSpheres(Sphere a, Sphere b);
 
 /**
  * Returns the distance squared between the spheres
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 hgDistSpheres(HgSphere a, HgSphere b);
+f32 distSpheres(Sphere a, Sphere b);
 
 /**
  * A 3D box
  */
-struct HgBox {
+struct Box {
     /**
      * The origin position
      */
-    HgVec3 pos;
+    Vec3 pos;
     /**
      * The extent in each dimension
      */
-    HgVec3 size;
+    Vec3 size;
 };
 
 /**
  * Returns an empty box
  */
-HgBox hgBoxEmpty();
+Box boxEmpty();
 
 /**
  * Expands the box to include the point
  */
-HgBox hgBoxAddPoint(HgBox box, HgVec3 point);
+Box boxAddPoint(Box box, Vec3 point);
 
 /**
  * Returns whether the box contains the point
  */
-bool hgContainsPointBox(HgVec3 point, HgBox box);
+bool containsPointBox(Vec3 point, Box box);
 
 /**
  * Returns the closest point to pos which lies on the box
  */
-HgVec3 hgClosestPointBox(HgVec3 pos, HgBox box);
+Vec3 closestPointBox(Vec3 pos, Box box);
 
 /**
  * Returns whether two boxs intersect or not (includes touching)
  */
-bool hgIntersectBox(HgBox a, HgBox b);
+bool intersectBox(Box a, Box b);
 
 /**
  * Returns whether a box and a sphere intersect or not (includes touching)
  */
-bool hgIntersectBoxSphere(HgBox box, HgSphere sphere);
+bool intersectBoxSphere(Box box, Sphere sphere);
 
 /**
  * 3D intersection info
  */
-struct HgHit3D {
+struct Hit3D {
     /**
      * The hit distance along the ray or line
      *
@@ -1756,63 +1756,63 @@ struct HgHit3D {
     /**
      * The normal at the hit position
      */
-    HgVec3 normal;
+    Vec3 normal;
 };
 
 /**
  * A 3D ray
  */
-struct HgRay3D {
+struct Ray3D {
     /**
      * The origin position
      */
-    HgVec3 pos;
+    Vec3 pos;
     /**
      * The direction
      */
-    HgVec3 dir;
+    Vec3 dir;
 };
 
 /**
  * A 3D line
  */
-struct HgLine3D {
+struct Line3D {
     /**
      * The begin vertex
      */
-    HgVec3 begin;
+    Vec3 begin;
     /**
      * The end vertex
      */
-    HgVec3 end;
+    Vec3 end;
 };
 
 /**
  * A 3D triangle
  */
-struct HgTri {
+struct Tri {
     /**
      * The first vertex
      */
-    HgVec3 a;
+    Vec3 a;
     /**
      * The second vertex
      */
-    HgVec3 b;
+    Vec3 b;
     /**
      * The third vertex
      */
-    HgVec3 c;
+    Vec3 c;
 };
 
 /**
  * A 3D plane
  */
-struct HgPlane {
+struct Plane {
     /**
      * The plane's normal
      */
-    HgVec3 normal;
+    Vec3 normal;
     /**
      * The distance in the direction of the normal
      */
@@ -1822,12 +1822,12 @@ struct HgPlane {
 /**
  * Create a plane at the point
  */
-HgPlane hgPlaneFromPoint(HgVec3 point, HgVec3 normal);
+Plane planeFromPoint(Vec3 point, Vec3 normal);
 
 /**
  * Create a plane from a triangle
  */
-HgPlane hgPlaneFromTri(HgTri tri);
+Plane planeFromTri(Tri tri);
 
 /**
  * Intersect a ray and a sphere
@@ -1840,7 +1840,7 @@ HgPlane hgPlaneFromTri(HgTri tri);
  * Returns
  * - Whether the ray and sphere intersect
  */
-bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgHit3D* hit);
+bool intersectRaySphere(Ray3D ray, Sphere sphere, Hit3D* hit);
 
 /**
  * Intersect a ray and a box
@@ -1853,7 +1853,7 @@ bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgHit3D* hit);
  * Returns
  * - Whether the ray and box intersect
  */
-bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit);
+bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit);
 
 /**
  * Intersect a ray and a triangle
@@ -1866,7 +1866,7 @@ bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit);
  * Returns
  * - Whether the ray and triangle intersect
  */
-bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgHit3D* hit);
+bool intersectRayTri(Ray3D ray, Tri tri, Hit3D* hit);
 
 /**
  * Intersect a ray and a plane
@@ -1879,7 +1879,7 @@ bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgHit3D* hit);
  * Returns
  * - Whether the ray and plane intersect
  */
-bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgHit3D* hit);
+bool intersectRayPlane(Ray3D ray, Plane plane, Hit3D* hit);
 
 /**
  * Intersect a line and a sphere
@@ -1892,7 +1892,7 @@ bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgHit3D* hit);
  * Returns
  * - Whether the line and sphere intersect
  */
-bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgHit3D* hit);
+bool intersectLineSphere(Line3D line, Sphere sphere, Hit3D* hit);
 
 /**
  * Intersect a line and a box
@@ -1905,7 +1905,7 @@ bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgHit3D* hit);
  * Returns
  * - Whether the line and box intersect
  */
-bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit);
+bool intersectLineBox(Line3D line, Box box, Hit3D* hit);
 
 /**
  * Intersect a line and a triangle
@@ -1918,7 +1918,7 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit);
  * Returns
  * - Whether the line and triangle intersect
  */
-bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgHit3D* hit);
+bool intersectLineTri(Line3D line, Tri tri, Hit3D* hit);
 
 /**
  * Intersect a line and a plane
@@ -1931,69 +1931,69 @@ bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgHit3D* hit);
  * Returns
  * - Whether the line and plane intersect
  */
-bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgHit3D* hit);
+bool intersectLinePlane(Line3D line, Plane plane, Hit3D* hit);
 
 /**
  * Generate white noise
  */
-u32 hgNoise(u32 seed, u32 pos);
+u32 noise(u32 seed, u32 pos);
 
 /**
  * Generate white noise
  */
-u32 hgNoise2D(u32 seed, u32 x, u32 y);
+u32 noise2D(u32 seed, u32 x, u32 y);
 
 /**
  * Generate white noise
  */
-u32 hgNoise3D(u32 seed, u32 x, u32 y, u32 z);
+u32 noise3D(u32 seed, u32 x, u32 y, u32 z);
 
 /**
  * Generate white noise
  */
-u32 hgNoise4D(u32 seed, u32 x, u32 y, u32 z, u32 w);
+u32 noise4D(u32 seed, u32 x, u32 y, u32 z, u32 w);
 
 /**
  * Generate white noise normalized from 0.0 to 1.0
  */
-f32 hgNoiseNorm(u32 seed, f32 pos);
+f32 noiseNorm(u32 seed, f32 pos);
 
 /**
  * Generate white noise normalized from 0.0 to 1.0
  */
-f32 hgNoiseNorm2D(u32 seed, HgVec2 pos);
+f32 noiseNorm2D(u32 seed, Vec2 pos);
 
 /**
  * Generate white noise normalized from 0.0 to 1.0
  */
-f32 hgNoiseNorm3D(u32 seed, HgVec3 pos);
+f32 noiseNorm3D(u32 seed, Vec3 pos);
 
 /**
  * Generate white noise normalized from 0.0 to 1.0
  */
-f32 hgNoiseNorm4D(u32 seed, HgVec4 pos);
+f32 noiseNorm4D(u32 seed, Vec4 pos);
 
 /**
  * Generate white noise unit vector
  */
-f32 hgNoiseVec1D(u32 seed, f32 pos);
+f32 noiseVec1D(u32 seed, f32 pos);
 
 /**
  * Generate white noise unit vector
  */
-HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos);
+Vec2 noiseVec2D(u32 seed, Vec2 pos);
 
 // value and gradient noise : TODO
 
 /**
  * Get a true random number from hardware
  */
-u32 hgTrueRandom();
+u32 trueRandom();
 
 /**
  * A pseudo random number generator
  */
-struct HgRng {
+struct Rng {
     u32 seed;
     u32 pos;
 };
@@ -2001,17 +2001,17 @@ struct HgRng {
 /**
  * Set the rng seed
  */
-void hgRngSeed(HgRng* rng, u32 seed);
+void rngSeed(Rng* rng, u32 seed);
 
 /**
  * Get the next random value
  */
-u32 hgRngNext(HgRng* rng);
+u32 rngNext(Rng* rng);
 
 /**
  * Get the next 64 bit random value
  */
-u64 hgRngNext64(HgRng* rng);
+u64 rngNext64(Rng* rng);
 
 // sort algorithm : TODO
 
@@ -2023,8 +2023,8 @@ u64 hgRngNext64(HgRng* rng);
  * - height The height of the image
  * - depth The depth of the image
  */
-u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth);
+u32 getMaxMipmaps(u32 width, u32 height, u32 depth);
 
 } // namespace hg
 
-#endif // HG_MATH_HPP
+#endif // MATH_HPP

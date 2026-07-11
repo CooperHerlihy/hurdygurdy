@@ -24,7 +24,7 @@
 
 namespace hg {
 
-bool hgPlatformInit()
+bool platformInit()
 {
     if (!SDL_Init(
         SDL_INIT_AUDIO |
@@ -33,13 +33,13 @@ bool hgPlatformInit()
         SDL_INIT_GAMEPAD |
         SDL_INIT_EVENTS))
     {
-        hgErrorSet((HgString)SDL_GetError());
+        errorSet((String)SDL_GetError());
         return false;
     }
     return true;
 }
 
-void hgPlatformDeinit()
+void platformDeinit()
 {
     SDL_Quit();
 }
@@ -447,32 +447,32 @@ static u32 vkFormatToSize(VkFormat format)
             return 0;
 
         default:
-            hgWarn("Unrecognized Vulkan format\n");
+            HG_WARN("Unrecognized Vulkan format\n");
             return 0;
     }
 }
 
-static VkFormat formatToVk(HgFormat format)
+static VkFormat formatToVk(Format format)
 {
     return (VkFormat)format;
 }
 
-u32 hgFormatToSize(HgFormat format)
+u32 formatToSize(Format format)
 {
     return vkFormatToSize(formatToVk(format));
 }
 
-static VkPipelineStageFlags gpuStageToVk(HgGpuStageFlags stage)
+static VkPipelineStageFlags gpuStageToVk(GpuStageFlags stage)
 {
     return (VkPipelineStageFlags)stage;
 }
 
-static VkAccessFlags gpuAccessToVk(HgGpuAccessFlags access)
+static VkAccessFlags gpuAccessToVk(GpuAccessFlags access)
 {
     return (VkAccessFlags)access;
 }
 
-typedef HgHandle Descriptor;
+typedef Handle Descriptor;
 
 enum DescriptorType : u32 {
     DescriptorType_combinedImageSampler = 0,
@@ -495,66 +495,66 @@ static VkDescriptorType descriptorTypeToVk(DescriptorType type)
         case DescriptorType_storageBuffer:
             return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         default:
-            hgPanic("invalid HgGpuDescriptorType: %d", type);
+            HG_PANIC("invalid GpuDescriptorType: %d", type);
     }
 }
 
-struct HgGpuBuffer {
+struct GpuBuffer {
     VkBuffer buffer;
     VmaAllocation alloc;
     u64 size;
     Descriptor uniformDesc;
     Descriptor storageDesc;
-    HgGpuMemoryHostAccess access;
-    HgGpuStageFlags lastStage;
-    HgGpuAccessFlags lastAccess;
+    GpuMemoryHostAccess access;
+    GpuStageFlags lastStage;
+    GpuAccessFlags lastAccess;
 };
 
-static VkBufferUsageFlags gpuBufferUsageToVk(HgGpuBufferUsageFlags usage)
+static VkBufferUsageFlags gpuBufferUsageToVk(GpuBufferUsageFlags usage)
 {
     return (VkBufferUsageFlags)usage;
 }
 
-static VmaAllocationCreateFlags gpuMemoryUsageToVma(HgGpuMemoryUsage usage)
+static VmaAllocationCreateFlags gpuMemoryUsageToVma(GpuMemoryUsage usage)
 {
     switch (usage)
     {
-        case HgGpuMemoryUsage_deviceOnly:
+        case GpuMemoryUsage_deviceOnly:
             return 0;
-        case HgGpuMemoryUsage_stagingWrite:
+        case GpuMemoryUsage_stagingWrite:
             return VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        case HgGpuMemoryUsage_stagingRead:
+        case GpuMemoryUsage_stagingRead:
             return VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-        case HgGpuMemoryUsage_frequentUpdate:
+        case GpuMemoryUsage_frequentUpdate:
             return VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
         default:
-            hgPanic("Invalid HgGpuMemoryUsage: %d\n", usage);
+            HG_PANIC("Invalid GpuMemoryUsage: %d\n", usage);
     }
 }
 
-static HgGpuMemoryHostAccess gpuMemoryUsageToHostAccess(HgGpuMemoryUsage usage)
+static GpuMemoryHostAccess gpuMemoryUsageToHostAccess(GpuMemoryUsage usage)
 {
     switch (usage)
     {
-        case HgGpuMemoryUsage_deviceOnly:
-            return HgGpuMemoryHostAccess_none;
-        case HgGpuMemoryUsage_stagingWrite:
-            return HgGpuMemoryHostAccess_write;
-        case HgGpuMemoryUsage_stagingRead:
-            return HgGpuMemoryHostAccess_read;
-        case HgGpuMemoryUsage_frequentUpdate:
-            return HgGpuMemoryHostAccess_none;
+        case GpuMemoryUsage_deviceOnly:
+            return GpuMemoryHostAccess_none;
+        case GpuMemoryUsage_stagingWrite:
+            return GpuMemoryHostAccess_write;
+        case GpuMemoryUsage_stagingRead:
+            return GpuMemoryHostAccess_read;
+        case GpuMemoryUsage_frequentUpdate:
+            return GpuMemoryHostAccess_none;
         default:
-            hgPanic("Invalid HgGpuMemoryUsage: %d\n", usage);
+            HG_PANIC("Invalid GpuMemoryUsage: %d\n", usage);
     }
 }
 
-struct HgGpuImage {
+struct GpuImage {
     VkImage image;
     VmaAllocation alloc;
-    HgGpuImageUsageFlags usage;
-    HgFormat format;
+    GpuImageUsageFlags usage;
+    Format format;
     u32 width;
     u32 height;
     u32 depth;
@@ -575,21 +575,21 @@ static VkImageType imageDimensionsToVkImage(u32 dimensions)
         case 3:
             return VK_IMAGE_TYPE_3D;
         default:
-            hgPanic("Invalid image dimensions: %d\n", dimensions);
+            HG_PANIC("Invalid image dimensions: %d\n", dimensions);
     }
 }
 
-static VkImageUsageFlags gpuImageUsageToVk(HgGpuImageUsageFlags usage)
+static VkImageUsageFlags gpuImageUsageToVk(GpuImageUsageFlags usage)
 {
     return (VkImageUsageFlags)usage;
 }
 
-static VkImageLayout gpuLayoutToVk(HgGpuLayout layout)
+static VkImageLayout gpuLayoutToVk(GpuLayout layout)
 {
     return (VkImageLayout)layout;
 }
 
-static VkImageCreateFlags gpuImageConfigFlagsToVk(HgGpuImageConfigFlags flags)
+static VkImageCreateFlags gpuImageConfigFlagsToVk(GpuImageConfigFlags flags)
 {
     return (VkImageCreateFlags)flags;
 }
@@ -613,18 +613,18 @@ static VkSampleCountFlagBits countToMsaaSampleBits(u32 count)
         case 64:
             return VK_SAMPLE_COUNT_64_BIT;
         default:
-            hgPanic("Invalid msaa sample count\n");
+            HG_PANIC("Invalid msaa sample count\n");
     }
 }
 
 struct SamplerInfo {
-    HgGpuFilter filter;
-    HgGpuSamplerEdgeMode mode;
-    HgGpuSamplerBorder border;
+    GpuFilter filter;
+    GpuSamplerEdgeMode mode;
+    GpuSamplerBorder border;
 };
 
 template<>
-constexpr u64 hgHash(SamplerInfo info)
+constexpr u64 hash(SamplerInfo info)
 {
     return info.border + (info.mode << 4) + (info.filter << 8);
 }
@@ -636,109 +636,109 @@ constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
         && lhs.border == rhs.border;
 }
 
-struct HgGpuView {
-    HgGpuImage* image;
+struct GpuView {
+    GpuImage* image;
     VkImageView view;
     VkSampler sampler;
     Descriptor samplerDesc;
     Descriptor storageDesc;
-    HgGpuViewType type;
-    HgGpuAspectFlags aspectFlags;
+    GpuViewType type;
+    GpuAspectFlags aspectFlags;
     u8 baseMipLevel;
     u8 levelCount;
     u8 baseArrayLayer;
     u8 layerCount;
-    HgGpuStageFlags lastStage;
-    HgGpuAccessFlags lastAccess;
-    HgGpuLayout lastLayout;
+    GpuStageFlags lastStage;
+    GpuAccessFlags lastAccess;
+    GpuLayout lastLayout;
 };
 
-static HgGpuViewType imageDimensionsToHgView(u32 dimensions)
+static GpuViewType imageDimensionsToHgView(u32 dimensions)
 {
     switch (dimensions)
     {
         case 1:
-            return HgGpuViewType_1D;
+            return GpuViewType_1D;
         case 2:
-            return HgGpuViewType_2D;
+            return GpuViewType_2D;
         case 3:
-            return HgGpuViewType_3D;
+            return GpuViewType_3D;
         default:
-            hgPanic("Invalid image dimensions: %d\n", dimensions);
+            HG_PANIC("Invalid image dimensions: %d\n", dimensions);
     }
 }
 
-static VkImageViewType gpuViewTypeToVk(HgGpuViewType type)
+static VkImageViewType gpuViewTypeToVk(GpuViewType type)
 {
     return (VkImageViewType)type;
 }
 
-static VkImageAspectFlags gpuAspectToVk(HgGpuAspectFlags aspect)
+static VkImageAspectFlags gpuAspectToVk(GpuAspectFlags aspect)
 {
     return (VkImageAspectFlags)aspect;
 }
 
-static VkFilter gpuFilterToVk(HgGpuFilter filter)
+static VkFilter gpuFilterToVk(GpuFilter filter)
 {
     return (VkFilter)filter;
 }
 
-static VkSamplerAddressMode gpuSamplerAddressModeToVk(HgGpuSamplerEdgeMode mode)
+static VkSamplerAddressMode gpuSamplerAddressModeToVk(GpuSamplerEdgeMode mode)
 {
     return (VkSamplerAddressMode)mode;
 }
 
-static VkBorderColor gpuSamplerBorderToVk(HgGpuSamplerBorder color)
+static VkBorderColor gpuSamplerBorderToVk(GpuSamplerBorder color)
 {
     return (VkBorderColor)color;
 }
 
-struct HgGpuPipeline {
+struct GpuPipeline {
     VkPipeline pipeline;
     VkPipelineLayout layout;
     VkPipelineBindPoint bindPoint;
 };
 
-static VkPrimitiveTopology gpuTopologyToVk(HgGpuTopology topology)
+static VkPrimitiveTopology gpuTopologyToVk(GpuTopology topology)
 {
     return (VkPrimitiveTopology)topology;
 }
 
-static VkPolygonMode gpuPolygonModeToVk(HgGpuPolygonMode mode)
+static VkPolygonMode gpuPolygonModeToVk(GpuPolygonMode mode)
 {
     return (VkPolygonMode)mode;
 }
 
-static VkCullModeFlags gpuCullModeToVk(HgGpuCullFlags mode)
+static VkCullModeFlags gpuCullModeToVk(GpuCullFlags mode)
 {
     return (VkCullModeFlags)mode;
 }
 
-struct HgWindow {
+struct Window {
     VkSurfaceKHR surface;
     VkSwapchainKHR swapchain;
-    HgArray<HgGpuImage> images;
-    HgArray<HgGpuView> views;
-    HgArray<VkSemaphore> imageAvailable;
-    HgArray<VkSemaphore> readyToPresent;
+    Array<GpuImage> images;
+    Array<GpuView> views;
+    Array<VkSemaphore> imageAvailable;
+    Array<VkSemaphore> readyToPresent;
     u32 imageIdx;
-    HgFormat format;
-    HgGpuImageUsageFlags imageUsage;
-    HgGpuPresentMode presentMode;
+    Format format;
+    GpuImageUsageFlags imageUsage;
+    GpuPresentMode presentMode;
 
     SDL_Window* sdlWindow;
     u32 width;
     u32 height;
     f32 mouseX;
     f32 mouseY;
-    bool isKeyDown[HgButton_count]{};
+    bool isKeyDown[Button_count]{};
     bool wasClosed = false;
 
-    HgArray<HgWindowEvent> events;
+    Array<WindowEvent> events;
 };
 
 struct Frame {
-    HgArray<HgWindow*> windows;
+    Array<Window*> windows;
     VkCommandPool cmdPool;
     VkFence fence;
 };
@@ -760,14 +760,14 @@ struct VulkanState {
     VkDescriptorSetLayout bindlessLayout = nullptr;
     VkDescriptorSet bindlessSet = nullptr;
 
-    HgHandlePool descriptorPools[DescriptorType_count];
+    HandlePool descriptorPools[DescriptorType_count];
 
-    HgPool buffers;
-    HgPool images;
-    HgPool views;
-    HgPool pipelines;
+    Pool buffers;
+    Pool images;
+    Pool views;
+    Pool pipelines;
 
-    HgMap<SamplerInfo, VkSampler> samplers;
+    Map<SamplerInfo, VkSampler> samplers;
 
     Frame* frames = nullptr;
     u32 frameCount = 0;
@@ -828,13 +828,13 @@ static const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerInfo{
 
 #endif
 
-static VkInstance createInstance(HgString* extensions, u32 extensionCount)
+static VkInstance createInstance(String* extensions, u32 extensionCount)
 {
     if (extensionCount > 0)
-        hgAssert(extensions != nullptr);
+        HG_ASSERT(extensions != nullptr);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -856,14 +856,14 @@ static VkInstance createInstance(HgString* extensions, u32 extensionCount)
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
-    instanceInfo.enabledLayerCount = (u32)hgArrayCount(layers);
+    instanceInfo.enabledLayerCount = (u32)arrayCount(layers);
     instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
-    const char** extCStrs = hgArenaAlloc<const char*>(scratch, extensionCount);
+    const char** extCStrs = arenaAlloc<const char*>(sc, extensionCount);
     for (u32 i = 0; i < extensionCount; ++i)
     {
-        extCStrs[i] = hgCString(scratch, extensions[i]);
+        extCStrs[i] = cString(sc, extensions[i]);
     }
     instanceInfo.enabledExtensionCount = extensionCount;
     instanceInfo.ppEnabledExtensionNames = extCStrs;
@@ -872,7 +872,7 @@ static VkInstance createInstance(HgString* extensions, u32 extensionCount)
     VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
     if (instance == nullptr)
     {
-        hgErrorFormat("Failed to create Vulkan instance: %s", vkResultToStr(result));
+        errorFormat("Failed to create Vulkan instance: %s", vkResultToStr(result));
     }
 
     return instance;
@@ -881,13 +881,13 @@ static VkInstance createInstance(HgString* extensions, u32 extensionCount)
 #ifdef HG_VK_DEBUG_MESSENGER
 static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
 {
-    hgAssert(vk.instance != nullptr);
+    HG_ASSERT(vk.instance != nullptr);
 
     VkDebugUtilsMessengerEXT messenger = nullptr;
     VkResult result = vkCreateDebugUtilsMessengerEXT(vk.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
     {
-        hgErrorFormat("Failed to create Vulkan debug messenger: %s", vkResultToStr(result));
+        errorFormat("Failed to create Vulkan debug messenger: %s", vkResultToStr(result));
     }
 
     return messenger;
@@ -896,15 +896,15 @@ static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
 
 static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags)
 {
-    hgAssert(gpu != nullptr);
-    hgAssert(queueFamily != nullptr);
+    HG_ASSERT(gpu != nullptr);
+    HG_ASSERT(queueFamily != nullptr);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     u32 familyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, nullptr);
-    VkQueueFamilyProperties* families = hgArenaAlloc<VkQueueFamilyProperties>(scratch, familyCount);
+    VkQueueFamilyProperties* families = arenaAlloc<VkQueueFamilyProperties>(sc, familyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families);
 
     for (u32 i = 0; i < familyCount; ++i)
@@ -916,7 +916,7 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
         }
     }
 
-    hgErrorSet("Could not find Vulkan queue family");
+    errorSet("Could not find Vulkan queue family");
     *queueFamily = (u32)-1;
     return false;
 }
@@ -927,14 +927,14 @@ static const char* const deviceExtensions[]{
 
 static VkPhysicalDevice findPhysicalDevice()
 {
-    hgAssert(vk.instance != nullptr);
+    HG_ASSERT(vk.instance != nullptr);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     u32 gpuCount;
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, nullptr);
-    VkPhysicalDevice* gpus = hgArenaAlloc<VkPhysicalDevice>(scratch, gpuCount);
+    VkPhysicalDevice* gpus = arenaAlloc<VkPhysicalDevice>(sc, gpuCount);
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, gpus);
 
     VkExtensionProperties* extProps = nullptr;
@@ -949,12 +949,12 @@ static VkPhysicalDevice findPhysicalDevice()
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, nullptr);
         if (newPropCount > extPropCount)
         {
-            extProps = hgArenaRealloc(scratch, extProps, extPropCount, newPropCount);
+            extProps = arenaRealloc(sc, extProps, extPropCount, newPropCount);
             extPropCount = newPropCount;
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, extProps);
 
-        for (u32 j = 0; j < (u32)hgArrayCount(deviceExtensions); j++)
+        for (u32 j = 0; j < (u32)arrayCount(deviceExtensions); j++)
         {
             for (u32 k = 0; k < newPropCount; k++)
             {
@@ -976,14 +976,14 @@ nextGpu:
         continue;
     }
 
-    hgErrorSet("Could not find suitable gpu");
+    errorSet("Could not find suitable gpu");
     return nullptr;
 }
 
 static VkDevice createDevice()
 {
-    hgAssert(vk.physicalDevice != nullptr);
-    hgAssert(vk.queueFamily != (u32)-1);
+    HG_ASSERT(vk.physicalDevice != nullptr);
+    HG_ASSERT(vk.queueFamily != (u32)-1);
 
     VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeature{};
     descriptorIndexingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
@@ -1033,7 +1033,7 @@ static VkDevice createDevice()
     deviceInfo.pNext = &synchronization2Feature;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueInfo;
-    deviceInfo.enabledExtensionCount = (u32)hgArrayCount(deviceExtensions);
+    deviceInfo.enabledExtensionCount = (u32)arrayCount(deviceExtensions);
     deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     deviceInfo.pEnabledFeatures = &features;
 
@@ -1041,7 +1041,7 @@ static VkDevice createDevice()
     VkResult result = vkCreateDevice(vk.physicalDevice, &deviceInfo, nullptr, &device);
     if (device == nullptr)
     {
-        hgErrorFormat("Could not create VkDevice: %s", vkResultToStr(result));
+        errorFormat("Could not create VkDevice: %s", vkResultToStr(result));
     }
 
     return device;
@@ -1059,7 +1059,7 @@ static VmaAllocator createVma()
     VkResult result = vmaCreateAllocator(&allocatorInfo, &vma);
     if (vma == nullptr)
     {
-        hgErrorFormat("Could not create Vulkan memory allocator: %s", vkResultToStr(result));
+        errorFormat("Could not create Vulkan memory allocator: %s", vkResultToStr(result));
     }
 
     return vma;
@@ -1078,13 +1078,13 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     info.maxSets = 1;
-    info.poolSizeCount = (u32)hgArrayCount(sizes);
+    info.poolSizeCount = (u32)arrayCount(sizes);
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
     VkResult result = vkCreateDescriptorPool(vk.device, &info, nullptr, &pool);
     if (pool == nullptr)
-        hgPanic("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
 
     return pool;
 }
@@ -1104,20 +1104,20 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    flagsInfo.bindingCount = (u32)hgArrayCount(bindings);
+    flagsInfo.bindingCount = (u32)arrayCount(bindings);
     flagsInfo.pBindingFlags = flags;
 
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &flagsInfo;
     info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    info.bindingCount = (u32)hgArrayCount(bindings);
+    info.bindingCount = (u32)arrayCount(bindings);
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
     VkResult result = vkCreateDescriptorSetLayout(vk.device, &info, nullptr, &layout);
     if (layout == nullptr)
-        hgPanic("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
 
     return layout;
 }
@@ -1126,7 +1126,7 @@ static Frame createFrame()
 {
     Frame frame{};
 
-    frame.windows = hgArrayCreate<HgWindow*>(0, 8);
+    frame.windows = arrayCreate<Window*>(0, 8);
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1135,7 +1135,7 @@ static Frame createFrame()
 
     VkResult poolResult = vkCreateCommandPool(vk.device, &poolInfo, nullptr, &frame.cmdPool);
     if (frame.cmdPool == nullptr)
-        hgPanic("Could not create Vulkan command pool: %s\n", vkResultToStr(poolResult));
+        HG_PANIC("Could not create Vulkan command pool: %s\n", vkResultToStr(poolResult));
 
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -1143,24 +1143,24 @@ static Frame createFrame()
 
     VkResult fenceResult = vkCreateFence(vk.device, &fenceInfo, nullptr, &frame.fence);
     if (frame.fence == nullptr)
-        hgPanic("Could not create Vulkan fence: %s\n", vkResultToStr(fenceResult));
+        HG_PANIC("Could not create Vulkan fence: %s\n", vkResultToStr(fenceResult));
 
     return frame;
 }
 
-bool hgGpuInit()
+bool gpuInit()
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     if (!loadVulkan())
         goto loadFailed;
 
     {
-        HgString* exts;
-        u32 extCount = hgPlatformGetVulkanExtensions(scratch, &exts);
+        String* exts;
+        u32 extCount = platformGetVulkanExtensions(sc, &exts);
 #ifdef HG_VK_DEBUG_MESSENGER
-        exts = hgArenaRealloc(scratch, exts, extCount, extCount + 1);
+        exts = arenaRealloc(sc, exts, extCount, extCount + 1);
         exts[extCount++] = "VK_EXT_debug_utils";
 #endif
         vk.instance = createInstance(exts, extCount);
@@ -1207,7 +1207,7 @@ bool hgGpuInit()
 
         VkResult result = vkCreateCommandPool(vk.device, &cmdPoolInfo, nullptr, &vk.cmdPool);
         if (vk.cmdPool == nullptr)
-            hgPanic("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
     }
 
     vk.bindlessPool = createBindlessDescriptorPool();
@@ -1221,28 +1221,28 @@ bool hgGpuInit()
 
         VkResult result = vkAllocateDescriptorSets(vk.device, &info, &vk.bindlessSet);
         if (vk.bindlessSet == nullptr)
-            hgPanic("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
     }
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vk.descriptorPools[i] = hgHandlePoolCreate();
+        vk.descriptorPools[i] = handlePoolCreate();
     }
 
-    vk.buffers = hgPoolCreate<HgGpuBuffer>();
-    vk.images = hgPoolCreate<HgGpuImage>();
-    vk.views = hgPoolCreate<HgGpuView>();
-    vk.pipelines = hgPoolCreate<HgGpuPipeline>();
+    vk.buffers = poolCreate<GpuBuffer>();
+    vk.images = poolCreate<GpuImage>();
+    vk.views = poolCreate<GpuView>();
+    vk.pipelines = poolCreate<GpuPipeline>();
 
-    vk.samplers = hgMapCreate<SamplerInfo, VkSampler>(
+    vk.samplers = mapCreate<SamplerInfo, VkSampler>(
         2 *
-        HgGpuFilter_count *
-        HgGpuSamplerEdgeMode_count *
-        HgGpuSamplerBorder_count);
+        GpuFilter_count *
+        GpuSamplerEdgeMode_count *
+        GpuSamplerBorder_count);
 
     vk.frameCount = 2;
     vk.currentFrame = 0;
-    vk.frames = hgGpaAlloc<Frame>(vk.frameCount);
+    vk.frames = gpaAlloc<Frame>(vk.frameCount);
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
         vk.frames[i] = createFrame();
@@ -1268,30 +1268,30 @@ loadFailed:
     return false;
 }
 
-void hgGpuDeinit()
+void gpuDeinit()
 {
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
         vkDestroyFence(vk.device, vk.frames[i].fence, nullptr);
         vkDestroyCommandPool(vk.device, vk.frames[i].cmdPool, nullptr);
-        hgArrayDestroy(&vk.frames[i].windows);
+        arrayDestroy(&vk.frames[i].windows);
     }
-    hgGpaFree(vk.frames, vk.frameCount);
+    gpaFree(vk.frames, vk.frameCount);
 
-    hgMapForEach(&vk.samplers, [](SamplerInfo*, VkSampler* sampler)
+    mapForEach(&vk.samplers, [](SamplerInfo*, VkSampler* sampler)
     {
         vkDestroySampler(vk.device, *sampler, nullptr);
     });
-    hgMapDestroy(&vk.samplers);
+    mapDestroy(&vk.samplers);
 
-    hgPoolDestroy(&vk.pipelines);
-    hgPoolDestroy(&vk.views);
-    hgPoolDestroy(&vk.images);
-    hgPoolDestroy(&vk.buffers);
+    poolDestroy(&vk.pipelines);
+    poolDestroy(&vk.views);
+    poolDestroy(&vk.images);
+    poolDestroy(&vk.buffers);
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        hgHandlePoolDestroy(&vk.descriptorPools[i]);
+        handlePoolDestroy(&vk.descriptorPools[i]);
     }
 
     vkDestroyDescriptorSetLayout(vk.device, vk.bindlessLayout, nullptr);
@@ -1312,7 +1312,7 @@ void hgGpuDeinit()
     unloadVulkan();
 }
 
-void hgGpuWaitIdle()
+void gpuWaitIdle()
 {
     vkQueueWaitIdle(vk.queue);
 }
@@ -1322,11 +1322,11 @@ void hgGpuWaitIdle()
 //     VkMemoryPropertyFlags preferredFlags,
 //     VkMemoryPropertyFlags unpreferredFlags)
 // {
-//     hgAssert(vkState.hgVkPhysicalDevice != nullptr);
-//     hgAssert(bitmask != 0);
+//     HG_ASSERT(vkState.vkPhysicalDevice != nullptr);
+//     HG_ASSERT(bitmask != 0);
 //
 //     VkPhysicalDeviceMemoryProperties memProps;
-//     vkGetPhysicalDeviceMemoryProperties(vkState.hgVkPhysicalDevice, &memProps);
+//     vkGetPhysicalDeviceMemoryProperties(vkState.vkPhysicalDevice, &memProps);
 //
 //     for (u32 i = 0; i < memProps.memoryTypeCount; ++i)
 //     {
@@ -1341,7 +1341,7 @@ void hgGpuWaitIdle()
 //     {
 //         if ((bitmask & (1 << i)) != 0 && (memProps.memoryTypes[i].propertyFlags & preferredFlags) != 0)
 //         {
-//             hgWarn("Could not find Vulkan memory type without undesired flags\n");
+//             HG_WARN("Could not find Vulkan memory type without undesired flags\n");
 //             return i;
 //         }
 //     }
@@ -1349,22 +1349,22 @@ void hgGpuWaitIdle()
 //     {
 //         if ((bitmask & (1 << i)) != 0)
 //         {
-//             hgWarn("Could not find Vulkan memory type with desired flags\n");
+//             HG_WARN("Could not find Vulkan memory type with desired flags\n");
 //             return i;
 //         }
 //     }
-//     hgPanic("Could not find Vulkan memory type in bitmask: %x\n", bitmask);
+//     HG_PANIC("Could not find Vulkan memory type in bitmask: %x\n", bitmask);
 // }
 
 struct DescriptorBufferInfo {
-    HgGpuBuffer* buffer;
+    GpuBuffer* buffer;
     u64 offset;
     u64 range;
 };
 
 struct DescriptorImageInfo {
-    HgGpuView* imageView;
-    HgGpuLayout imageLayout;
+    GpuView* imageView;
+    GpuLayout imageLayout;
 };
 
 static Descriptor descriptorCreate(
@@ -1372,12 +1372,12 @@ static Descriptor descriptorCreate(
     const DescriptorBufferInfo* bufferInfo,
     const DescriptorImageInfo* imageInfo)
 {
-    hgAssert(type < DescriptorType_count);
+    HG_ASSERT(type < DescriptorType_count);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    Descriptor desc = hgHandlePoolAlloc(&vk.descriptorPools[type]);
+    Descriptor desc = handlePoolAlloc(&vk.descriptorPools[type]);
 
     VkDescriptorBufferInfo bufferVkInfo = bufferInfo != nullptr
         ? VkDescriptorBufferInfo{bufferInfo->buffer->buffer, bufferInfo->offset, bufferInfo->range}
@@ -1395,7 +1395,7 @@ static Descriptor descriptorCreate(
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = vk.bindlessSet;
     write.dstBinding = type;
-    write.dstArrayElement = hgHandleIdx(desc);
+    write.dstArrayElement = handleIdx(desc);
     write.descriptorCount = 1;
     write.descriptorType = descriptorTypeToVk(type);
     write.pBufferInfo = bufferInfo != nullptr ? &bufferVkInfo : nullptr;
@@ -1409,21 +1409,21 @@ static Descriptor descriptorCreate(
 
 static void descriptorDestroy(Descriptor desc, DescriptorType type)
 {
-    if (desc != hgHandleNull)
+    if (desc != handleNull)
     {
-        hgHandlePoolFree(&vk.descriptorPools[type], desc);
+        handlePoolFree(&vk.descriptorPools[type], desc);
     }
 }
 
-HgGpuBuffer* hgGpuBufferCreate(
+GpuBuffer* gpuBufferCreate(
     u64 size,
-    HgGpuBufferUsageFlags usageFlags,
-    HgGpuMemoryUsage memoryUsage)
+    GpuBufferUsageFlags usageFlags,
+    GpuMemoryUsage memoryUsage)
 {
-    hgAssert(size > 0);
-    hgAssert(usageFlags != 0);
+    HG_ASSERT(size > 0);
+    HG_ASSERT(usageFlags != 0);
 
-    HgGpuBuffer* buffer = (HgGpuBuffer*)hgPoolAlloc(&vk.buffers);
+    GpuBuffer* buffer = (GpuBuffer*)poolAlloc(&vk.buffers);
     *buffer = {};
 
     VkBufferCreateInfo bufferInfo{};
@@ -1444,15 +1444,15 @@ HgGpuBuffer* hgGpuBufferCreate(
         nullptr);
 
     if (result != VK_SUCCESS)
-        hgPanic("Could not create VkBuffer: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkBuffer: %s\n", vkResultToStr(result));
 
-    if (usageFlags & HgGpuBufferUsage_uniformBuffer)
+    if (usageFlags & GpuBufferUsage_uniformBuffer)
     {
         DescriptorBufferInfo descInfo{buffer, 0, size};
         buffer->uniformDesc = descriptorCreate(DescriptorType_uniformBuffer, &descInfo, nullptr);
     }
 
-    if (usageFlags & HgGpuBufferUsage_storageBuffer)
+    if (usageFlags & GpuBufferUsage_storageBuffer)
     {
         DescriptorBufferInfo descInfo{buffer, 0, size};
         buffer->storageDesc = descriptorCreate(DescriptorType_storageBuffer, &descInfo, nullptr);
@@ -1460,13 +1460,13 @@ HgGpuBuffer* hgGpuBufferCreate(
 
     buffer->size = size;
 
-    if (memoryUsage == HgGpuMemoryUsage_frequentUpdate)
+    if (memoryUsage == GpuMemoryUsage_frequentUpdate)
     {
         VkMemoryPropertyFlags memPropFlags;
         vmaGetAllocationMemoryProperties(vk.vma, buffer->alloc, &memPropFlags);
         buffer->access = memPropFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-            ? HgGpuMemoryHostAccess_write
-            : HgGpuMemoryHostAccess_none;
+            ? GpuMemoryHostAccess_write
+            : GpuMemoryHostAccess_none;
     } else {
         buffer->access = gpuMemoryUsageToHostAccess(memoryUsage);
     }
@@ -1474,52 +1474,52 @@ HgGpuBuffer* hgGpuBufferCreate(
     return buffer;
 }
 
-void hgGpuBufferDestroy(HgGpuBuffer* buffer)
+void gpuBufferDestroy(GpuBuffer* buffer)
 {
     if (buffer != nullptr)
     {
         descriptorDestroy(buffer->storageDesc, DescriptorType_storageBuffer);
         descriptorDestroy(buffer->uniformDesc, DescriptorType_uniformBuffer);
         vmaDestroyBuffer(vk.vma, buffer->buffer, buffer->alloc);
-        hgPoolFree(&vk.buffers, buffer);
+        poolFree(&vk.buffers, buffer);
     }
 }
 
-u32 hgGpuBufferUniformDescriptor(HgGpuBuffer* buffer)
+u32 gpuBufferUniformDescriptor(GpuBuffer* buffer)
 {
     Descriptor desc = buffer->uniformDesc;
-    hgAssert(hgHandlePoolAlive(&vk.descriptorPools[DescriptorType_uniformBuffer], desc));
-    return hgHandleIdx(desc);
+    HG_ASSERT(handlePoolAlive(&vk.descriptorPools[DescriptorType_uniformBuffer], desc));
+    return handleIdx(desc);
 }
 
-u32 hgGpuBufferStorageDescriptor(HgGpuBuffer* buffer)
+u32 gpuBufferStorageDescriptor(GpuBuffer* buffer)
 {
     Descriptor desc = buffer->storageDesc;
-    hgAssert(hgHandlePoolAlive(&vk.descriptorPools[DescriptorType_storageBuffer], desc));
-    return hgHandleIdx(desc);
+    HG_ASSERT(handlePoolAlive(&vk.descriptorPools[DescriptorType_storageBuffer], desc));
+    return handleIdx(desc);
 }
 
-void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size)
+void gpuBufferWrite(GpuBuffer* dst, u64 offset, const void* src, u64 size)
 {
     if (size == 0)
         return;
 
-    hgAssert(dst != nullptr);
-    hgAssert(src != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(src != nullptr);
 
-    if (dst->access & HgGpuMemoryHostAccess_write)
+    if (dst->access & GpuMemoryHostAccess_write)
     {
         VkResult result = vmaCopyMemoryToAllocation(vk.vma, src, dst->alloc, offset, size);
         if (result != VK_SUCCESS)
-            hgPanic("Could not write gpu buffer: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not write gpu buffer: %s\n", vkResultToStr(result));
         return;
     }
 
-    HgGpuBuffer* stage = hgGpuBufferCreate(size, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
-    hgDefer(hgGpuBufferDestroy(stage));
-    hgGpuBufferWrite(stage, 0, src, size);
+    GpuBuffer* stage = gpuBufferCreate(size, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
+    HG_DEFER(gpuBufferDestroy(stage));
+    gpuBufferWrite(stage, 0, src, size);
 
-    HgGpuCmd* cmd = hgGpuCmdBegin();
+    GpuCmd* cmd = gpuCmdBegin();
 
     VkBufferCopy region{};
     region.dstOffset = offset;
@@ -1527,32 +1527,32 @@ void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size)
 
     vkCmdCopyBuffer((VkCommandBuffer)cmd, stage->buffer, dst->buffer, 1, &region);
 
-    hgGpuCmdEnd(cmd);
+    gpuCmdEnd(cmd);
 
-    dst->lastStage = HgGpuStage_transfer;
-    dst->lastAccess = HgGpuAccess_transferWrite;
+    dst->lastStage = GpuStage_transfer;
+    dst->lastAccess = GpuAccess_transferWrite;
 }
 
-void hgGpuBufferRead(void* dst, HgGpuBuffer* src, u64 offset, u64 size)
+void gpuBufferRead(void* dst, GpuBuffer* src, u64 offset, u64 size)
 {
     if (size == 0)
         return;
 
-    hgAssert(dst != nullptr);
-    hgAssert(src != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(src != nullptr);
 
-    if (src->access & HgGpuMemoryHostAccess_read)
+    if (src->access & GpuMemoryHostAccess_read)
     {
         VkResult result = vmaCopyAllocationToMemory(vk.vma, src->alloc, offset, dst, size);
         if (result != VK_SUCCESS)
-            hgPanic("Could not read gpu buffer: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not read gpu buffer: %s\n", vkResultToStr(result));
         return;
     }
 
-    HgGpuBuffer* stage = hgGpuBufferCreate(size, HgGpuBufferUsage_transferDst, HgGpuMemoryUsage_stagingRead);
-    hgDefer(hgGpuBufferDestroy(stage));
+    GpuBuffer* stage = gpuBufferCreate(size, GpuBufferUsage_transferDst, GpuMemoryUsage_stagingRead);
+    HG_DEFER(gpuBufferDestroy(stage));
 
-    HgGpuCmd* cmd = hgGpuCmdBegin();
+    GpuCmd* cmd = gpuCmdBegin();
 
     VkBufferCopy region{};
     region.srcOffset = offset;
@@ -1560,30 +1560,30 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer* src, u64 offset, u64 size)
 
     vkCmdCopyBuffer((VkCommandBuffer)cmd, src->buffer, stage->buffer, 1, &region);
 
-    hgGpuCmdEnd(cmd);
+    gpuCmdEnd(cmd);
 
-    hgGpuBufferRead(dst, stage, 0, size);
+    gpuBufferRead(dst, stage, 0, size);
 
-    src->lastStage = HgGpuStage_transfer;
-    src->lastAccess = HgGpuAccess_transferRead;
+    src->lastStage = GpuStage_transfer;
+    src->lastAccess = GpuAccess_transferRead;
 }
 
-HgGpuImage* hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage)
+GpuImage* gpuImageCreate(u32 width, u32 height, Format format, GpuImageUsageFlags usage)
 {
-    HgGpuImageCreateEx create{};
+    GpuImageCreateEx create{};
     create.width = width;
     create.height = height;
     create.format = format;
     create.usage = usage;
-    return hgGpuImageCreateEx(&create);
+    return gpuImageCreateEx(&create);
 }
 
-HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
+GpuImage* gpuImageCreateEx(const GpuImageCreateEx* create)
 {
-    hgAssert(create->format != HgFormat_undefined);
-    hgAssert(create->usage != 0);
+    HG_ASSERT(create->format != Format_undefined);
+    HG_ASSERT(create->usage != 0);
 
-    HgGpuImage* image = (HgGpuImage*)hgPoolAlloc(&vk.images);
+    GpuImage* image = (GpuImage*)poolAlloc(&vk.images);
     *image = {};
 
     VkImageCreateInfo imageInfo{};
@@ -1609,7 +1609,7 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
         nullptr);
 
     if (result != VK_SUCCESS)
-        hgPanic("Could not create VkImage: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkImage: %s\n", vkResultToStr(result));
 
     image->usage = create->usage;
     image->format = create->format;
@@ -1624,21 +1624,21 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     return image;
 }
 
-void hgGpuImageDestroy(HgGpuImage* image)
+void gpuImageDestroy(GpuImage* image)
 {
     if (image != nullptr)
     {
         vmaDestroyImage(vk.vma, image->image, image->alloc);
-        hgPoolFree(&vk.images, image);
+        poolFree(&vk.images, image);
     }
 }
 
-u32 hgGpuImageWidth(HgGpuImage* image)
+u32 gpuImageWidth(GpuImage* image)
 {
     return image->width;
 }
 
-u32 hgGpuImageHeight(HgGpuImage* image)
+u32 gpuImageHeight(GpuImage* image)
 {
     return image->height;
 }
@@ -1649,7 +1649,7 @@ static VkSampler samplerCreate(SamplerInfo* desc)
     info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     info.magFilter = gpuFilterToVk(desc->filter);
     info.minFilter = gpuFilterToVk(desc->filter);
-    info.mipmapMode = desc->filter == HgGpuFilter_linear
+    info.mipmapMode = desc->filter == GpuFilter_linear
         ? VK_SAMPLER_MIPMAP_MODE_LINEAR
         : VK_SAMPLER_MIPMAP_MODE_NEAREST;
     info.addressModeU = gpuSamplerAddressModeToVk(desc->mode);
@@ -1663,31 +1663,31 @@ static VkSampler samplerCreate(SamplerInfo* desc)
     VkSampler sampler = nullptr;
     VkResult result = vkCreateSampler(vk.device, &info, nullptr, &sampler);
     if (sampler == nullptr)
-        hgPanic("Could not create VkSampler: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkSampler: %s\n", vkResultToStr(result));
 
     return sampler;
 }
 
 static VkSampler samplerGet(
-    HgGpuFilter filter,
-    HgGpuSamplerEdgeMode addressMode = HgGpuSamplerEdgeMode_repeat,
-    HgGpuSamplerBorder borderColor = HgGpuSamplerBorder_floatTransparentBlack)
+    GpuFilter filter,
+    GpuSamplerEdgeMode addressMode = GpuSamplerEdgeMode_repeat,
+    GpuSamplerBorder borderColor = GpuSamplerBorder_floatTransparentBlack)
 {
     SamplerInfo desc = {filter, addressMode, borderColor};
-    VkSampler* sampler = hgMapGet(&vk.samplers, desc);
+    VkSampler* sampler = mapGet(&vk.samplers, desc);
     if (sampler == nullptr)
     {
-        sampler = hgMapAdd(&vk.samplers, desc, samplerCreate(&desc));
+        sampler = mapAdd(&vk.samplers, desc, samplerCreate(&desc));
     }
     return *sampler;
 }
 
-HgGpuView* hgGpuViewCreate(
-    HgGpuImage* image,
-    HgGpuAspectFlags aspectFlags,
-    HgGpuFilter filter)
+GpuView* gpuViewCreate(
+    GpuImage* image,
+    GpuAspectFlags aspectFlags,
+    GpuFilter filter)
 {
-    HgGpuViewCreateEx config{};
+    GpuViewCreateEx config{};
     config.image = image;
     config.baseMipLevel = 0;
     config.levelCount = image->mipLevels;
@@ -1696,16 +1696,16 @@ HgGpuView* hgGpuViewCreate(
     config.aspectFlags = aspectFlags;
     config.type = imageDimensionsToHgView(image->dimensions);
     config.filter = filter;
-    config.edgeMode = HgGpuSamplerEdgeMode_repeat;
-    config.border = HgGpuSamplerBorder_floatTransparentBlack;
-    return hgGpuViewCreateEx(&config);
+    config.edgeMode = GpuSamplerEdgeMode_repeat;
+    config.border = GpuSamplerBorder_floatTransparentBlack;
+    return gpuViewCreateEx(&config);
 }
 
-HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
+GpuView* gpuViewCreateEx(const GpuViewCreateEx* config)
 {
-    hgAssert(config->aspectFlags != 0);
+    HG_ASSERT(config->aspectFlags != 0);
 
-    HgGpuView* view = (HgGpuView*)hgPoolAlloc(&vk.views);
+    GpuView* view = (GpuView*)poolAlloc(&vk.views);
     *view = {};
 
     VkImageViewCreateInfo info{};
@@ -1721,19 +1721,19 @@ HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 
     VkResult result = vkCreateImageView(vk.device, &info, nullptr, &view->view);
     if (view->view == nullptr)
-        hgPanic("Could not create VkImageView: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkImageView: %s\n", vkResultToStr(result));
 
-    if (config->image->usage & HgGpuImageUsage_sampled)
+    if (config->image->usage & GpuImageUsage_sampled)
     {
         view->sampler = samplerGet(config->filter, config->edgeMode, config->border);
 
-        DescriptorImageInfo descInfo{view, HgGpuLayout_shaderReadOnly};
+        DescriptorImageInfo descInfo{view, GpuLayout_shaderReadOnly};
         view->samplerDesc = descriptorCreate(DescriptorType_combinedImageSampler, nullptr, &descInfo);
     }
 
-    if (config->image->usage & HgGpuImageUsage_storage)
+    if (config->image->usage & GpuImageUsage_storage)
     {
-        DescriptorImageInfo descInfo{view, HgGpuLayout_general};
+        DescriptorImageInfo descInfo{view, GpuLayout_general};
         view->storageDesc = descriptorCreate(DescriptorType_storageImage, nullptr, &descInfo);
     }
 
@@ -1748,56 +1748,56 @@ HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
     return view;
 }
 
-void hgGpuViewDestroy(HgGpuView* view)
+void gpuViewDestroy(GpuView* view)
 {
     if (view != nullptr)
     {
         descriptorDestroy(view->storageDesc, DescriptorType_storageImage);
         descriptorDestroy(view->samplerDesc, DescriptorType_combinedImageSampler);
         vkDestroyImageView(vk.device, view->view, nullptr);
-        hgPoolFree(&vk.views, view);
+        poolFree(&vk.views, view);
     }
 }
 
-u32 hgGpuViewWidth(HgGpuView* view)
+u32 gpuViewWidth(GpuView* view)
 {
     return view->image->width;
 }
 
-u32 hgGpuViewHeight(HgGpuView* view)
+u32 gpuViewHeight(GpuView* view)
 {
     return view->image->height;
 }
 
-u32 hgGpuImageSamplerDescriptor(HgGpuView* view)
+u32 gpuImageSamplerDescriptor(GpuView* view)
 {
     Descriptor desc = view->samplerDesc;
-    hgAssert(hgHandlePoolAlive(&vk.descriptorPools[DescriptorType_combinedImageSampler], desc));
-    return hgHandleIdx(desc);
+    HG_ASSERT(handlePoolAlive(&vk.descriptorPools[DescriptorType_combinedImageSampler], desc));
+    return handleIdx(desc);
 }
 
-u32 hgGpuImageStorageDescriptor(HgGpuView* view)
+u32 gpuImageStorageDescriptor(GpuView* view)
 {
     Descriptor desc = view->storageDesc;
-    hgAssert(hgHandlePoolAlive(&vk.descriptorPools[DescriptorType_storageImage], desc));
-    return hgHandleIdx(desc);
+    HG_ASSERT(handlePoolAlive(&vk.descriptorPools[DescriptorType_storageImage], desc));
+    return handleIdx(desc);
 }
 
-void hgGpuImageWrite(HgGpuView* dst, const void* src)
+void gpuImageWrite(GpuView* dst, const void* src)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(src != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(src != nullptr);
 
     u64 size = dst->image->width
              * dst->image->height
              * dst->image->depth
-             * hgFormatToSize(dst->image->format);
+             * formatToSize(dst->image->format);
 
-    HgGpuBuffer* stage = hgGpuBufferCreate(size, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
-    hgDefer(hgGpuBufferDestroy(stage));
-    hgGpuBufferWrite(stage, 0, src, size);
+    GpuBuffer* stage = gpuBufferCreate(size, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
+    HG_DEFER(gpuBufferDestroy(stage));
+    gpuBufferWrite(stage, 0, src, size);
 
-    HgGpuCmd* cmd = hgGpuCmdBegin();
+    GpuCmd* cmd = gpuCmdBegin();
 
     VkImageMemoryBarrier2 transferBarrier{};
     transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1833,36 +1833,36 @@ void hgGpuImageWrite(HgGpuView* dst, const void* src)
         1,
         &region);
 
-    hgGpuCmdEnd(cmd);
+    gpuCmdEnd(cmd);
 
-    dst->lastStage = HgGpuStage_transfer;
-    dst->lastAccess = HgGpuAccess_transferWrite;
-    dst->lastLayout = HgGpuLayout_transferDst;
+    dst->lastStage = GpuStage_transfer;
+    dst->lastAccess = GpuAccess_transferWrite;
+    dst->lastLayout = GpuLayout_transferDst;
 }
 
-void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
+void gpuImageWriteCubemap(GpuView* dst, const void* src)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(dst->image->depth == 1);
-    hgAssert(dst->baseArrayLayer == 0);
-    hgAssert(dst->layerCount >= 6);
-    hgAssert(src != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(dst->image->depth == 1);
+    HG_ASSERT(dst->baseArrayLayer == 0);
+    HG_ASSERT(dst->layerCount >= 6);
+    HG_ASSERT(src != nullptr);
 
-    u64 size = dst->image->width * dst->image->height * hgFormatToSize(dst->image->format);
+    u64 size = dst->image->width * dst->image->height * formatToSize(dst->image->format);
 
-    HgGpuBuffer* buffer = hgGpuBufferCreate(size * 4 * 3, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
-    hgDefer(hgGpuBufferDestroy(buffer));
+    GpuBuffer* buffer = gpuBufferCreate(size * 4 * 3, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
+    HG_DEFER(gpuBufferDestroy(buffer));
 
-    hgGpuBufferWrite(buffer, 0, src, size * 4 * 3);
+    gpuBufferWrite(buffer, 0, src, size * 4 * 3);
 
-    HgGpuImage* stage = hgGpuImageCreate(
+    GpuImage* stage = gpuImageCreate(
         dst->image->width * 4,
         dst->image->height * 3,
         dst->image->format,
-        HgGpuImageUsage_transferDst | HgGpuImageUsage_transferSrc);
-    hgDefer(hgGpuImageDestroy(stage));
+        GpuImageUsage_transferDst | GpuImageUsage_transferSrc);
+    HG_DEFER(gpuImageDestroy(stage));
 
-    HgGpuCmd* cmd = hgGpuCmdBegin();
+    GpuCmd* cmd = gpuCmdBegin();
 
     VkImageMemoryBarrier2 stageBarrier{};
     stageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1924,7 +1924,7 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = (u32)hgArrayCount(transferBarriers);
+    transferDep.imageMemoryBarrierCount = (u32)arrayCount(transferBarriers);
     transferDep.pImageMemoryBarriers = transferBarriers;
 
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &transferDep);
@@ -1973,31 +1973,31 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         dst->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        (u32)hgArrayCount(regions),
+        (u32)arrayCount(regions),
         regions);
 
-    hgGpuCmdEnd(cmd);
+    gpuCmdEnd(cmd);
 
-    dst->lastStage = HgGpuStage_transfer;
-    dst->lastAccess = HgGpuAccess_transferWrite;
-    dst->lastLayout = HgGpuLayout_transferDst;
+    dst->lastStage = GpuStage_transfer;
+    dst->lastAccess = GpuAccess_transferWrite;
+    dst->lastLayout = GpuLayout_transferDst;
 }
 
-void hgGpuImageRead(void* dst, HgGpuView* src)
+void gpuImageRead(void* dst, GpuView* src)
 {
-    hgAssert(src != nullptr);
-    hgAssert(src->lastLayout != HgGpuLayout_undefined);
-    hgAssert(dst != nullptr);
+    HG_ASSERT(src != nullptr);
+    HG_ASSERT(src->lastLayout != GpuLayout_undefined);
+    HG_ASSERT(dst != nullptr);
 
     u64 size = src->image->width
              * src->image->height
              * src->image->depth
-             * hgFormatToSize(src->image->format);
+             * formatToSize(src->image->format);
 
-    HgGpuBuffer* stage = hgGpuBufferCreate(size, HgGpuBufferUsage_transferDst, HgGpuMemoryUsage_stagingRead);
-    hgDefer(hgGpuBufferDestroy(stage));
+    GpuBuffer* stage = gpuBufferCreate(size, GpuBufferUsage_transferDst, GpuMemoryUsage_stagingRead);
+    HG_DEFER(gpuBufferDestroy(stage));
 
-    HgGpuCmd* cmd = hgGpuCmdBegin();
+    GpuCmd* cmd = gpuCmdBegin();
 
     VkImageMemoryBarrier2 transferBarrier{};
     transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2036,23 +2036,23 @@ void hgGpuImageRead(void* dst, HgGpuView* src)
         1,
         &region);
 
-    hgGpuCmdEnd(cmd);
+    gpuCmdEnd(cmd);
 
-    hgGpuBufferRead(dst, stage, 0, size);
+    gpuBufferRead(dst, stage, 0, size);
 
-    src->lastStage = HgGpuStage_transfer;
-    src->lastAccess = HgGpuAccess_transferRead;
-    src->lastLayout = HgGpuLayout_transferSrc;
+    src->lastStage = GpuStage_transfer;
+    src->lastAccess = GpuAccess_transferRead;
+    src->lastLayout = GpuLayout_transferSrc;
 }
 
-void hgGpuImageGenMipmaps(HgGpuView* dst)
+void gpuImageGenMipmaps(GpuView* dst)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(dst->lastLayout != HgGpuLayout_undefined);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(dst->lastLayout != GpuLayout_undefined);
     if (dst->levelCount == 1)
         return;
 
-    HgGpuCmd* cmd = hgGpuCmdBegin();
+    GpuCmd* cmd = gpuCmdBegin();
 
     VkOffset3D mipOffset{};
     mipOffset.x = (i32)dst->image->width;
@@ -2127,11 +2127,11 @@ void hgGpuImageGenMipmaps(HgGpuView* dst)
         vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
     }
 
-    hgGpuCmdEnd(cmd);
+    gpuCmdEnd(cmd);
 
-    dst->lastStage = HgGpuStage_transfer;
-    dst->lastAccess = HgGpuAccess_transferRead;
-    dst->lastLayout = HgGpuLayout_transferSrc;
+    dst->lastStage = GpuStage_transfer;
+    dst->lastAccess = GpuAccess_transferRead;
+    dst->lastLayout = GpuLayout_transferSrc;
 }
 
 static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
@@ -2144,23 +2144,23 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
     VkShaderModule shader = nullptr;
     VkResult result = vkCreateShaderModule(vk.device, &info, nullptr, &shader);
     if (shader == nullptr)
-        hgPanic("Could not create VkShaderModule: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkShaderModule: %s\n", vkResultToStr(result));
 
     return shader;
 }
 
-HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config)
+GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
 {
-    hgAssert(config->vertexShader != nullptr);
-    hgAssert(config->fragmentShader != nullptr);
+    HG_ASSERT(config->vertexShader != nullptr);
+    HG_ASSERT(config->fragmentShader != nullptr);
     if (config->colorAttachmentCount > 0)
-        hgAssert(config->colorAttachmentFormats != nullptr);
+        HG_ASSERT(config->colorAttachmentFormats != nullptr);
 
-    HgGpuPipeline* pipeline = (HgGpuPipeline*)hgPoolAlloc(&vk.pipelines);
+    GpuPipeline* pipeline = (GpuPipeline*)poolAlloc(&vk.pipelines);
     *pipeline = {};
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2175,12 +2175,12 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
 
     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
-        hgPanic("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
+        HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule vertexShader = createShaderModule(config->vertexShader, config->vertexShaderSize);
     VkShaderModule fragmentShader = createShaderModule(config->fragmentShader, config->fragmentShaderSize);
-    hgDefer(vkDestroyShaderModule(vk.device, vertexShader, nullptr));
-    hgDefer(vkDestroyShaderModule(vk.device, fragmentShader, nullptr));
+    HG_DEFER(vkDestroyShaderModule(vk.device, vertexShader, nullptr));
+    HG_DEFER(vkDestroyShaderModule(vk.device, fragmentShader, nullptr));
 
     VkPipelineShaderStageCreateInfo shaderStages[2]{};
     shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -2244,7 +2244,7 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     depthStencilState.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState* colorBlendAttachments
-        = hgArenaAlloc<VkPipelineColorBlendAttachmentState>(scratch, config->colorAttachmentCount);
+        = arenaAlloc<VkPipelineColorBlendAttachmentState>(sc, config->colorAttachmentCount);
 
     for (u32 i = 0; i < config->colorAttachmentCount; ++i)
     {
@@ -2278,10 +2278,10 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = (u32)hgArrayCount(dynamicStates);
+    dynamicState.dynamicStateCount = (u32)arrayCount(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
 
-    VkFormat* colorFormats = hgArenaAlloc<VkFormat>(scratch, config->colorAttachmentCount);
+    VkFormat* colorFormats = arenaAlloc<VkFormat>(sc, config->colorAttachmentCount);
     for (u32 i = 0; i < config->colorAttachmentCount; ++i)
     {
         colorFormats[i] = formatToVk(config->colorAttachmentFormats[i]);
@@ -2299,7 +2299,7 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = (u32)hgArrayCount(shaderStages);
+    pipelineInfo.stageCount = (u32)arrayCount(shaderStages);
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputState;
     pipelineInfo.pInputAssemblyState = &inputAssemblyState;
@@ -2317,19 +2317,19 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     VkResult pipelineResult = vkCreateGraphicsPipelines(
         vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
     if (pipeline == nullptr)
-        hgPanic("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
+        HG_PANIC("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
 
     pipeline->bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     return pipeline;
 }
 
-HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize)
+GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize)
 {
-    hgAssert(shaderCode != nullptr);
-    hgAssert(shaderCodeSize > 0);
+    HG_ASSERT(shaderCode != nullptr);
+    HG_ASSERT(shaderCodeSize > 0);
 
-    HgGpuPipeline* pipeline = (HgGpuPipeline*)hgPoolAlloc(&vk.pipelines);
+    GpuPipeline* pipeline = (GpuPipeline*)poolAlloc(&vk.pipelines);
     *pipeline = {};
 
     VkPipelineLayoutCreateInfo layoutInfo{};
@@ -2343,10 +2343,10 @@ HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u6
 
     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
-        hgPanic("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
+        HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule computeShader = createShaderModule(shaderCode, shaderCodeSize);
-    hgDefer(vkDestroyShaderModule(vk.device, computeShader, nullptr));
+    HG_DEFER(vkDestroyShaderModule(vk.device, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -2361,24 +2361,24 @@ HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u6
     VkResult pipelineResult = vkCreateComputePipelines(
         vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
     if (pipeline == nullptr)
-        hgPanic("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
+        HG_PANIC("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
 
     pipeline->bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
 
     return pipeline;
 }
 
-void hgGpuPipelineDestroy(HgGpuPipeline* pipeline)
+void gpuPipelineDestroy(GpuPipeline* pipeline)
 {
     if (pipeline != nullptr)
     {
         vkDestroyPipeline(vk.device, pipeline->pipeline, nullptr);
         vkDestroyPipelineLayout(vk.device, pipeline->layout, nullptr);
-        hgPoolFree(&vk.pipelines, pipeline);
+        poolFree(&vk.pipelines, pipeline);
     }
 }
 
-HgGpuCmd* hgGpuCmdBegin()
+GpuCmd* gpuCmdBegin()
 {
     VkCommandBufferAllocateInfo cmdInfo{};
     cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -2394,12 +2394,12 @@ HgGpuCmd* hgGpuCmdBegin()
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(cmd, &beginInfo);
-    return (HgGpuCmd*)cmd;
+    return (GpuCmd*)cmd;
 }
 
-void hgGpuCmdEnd(HgGpuCmd* cmd)
+void gpuCmdEnd(GpuCmd* cmd)
 {
-    hgAssert(cmd != nullptr);
+    HG_ASSERT(cmd != nullptr);
     vkEndCommandBuffer((VkCommandBuffer)cmd);
 
     VkFenceCreateInfo fenceInfo{};
@@ -2407,7 +2407,7 @@ void hgGpuCmdEnd(HgGpuCmd* cmd)
 
     VkFence fence = nullptr;
     vkCreateFence(vk.device, &fenceInfo, nullptr, &fence);
-    hgDefer(vkDestroyFence(vk.device, fence, nullptr));
+    HG_DEFER(vkDestroyFence(vk.device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2420,7 +2420,7 @@ void hgGpuCmdEnd(HgGpuCmd* cmd)
     vkFreeCommandBuffers(vk.device, vk.cmdPool, 1, (VkCommandBuffer*)&cmd);
 }
 
-void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline)
+void gpuBindPipeline(GpuCmd* cmd, GpuPipeline* pipeline)
 {
     vkCmdBindPipeline(
         (VkCommandBuffer)cmd,
@@ -2438,7 +2438,7 @@ void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline)
         nullptr);
 }
 
-void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, void* push, u32 size)
+void gpuPushConstants(GpuCmd* cmd, GpuPipeline* pipeline, void* push, u32 size)
 {
     vkCmdPushConstants(
         (VkCommandBuffer)cmd,
@@ -2451,32 +2451,32 @@ void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, void* push, u32 
         push);
 }
 
-void hgGpuDraw(HgGpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount)
+void gpuDraw(GpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount)
 {
     vkCmdDraw((VkCommandBuffer)cmd, vertexCount, instanceCount, vertexBegin, instanceBegin);
 }
 
-void hgGpuDispatch(HgGpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
+void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
 {
     vkCmdDispatch((VkCommandBuffer)cmd, groupCountX, groupCountY, groupCountZ);
 }
 
-void hgGpuMemoryBarrier(
-    HgGpuCmd* cmd,
-    const HgGpuBufferBarrier* bufferBarriers,
+void gpuMemoryBarrier(
+    GpuCmd* cmd,
+    const GpuBufferBarrier* bufferBarriers,
     u32 bufferBarrierCount,
-    const HgGpuImageBarrier* imageBarriers,
+    const GpuImageBarrier* imageBarriers,
     u32 imageBarrierCount)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    VkBufferMemoryBarrier2* vkBufferBarriers = hgArenaAlloc<VkBufferMemoryBarrier2>(scratch, imageBarrierCount);
-    VkImageMemoryBarrier2* vkImageBarriers = hgArenaAlloc<VkImageMemoryBarrier2>(scratch, imageBarrierCount);
+    VkBufferMemoryBarrier2* vkBufferBarriers = arenaAlloc<VkBufferMemoryBarrier2>(sc, imageBarrierCount);
+    VkImageMemoryBarrier2* vkImageBarriers = arenaAlloc<VkImageMemoryBarrier2>(sc, imageBarrierCount);
 
     for (u32 i = 0; i < bufferBarrierCount; ++i)
     {
-        HgGpuBuffer* buffer = bufferBarriers[i].buffer;
+        GpuBuffer* buffer = bufferBarriers[i].buffer;
 
         vkBufferBarriers[i] = {};
         vkBufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2493,7 +2493,7 @@ void hgGpuMemoryBarrier(
 
     for (u32 i = 0; i < imageBarrierCount; ++i)
     {
-        HgGpuView* image = imageBarriers[i].image;
+        GpuView* image = imageBarriers[i].image;
 
         vkImageBarriers[i] = {};
         vkImageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2527,32 +2527,32 @@ void hgGpuMemoryBarrier(
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 }
 
-static VkAttachmentLoadOp gpuLoadOpToVk(HgGpuLoadOp op)
+static VkAttachmentLoadOp gpuLoadOpToVk(GpuLoadOp op)
 {
     return (VkAttachmentLoadOp)op;
 }
 
-static VkAttachmentStoreOp gpuStoreOpToVk(HgGpuStoreOp op)
+static VkAttachmentStoreOp gpuStoreOpToVk(GpuStoreOp op)
 {
     return (VkAttachmentStoreOp)op;
 }
 
-void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
+void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     VkBufferMemoryBarrier2* bufferBarriers = nullptr;
     u32 bufferBarrierCount = 0;
     VkImageMemoryBarrier2* imageBarriers = nullptr;
     u32 imageBarrierCount = 0;
 
-    bufferBarriers = hgArenaRealloc<VkBufferMemoryBarrier2>(scratch,
+    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(sc,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
     {
-        HgGpuBuffer* buffer = &pass->uniformBuffers[i - bufferBarrierCount];
+        GpuBuffer* buffer = &pass->uniformBuffers[i - bufferBarrierCount];
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2563,18 +2563,18 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
         bufferBarriers[i].buffer = buffer->buffer;
         bufferBarriers[i].size = buffer->size;
 
-        buffer->lastStage = HgGpuStage_computeShader;
-        buffer->lastAccess = HgGpuAccess_uniformRead;
+        buffer->lastStage = GpuStage_computeShader;
+        buffer->lastAccess = GpuAccess_uniformRead;
     }
 
     bufferBarrierCount += pass->uniformBufferCount;
 
-    bufferBarriers = hgArenaRealloc<VkBufferMemoryBarrier2>(scratch,
+    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(sc,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
     {
-        HgGpuBuffer* buffer = &pass->storageBuffers[i - bufferBarrierCount];
+        GpuBuffer* buffer = &pass->storageBuffers[i - bufferBarrierCount];
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2585,18 +2585,18 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
         bufferBarriers[i].buffer = buffer->buffer;
         bufferBarriers[i].size = buffer->size;
 
-        buffer->lastStage = HgGpuStage_computeShader;
-        buffer->lastAccess = HgGpuAccess_shaderRead | HgGpuAccess_shaderWrite;
+        buffer->lastStage = GpuStage_computeShader;
+        buffer->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
     }
 
     bufferBarrierCount += pass->storageBufferCount;
 
-    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(scratch,
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(sc,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
     {
-        HgGpuView* image = &pass->sampledImages[i - imageBarrierCount];
+        GpuView* image = &pass->sampledImages[i - imageBarrierCount];
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2615,19 +2615,19 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
             image->layerCount,
         };
 
-        image->lastStage = HgGpuStage_computeShader;
-        image->lastAccess = HgGpuAccess_shaderRead;
-        image->lastLayout = HgGpuLayout_shaderReadOnly;
+        image->lastStage = GpuStage_computeShader;
+        image->lastAccess = GpuAccess_shaderRead;
+        image->lastLayout = GpuLayout_shaderReadOnly;
     }
 
     imageBarrierCount += pass->sampledImageCount;
 
-    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(scratch,
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(sc,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
     {
-        HgGpuView* image = &pass->storageImages[i - imageBarrierCount];
+        GpuView* image = &pass->storageImages[i - imageBarrierCount];
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2646,9 +2646,9 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
             image->layerCount,
         };
 
-        image->lastStage = HgGpuStage_computeShader;
-        image->lastAccess = HgGpuAccess_shaderRead | HgGpuAccess_shaderWrite;
-        image->lastLayout = HgGpuLayout_general;
+        image->lastStage = GpuStage_computeShader;
+        image->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        image->lastLayout = GpuLayout_general;
     }
 
     imageBarrierCount += pass->storageImageCount;
@@ -2663,22 +2663,22 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 }
 
-void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
+void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     VkBufferMemoryBarrier2* bufferBarriers = nullptr;
     u32 bufferBarrierCount = 0;
     VkImageMemoryBarrier2* imageBarriers = nullptr;
     u32 imageBarrierCount = 0;
 
-    bufferBarriers = hgArenaRealloc<VkBufferMemoryBarrier2>(scratch,
+    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(sc,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
     {
-        HgGpuBuffer* buffer = &pass->uniformBuffers[i - bufferBarrierCount];
+        GpuBuffer* buffer = &pass->uniformBuffers[i - bufferBarrierCount];
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2689,18 +2689,18 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
         bufferBarriers[i].buffer = buffer->buffer;
         bufferBarriers[i].size = buffer->size;
 
-        buffer->lastStage = HgGpuStage_vertexShader | HgGpuStage_fragmentShader;
-        buffer->lastAccess = HgGpuAccess_uniformRead;
+        buffer->lastStage = GpuStage_vertexShader | GpuStage_fragmentShader;
+        buffer->lastAccess = GpuAccess_uniformRead;
     }
 
     bufferBarrierCount += pass->uniformBufferCount;
 
-    bufferBarriers = hgArenaRealloc<VkBufferMemoryBarrier2>(scratch,
+    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(sc,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
     {
-        HgGpuBuffer* buffer = &pass->storageBuffers[i - bufferBarrierCount];
+        GpuBuffer* buffer = &pass->storageBuffers[i - bufferBarrierCount];
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2711,18 +2711,18 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
         bufferBarriers[i].buffer = buffer->buffer;
         bufferBarriers[i].size = buffer->size;
 
-        buffer->lastStage = HgGpuStage_vertexShader | HgGpuStage_fragmentShader;
-        buffer->lastAccess = HgGpuAccess_shaderRead | HgGpuAccess_shaderWrite;
+        buffer->lastStage = GpuStage_vertexShader | GpuStage_fragmentShader;
+        buffer->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
     }
 
     bufferBarrierCount += pass->storageBufferCount;
 
-    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(scratch,
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(sc,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
     {
-        HgGpuView* image = &pass->sampledImages[i - imageBarrierCount];
+        GpuView* image = &pass->sampledImages[i - imageBarrierCount];
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2741,19 +2741,19 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
             image->layerCount,
         };
 
-        image->lastStage = HgGpuStage_fragmentShader;
-        image->lastAccess = HgGpuAccess_shaderRead;
-        image->lastLayout = HgGpuLayout_shaderReadOnly;
+        image->lastStage = GpuStage_fragmentShader;
+        image->lastAccess = GpuAccess_shaderRead;
+        image->lastLayout = GpuLayout_shaderReadOnly;
     }
 
     imageBarrierCount += pass->sampledImageCount;
 
-    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(scratch,
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(sc,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
     {
-        HgGpuView* image = &pass->storageImages[i - imageBarrierCount];
+        GpuView* image = &pass->storageImages[i - imageBarrierCount];
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2772,19 +2772,19 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
             image->layerCount,
         };
 
-        image->lastStage = HgGpuStage_fragmentShader;
-        image->lastAccess = HgGpuAccess_shaderRead | HgGpuAccess_shaderWrite;
-        image->lastLayout = HgGpuLayout_general;
+        image->lastStage = GpuStage_fragmentShader;
+        image->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        image->lastLayout = GpuLayout_general;
     }
 
     imageBarrierCount += pass->storageImageCount;
 
-    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(
-        scratch, imageBarriers, imageBarrierCount, imageBarrierCount + pass->colorAttachmentCount);
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(
+        sc, imageBarriers, imageBarrierCount, imageBarrierCount + pass->colorAttachmentCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->colorAttachmentCount; ++i)
     {
-        HgGpuView* image = pass->colorAttachments[i - imageBarrierCount].image;
+        GpuView* image = pass->colorAttachments[i - imageBarrierCount].image;
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2792,7 +2792,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
         imageBarriers[i].srcAccessMask = gpuAccessToVk(image->lastAccess);
         imageBarriers[i].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarriers[i].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        if (pass->colorAttachments[i - imageBarrierCount].loadOp == HgGpuLoadOp_load)
+        if (pass->colorAttachments[i - imageBarrierCount].loadOp == GpuLoadOp_load)
             imageBarriers[i].oldLayout = gpuLayoutToVk(image->lastLayout);
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imageBarriers[i].image = image->image->image;
@@ -2804,19 +2804,19 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
             image->layerCount,
         };
 
-        image->lastStage = HgGpuStage_colorAttachmentOutput;
-        image->lastAccess = HgGpuAccess_colorAttachmentWrite;
-        image->lastLayout = HgGpuLayout_colorAttachment;
+        image->lastStage = GpuStage_colorAttachmentOutput;
+        image->lastAccess = GpuAccess_colorAttachmentWrite;
+        image->lastLayout = GpuLayout_colorAttachment;
     }
 
     imageBarrierCount += pass->colorAttachmentCount;
 
     if (pass->depthAttachment != nullptr)
     {
-        imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(
-            scratch, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
+        imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(
+            sc, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
-        HgGpuView* image = pass->depthAttachment->image;
+        GpuView* image = pass->depthAttachment->image;
 
         u32 idx = imageBarrierCount;
         imageBarriers[idx] = {};
@@ -2827,7 +2827,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
                                         | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         imageBarriers[idx].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        if (pass->depthAttachment->loadOp == HgGpuLoadOp_load)
+        if (pass->depthAttachment->loadOp == GpuLoadOp_load)
             imageBarriers[idx].oldLayout = gpuLayoutToVk(image->lastLayout);
         imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         imageBarriers[idx].image = image->image->image;
@@ -2839,19 +2839,19 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
             image->layerCount,
         };
 
-        image->lastStage = HgGpuStage_earlyFragmentTests | HgGpuStage_lateFragmentTests;
-        image->lastAccess = HgGpuAccess_depthStencilAttachmentRead | HgGpuAccess_depthStencilAttachmentWrite;
-        image->lastLayout = HgGpuLayout_depthStencilAttachment;
+        image->lastStage = GpuStage_earlyFragmentTests | GpuStage_lateFragmentTests;
+        image->lastAccess = GpuAccess_depthStencilAttachmentRead | GpuAccess_depthStencilAttachmentWrite;
+        image->lastLayout = GpuLayout_depthStencilAttachment;
 
         ++imageBarrierCount;
     }
 
     if (pass->stencilAttachment != nullptr)
     {
-        imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(
-            scratch, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
+        imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(
+            sc, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
-        HgGpuView* image = pass->stencilAttachment->image;
+        GpuView* image = pass->stencilAttachment->image;
 
         u32 idx = imageBarrierCount;
         imageBarriers[idx] = {};
@@ -2862,7 +2862,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
                                         | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         imageBarriers[idx].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        if (pass->stencilAttachment->loadOp == HgGpuLoadOp_load)
+        if (pass->stencilAttachment->loadOp == GpuLoadOp_load)
             imageBarriers[idx].oldLayout = gpuLayoutToVk(image->lastLayout);
         imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         imageBarriers[idx].image = image->image->image;
@@ -2874,9 +2874,9 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
             image->layerCount,
         };
 
-        image->lastStage = HgGpuStage_earlyFragmentTests | HgGpuStage_lateFragmentTests;
-        image->lastAccess = HgGpuAccess_depthStencilAttachmentRead | HgGpuAccess_depthStencilAttachmentWrite;
-        image->lastLayout = HgGpuLayout_depthStencilAttachment;
+        image->lastStage = GpuStage_earlyFragmentTests | GpuStage_lateFragmentTests;
+        image->lastAccess = GpuAccess_depthStencilAttachmentRead | GpuAccess_depthStencilAttachmentWrite;
+        image->lastLayout = GpuLayout_depthStencilAttachment;
 
         ++imageBarrierCount;
     }
@@ -2891,7 +2891,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 
     VkRenderingAttachmentInfo* colorAttachments
-        = hgArenaAlloc<VkRenderingAttachmentInfo>(scratch, pass->colorAttachmentCount);
+        = arenaAlloc<VkRenderingAttachmentInfo>(sc, pass->colorAttachmentCount);
 
     for (u32 i = 0; i < pass->colorAttachmentCount; ++i)
     {
@@ -2901,7 +2901,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
         colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachments[i].loadOp = gpuLoadOpToVk(pass->colorAttachments[i].loadOp);
         colorAttachments[i].storeOp = gpuStoreOpToVk(pass->colorAttachments[i].storeOp);
-        hgMemCopy(&colorAttachments[i].clearValue, &pass->colorAttachments[i].clearValue, sizeof(VkClearValue));
+        memCopy(&colorAttachments[i].clearValue, &pass->colorAttachments[i].clearValue, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo depthAttachment{};
@@ -2912,7 +2912,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = gpuLoadOpToVk(pass->depthAttachment->loadOp);
         depthAttachment.storeOp = gpuStoreOpToVk(pass->depthAttachment->storeOp);
-        hgMemCopy(&depthAttachment.clearValue, &pass->depthAttachment->clearValue, sizeof(VkClearValue));
+        memCopy(&depthAttachment.clearValue, &pass->depthAttachment->clearValue, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo stencilAttachment{};
@@ -2923,7 +2923,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
         stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         stencilAttachment.loadOp = gpuLoadOpToVk(pass->stencilAttachment->loadOp);
         stencilAttachment.storeOp = gpuStoreOpToVk(pass->stencilAttachment->storeOp);
-        hgMemCopy(&stencilAttachment.clearValue, &pass->stencilAttachment->clearValue, sizeof(VkClearValue));
+        memCopy(&stencilAttachment.clearValue, &pass->stencilAttachment->clearValue, sizeof(VkClearValue));
     }
 
     u32 width = pass->colorAttachments[0].image->image->width;
@@ -2944,36 +2944,36 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, const HgGpuRenderPass* pass)
 
     vkCmdBeginRendering((VkCommandBuffer)cmd, &renderingInfo);
 
-    hgGpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
-    hgGpuSetScissor(cmd, 0, 0, width, height);
+    gpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
+    gpuSetScissor(cmd, 0, 0, width, height);
 }
 
-static VkPresentModeKHR hgPresentModeToVk(HgGpuPresentMode mode)
+static VkPresentModeKHR presentModeToVk(GpuPresentMode mode)
 {
     return (VkPresentModeKHR)mode;
 }
 
-void hgGpuRenderPassEnd(HgGpuCmd* cmd)
+void gpuRenderPassEnd(GpuCmd* cmd)
 {
     vkCmdEndRendering((VkCommandBuffer)cmd);
 }
 
-void hgGpuSetViewport(HgGpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near, f32 far)
+void gpuSetViewport(GpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near, f32 far)
 {
     VkViewport viewport{x, y, width, height, near, far};
     vkCmdSetViewport((VkCommandBuffer)cmd, 0, 1, &viewport);
 }
 
-void hgGpuSetScissor(HgGpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
+void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
 {
     VkRect2D scissor{{x, y}, {width, height}};
     vkCmdSetScissor((VkCommandBuffer)cmd, 0, 1, &scissor);
 }
 
-static void resizeWindowSwapchain(HgWindow* window)
+static void resizeWindowSwapchain(Window* window)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     vkQueueWaitIdle(vk.queue);
 
@@ -3006,32 +3006,32 @@ static void resizeWindowSwapchain(HgWindow* window)
         VkSwapchainCreateInfoKHR swapchainInfo{};
         swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         swapchainInfo.surface = window->surface;
-        swapchainInfo.minImageCount = hgMin(capabilities.minImageCount, capabilities.maxImageCount - 1) + 1;
+        swapchainInfo.minImageCount = min(capabilities.minImageCount, capabilities.maxImageCount - 1) + 1;
         swapchainInfo.imageFormat = formatToVk(window->format);
         swapchainInfo.imageExtent = {window->width, window->height};
         swapchainInfo.imageArrayLayers = 1;
         swapchainInfo.imageUsage = window->imageUsage;
         swapchainInfo.preTransform = capabilities.currentTransform;
         swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        swapchainInfo.presentMode = hgPresentModeToVk(window->presentMode);
+        swapchainInfo.presentMode = presentModeToVk(window->presentMode);
         swapchainInfo.clipped = VK_TRUE;
         swapchainInfo.oldSwapchain = window->swapchain;
 
         VkResult result = vkCreateSwapchainKHR(vk.device, &swapchainInfo, nullptr, &window->swapchain);
         if (window->swapchain == nullptr)
-            hgPanic("Failed to create swapchain: %s\n", vkResultToStr(result));
+            HG_PANIC("Failed to create swapchain: %s\n", vkResultToStr(result));
 
         u32 swapImageCount;
         vkGetSwapchainImagesKHR(vk.device, window->swapchain, &swapImageCount, nullptr);
 
         if (window->images.count != swapImageCount)
         {
-            hgArrayResize(&window->images, swapImageCount);
-            hgArrayResize(&window->views, swapImageCount);
-            hgArrayResize(&window->readyToPresent, swapImageCount);
+            arrayResize(&window->images, swapImageCount);
+            arrayResize(&window->views, swapImageCount);
+            arrayResize(&window->readyToPresent, swapImageCount);
         }
 
-        VkImage* swapImages = hgArenaAlloc<VkImage>(scratch, swapImageCount);
+        VkImage* swapImages = arenaAlloc<VkImage>(sc, swapImageCount);
         vkGetSwapchainImagesKHR(vk.device, window->swapchain, &swapImageCount, swapImages);
 
         for (u32 i = 0; i < window->images.count; ++i)
@@ -3058,11 +3058,11 @@ static void resizeWindowSwapchain(HgWindow* window)
 
             VkResult viewResult = vkCreateImageView(vk.device, &viewInfo, nullptr, &window->views[i].view);
             if (window->views[i].view == nullptr)
-                hgPanic("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
+                HG_PANIC("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
 
             window->views[i].image = &window->images[i];
-            window->views[i].type = HgGpuViewType_2D;
-            window->views[i].aspectFlags = HgGpuAspect_color;
+            window->views[i].type = GpuViewType_2D;
+            window->views[i].aspectFlags = GpuAspect_color;
             window->views[i].baseMipLevel = 0;
             window->views[i].levelCount = 1;
             window->views[i].baseArrayLayer = 0;
@@ -3073,7 +3073,7 @@ static void resizeWindowSwapchain(HgWindow* window)
 
             VkResult readyToPresentResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
             if (window->readyToPresent[i] == nullptr)
-                hgPanic("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
+                HG_PANIC("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
         }
 
         for (u32 i = 0; i < vk.frameCount; ++i)
@@ -3083,7 +3083,7 @@ static void resizeWindowSwapchain(HgWindow* window)
 
             VkResult imageAvailableResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
             if (window->imageAvailable[i] == nullptr)
-                hgPanic("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
+                HG_PANIC("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
         }
     }
     else
@@ -3096,7 +3096,7 @@ static void resizeWindowSwapchain(HgWindow* window)
     vkDestroySwapchainKHR(vk.device, oldSwapchain, nullptr);
 }
 
-HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
+GpuCmd* gpuFrameBegin(Window** windows, u32 windowCount)
 {
     Frame* frame = &vk.frames[vk.currentFrame];
 
@@ -3119,7 +3119,7 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
 
         if (result == VK_SUCCESS)
         {
-            *hgArrayPush(&frame->windows) = windows[i];
+            *arrayPush(&frame->windows) = windows[i];
         }
         else if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         {
@@ -3128,7 +3128,7 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
         }
         else
         {
-            hgPanic("Could not acquire next image: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not acquire next image: %s\n", vkResultToStr(result));
         }
     }
 
@@ -3148,36 +3148,36 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(cmd, &beginInfo);
-    return (HgGpuCmd*)cmd;
+    return (GpuCmd*)cmd;
 }
 
-void hgGpuFrameEnd(HgGpuCmd* cmd)
+void gpuFrameEnd(GpuCmd* cmd)
 {
-    hgAssert(cmd != nullptr);
+    HG_ASSERT(cmd != nullptr);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     Frame* frame = &vk.frames[vk.currentFrame];
 
-    HgArray<HgGpuImageBarrier> presentBarriers = hgArrayTemp<HgGpuImageBarrier>(scratch, 0, frame->windows.count);
+    Array<GpuImageBarrier> presentBarriers = arrayTemp<GpuImageBarrier>(sc, 0, frame->windows.count);
     for (u32 i = 0; i < frame->windows.count; ++i)
     {
-        HgGpuImageBarrier* barrier = hgArrayPushTemp(scratch, &presentBarriers);
+        GpuImageBarrier* barrier = arrayPushTemp(sc, &presentBarriers);
         *barrier = {};
-        barrier->image = hgWindowImageView(frame->windows[i]);
-        barrier->nextLayout = HgGpuLayout_presentSrc;
+        barrier->image = windowImageView(frame->windows[i]);
+        barrier->nextLayout = GpuLayout_presentSrc;
     }
-    hgGpuMemoryBarrier(cmd, nullptr, 0, presentBarriers.vals, presentBarriers.count);
+    gpuMemoryBarrier(cmd, nullptr, 0, presentBarriers.vals, presentBarriers.count);
 
     vkEndCommandBuffer((VkCommandBuffer)cmd);
 
-    VkPipelineStageFlags* waitStages = hgArenaAlloc<VkPipelineStageFlags>(scratch, frame->windows.count);
-    VkSemaphore* imageAvailableSemaphores = hgArenaAlloc<VkSemaphore>(scratch, frame->windows.count);
-    VkSemaphore* readyToPresentSemaphores = hgArenaAlloc<VkSemaphore>(scratch, frame->windows.count);
+    VkPipelineStageFlags* waitStages = arenaAlloc<VkPipelineStageFlags>(sc, frame->windows.count);
+    VkSemaphore* imageAvailableSemaphores = arenaAlloc<VkSemaphore>(sc, frame->windows.count);
+    VkSemaphore* readyToPresentSemaphores = arenaAlloc<VkSemaphore>(sc, frame->windows.count);
 
-    VkSwapchainKHR* swapchains = hgArenaAlloc<VkSwapchainKHR>(scratch, frame->windows.count);
-    u32* imageIndices = hgArenaAlloc<u32>(scratch, frame->windows.count);
+    VkSwapchainKHR* swapchains = arenaAlloc<VkSwapchainKHR>(sc, frame->windows.count);
+    u32* imageIndices = arenaAlloc<u32>(sc, frame->windows.count);
 
     for (u32 i = 0; i < frame->windows.count; ++i)
     {
@@ -3218,12 +3218,12 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     vk.currentFrame = (vk.currentFrame + 1) % vk.frameCount;
 }
 
-u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgString** extBuffer)
+u32 platformGetVulkanExtensions(Arena* arena, String** extBuffer)
 {
     u32 extCount;
     const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);
 
-    *extBuffer = hgArenaAlloc<HgString>(arena, extCount);
+    *extBuffer = arenaAlloc<String>(arena, extCount);
     for (u32 i = 0; i < extCount; ++i)
     {
         (*extBuffer)[i] = exts[i];
@@ -3233,8 +3233,8 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgString** extBuffer)
 }
 
 struct WindowState {
-    HgPool pool = {};
-    HgMap<SDL_WindowID, HgWindow*> ids = {};
+    Pool pool = {};
+    Map<SDL_WindowID, Window*> ids = {};
 
     f32 mouseDX = 0.0f;
     f32 mouseDY = 0.0f;
@@ -3245,72 +3245,72 @@ struct WindowState {
 
 static WindowState windowState{};
 
-void hgWindowsInit()
+void windowsInit()
 {
-    windowState.pool = hgPoolCreate<HgWindow>();
-    windowState.ids = hgMapCreate<SDL_WindowID, HgWindow*>();
+    windowState.pool = poolCreate<Window>();
+    windowState.ids = mapCreate<SDL_WindowID, Window*>();
 }
 
-void hgWindowsDeinit()
+void windowsDeinit()
 {
-    hgMapDestroy(&windowState.ids);
-    hgPoolDestroy(&windowState.pool);
+    mapDestroy(&windowState.ids);
+    poolDestroy(&windowState.pool);
 }
 
-static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
+static Format findSwapchainFormat(VkSurfaceKHR surface)
 {
-    hgAssert(surface != nullptr);
+    HG_ASSERT(surface != nullptr);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     u32 formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physicalDevice, surface, &formatCount, nullptr);
-    VkSurfaceFormatKHR* formats = hgArenaAlloc<VkSurfaceFormatKHR>(scratch, formatCount);
+    VkSurfaceFormatKHR* formats = arenaAlloc<VkSurfaceFormatKHR>(sc, formatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physicalDevice, surface, &formatCount, formats);
 
     for (u32 i = 0; i < formatCount; ++i)
     {
         if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
-            return HgFormat_r8g8b8a8_srgb;
+            return Format_r8g8b8a8_srgb;
         if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
-            return HgFormat_b8g8r8a8_srgb;
+            return Format_b8g8r8a8_srgb;
     }
-    hgPanic("No supported swapchain formats\n");
+    HG_PANIC("No supported swapchain formats\n");
 }
 
-static HgGpuPresentMode findSwapchainPresentMode(
+static GpuPresentMode findSwapchainPresentMode(
     VkSurfaceKHR surface,
-    HgGpuPresentMode desiredMode)
+    GpuPresentMode desiredMode)
 {
-    hgAssert(surface != nullptr);
+    HG_ASSERT(surface != nullptr);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    if (desiredMode == HgGpuPresentMode_fifo)
+    if (desiredMode == GpuPresentMode_fifo)
         return desiredMode;
 
     u32 modeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physicalDevice, surface, &modeCount, nullptr);
-    VkPresentModeKHR* presentModes = hgArenaAlloc<VkPresentModeKHR>(scratch, modeCount);
+    VkPresentModeKHR* presentModes = arenaAlloc<VkPresentModeKHR>(sc, modeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physicalDevice, surface, &modeCount, presentModes);
 
     for (u32 i = 0; i < modeCount; ++i)
     {
-        if (presentModes[i] == hgPresentModeToVk(desiredMode))
+        if (presentModes[i] == presentModeToVk(desiredMode))
             return desiredMode;
     }
-    return HgGpuPresentMode_fifo;
+    return GpuPresentMode_fifo;
 }
 
-HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowConfig* config)
+Window* windowCreate(String title, u32 width, u32 height, const WindowConfig* config)
 {
-    static const HgWindowConfig defaultConfig{};
+    static const WindowConfig defaultConfig{};
     if (config == nullptr)
         config = &defaultConfig;
 
-    HgWindow* window = (HgWindow*)hgPoolAlloc(&windowState.pool);
+    Window* window = (Window*)poolAlloc(&windowState.pool);
     *window = {};
 
     if (title == "")
@@ -3324,30 +3324,30 @@ HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowCo
     {
         int modeCount = 0;
         SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &modeCount);
-        hgDefer(SDL_free(modes));
+        HG_DEFER(SDL_free(modes));
 
         width = (u32)modes[0]->w;
         height = (u32)modes[0]->h;
         flags |= SDL_WINDOW_FULLSCREEN;
     }
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    window->sdlWindow = SDL_CreateWindow(hgCString(scratch, title), (int)width, (int)height, flags);
+    window->sdlWindow = SDL_CreateWindow(cString(sc, title), (int)width, (int)height, flags);
     if (window->sdlWindow == nullptr)
     {
-        hgErrorSet(SDL_GetError());
+        errorSet(SDL_GetError());
         goto windowFailed;
     }
 
     if (!SDL_Vulkan_CreateSurface(window->sdlWindow, vk.instance, nullptr, &window->surface))
     {
-        hgErrorSet(SDL_GetError());
+        errorSet(SDL_GetError());
         goto surfaceFailed;
     }
 
-    hgMapAdd(&windowState.ids, SDL_GetWindowID(window->sdlWindow), window);
+    mapAdd(&windowState.ids, SDL_GetWindowID(window->sdlWindow), window);
 
     SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
 
@@ -3355,7 +3355,7 @@ HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowCo
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
     window->imageUsage = config->imageUsage;
 
-    window->imageAvailable = hgArrayCreate<VkSemaphore>(vk.frameCount, vk.frameCount);
+    window->imageAvailable = arrayCreate<VkSemaphore>(vk.frameCount, vk.frameCount);
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
         window->imageAvailable[i] = nullptr;
@@ -3363,20 +3363,20 @@ HgWindow* hgWindowCreate(HgString title, u32 width, u32 height, const HgWindowCo
 
     resizeWindowSwapchain(window);
 
-    window->events = hgArrayCreate<HgWindowEvent>();
+    window->events = arrayCreate<WindowEvent>();
 
     return window;
 
 surfaceFailed:
     SDL_DestroyWindow(window->sdlWindow);
 windowFailed:
-    hgPoolFree(&windowState.pool, window);
+    poolFree(&windowState.pool, window);
     return nullptr;
 }
 
-void hgWindowDestroy(HgWindow* window)
+void windowDestroy(Window* window)
 {
-    hgArrayDestroy(&window->events);
+    arrayDestroy(&window->events);
 
     for (u32 i = 0; i < window->images.count; ++i)
     {
@@ -3391,273 +3391,273 @@ void hgWindowDestroy(HgWindow* window)
 
     vkDestroySwapchainKHR(vk.device, window->swapchain, nullptr);
 
-    hgArrayDestroy(&window->readyToPresent);
-    hgArrayDestroy(&window->imageAvailable);
-    hgArrayDestroy(&window->views);
-    hgArrayDestroy(&window->images);
+    arrayDestroy(&window->readyToPresent);
+    arrayDestroy(&window->imageAvailable);
+    arrayDestroy(&window->views);
+    arrayDestroy(&window->images);
 
-    hgMapRemove(&windowState.ids, SDL_GetWindowID(window->sdlWindow));
+    mapRemove(&windowState.ids, SDL_GetWindowID(window->sdlWindow));
 
     vkDestroySurfaceKHR(vk.instance, window->surface, nullptr);
     SDL_DestroyWindow(window->sdlWindow);
 
-    hgPoolFree(&windowState.pool, window);
+    poolFree(&windowState.pool, window);
 }
 
-HgGpuView* hgWindowImageView(HgWindow* window)
+GpuView* windowImageView(Window* window)
 {
     return window->imageIdx < window->images.count ? &window->views[window->imageIdx] : nullptr;
 }
 
-HgFormat hgWindowImageFormat(HgWindow* window)
+Format windowImageFormat(Window* window)
 {
     return window->format;
 }
 
-static HgButton sdlKeycodeToHgButton(u32 key)
+static Button sdlKeycodeToHgButton(u32 key)
 {
     switch (key)
     {
         case SDLK_0:
-            return HgButton_k0;
+            return Button_k0;
         case SDLK_1:
-            return HgButton_k1;
+            return Button_k1;
         case SDLK_2:
-            return HgButton_k2;
+            return Button_k2;
         case SDLK_3:
-            return HgButton_k3;
+            return Button_k3;
         case SDLK_4:
-            return HgButton_k4;
+            return Button_k4;
         case SDLK_5:
-            return HgButton_k5;
+            return Button_k5;
         case SDLK_6:
-            return HgButton_k6;
+            return Button_k6;
         case SDLK_7:
-            return HgButton_k7;
+            return Button_k7;
         case SDLK_8:
-            return HgButton_k8;
+            return Button_k8;
         case SDLK_9:
-            return HgButton_k9;
+            return Button_k9;
 
         case SDLK_Q:
-            return HgButton_q;
+            return Button_q;
         case SDLK_W:
-            return HgButton_w;
+            return Button_w;
         case SDLK_E:
-            return HgButton_e;
+            return Button_e;
         case SDLK_R:
-            return HgButton_r;
+            return Button_r;
         case SDLK_T:
-            return HgButton_t;
+            return Button_t;
         case SDLK_Y:
-            return HgButton_y;
+            return Button_y;
         case SDLK_U:
-            return HgButton_u;
+            return Button_u;
         case SDLK_I:
-            return HgButton_i;
+            return Button_i;
         case SDLK_O:
-            return HgButton_o;
+            return Button_o;
         case SDLK_P:
-            return HgButton_p;
+            return Button_p;
         case SDLK_A:
-            return HgButton_a;
+            return Button_a;
         case SDLK_S:
-            return HgButton_s;
+            return Button_s;
         case SDLK_D:
-            return HgButton_d;
+            return Button_d;
         case SDLK_F:
-            return HgButton_f;
+            return Button_f;
         case SDLK_G:
-            return HgButton_g;
+            return Button_g;
         case SDLK_H:
-            return HgButton_h;
+            return Button_h;
         case SDLK_J:
-            return HgButton_j;
+            return Button_j;
         case SDLK_K:
-            return HgButton_k;
+            return Button_k;
         case SDLK_L:
-            return HgButton_l;
+            return Button_l;
         case SDLK_Z:
-            return HgButton_z;
+            return Button_z;
         case SDLK_X:
-            return HgButton_x;
+            return Button_x;
         case SDLK_C:
-            return HgButton_c;
+            return Button_c;
         case SDLK_V:
-            return HgButton_v;
+            return Button_v;
         case SDLK_B:
-            return HgButton_b;
+            return Button_b;
         case SDLK_N:
-            return HgButton_n;
+            return Button_n;
         case SDLK_M:
-            return HgButton_m;
+            return Button_m;
 
         case SDLK_SEMICOLON:
-            return HgButton_semicolon;
+            return Button_semicolon;
         case SDLK_COLON:
-            return HgButton_colon;
+            return Button_colon;
         case SDLK_APOSTROPHE:
-            return HgButton_apostrophe;
+            return Button_apostrophe;
         case SDLK_DBLAPOSTROPHE:
-            return HgButton_quotation;
+            return Button_quotation;
         case SDLK_COMMA:
-            return HgButton_comma;
+            return Button_comma;
         case SDLK_PERIOD:
-            return HgButton_period;
+            return Button_period;
         case SDLK_QUESTION:
-            return HgButton_question;
+            return Button_question;
         case SDLK_GRAVE:
-            return HgButton_grave;
+            return Button_grave;
         case SDLK_TILDE:
-            return HgButton_tilde;
+            return Button_tilde;
         case SDLK_EXCLAIM:
-            return HgButton_exclamation;
+            return Button_exclamation;
         case SDLK_AT:
-            return HgButton_at;
+            return Button_at;
         case SDLK_HASH:
-            return HgButton_hash;
+            return Button_hash;
         case SDLK_DOLLAR:
-            return HgButton_dollar;
+            return Button_dollar;
         case SDLK_PERCENT:
-            return HgButton_percent;
+            return Button_percent;
         case SDLK_CARET:
-            return HgButton_carot;
+            return Button_carot;
         case SDLK_AMPERSAND:
-            return HgButton_ampersand;
+            return Button_ampersand;
         case SDLK_ASTERISK:
-            return HgButton_asterisk;
+            return Button_asterisk;
 
         case SDLK_LEFTPAREN:
-            return HgButton_lparen;
+            return Button_lparen;
         case SDLK_RIGHTPAREN:
-            return HgButton_rparen;
+            return Button_rparen;
         case SDLK_LEFTBRACKET:
-            return HgButton_lbracket;
+            return Button_lbracket;
         case SDLK_RIGHTBRACKET:
-            return HgButton_rbracket;
+            return Button_rbracket;
         case SDLK_LEFTBRACE:
-            return HgButton_lbrace;
+            return Button_lbrace;
         case SDLK_RIGHTBRACE:
-            return HgButton_rbrace;
+            return Button_rbrace;
 
         case SDLK_EQUALS:
-            return HgButton_equal;
+            return Button_equal;
         case SDLK_LESS:
-            return HgButton_less;
+            return Button_less;
         case SDLK_GREATER:
-            return HgButton_greater;
+            return Button_greater;
         case SDLK_PLUS:
-            return HgButton_plus;
+            return Button_plus;
         case SDLK_MINUS:
-            return HgButton_minus;
+            return Button_minus;
         case SDLK_SLASH:
-            return HgButton_slash;
+            return Button_slash;
         case SDLK_BACKSLASH:
-            return HgButton_backslash;
+            return Button_backslash;
         case SDLK_UNDERSCORE:
-            return HgButton_underscore;
+            return Button_underscore;
         case SDLK_PIPE:
-            return HgButton_bar;
+            return Button_bar;
 
         case SDLK_UP:
-            return HgButton_up;
+            return Button_up;
         case SDLK_DOWN:
-            return HgButton_down;
+            return Button_down;
         case SDLK_LEFT:
-            return HgButton_left;
+            return Button_left;
         case SDLK_RIGHT:
-            return HgButton_right;
+            return Button_right;
 
         case SDLK_ESCAPE:
-            return HgButton_escape;
+            return Button_escape;
         case SDLK_SPACE:
-            return HgButton_space;
+            return Button_space;
         case SDLK_RETURN:
-            return HgButton_enter;
+            return Button_enter;
         case SDLK_BACKSPACE:
-            return HgButton_backspace;
+            return Button_backspace;
         case SDLK_DELETE:
-            return HgButton_kdelete;
+            return Button_kdelete;
         case SDLK_INSERT:
-            return HgButton_insert;
+            return Button_insert;
         case SDLK_TAB:
-            return HgButton_tab;
+            return Button_tab;
         case SDLK_HOME:
-            return HgButton_home;
+            return Button_home;
         case SDLK_END:
-            return HgButton_end;
+            return Button_end;
 
         case SDLK_F1:
-            return HgButton_f1;
+            return Button_f1;
         case SDLK_F2:
-            return HgButton_f2;
+            return Button_f2;
         case SDLK_F3:
-            return HgButton_f3;
+            return Button_f3;
         case SDLK_F4:
-            return HgButton_f4;
+            return Button_f4;
         case SDLK_F5:
-            return HgButton_f5;
+            return Button_f5;
         case SDLK_F6:
-            return HgButton_f6;
+            return Button_f6;
         case SDLK_F7:
-            return HgButton_f7;
+            return Button_f7;
         case SDLK_F8:
-            return HgButton_f8;
+            return Button_f8;
         case SDLK_F9:
-            return HgButton_f9;
+            return Button_f9;
         case SDLK_F10:
-            return HgButton_f10;
+            return Button_f10;
         case SDLK_F11:
-            return HgButton_f11;
+            return Button_f11;
         case SDLK_F12:
-            return HgButton_f12;
+            return Button_f12;
 
         case SDLK_LSHIFT:
-            return HgButton_lshift;
+            return Button_lshift;
         case SDLK_RSHIFT:
-            return HgButton_rshift;
+            return Button_rshift;
         case SDLK_LCTRL:
-            return HgButton_lctrl;
+            return Button_lctrl;
         case SDLK_RCTRL:
-            return HgButton_rctrl;
+            return Button_rctrl;
         case SDLK_LALT:
-            return HgButton_lalt;
+            return Button_lalt;
         case SDLK_RALT:
-            return HgButton_ralt;
+            return Button_ralt;
         case SDLK_LGUI:
-            return HgButton_lsuper;
+            return Button_lsuper;
         case SDLK_RGUI:
-            return HgButton_rsuper;
+            return Button_rsuper;
         case SDLK_CAPSLOCK:
-            return HgButton_capslock;
+            return Button_capslock;
     }
-    return HgButton_none;
+    return Button_none;
 }
 
-static HgButton sdlButtonToHgButton(u32 button)
+static Button sdlButtonToHgButton(u32 button)
 {
     switch (button)
     {
         case SDL_BUTTON_LEFT:
-            return HgButton_mouse1;
+            return Button_mouse1;
         case SDL_BUTTON_RIGHT:
-            return HgButton_mouse2;
+            return Button_mouse2;
         case SDL_BUTTON_MIDDLE:
-            return HgButton_mouse3;
+            return Button_mouse3;
         case SDL_BUTTON_X1:
-            return HgButton_mouse4;
+            return Button_mouse4;
         case SDL_BUTTON_X2:
-            return HgButton_mouse5;
+            return Button_mouse5;
     }
-    return HgButton_none;
+    return Button_none;
 }
 
-void hgProcessEvents()
+void processEvents()
 {
     windowState.mouseDX = 0;
     windowState.mouseDY = 0;
 
-    hgMapForEach(&windowState.ids, [&](SDL_WindowID*, HgWindow** window)
+    mapForEach(&windowState.ids, [&](SDL_WindowID*, Window** window)
     {
         (*window)->events.count = 0;
     });
@@ -3675,7 +3675,7 @@ void hgProcessEvents()
                 break;
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             {
-                HgWindow** window = hgMapGet(&windowState.ids, event.window.windowID);
+                Window** window = mapGet(&windowState.ids, event.window.windowID);
                 if (window != nullptr)
                     (*window)->wasClosed = true;
             } break;
@@ -3683,7 +3683,7 @@ void hgProcessEvents()
             case SDL_EVENT_WINDOW_RESTORED: [[fallthrough]];
             case SDL_EVENT_WINDOW_RESIZED:
             {
-                HgWindow** window = hgMapGet(&windowState.ids, event.window.windowID);
+                Window** window = mapGet(&windowState.ids, event.window.windowID);
                 if (window != nullptr)
                 {
                     SDL_GetWindowSize((*window)->sdlWindow, (int*)&(*window)->width, (int*)&(*window)->height);
@@ -3692,7 +3692,7 @@ void hgProcessEvents()
             } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
-                HgWindow** window = hgMapGet(&windowState.ids, event.button.windowID);
+                Window** window = mapGet(&windowState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     (*window)->mouseX = event.motion.x;
@@ -3703,57 +3703,57 @@ void hgProcessEvents()
             } break;
             case SDL_EVENT_KEY_DOWN:
             {
-                HgButton key = sdlKeycodeToHgButton(event.key.key);
-                HgWindow** window = hgMapGet(&windowState.ids, event.key.windowID);
+                Button key = sdlKeycodeToHgButton(event.key.key);
+                Window** window = mapGet(&windowState.ids, event.key.windowID);
                 if (window != nullptr)
                 {
-                    HgWindowEvent windowEvent{};
-                    windowEvent.button.type = HgWindowEventType_buttonPress;
+                    WindowEvent windowEvent{};
+                    windowEvent.button.type = WindowEventType_buttonPress;
                     windowEvent.button.button = key;
 
-                    *hgArrayPush(&(*window)->events) = windowEvent;
+                    *arrayPush(&(*window)->events) = windowEvent;
                     (*window)->isKeyDown[key] = true;
                 }
             } break;
             case SDL_EVENT_KEY_UP:
             {
-                HgButton key = sdlKeycodeToHgButton(event.key.key);
-                HgWindow** window = hgMapGet(&windowState.ids, event.key.windowID);
+                Button key = sdlKeycodeToHgButton(event.key.key);
+                Window** window = mapGet(&windowState.ids, event.key.windowID);
                 if (window != nullptr)
                 {
-                    HgWindowEvent windowEvent{};
-                    windowEvent.button.type = HgWindowEventType_buttonRelease;
+                    WindowEvent windowEvent{};
+                    windowEvent.button.type = WindowEventType_buttonRelease;
                     windowEvent.button.button = key;
 
-                    *hgArrayPush(&(*window)->events) = windowEvent;
+                    *arrayPush(&(*window)->events) = windowEvent;
                     (*window)->isKeyDown[key] = false;
                 }
             } break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
-                HgButton key = sdlButtonToHgButton(event.button.button);
-                HgWindow** window = hgMapGet(&windowState.ids, event.button.windowID);
+                Button key = sdlButtonToHgButton(event.button.button);
+                Window** window = mapGet(&windowState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
-                    HgWindowEvent windowEvent{};
-                    windowEvent.button.type = HgWindowEventType_buttonPress;
+                    WindowEvent windowEvent{};
+                    windowEvent.button.type = WindowEventType_buttonPress;
                     windowEvent.button.button = key;
 
-                    *hgArrayPush(&(*window)->events) = windowEvent;
+                    *arrayPush(&(*window)->events) = windowEvent;
                     (*window)->isKeyDown[key] = true;
                 }
             } break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
-                HgButton key = sdlButtonToHgButton(event.button.button);
-                HgWindow** window = hgMapGet(&windowState.ids, event.button.windowID);
+                Button key = sdlButtonToHgButton(event.button.button);
+                Window** window = mapGet(&windowState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
-                    HgWindowEvent windowEvent{};
-                    windowEvent.button.type = HgWindowEventType_buttonRelease;
+                    WindowEvent windowEvent{};
+                    windowEvent.button.type = WindowEventType_buttonRelease;
                     windowEvent.button.button = key;
 
-                    *hgArrayPush(&(*window)->events) = windowEvent;
+                    *arrayPush(&(*window)->events) = windowEvent;
                     (*window)->isKeyDown[key] = false;
                 }
             } break;
@@ -3761,106 +3761,106 @@ void hgProcessEvents()
     }
 }
 
-bool hgWasQuit()
+bool wasQuit()
 {
     return windowState.wasQuit;
 }
 
-bool hgWindowWasClosed(HgWindow* window)
+bool windowWasClosed(Window* window)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return window->wasClosed;
 }
 
-bool hgWindowIsFocused(HgWindow* window)
+bool windowIsFocused(Window* window)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return SDL_GetMouseFocus() == window->sdlWindow;
 }
 
-u32 hgWindowWidth(HgWindow* window)
+u32 windowWidth(Window* window)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return window->width;
 }
 
-u32 hgWindowHeight(HgWindow* window)
+u32 windowHeight(Window* window)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return window->height;
 }
 
-f32 hgMouseX(HgWindow* window)
+f32 mouseX(Window* window)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return window->mouseX;
 }
 
-f32 hgMouseY(HgWindow* window)
+f32 mouseY(Window* window)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return window->mouseY;
 }
 
-f32 hgMouseDeltaX(HgWindow* window)
+f32 mouseDeltaX(Window* window)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return windowState.mouseDX / (f32)window->height;
 }
 
-f32 hgMouseDeltaY(HgWindow* window)
+f32 mouseDeltaY(Window* window)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return windowState.mouseDY / (f32)window->height;
 }
 
-bool hgIsButtonDown(HgWindow* window, HgButton key)
+bool isButtonDown(Window* window, Button key)
 {
-    hgAssert(window != nullptr);
+    HG_ASSERT(window != nullptr);
     return window->isKeyDown[key];
 }
 
-HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count)
+WindowEvent* windowEvents(Window* window, u32* count)
 {
-    hgAssert(window != nullptr);
-    hgAssert(count != nullptr);
+    HG_ASSERT(window != nullptr);
+    HG_ASSERT(count != nullptr);
     *count = window->events.count;
     return window->events.vals;
 }
 
 struct AudioState {
     SDL_AudioDeviceID device;
-    HgArray<SDL_AudioStream*> streams;
+    Array<SDL_AudioStream*> streams;
 };
 
 static AudioState audio{};
 
-bool hgAudioInit()
+bool audioInit()
 {
     audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
     {
-        hgErrorFormat("SDL could not open audio device: %s", SDL_GetError());
+        errorFormat("SDL could not open audio device: %s", SDL_GetError());
         return false;
     }
 
-    audio.streams = hgArrayCreate<SDL_AudioStream*>();
+    audio.streams = arrayCreate<SDL_AudioStream*>();
 
     return true;
 }
 
-void hgAudioDeinit()
+void audioDeinit()
 {
     for (u32 i = 0; i < audio.streams.count; ++i)
     {
         SDL_DestroyAudioStream(audio.streams[i]);
     }
-    hgArrayDestroy(&audio.streams);
+    arrayDestroy(&audio.streams);
 
     SDL_CloseAudioDevice(audio.device);
 }
 
-HgAudioStream* hgAudioStreamCreate(u32 frequency, u32 channels)
+AudioStream* audioStreamCreate(u32 frequency, u32 channels)
 {
     SDL_AudioSpec audioSpec{};
     audioSpec.format = SDL_AUDIO_F32;
@@ -3873,79 +3873,79 @@ HgAudioStream* hgAudioStreamCreate(u32 frequency, u32 channels)
         stream = SDL_CreateAudioStream(&audioSpec, nullptr);
         if (stream == nullptr)
         {
-            hgErrorSet(SDL_GetError());
+            errorSet(SDL_GetError());
             return nullptr;
         }
 
         if (!SDL_BindAudioStream(audio.device, stream))
         {
-            hgErrorSet(SDL_GetError());
+            errorSet(SDL_GetError());
             SDL_DestroyAudioStream(stream);
             return nullptr;
         }
     }
     else
     {
-        stream = hgArrayPop(&audio.streams);
+        stream = arrayPop(&audio.streams);
         if (!SDL_SetAudioStreamFormat(stream, &audioSpec, nullptr))
-            hgPanic("SDL could not set audio stream format: %s\n", SDL_GetError());
+            HG_PANIC("SDL could not set audio stream format: %s\n", SDL_GetError());
     }
 
-    return (HgAudioStream*)stream;
+    return (AudioStream*)stream;
 }
 
-void hgAudioStreamDestroy(HgAudioStream* stream)
+void audioStreamDestroy(AudioStream* stream)
 {
     if (stream != nullptr)
     {
         SDL_AudioStream* sdlStream = (SDL_AudioStream*)stream;
 
         if (!SDL_ClearAudioStream(sdlStream))
-            hgPanic("SDL could not clear audio stream: %s\n", SDL_GetError());
+            HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
 
-        *hgArrayPush(&audio.streams) = sdlStream;
+        *arrayPush(&audio.streams) = sdlStream;
     }
 }
 
-void hgAudioStreamPush(HgAudioStream* player, const f32* data, u64 size)
+void audioStreamPush(AudioStream* player, const f32* data, u64 size)
 {
     SDL_AudioStream* stream = (SDL_AudioStream*)player;
     if (!SDL_PutAudioStreamData(stream, data, (int)size))
-        hgPanic("SDL could not push audio data: %s\n", SDL_GetError());
+        HG_PANIC("SDL could not push audio data: %s\n", SDL_GetError());
 }
 
-u32 hgAudioStreamQueuedSize(HgAudioStream* stream)
+u32 audioStreamQueuedSize(AudioStream* stream)
 {
     int size = SDL_GetAudioStreamQueued((SDL_AudioStream*)stream);
     if (size == -1)
-        hgPanic("SDL could not read audio data: %s\n", SDL_GetError());
+        HG_PANIC("SDL could not read audio data: %s\n", SDL_GetError());
 
     return (u32)size;
 }
 
-void hgAudioStreamClear(HgAudioStream* stream)
+void audioStreamClear(AudioStream* stream)
 {
     if (!SDL_ClearAudioStream((SDL_AudioStream*)stream))
-        hgPanic("SDL could not clear audio stream: %s\n", SDL_GetError());
+        HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 
-void hgAudioStreamSetGain(HgAudioStream* stream, f32 gain)
+void audioStreamSetGain(AudioStream* stream, f32 gain)
 {
     if (!SDL_SetAudioStreamGain((SDL_AudioStream*)stream, gain))
-        hgPanic("SDL could not clear audio stream: %s\n", SDL_GetError());
+        HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 
-void hgImGuiInit(
-    HgWindow* window,
-    HgFormat colorFormat,
-    HgFormat depthFormat,
-    HgFormat stencilFormat)
+void imGuiInit(
+    Window* window,
+    Format colorFormat,
+    Format depthFormat,
+    Format stencilFormat)
 {
-    hgAssert(window != nullptr);
-    hgAssert(colorFormat != HgFormat_undefined);
+    HG_ASSERT(window != nullptr);
+    HG_ASSERT(colorFormat != Format_undefined);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     ImGui_ImplSDL3_InitForVulkan(window->sdlWindow);
 
@@ -3976,7 +3976,7 @@ void hgImGuiInit(
     windowState.imguiInitialized = true;
 }
 
-void hgImGuiDeinit()
+void imGuiDeinit()
 {
     windowState.imguiInitialized = false;
 
@@ -3984,31 +3984,31 @@ void hgImGuiDeinit()
     ImGui_ImplSDL3_Shutdown();
 }
 
-void* hgImGuiTextureCreate(HgGpuView* view, HgGpuLayout layout)
+void* imGuiTextureCreate(GpuView* view, GpuLayout layout)
 {
-    hgAssert(view != nullptr);
+    HG_ASSERT(view != nullptr);
     return ImGui_ImplVulkan_AddTexture(view->sampler, view->view, gpuLayoutToVk(layout));
 }
 
-void hgImGuiTextureDestroy(void* texture)
+void imGuiTextureDestroy(void* texture)
 {
     ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)texture);
 }
 
-void hgImGuiNewFrame()
+void imGuiNewFrame()
 {
     ImGui_ImplSDL3_NewFrame();
     ImGui_ImplVulkan_NewFrame();
 }
 
-void hgImGuiDraw(HgGpuCmd* cmd)
+void imGuiDraw(GpuCmd* cmd)
 {
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), (VkCommandBuffer)cmd);
 }
 
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name
 
-struct HgVulkanFuncs {
+struct VulkanFuncs {
     HG_MAKE_VULKAN_FUNC(vkGetInstanceProcAddr);
     HG_MAKE_VULKAN_FUNC(vkGetDeviceProcAddr);
 
@@ -4137,20 +4137,20 @@ struct HgVulkanFuncs {
 
 #undef HG_MAKE_VULKAN_FUNC
 
-static HgVulkanFuncs vulkanFuncs{};
+static VulkanFuncs vulkanFuncs{};
 
-static HgLibrary* libvulkan = nullptr;
+static Library* libvulkan = nullptr;
 
 #define HG_LOAD_VULKAN_FUNC(name) \
     hg::vulkanFuncs. name = (PFN_##name)hg::vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
     if (hg::vulkanFuncs. name == nullptr) { \
-        hgErrorSet("Could not load " #name); \
+        errorSet("Could not load " #name); \
         return false; \
     }
 
 static bool loadVulkan()
 {
-    libvulkan = hgLibraryLoad(
+    libvulkan = libraryLoad(
 #if defined(HG_PLATFORM_LINUX)
         "libvulkan.so.1"
 #elif defined(HG_PLATFORM_WINDOWS)
@@ -4160,14 +4160,14 @@ static bool loadVulkan()
 
     if (libvulkan == nullptr)
     {
-        hgErrorSet("Could not load vulkan");
+        errorSet("Could not load vulkan");
         return false;
     }
 
-    *(void**)&hg::vulkanFuncs.vkGetInstanceProcAddr = hgLibraryFindFunction(libvulkan, "vkGetInstanceProcAddr");
+    *(void**)&hg::vulkanFuncs.vkGetInstanceProcAddr = libraryFindFunction(libvulkan, "vkGetInstanceProcAddr");
     if (hg::vulkanFuncs.vkGetInstanceProcAddr == nullptr)
     {
-        hgErrorSet("Could not load vkGetInstanceProcAddr\n");
+        errorSet("Could not load vkGetInstanceProcAddr\n");
         return false;
     }
 
@@ -4182,7 +4182,7 @@ static void unloadVulkan()
 {
     if (libvulkan != nullptr)
     {
-        hgLibraryUnload(libvulkan);
+        libraryUnload(libvulkan);
         libvulkan = nullptr;
     }
 }
@@ -4190,13 +4190,13 @@ static void unloadVulkan()
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
     hg::vulkanFuncs. name = (PFN_##name)hg::vulkanFuncs.vkGetInstanceProcAddr(instance, #name); \
     if (hg::vulkanFuncs. name == nullptr) { \
-        hgErrorSet("Could not load " #name); \
+        errorSet("Could not load " #name); \
         return false; \
     }
 
 static bool loadVulkanInstanceFuncs(VkInstance instance)
 {
-    hgAssert(instance != nullptr);
+    HG_ASSERT(instance != nullptr);
 
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
@@ -4226,13 +4226,13 @@ static bool loadVulkanInstanceFuncs(VkInstance instance)
 #define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
     hg::vulkanFuncs. name = (PFN_##name)hg::vulkanFuncs.vkGetDeviceProcAddr(device, #name); \
     if (hg::vulkanFuncs. name == nullptr) { \
-        hgErrorSet("Could not load " #name); \
+        errorSet("Could not load " #name); \
         return false; \
     }
 
 static bool loadVulkanDeviceFuncs(VkDevice device)
 {
-    hgAssert(device != nullptr);
+    HG_ASSERT(device != nullptr);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDevice)
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDeviceWaitIdle)
@@ -5640,30 +5640,30 @@ namespace hg {
 
 #include <dlfcn.h>
 
-HgLibrary* hgLibraryLoad(HgString path)
+Library* libraryLoad(String path)
 {
-    char* cstr = hgCString(hgScratch(), path);
+    char* cstr = cString(scratch(), path);
 
-    HgLibrary* lib = (HgLibrary*)dlopen(cstr, RTLD_LAZY);
+    Library* lib = (Library*)dlopen(cstr, RTLD_LAZY);
     if (lib == nullptr)
-        hgErrorFormat("Could not load dynamic library \"%s\": %s", cstr, dlerror());
+        errorFormat("Could not load dynamic library \"%s\": %s", cstr, dlerror());
 
     return lib;
 }
 
-void hgLibraryUnload(HgLibrary* lib)
+void libraryUnload(Library* lib)
 {
     if (lib != nullptr)
         dlclose(lib);
 }
 
-void* hgLibraryFindFunction(HgLibrary* lib, HgString symbol)
+void* libraryFindFunction(Library* lib, String symbol)
 {
-    char* cstr = hgCString(hgScratch(), symbol);
+    char* cstr = cString(scratch(), symbol);
 
     void* fn = dlsym(lib, cstr);
     if (fn == nullptr)
-        hgErrorFormat("Could not load function symbol \"%s\": %s", cstr, dlerror());
+        errorFormat("Could not load function symbol \"%s\": %s", cstr, dlerror());
 
     return fn;
 }
@@ -5673,37 +5673,37 @@ void* hgLibraryFindFunction(HgLibrary* lib, HgString symbol)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-HgLibrary* hgLibraryLoad(HgStringView path)
+Library* libraryLoad(StringView path)
 {
-    char* cstr = hgCString(hgScratch(), path);
+    char* cstr = cString(scratch(), path);
 
-    HgLibrary* lib = (HgLibrary*)LoadLibraryA(cstr);
+    Library* lib = (Library*)LoadLibraryA(cstr);
     if (lib == nullptr)
     {
-        hgErrorSet("Could not load dynamic library \"");
-        hgErrorAppend(path);
-        hgErrorAppend("\"");
+        errorSet("Could not load dynamic library \"");
+        errorAppend(path);
+        errorAppend("\"");
     }
 
     return lib;
 }
 
-void hgLibraryUnload(HgLibrary* lib)
+void libraryUnload(Library* lib)
 {
     if (lib != nullptr)
         FreeLibrary((HMODULE)lib);
 }
 
-void* hgLibraryFindFunction(HgLibrary* lib, HgStringView symbol)
+void* libraryFindFunction(Library* lib, StringView symbol)
 {
-    char* cstr = hgCString(hgScratch(), symbol);
+    char* cstr = cString(scratch(), symbol);
 
     void* fn = GetProcAddress((HMODULE)lib, cstr);
     if (fn == nullptr)
     {
-        hgErrorSet("Could not load function symbol \"");
-        hgErrorAppend(symbol);
-        hgErrorAppend("\"");
+        errorSet("Could not load function symbol \"");
+        errorAppend(symbol);
+        errorAppend("\"");
     }
 
     return fn;

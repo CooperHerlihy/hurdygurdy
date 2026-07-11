@@ -13,401 +13,401 @@
 
 namespace hg {
 
-void hgTest()
+void test()
 {
-    hgLog("Tests Begun\n");
+    HG_LOG("Tests Begun\n");
 
-    HgClock timer{};
-    hgClockTick(&timer);
+    Clock timer{};
+    clockTick(&timer);
 
-    // HgArena
+    // Arena
     {
         void* block = malloc(1024);
-        hgDefer(free(block));
+        HG_DEFER(free(block));
 
-        HgArena arena{block, 1024, 0};
+        Arena arena{block, 1024, 0};
 
         for (u32 i = 0; i < 3; ++i)
         {
-            hgAssert(arena.memory != nullptr);
-            hgAssert(arena.capacity == 1024);
-            hgAssert(arena.head == 0);
+            HG_ASSERT(arena.memory != nullptr);
+            HG_ASSERT(arena.capacity == 1024);
+            HG_ASSERT(arena.head == 0);
 
-            u32* allocU32 = hgArenaAlloc<u32>(&arena, 1);
-            hgAssert(allocU32 == arena.memory);
+            u32* allocU32 = arenaAlloc<u32>(&arena, 1);
+            HG_ASSERT(allocU32 == arena.memory);
 
-            u64* allocU64 = hgArenaAlloc<u64>(&arena, 2);
-            hgAssert((u8*)allocU64 == (u8*)allocU32 + 8);
+            u64* allocU64 = arenaAlloc<u64>(&arena, 2);
+            HG_ASSERT((u8*)allocU64 == (u8*)allocU32 + 8);
 
-            u8* allocU8 = hgArenaAlloc<u8>(&arena, 1);
-            hgAssert(allocU8 == (u8*)allocU32 + 24);
+            u8* allocU8 = arenaAlloc<u8>(&arena, 1);
+            HG_ASSERT(allocU8 == (u8*)allocU32 + 24);
 
             struct Big {
                 u8 data[32];
             };
-            Big* allocBig = hgArenaAlloc<Big>(&arena, 1);
-            hgAssert((u8*)allocBig == (u8*)allocU32 + 25);
+            Big* allocBig = arenaAlloc<Big>(&arena, 1);
+            HG_ASSERT((u8*)allocBig == (u8*)allocU32 + 25);
 
-            Big* reallocBig = hgArenaRealloc(&arena, allocBig, 1, 2);
-            hgAssert(reallocBig == allocBig);
+            Big* reallocBig = arenaRealloc(&arena, allocBig, 1, 2);
+            HG_ASSERT(reallocBig == allocBig);
 
-            Big* reallocBigSame = hgArenaRealloc(&arena, reallocBig, 2, 2);
-            hgAssert(reallocBigSame == reallocBig);
+            Big* reallocBigSame = arenaRealloc(&arena, reallocBig, 2, 2);
+            HG_ASSERT(reallocBigSame == reallocBig);
 
-            hgMemClear(reallocBig, 2 * sizeof(*reallocBig), 2);
-            u8* allocInterrupt = hgArenaAlloc<u8>(&arena, 1);
+            memClear(reallocBig, 2 * sizeof(*reallocBig), 2);
+            u8* allocInterrupt = arenaAlloc<u8>(&arena, 1);
             (void)allocInterrupt;
 
-            Big* reallocBig2 = hgArenaRealloc(&arena, reallocBig, 2, 4);
-            hgAssert(reallocBig2 != reallocBig);
-            hgAssert(hgMemEqual(reallocBig, reallocBig2, 2 * sizeof(*reallocBig)));
+            Big* reallocBig2 = arenaRealloc(&arena, reallocBig, 2, 4);
+            HG_ASSERT(reallocBig2 != reallocBig);
+            HG_ASSERT(memEqual(reallocBig, reallocBig2, 2 * sizeof(*reallocBig)));
 
             arena.head = 0;
         }
     }
 
-    // HgString
+    // String
     {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
+        Arena* arena = scratch();
+        HG_ARENA_SCOPE(arena);
 
-        HgStringBuilder a = hgStringCopy(arena, "a");
-        hgAssert(a[0] == 'a');
-        hgAssert(a.length == 1);
+        StringBuilder a = stringCopy(arena, "a");
+        HG_ASSERT(a[0] == 'a');
+        HG_ASSERT(a.length == 1);
 
-        HgStringBuilder abc = hgStringCopy(arena, "abc");
-        hgAssert(abc[0] == 'a');
-        hgAssert(abc[1] == 'b');
-        hgAssert(abc[2] == 'c');
-        hgAssert(abc.length == 3);
+        StringBuilder abc = stringCopy(arena, "abc");
+        HG_ASSERT(abc[0] == 'a');
+        HG_ASSERT(abc[1] == 'b');
+        HG_ASSERT(abc[2] == 'c');
+        HG_ASSERT(abc.length == 3);
 
-        hgStringAppend(arena, &a, "bc");
-        hgAssert(a == abc);
+        stringAppend(arena, &a, "bc");
+        HG_ASSERT(a == abc);
 
-        HgStringBuilder str{};
+        StringBuilder str{};
 
-        hgStringAppend(arena, &str, "hello");
-        hgAssert(str == hgStringCopy(arena, "hello"));
+        stringAppend(arena, &str, "hello");
+        HG_ASSERT(str == stringCopy(arena, "hello"));
 
-        hgStringAppend(arena, &str, " there");
-        hgAssert(str == hgStringCopy(arena, "hello there"));
+        stringAppend(arena, &str, " there");
+        HG_ASSERT(str == stringCopy(arena, "hello there"));
 
-        hgStringPrepend(arena, &str, "why ");
-        hgAssert(str == hgStringCopy(arena, "why hello there"));
+        stringPrepend(arena, &str, "why ");
+        HG_ASSERT(str == stringCopy(arena, "why hello there"));
 
-        hgStringInsert(arena, &str, 3, ",");
-        hgAssert(str == hgStringCopy(arena, "why, hello there"));
+        stringInsert(arena, &str, 3, ",");
+        HG_ASSERT(str == stringCopy(arena, "why, hello there"));
 
-        hgStringPrepend(arena, &str, "aaaaaaaaaaaaaaaaaaaaaaaa ");
-        hgAssert(str == hgStringCopy(arena, "aaaaaaaaaaaaaaaaaaaaaaaa why, hello there"));
+        stringPrepend(arena, &str, "aaaaaaaaaaaaaaaaaaaaaaaa ");
+        HG_ASSERT(str == stringCopy(arena, "aaaaaaaaaaaaaaaaaaaaaaaa why, hello there"));
     }
 
     // string utils
     {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
+        Arena* arena = scratch();
+        HG_ARENA_SCOPE(arena);
 
-        hgAssert(hgIsWhitespace(' '));
-        hgAssert(hgIsWhitespace('\t'));
-        hgAssert(hgIsWhitespace('\n'));
+        HG_ASSERT(isWhitespace(' '));
+        HG_ASSERT(isWhitespace('\t'));
+        HG_ASSERT(isWhitespace('\n'));
 
-        hgAssert(hgIsNumeral('0'));
-        hgAssert(hgIsNumeral('1'));
-        hgAssert(hgIsNumeral('2'));
-        hgAssert(hgIsNumeral('3'));
-        hgAssert(hgIsNumeral('4'));
-        hgAssert(hgIsNumeral('5'));
-        hgAssert(hgIsNumeral('5'));
-        hgAssert(hgIsNumeral('6'));
-        hgAssert(hgIsNumeral('7'));
-        hgAssert(hgIsNumeral('8'));
-        hgAssert(hgIsNumeral('9'));
+        HG_ASSERT(isNumeral('0'));
+        HG_ASSERT(isNumeral('1'));
+        HG_ASSERT(isNumeral('2'));
+        HG_ASSERT(isNumeral('3'));
+        HG_ASSERT(isNumeral('4'));
+        HG_ASSERT(isNumeral('5'));
+        HG_ASSERT(isNumeral('5'));
+        HG_ASSERT(isNumeral('6'));
+        HG_ASSERT(isNumeral('7'));
+        HG_ASSERT(isNumeral('8'));
+        HG_ASSERT(isNumeral('9'));
 
-        hgAssert(!hgIsNumeral('0' - 1));
-        hgAssert(!hgIsNumeral('9' + 1));
+        HG_ASSERT(!isNumeral('0' - 1));
+        HG_ASSERT(!isNumeral('9' + 1));
 
-        hgAssert(!hgIsNumeral('x'));
-        hgAssert(!hgIsNumeral('a'));
-        hgAssert(!hgIsNumeral('b'));
-        hgAssert(!hgIsNumeral('c'));
-        hgAssert(!hgIsNumeral('d'));
-        hgAssert(!hgIsNumeral('e'));
-        hgAssert(!hgIsNumeral('f'));
-        hgAssert(!hgIsNumeral('X'));
-        hgAssert(!hgIsNumeral('A'));
-        hgAssert(!hgIsNumeral('B'));
-        hgAssert(!hgIsNumeral('C'));
-        hgAssert(!hgIsNumeral('D'));
-        hgAssert(!hgIsNumeral('E'));
-        hgAssert(!hgIsNumeral('F'));
+        HG_ASSERT(!isNumeral('x'));
+        HG_ASSERT(!isNumeral('a'));
+        HG_ASSERT(!isNumeral('b'));
+        HG_ASSERT(!isNumeral('c'));
+        HG_ASSERT(!isNumeral('d'));
+        HG_ASSERT(!isNumeral('e'));
+        HG_ASSERT(!isNumeral('f'));
+        HG_ASSERT(!isNumeral('X'));
+        HG_ASSERT(!isNumeral('A'));
+        HG_ASSERT(!isNumeral('B'));
+        HG_ASSERT(!isNumeral('C'));
+        HG_ASSERT(!isNumeral('D'));
+        HG_ASSERT(!isNumeral('E'));
+        HG_ASSERT(!isNumeral('F'));
 
-        hgAssert(!hgIsNumeral('.'));
-        hgAssert(!hgIsNumeral('+'));
-        hgAssert(!hgIsNumeral('-'));
-        hgAssert(!hgIsNumeral('*'));
-        hgAssert(!hgIsNumeral('/'));
-        hgAssert(!hgIsNumeral('='));
-        hgAssert(!hgIsNumeral('#'));
-        hgAssert(!hgIsNumeral('&'));
-        hgAssert(!hgIsNumeral('^'));
-        hgAssert(!hgIsNumeral('~'));
+        HG_ASSERT(!isNumeral('.'));
+        HG_ASSERT(!isNumeral('+'));
+        HG_ASSERT(!isNumeral('-'));
+        HG_ASSERT(!isNumeral('*'));
+        HG_ASSERT(!isNumeral('/'));
+        HG_ASSERT(!isNumeral('='));
+        HG_ASSERT(!isNumeral('#'));
+        HG_ASSERT(!isNumeral('&'));
+        HG_ASSERT(!isNumeral('^'));
+        HG_ASSERT(!isNumeral('~'));
 
-        hgAssert(hgIsInteger("0"));
-        hgAssert(hgIsInteger("1"));
-        hgAssert(hgIsInteger("2"));
-        hgAssert(hgIsInteger("3"));
-        hgAssert(hgIsInteger("4"));
-        hgAssert(hgIsInteger("5"));
-        hgAssert(hgIsInteger("6"));
-        hgAssert(hgIsInteger("7"));
-        hgAssert(hgIsInteger("8"));
-        hgAssert(hgIsInteger("9"));
-        hgAssert(hgIsInteger("10"));
+        HG_ASSERT(isInteger("0"));
+        HG_ASSERT(isInteger("1"));
+        HG_ASSERT(isInteger("2"));
+        HG_ASSERT(isInteger("3"));
+        HG_ASSERT(isInteger("4"));
+        HG_ASSERT(isInteger("5"));
+        HG_ASSERT(isInteger("6"));
+        HG_ASSERT(isInteger("7"));
+        HG_ASSERT(isInteger("8"));
+        HG_ASSERT(isInteger("9"));
+        HG_ASSERT(isInteger("10"));
 
-        hgAssert(hgIsInteger("12"));
-        hgAssert(hgIsInteger("42"));
-        hgAssert(hgIsInteger("100"));
-        hgAssert(hgIsInteger("123456789"));
-        hgAssert(hgIsInteger("-12"));
-        hgAssert(hgIsInteger("-42"));
-        hgAssert(hgIsInteger("-100"));
-        hgAssert(hgIsInteger("-123456789"));
-        hgAssert(hgIsInteger("+12"));
-        hgAssert(hgIsInteger("+42"));
-        hgAssert(hgIsInteger("+100"));
-        hgAssert(hgIsInteger("+123456789"));
+        HG_ASSERT(isInteger("12"));
+        HG_ASSERT(isInteger("42"));
+        HG_ASSERT(isInteger("100"));
+        HG_ASSERT(isInteger("123456789"));
+        HG_ASSERT(isInteger("-12"));
+        HG_ASSERT(isInteger("-42"));
+        HG_ASSERT(isInteger("-100"));
+        HG_ASSERT(isInteger("-123456789"));
+        HG_ASSERT(isInteger("+12"));
+        HG_ASSERT(isInteger("+42"));
+        HG_ASSERT(isInteger("+100"));
+        HG_ASSERT(isInteger("+123456789"));
 
-        hgAssert(!hgIsInteger("hello"));
-        hgAssert(!hgIsInteger("not a number"));
-        hgAssert(!hgIsInteger("number"));
-        hgAssert(!hgIsInteger("integer"));
-        hgAssert(!hgIsInteger("0.0"));
-        hgAssert(!hgIsInteger("1.0"));
-        hgAssert(!hgIsInteger(".10"));
-        hgAssert(!hgIsInteger("1e2"));
-        hgAssert(!hgIsInteger("1f"));
-        hgAssert(!hgIsInteger("0xff"));
-        hgAssert(!hgIsInteger("--42"));
-        hgAssert(!hgIsInteger("++42"));
-        hgAssert(!hgIsInteger("42-"));
-        hgAssert(!hgIsInteger("42+"));
-        hgAssert(!hgIsInteger("4 2"));
-        hgAssert(!hgIsInteger("4+2"));
+        HG_ASSERT(!isInteger("hello"));
+        HG_ASSERT(!isInteger("not a number"));
+        HG_ASSERT(!isInteger("number"));
+        HG_ASSERT(!isInteger("integer"));
+        HG_ASSERT(!isInteger("0.0"));
+        HG_ASSERT(!isInteger("1.0"));
+        HG_ASSERT(!isInteger(".10"));
+        HG_ASSERT(!isInteger("1e2"));
+        HG_ASSERT(!isInteger("1f"));
+        HG_ASSERT(!isInteger("0xff"));
+        HG_ASSERT(!isInteger("--42"));
+        HG_ASSERT(!isInteger("++42"));
+        HG_ASSERT(!isInteger("42-"));
+        HG_ASSERT(!isInteger("42+"));
+        HG_ASSERT(!isInteger("4 2"));
+        HG_ASSERT(!isInteger("4+2"));
 
-        hgAssert(hgIsFloat("0.0"));
-        hgAssert(hgIsFloat("1."));
-        hgAssert(hgIsFloat("2.0"));
-        hgAssert(hgIsFloat("3."));
-        hgAssert(hgIsFloat("4.0"));
-        hgAssert(hgIsFloat("5."));
-        hgAssert(hgIsFloat("6.0"));
-        hgAssert(hgIsFloat("7."));
-        hgAssert(hgIsFloat("8.0"));
-        hgAssert(hgIsFloat("9."));
-        hgAssert(hgIsFloat("10.0"));
+        HG_ASSERT(isFloat("0.0"));
+        HG_ASSERT(isFloat("1."));
+        HG_ASSERT(isFloat("2.0"));
+        HG_ASSERT(isFloat("3."));
+        HG_ASSERT(isFloat("4.0"));
+        HG_ASSERT(isFloat("5."));
+        HG_ASSERT(isFloat("6.0"));
+        HG_ASSERT(isFloat("7."));
+        HG_ASSERT(isFloat("8.0"));
+        HG_ASSERT(isFloat("9."));
+        HG_ASSERT(isFloat("10.0"));
 
-        hgAssert(hgIsFloat("0.0"));
-        hgAssert(hgIsFloat(".1"));
-        hgAssert(hgIsFloat("0.2"));
-        hgAssert(hgIsFloat(".3"));
-        hgAssert(hgIsFloat("0.4"));
-        hgAssert(hgIsFloat(".5"));
-        hgAssert(hgIsFloat("0.6"));
-        hgAssert(hgIsFloat(".7"));
-        hgAssert(hgIsFloat("0.8"));
-        hgAssert(hgIsFloat(".9"));
-        hgAssert(hgIsFloat("0.10"));
+        HG_ASSERT(isFloat("0.0"));
+        HG_ASSERT(isFloat(".1"));
+        HG_ASSERT(isFloat("0.2"));
+        HG_ASSERT(isFloat(".3"));
+        HG_ASSERT(isFloat("0.4"));
+        HG_ASSERT(isFloat(".5"));
+        HG_ASSERT(isFloat("0.6"));
+        HG_ASSERT(isFloat(".7"));
+        HG_ASSERT(isFloat("0.8"));
+        HG_ASSERT(isFloat(".9"));
+        HG_ASSERT(isFloat("0.10"));
 
-        hgAssert(hgIsFloat("1.0"));
-        hgAssert(hgIsFloat("+10.f"));
-        hgAssert(hgIsFloat(".10"));
-        hgAssert(hgIsFloat("-999.999f"));
-        hgAssert(hgIsFloat("1e3"));
-        hgAssert(hgIsFloat("1e3"));
-        hgAssert(hgIsFloat("+1.e3f"));
-        hgAssert(hgIsFloat(".1e3"));
+        HG_ASSERT(isFloat("1.0"));
+        HG_ASSERT(isFloat("+10.f"));
+        HG_ASSERT(isFloat(".10"));
+        HG_ASSERT(isFloat("-999.999f"));
+        HG_ASSERT(isFloat("1e3"));
+        HG_ASSERT(isFloat("1e3"));
+        HG_ASSERT(isFloat("+1.e3f"));
+        HG_ASSERT(isFloat(".1e3"));
 
-        hgAssert(!hgIsFloat("hello"));
-        hgAssert(!hgIsFloat("not a number"));
-        hgAssert(!hgIsFloat("number"));
-        hgAssert(!hgIsFloat("float"));
-        hgAssert(!hgIsFloat("1.0ff"));
-        hgAssert(!hgIsFloat("0x1.0"));
-        hgAssert(!hgIsFloat("-0x1.0"));
+        HG_ASSERT(!isFloat("hello"));
+        HG_ASSERT(!isFloat("not a number"));
+        HG_ASSERT(!isFloat("number"));
+        HG_ASSERT(!isFloat("float"));
+        HG_ASSERT(!isFloat("1.0ff"));
+        HG_ASSERT(!isFloat("0x1.0"));
+        HG_ASSERT(!isFloat("-0x1.0"));
 
-        hgAssert(hgStringToInteger("0") == 0);
-        hgAssert(hgStringToInteger("1") == 1);
-        hgAssert(hgStringToInteger("2") == 2);
-        hgAssert(hgStringToInteger("3") == 3);
-        hgAssert(hgStringToInteger("4") == 4);
-        hgAssert(hgStringToInteger("5") == 5);
-        hgAssert(hgStringToInteger("6") == 6);
-        hgAssert(hgStringToInteger("7") == 7);
-        hgAssert(hgStringToInteger("8") == 8);
-        hgAssert(hgStringToInteger("9") == 9);
+        HG_ASSERT(stringToInteger("0") == 0);
+        HG_ASSERT(stringToInteger("1") == 1);
+        HG_ASSERT(stringToInteger("2") == 2);
+        HG_ASSERT(stringToInteger("3") == 3);
+        HG_ASSERT(stringToInteger("4") == 4);
+        HG_ASSERT(stringToInteger("5") == 5);
+        HG_ASSERT(stringToInteger("6") == 6);
+        HG_ASSERT(stringToInteger("7") == 7);
+        HG_ASSERT(stringToInteger("8") == 8);
+        HG_ASSERT(stringToInteger("9") == 9);
 
-        hgAssert(hgStringToInteger("0000000") == 0);
-        hgAssert(hgStringToInteger("+0000001") == +1);
-        hgAssert(hgStringToInteger("0000002") == 2);
-        hgAssert(hgStringToInteger("-0000003") == -3);
-        hgAssert(hgStringToInteger("0000004") == 4);
-        hgAssert(hgStringToInteger("+0000005") == +5);
-        hgAssert(hgStringToInteger("0000006") == 6);
-        hgAssert(hgStringToInteger("-0000007") == -7);
-        hgAssert(hgStringToInteger("0000008") == 8);
-        hgAssert(hgStringToInteger("+0000009") == +9);
+        HG_ASSERT(stringToInteger("0000000") == 0);
+        HG_ASSERT(stringToInteger("+0000001") == +1);
+        HG_ASSERT(stringToInteger("0000002") == 2);
+        HG_ASSERT(stringToInteger("-0000003") == -3);
+        HG_ASSERT(stringToInteger("0000004") == 4);
+        HG_ASSERT(stringToInteger("+0000005") == +5);
+        HG_ASSERT(stringToInteger("0000006") == 6);
+        HG_ASSERT(stringToInteger("-0000007") == -7);
+        HG_ASSERT(stringToInteger("0000008") == 8);
+        HG_ASSERT(stringToInteger("+0000009") == +9);
 
-        hgAssert(hgStringToInteger("0000000") == 0);
-        hgAssert(hgStringToInteger("1000000") == 1000000);
-        hgAssert(hgStringToInteger("2000000") == 2000000);
-        hgAssert(hgStringToInteger("3000000") == 3000000);
-        hgAssert(hgStringToInteger("4000000") == 4000000);
-        hgAssert(hgStringToInteger("5000000") == 5000000);
-        hgAssert(hgStringToInteger("6000000") == 6000000);
-        hgAssert(hgStringToInteger("7000000") == 7000000);
-        hgAssert(hgStringToInteger("8000000") == 8000000);
-        hgAssert(hgStringToInteger("9000000") == 9000000);
-        hgAssert(hgStringToInteger("1234567890") == 1234567890);
+        HG_ASSERT(stringToInteger("0000000") == 0);
+        HG_ASSERT(stringToInteger("1000000") == 1000000);
+        HG_ASSERT(stringToInteger("2000000") == 2000000);
+        HG_ASSERT(stringToInteger("3000000") == 3000000);
+        HG_ASSERT(stringToInteger("4000000") == 4000000);
+        HG_ASSERT(stringToInteger("5000000") == 5000000);
+        HG_ASSERT(stringToInteger("6000000") == 6000000);
+        HG_ASSERT(stringToInteger("7000000") == 7000000);
+        HG_ASSERT(stringToInteger("8000000") == 8000000);
+        HG_ASSERT(stringToInteger("9000000") == 9000000);
+        HG_ASSERT(stringToInteger("1234567890") == 1234567890);
 
-        hgAssert(hgStringToFloat("0.0") == 0.0);
-        hgAssert(hgStringToFloat("1.0f") == 1.0);
-        hgAssert(hgStringToFloat("2.0") == 2.0);
-        hgAssert(hgStringToFloat("3.0f") == 3.0);
-        hgAssert(hgStringToFloat("4.0") == 4.0);
-        hgAssert(hgStringToFloat("5.0f") == 5.0);
-        hgAssert(hgStringToFloat("6.0") == 6.0);
-        hgAssert(hgStringToFloat("7.0f") == 7.0);
-        hgAssert(hgStringToFloat("8.0") == 8.0);
-        hgAssert(hgStringToFloat("9.0f") == 9.0);
+        HG_ASSERT(stringToFloat("0.0") == 0.0);
+        HG_ASSERT(stringToFloat("1.0f") == 1.0);
+        HG_ASSERT(stringToFloat("2.0") == 2.0);
+        HG_ASSERT(stringToFloat("3.0f") == 3.0);
+        HG_ASSERT(stringToFloat("4.0") == 4.0);
+        HG_ASSERT(stringToFloat("5.0f") == 5.0);
+        HG_ASSERT(stringToFloat("6.0") == 6.0);
+        HG_ASSERT(stringToFloat("7.0f") == 7.0);
+        HG_ASSERT(stringToFloat("8.0") == 8.0);
+        HG_ASSERT(stringToFloat("9.0f") == 9.0);
 
-        hgAssert(hgStringToFloat("0e1") == 0.0);
-        hgAssert(hgStringToFloat("1e2f") == 1e2);
-        hgAssert(hgStringToFloat("2e3") == 2e3);
-        hgAssert(hgStringToFloat("3e4f") == 3e4);
-        hgAssert(hgStringToFloat("4e5") == 4e5);
-        hgAssert(hgStringToFloat("5e6f") == 5e6);
-        hgAssert(hgStringToFloat("6e7") == 6e7);
-        hgAssert(hgStringToFloat("7e8f") == 7e8);
-        hgAssert(hgStringToFloat("8e9") == 8e9);
-        hgAssert(hgStringToFloat("9e10f") == 9e10);
+        HG_ASSERT(stringToFloat("0e1") == 0.0);
+        HG_ASSERT(stringToFloat("1e2f") == 1e2);
+        HG_ASSERT(stringToFloat("2e3") == 2e3);
+        HG_ASSERT(stringToFloat("3e4f") == 3e4);
+        HG_ASSERT(stringToFloat("4e5") == 4e5);
+        HG_ASSERT(stringToFloat("5e6f") == 5e6);
+        HG_ASSERT(stringToFloat("6e7") == 6e7);
+        HG_ASSERT(stringToFloat("7e8f") == 7e8);
+        HG_ASSERT(stringToFloat("8e9") == 8e9);
+        HG_ASSERT(stringToFloat("9e10f") == 9e10);
 
-        hgAssert(hgStringToFloat("0e1") == 0.0);
-        hgAssert(hgStringToFloat("1e2f") == 1e2);
-        hgAssert(hgStringToFloat("2e3") == 2e3);
-        hgAssert(hgStringToFloat("3e4f") == 3e4);
-        hgAssert(hgStringToFloat("4e5") == 4e5);
-        hgAssert(hgStringToFloat("5e6f") == 5e6);
-        hgAssert(hgStringToFloat("6e7") == 6e7);
-        hgAssert(hgStringToFloat("7e8f") == 7e8);
-        hgAssert(hgStringToFloat("8e9") == 8e9);
-        hgAssert(hgStringToFloat("9e10f") == 9e10);
+        HG_ASSERT(stringToFloat("0e1") == 0.0);
+        HG_ASSERT(stringToFloat("1e2f") == 1e2);
+        HG_ASSERT(stringToFloat("2e3") == 2e3);
+        HG_ASSERT(stringToFloat("3e4f") == 3e4);
+        HG_ASSERT(stringToFloat("4e5") == 4e5);
+        HG_ASSERT(stringToFloat("5e6f") == 5e6);
+        HG_ASSERT(stringToFloat("6e7") == 6e7);
+        HG_ASSERT(stringToFloat("7e8f") == 7e8);
+        HG_ASSERT(stringToFloat("8e9") == 8e9);
+        HG_ASSERT(stringToFloat("9e10f") == 9e10);
 
-        hgAssert(hgStringToFloat(".1") == .1);
-        hgAssert(hgStringToFloat("+.1") == +.1);
-        hgAssert(hgStringToFloat("-.1") == -.1);
-        hgAssert(hgStringToFloat("+.1e5") == +.1e5);
+        HG_ASSERT(stringToFloat(".1") == .1);
+        HG_ASSERT(stringToFloat("+.1") == +.1);
+        HG_ASSERT(stringToFloat("-.1") == -.1);
+        HG_ASSERT(stringToFloat("+.1e5") == +.1e5);
 
-        hgAssert(hgIntegerToString(arena, 0) == "0");
-        hgAssert(hgIntegerToString(arena, -1) == "-1");
-        hgAssert(hgIntegerToString(arena, 2) == "2");
-        hgAssert(hgIntegerToString(arena, -3) == "-3");
-        hgAssert(hgIntegerToString(arena, 4) == "4");
-        hgAssert(hgIntegerToString(arena, -5) == "-5");
-        hgAssert(hgIntegerToString(arena, 6) == "6");
-        hgAssert(hgIntegerToString(arena, -7) == "-7");
-        hgAssert(hgIntegerToString(arena, 8) == "8");
-        hgAssert(hgIntegerToString(arena, -9) == "-9");
+        HG_ASSERT(integerToString(arena, 0) == "0");
+        HG_ASSERT(integerToString(arena, -1) == "-1");
+        HG_ASSERT(integerToString(arena, 2) == "2");
+        HG_ASSERT(integerToString(arena, -3) == "-3");
+        HG_ASSERT(integerToString(arena, 4) == "4");
+        HG_ASSERT(integerToString(arena, -5) == "-5");
+        HG_ASSERT(integerToString(arena, 6) == "6");
+        HG_ASSERT(integerToString(arena, -7) == "-7");
+        HG_ASSERT(integerToString(arena, 8) == "8");
+        HG_ASSERT(integerToString(arena, -9) == "-9");
 
-        hgAssert(hgIntegerToString(arena, 0000000) == "0");
-        hgAssert(hgIntegerToString(arena, -1000000) == "-1000000");
-        hgAssert(hgIntegerToString(arena, 2000000) == "2000000");
-        hgAssert(hgIntegerToString(arena, -3000000) == "-3000000");
-        hgAssert(hgIntegerToString(arena, 4000000) == "4000000");
-        hgAssert(hgIntegerToString(arena, -5000000) == "-5000000");
-        hgAssert(hgIntegerToString(arena, 6000000) == "6000000");
-        hgAssert(hgIntegerToString(arena, -7000000) == "-7000000");
-        hgAssert(hgIntegerToString(arena, 8000000) == "8000000");
-        hgAssert(hgIntegerToString(arena, -9000000) == "-9000000");
-        hgAssert(hgIntegerToString(arena, 1234567890) == "1234567890");
+        HG_ASSERT(integerToString(arena, 0000000) == "0");
+        HG_ASSERT(integerToString(arena, -1000000) == "-1000000");
+        HG_ASSERT(integerToString(arena, 2000000) == "2000000");
+        HG_ASSERT(integerToString(arena, -3000000) == "-3000000");
+        HG_ASSERT(integerToString(arena, 4000000) == "4000000");
+        HG_ASSERT(integerToString(arena, -5000000) == "-5000000");
+        HG_ASSERT(integerToString(arena, 6000000) == "6000000");
+        HG_ASSERT(integerToString(arena, -7000000) == "-7000000");
+        HG_ASSERT(integerToString(arena, 8000000) == "8000000");
+        HG_ASSERT(integerToString(arena, -9000000) == "-9000000");
+        HG_ASSERT(integerToString(arena, 1234567890) == "1234567890");
 
-        hgAssert(hgFloatToString(arena, 0.0, 10) == "0.0");
-        hgAssert(hgFloatToString(arena, -1.0f, 1) == "-1.0");
-        hgAssert(hgFloatToString(arena, 2.0, 2) == "2.00");
-        hgAssert(hgFloatToString(arena, -3.0f, 3) == "-3.000");
-        hgAssert(hgFloatToString(arena, 4.0, 4) == "4.0000");
-        hgAssert(hgFloatToString(arena, -5.0f, 5) == "-5.00000");
-        hgAssert(hgFloatToString(arena, 6.0, 6) == "6.000000");
-        hgAssert(hgFloatToString(arena, -7.0f, 7) == "-7.0000000");
-        hgAssert(hgFloatToString(arena, 8.0, 8) == "8.00000000");
-        hgAssert(hgFloatToString(arena, -9.0f, 9) == "-9.000000000");
+        HG_ASSERT(floatToString(arena, 0.0, 10) == "0.0");
+        HG_ASSERT(floatToString(arena, -1.0f, 1) == "-1.0");
+        HG_ASSERT(floatToString(arena, 2.0, 2) == "2.00");
+        HG_ASSERT(floatToString(arena, -3.0f, 3) == "-3.000");
+        HG_ASSERT(floatToString(arena, 4.0, 4) == "4.0000");
+        HG_ASSERT(floatToString(arena, -5.0f, 5) == "-5.00000");
+        HG_ASSERT(floatToString(arena, 6.0, 6) == "6.000000");
+        HG_ASSERT(floatToString(arena, -7.0f, 7) == "-7.0000000");
+        HG_ASSERT(floatToString(arena, 8.0, 8) == "8.00000000");
+        HG_ASSERT(floatToString(arena, -9.0f, 9) == "-9.000000000");
 
-        hgAssert(hgFloatToString(arena, 0e0, 1) == "0.0");
-        hgAssert(hgFloatToString(arena, -1e1f, 0) == "-10.");
-        hgAssert(hgFloatToString(arena, 2e2, 1) == "200.0");
-        hgAssert(hgFloatToString(arena, -3e3f, 0) == "-3000.");
-        hgAssert(hgFloatToString(arena, 4e4, 1) == "40000.0");
-        hgAssert(hgFloatToString(arena, -5e5f, 0) == "-500000.");
-        hgAssert(hgFloatToString(arena, 6e6, 1) == "6000000.0");
-        hgAssert(hgFloatToString(arena, -7e7f, 0) == "-70000000.");
-        hgAssert(hgFloatToString(arena, 8e8, 1) == "800000000.0");
-        hgAssert(hgFloatToString(arena, -9e9f, 0) == "-8999999488.");
+        HG_ASSERT(floatToString(arena, 0e0, 1) == "0.0");
+        HG_ASSERT(floatToString(arena, -1e1f, 0) == "-10.");
+        HG_ASSERT(floatToString(arena, 2e2, 1) == "200.0");
+        HG_ASSERT(floatToString(arena, -3e3f, 0) == "-3000.");
+        HG_ASSERT(floatToString(arena, 4e4, 1) == "40000.0");
+        HG_ASSERT(floatToString(arena, -5e5f, 0) == "-500000.");
+        HG_ASSERT(floatToString(arena, 6e6, 1) == "6000000.0");
+        HG_ASSERT(floatToString(arena, -7e7f, 0) == "-70000000.");
+        HG_ASSERT(floatToString(arena, 8e8, 1) == "800000000.0");
+        HG_ASSERT(floatToString(arena, -9e9f, 0) == "-8999999488.");
 
-        hgAssert(hgFloatToString(arena, -0e-0, 3) == "0.0");
-        hgAssert(hgFloatToString(arena, 1e-1f, 3) == "0.100");
-        hgAssert(hgFloatToString(arena, -2e-2, 3) == "-0.020");
-        hgAssert(hgFloatToString(arena, 3e-3f, 3) == "0.003");
-        hgAssert(hgFloatToString(arena, -4e-0, 3) == "-4.000");
-        hgAssert(hgFloatToString(arena, 5e-1f, 3) == "0.500");
-        hgAssert(hgFloatToString(arena, -6e-2, 3) == "-0.060");
-        hgAssert(hgFloatToString(arena, 7e-3f, 3) == "0.007");
-        hgAssert(hgFloatToString(arena, -8e-0, 3) == "-8.000");
-        hgAssert(hgFloatToString(arena, 9e-1f, 3) == "0.899");
+        HG_ASSERT(floatToString(arena, -0e-0, 3) == "0.0");
+        HG_ASSERT(floatToString(arena, 1e-1f, 3) == "0.100");
+        HG_ASSERT(floatToString(arena, -2e-2, 3) == "-0.020");
+        HG_ASSERT(floatToString(arena, 3e-3f, 3) == "0.003");
+        HG_ASSERT(floatToString(arena, -4e-0, 3) == "-4.000");
+        HG_ASSERT(floatToString(arena, 5e-1f, 3) == "0.500");
+        HG_ASSERT(floatToString(arena, -6e-2, 3) == "-0.060");
+        HG_ASSERT(floatToString(arena, 7e-3f, 3) == "0.007");
+        HG_ASSERT(floatToString(arena, -8e-0, 3) == "-8.000");
+        HG_ASSERT(floatToString(arena, 9e-1f, 3) == "0.899");
     }
 
     // thread pool
     {
         {
-            HgFence* fence = hgFenceCreate();
-            hgDefer(hgFenceDestroy(fence));
+            Fence* fence = fenceCreate();
+            HG_DEFER(fenceDestroy(fence));
 
             bool a = false;
             bool b = false;
 
-            hgThreadsCall(fence, &a, [](void *pa)
+            threadsCall(fence, &a, [](void *pa)
             {
                 *(bool*)pa = true;
             });
-            hgThreadsCall(fence, &b, [](void *pb)
+            threadsCall(fence, &b, [](void *pb)
             {
                 *(bool*)pb = true;
             });
 
-            hgFenceWait(fence, 2.0);
+            fenceWait(fence, 2.0);
 
-            hgAssert(hgFenceWait(fence, 2.0));
+            HG_ASSERT(fenceWait(fence, 2.0));
 
-            hgAssert(a == true);
-            hgAssert(b == true);
+            HG_ASSERT(a == true);
+            HG_ASSERT(b == true);
         }
 
         {
-            HgFence* fence = hgFenceCreate();
-            hgDefer(hgFenceDestroy(fence));
+            Fence* fence = fenceCreate();
+            HG_DEFER(fenceDestroy(fence));
 
             bool vals[100]{};
             for (bool& val : vals)
             {
-                hgThreadsCall(fence, &val, [](void* data)
+                threadsCall(fence, &val, [](void* data)
                 {
                     *(bool*)data = true;
                 });
             }
 
-            hgAssert(hgThreadsHelp(fence, 2.0));
+            HG_ASSERT(threadsHelp(fence, 2.0));
 
             for (bool& val : vals)
             {
-                hgAssert(val == true);
+                HG_ASSERT(val == true);
             }
         }
 
@@ -418,17 +418,17 @@ void hgTest()
             {
                 ((bool*)pvals)[idx] = true;
             };
-            hgThreadsFor(0, hgArrayCount(vals), vals, fn);
+            threadsFor(0, arrayCount(vals), vals, fn);
 
             for (bool& val : vals)
             {
-                hgAssert(val == true);
+                HG_ASSERT(val == true);
             }
         }
 
         {
-            HgFence* fence = hgFenceCreate();
-            hgDefer(hgFenceDestroy(fence));
+            Fence* fence = fenceCreate();
+            HG_DEFER(fenceDestroy(fence));
 
             for (u32 n = 0; n < 3; ++n)
             {
@@ -452,10 +452,10 @@ void hgTest()
                     u32 end = begin + 25;
                     for (u32 i = begin; i < end; ++i)
                     {
-                        hgThreadsCall(fence, vals + i, fn);
+                        threadsCall(fence, vals + i, fn);
                     }
                 };
-                for (u32 j = 0; j < hgArrayCount(producers); ++j)
+                for (u32 j = 0; j < arrayCount(producers); ++j)
                 {
                     producers[j] = std::thread(prodFn, j);
                 }
@@ -466,44 +466,44 @@ void hgTest()
                     thread.join();
                 }
 
-                hgAssert(hgThreadsHelp(fence, 2.0));
+                HG_ASSERT(threadsHelp(fence, 2.0));
                 for (auto val : vals)
                 {
-                    hgAssert(val == true);
+                    HG_ASSERT(val == true);
                 }
             }
         }
     }
 
-    // HgMutex
+    // Mutex
     {
         struct Capture {
-            HgMutex* mtx;
+            Mutex* mtx;
             u32 count;
         };
         Capture c{};
 
-        c.mtx = hgMutexCreate();
-        hgDefer(hgMutexDestroy(c.mtx));
+        c.mtx = mutexCreate();
+        HG_DEFER(mutexDestroy(c.mtx));
 
         c.count = 0;
-        hgThreadsFor(0, 100, &c, [](void* pc, u64)
+        threadsFor(0, 100, &c, [](void* pc, u64)
         {
             Capture* c = (Capture*)pc;
-            hgMutexAcquire(c->mtx);
-            hgDefer(hgMutexRelease(c->mtx));
+            mutexAcquire(c->mtx);
+            HG_DEFER(mutexRelease(c->mtx));
             for (u32 i = 0; i < 10000; ++i)
             {
                 ++c->count;
             }
         });
-        hgAssert(c.count == 1000000);
+        HG_ASSERT(c.count == 1000000);
     }
 
     // Serialization
     {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
+        Arena* arena = scratch();
+        HG_ARENA_SCOPE(arena);
 
         struct PlainOldData {
             i64 a;
@@ -523,43 +523,43 @@ void hgTest()
         pod.e[2] = {6};
 
         {
-            HgSerializer writer = hgSerialWriter(arena);
-            hgSerialize(&writer, &pod);
+            Serializer writer = serialWriter(arena);
+            serialize(&writer, &pod);
 
             PlainOldData podCopy{};
 
-            HgSerializer reader = hgSerialReader(arena, writer.current);
-            hgSerialize(&reader, &podCopy);
+            Serializer reader = serialReader(arena, writer.current);
+            serialize(&reader, &podCopy);
 
-            hgAssert(hgMemEqual(&podCopy, &pod, sizeof(pod)));
+            HG_ASSERT(memEqual(&podCopy, &pod, sizeof(pod)));
         }
 
         {
-            HgSerializer writer = hgSerialWriter(arena);
-            hgSerialize(&writer, &pod);
+            Serializer writer = serialWriter(arena);
+            serialize(&writer, &pod);
 
-            HgBinary bin = hgBinaryWriteSerial(arena, &writer);
+            Binary bin = binaryWriteSerial(arena, &writer);
 
             PlainOldData podCopy{};
 
-            HgSerializer reader = hgBinaryReadSerial(arena, bin);
-            hgSerialize(&reader, &podCopy);
+            Serializer reader = binaryReadSerial(arena, bin);
+            serialize(&reader, &podCopy);
 
-            hgAssert(hgMemEqual(&podCopy, &pod, sizeof(pod)));
+            HG_ASSERT(memEqual(&podCopy, &pod, sizeof(pod)));
         }
 
         // {
-        //     HgSerializer writer = hgSerialWriter(arena);
-        //     hgSerialize(arena, &writer, "data", &pod);
+        //     Serializer writer = serialWriter(arena);
+        //     serialize(arena, &writer, "data", &pod);
         //
-        //     HgStringView json = hgJsonWriteSerial(arena, writer);
+        //     StringView json = jsonWriteSerial(arena, writer);
         //
         //     PlainOldData podCopy{};
         //
-        //     HgSerializer reader = hgJsonReadSerial(arena, json);
-        //     hgSerialize(arena, &reader, "data", &podCopy);
+        //     Serializer reader = jsonReadSerial(arena, json);
+        //     serialize(arena, &reader, "data", &podCopy);
         //
-        //     hgAssert(hgMemEqual(&podCopy, &pod, sizeof(pod)));
+        //     HG_ASSERT(memEqual(&podCopy, &pod, sizeof(pod)));
         // }
 
         struct Data {
@@ -568,7 +568,7 @@ void hgTest()
             f32 c;
             bool d;
             u32 e[3];
-            HgStringBuilder f;
+            StringBuilder f;
         };
 
         Data data{};
@@ -579,11 +579,11 @@ void hgTest()
         data.e[0] = {2};
         data.e[1] = {4};
         data.e[2] = {6};
-        data.f = hgStringCopy(arena, "hello");
+        data.f = stringCopy(arena, "hello");
 
-        auto serializeData = [](HgSerializer* s, Data* val)
+        auto serializeData = [](Serializer* s, Data* val)
         {
-            hgSerializeObject(s,
+            serializeObject(s,
                 &val->a,
                 &val->b,
                 &val->c,
@@ -593,58 +593,58 @@ void hgTest()
         };
 
         {
-            HgSerializer writer = hgSerialWriter(arena);
+            Serializer writer = serialWriter(arena);
             serializeData(&writer, &data);
 
-            // HgStringView json = hgJsonWriteSerial(arena, &writer);
-            // hgDebug("json: %.*s\n", (int)json.length, json.chars);
+            // StringView json = jsonWriteSerial(arena, &writer);
+            // debug("json: %.*s\n", (int)json.length, json.chars);
 
             Data dataCopy{};
 
-            HgSerializer reader = hgSerialReader(arena, writer.current);
+            Serializer reader = serialReader(arena, writer.current);
             serializeData(&reader, &dataCopy);
 
-            hgAssert(!hgMemEqual(&dataCopy, &data, sizeof(data)));
-            hgAssert(data.a == dataCopy.a);
-            hgAssert(data.b == dataCopy.b);
-            hgAssert(data.c == dataCopy.c);
-            hgAssert(data.d == dataCopy.d);
-            hgAssert(data.e[0] == dataCopy.e[0]);
-            hgAssert(data.e[1] == dataCopy.e[1]);
-            hgAssert(data.e[2] == dataCopy.e[2]);
-            hgAssert(data.f == dataCopy.f);
+            HG_ASSERT(!memEqual(&dataCopy, &data, sizeof(data)));
+            HG_ASSERT(data.a == dataCopy.a);
+            HG_ASSERT(data.b == dataCopy.b);
+            HG_ASSERT(data.c == dataCopy.c);
+            HG_ASSERT(data.d == dataCopy.d);
+            HG_ASSERT(data.e[0] == dataCopy.e[0]);
+            HG_ASSERT(data.e[1] == dataCopy.e[1]);
+            HG_ASSERT(data.e[2] == dataCopy.e[2]);
+            HG_ASSERT(data.f == dataCopy.f);
         }
 
         {
-            HgSerializer writer = hgSerialWriter(arena);
+            Serializer writer = serialWriter(arena);
             serializeData(&writer, &data);
 
-            HgBinary bin = hgBinaryWriteSerial(arena, &writer);
+            Binary bin = binaryWriteSerial(arena, &writer);
 
             Data dataCopy{};
 
-            HgSerializer reader = hgBinaryReadSerial(arena, bin);
+            Serializer reader = binaryReadSerial(arena, bin);
             serializeData(&reader, &dataCopy);
 
-            hgAssert(!hgMemEqual(&dataCopy, &data, sizeof(data)));
-            hgAssert(data.a == dataCopy.a);
-            hgAssert(data.b == dataCopy.b);
-            hgAssert(data.c == dataCopy.c);
-            hgAssert(data.d == dataCopy.d);
-            hgAssert(data.e[0] == dataCopy.e[0]);
-            hgAssert(data.e[1] == dataCopy.e[1]);
-            hgAssert(data.e[2] == dataCopy.e[2]);
-            hgAssert(data.f == dataCopy.f);
+            HG_ASSERT(!memEqual(&dataCopy, &data, sizeof(data)));
+            HG_ASSERT(data.a == dataCopy.a);
+            HG_ASSERT(data.b == dataCopy.b);
+            HG_ASSERT(data.c == dataCopy.c);
+            HG_ASSERT(data.d == dataCopy.d);
+            HG_ASSERT(data.e[0] == dataCopy.e[0]);
+            HG_ASSERT(data.e[1] == dataCopy.e[1]);
+            HG_ASSERT(data.e[2] == dataCopy.e[2]);
+            HG_ASSERT(data.f == dataCopy.f);
         }
 
 //         {
-//             HgSerializer writer = hgSerialWriter(arena);
+//             Serializer writer = serialWriter(arena);
 //             serializeData(&writer, &data);
 //
-//             HgStringView json = hgJsonWriteSerial(arena, &writer);
+//             StringView json = jsonWriteSerial(arena, &writer);
 //
-//             hgDebug("json: %.*s\n", (int)json.length, json.chars);
-//             hgAssert(json ==
+//             debug("json: %.*s\n", (int)json.length, json.chars);
+//             HG_ASSERT(json ==
 // R"({
 //     "a" : -12,
 //     "b" : 42,
@@ -661,484 +661,484 @@ void hgTest()
 //
 //             Data dataCopy{};
 //
-//             HgSerializer reader = hgJsonReadSerial(arena, json);
+//             Serializer reader = jsonReadSerial(arena, json);
 //             serializeData(arena, &reader, "data", &dataCopy);
 //
-//             hgAssert(!hgMemEqual(&dataCopy, &data, sizeof(data)));
-//             hgAssert(data.a == dataCopy.a);
-//             hgAssert(data.b == dataCopy.b);
-//             hgAssert(data.c == dataCopy.c);
-//             hgAssert(data.d == dataCopy.d);
-//             hgAssert(data.e[0] == dataCopy.e[0]);
-//             hgAssert(data.e[1] == dataCopy.e[1]);
-//             hgAssert(data.e[2] == dataCopy.e[2]);
-//             hgAssert(data.f == dataCopy.f);
+//             HG_ASSERT(!memEqual(&dataCopy, &data, sizeof(data)));
+//             HG_ASSERT(data.a == dataCopy.a);
+//             HG_ASSERT(data.b == dataCopy.b);
+//             HG_ASSERT(data.c == dataCopy.c);
+//             HG_ASSERT(data.d == dataCopy.d);
+//             HG_ASSERT(data.e[0] == dataCopy.e[0]);
+//             HG_ASSERT(data.e[1] == dataCopy.e[1]);
+//             HG_ASSERT(data.e[2] == dataCopy.e[2]);
+//             HG_ASSERT(data.f == dataCopy.f);
 //         }
     }
 
-    // HgJson
+    // Json
     {
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file == nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields == nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     1234
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors != nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors != nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonError* error = json.errors;
-            hgAssert(error->next == nullptr);
-            hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
+            JsonError* error = json.errors;
+            HG_ASSERT(error->next == nullptr);
+            HG_ASSERT(error->msg == "on line 4, struct has a literal instead of a field\n");
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields == nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf"
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors != nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors != nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonError* error = json.errors;
-            hgAssert(error->next == nullptr);
-            hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
+            JsonError* error = json.errors;
+            HG_ASSERT(error->next == nullptr);
+            HG_ASSERT(error->msg == "on line 4, struct has a literal instead of a field\n");
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields == nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf":
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors != nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors != nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonError* error = json.errors;
-            hgAssert(error->next != nullptr);
-            hgAssert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
+            JsonError* error = json.errors;
+            HG_ASSERT(error->next != nullptr);
+            HG_ASSERT(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
             error = error->next;
-            hgAssert(error->next == nullptr);
-            hgAssert(error->msg == "on line 4, found unexpected token \"}\"\n");
+            HG_ASSERT(error->next == nullptr);
+            HG_ASSERT(error->msg == "on line 4, found unexpected token \"}\"\n");
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields == nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": true
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_bool);
-            hgAssert(field->value->boolean == true);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_bool);
+            HG_ASSERT(field->value->boolean == true);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": false
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_bool);
-            hgAssert(field->value->boolean == false);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_bool);
+            HG_ASSERT(field->value->boolean == false);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": asdf
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors != nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors != nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonError* error = json.errors;
-            hgAssert(error->next != nullptr);
-            hgAssert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
+            JsonError* error = json.errors;
+            HG_ASSERT(error->next != nullptr);
+            HG_ASSERT(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
             error = error->next;
-            hgAssert(error->next == nullptr);
-            hgAssert(error->msg == "on line 3, found unexpected token \"asdf\"\n");
+            HG_ASSERT(error->next == nullptr);
+            HG_ASSERT(error->msg == "on line 3, found unexpected token \"asdf\"\n");
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields == nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": "asdf"
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_string);
-            hgAssert(field->value->string == "asdf");
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_string);
+            HG_ASSERT(field->value->string == "asdf");
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": 1234
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_integer);
-            hgAssert(field->value->integer == 1234);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_integer);
+            HG_ASSERT(field->value->integer == 1234);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": 1234.0
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_float);
-            hgAssert(field->value->floating == 1234.0);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_float);
+            HG_ASSERT(field->value->floating == 1234.0);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": 1234.0,
                     "hjkl": 5678.0
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next != nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_float);
-            hgAssert(field->value->floating == 1234.0);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next != nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_float);
+            HG_ASSERT(field->value->floating == 1234.0);
 
             field = field->next;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "hjkl");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_float);
-            hgAssert(field->value->floating == 5678.0);
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "hjkl");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_float);
+            HG_ASSERT(field->value->floating == 5678.0);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": [1, 2, 3, 4]
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_array);
-            hgAssert(field->value->array.elems != nullptr);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_array);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
-            HgJsonElem* elem = field->value->array.elems;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 1);
-
-            elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 2);
+            JsonElem* elem = field->value->array.elems;
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 1);
 
             elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 3);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 2);
 
             elem = elem->next;
-            hgAssert(elem->next == nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 4);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 3);
+
+            elem = elem->next;
+            HG_ASSERT(elem->next == nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 4);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": [1 2 3 4]
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_array);
-            hgAssert(field->value->array.elems != nullptr);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_array);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
-            HgJsonElem* elem = field->value->array.elems;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 1);
-
-            elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 2);
+            JsonElem* elem = field->value->array.elems;
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 1);
 
             elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 3);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 2);
 
             elem = elem->next;
-            hgAssert(elem->next == nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 4);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 3);
+
+            elem = elem->next;
+            HG_ASSERT(elem->next == nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 4);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": [1, 2, "3", 4]
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors != nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors != nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonError* error = json.errors;
-            hgAssert(error->next == nullptr);
-            hgAssert(error->msg ==
+            JsonError* error = json.errors;
+            HG_ASSERT(error->next == nullptr);
+            HG_ASSERT(error->msg ==
                 "on line 3, array has element which is not the same type as the first valid element\n");
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_array);
-            hgAssert(field->value->array.elems != nullptr);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_array);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
-            HgJsonElem* elem = field->value->array.elems;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 1);
-
-            elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 2);
+            JsonElem* elem = field->value->array.elems;
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 1);
 
             elem = elem->next;
-            hgAssert(elem->next == nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_integer);
-            hgAssert(elem->value->integer == 4);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 2);
+
+            elem = elem->next;
+            HG_ASSERT(elem->next == nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_integer);
+            HG_ASSERT(elem->value->integer == 4);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "asdf": {
                         "a": 1,
@@ -1149,56 +1149,56 @@ void hgTest()
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* node = json.file;
-            hgAssert(node->type == HgJsonType_struct);
-            hgAssert(node->jstruct.fields != nullptr);
+            JsonNode* node = json.file;
+            HG_ASSERT(node->type == JsonType_struct);
+            HG_ASSERT(node->jstruct.fields != nullptr);
 
-            HgJsonField* field = node->jstruct.fields;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "asdf");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_struct);
-            hgAssert(field->value->array.elems != nullptr);
+            JsonField* field = node->jstruct.fields;
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "asdf");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_struct);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
-            HgJsonField* subField = field->value->jstruct.fields;
-            hgAssert(subField->next != nullptr);
-            hgAssert(subField->name == "a");
-            hgAssert(subField->value != nullptr);
-            hgAssert(subField->value->type == HgJsonType_integer);
-            hgAssert(subField->value->integer == 1);
-
-            subField = subField->next;
-            hgAssert(subField->next != nullptr);
-            hgAssert(subField->name == "s");
-            hgAssert(subField->value != nullptr);
-            hgAssert(subField->value->type == HgJsonType_float);
-            hgAssert(subField->value->floating == 2.0);
+            JsonField* subField = field->value->jstruct.fields;
+            HG_ASSERT(subField->next != nullptr);
+            HG_ASSERT(subField->name == "a");
+            HG_ASSERT(subField->value != nullptr);
+            HG_ASSERT(subField->value->type == JsonType_integer);
+            HG_ASSERT(subField->value->integer == 1);
 
             subField = subField->next;
-            hgAssert(subField->next != nullptr);
-            hgAssert(subField->name == "d");
-            hgAssert(subField->value != nullptr);
-            hgAssert(subField->value->type == HgJsonType_integer);
-            hgAssert(subField->value->integer == 3);
+            HG_ASSERT(subField->next != nullptr);
+            HG_ASSERT(subField->name == "s");
+            HG_ASSERT(subField->value != nullptr);
+            HG_ASSERT(subField->value->type == JsonType_float);
+            HG_ASSERT(subField->value->floating == 2.0);
 
             subField = subField->next;
-            hgAssert(subField->next == nullptr);
-            hgAssert(subField->name == "f");
-            hgAssert(subField->value != nullptr);
-            hgAssert(subField->value->type == HgJsonType_float);
-            hgAssert(subField->value->floating == 4.0);
+            HG_ASSERT(subField->next != nullptr);
+            HG_ASSERT(subField->name == "d");
+            HG_ASSERT(subField->value != nullptr);
+            HG_ASSERT(subField->value->type == JsonType_integer);
+            HG_ASSERT(subField->value->integer == 3);
+
+            subField = subField->next;
+            HG_ASSERT(subField->next == nullptr);
+            HG_ASSERT(subField->name == "f");
+            HG_ASSERT(subField->value != nullptr);
+            HG_ASSERT(subField->value->type == JsonType_float);
+            HG_ASSERT(subField->value->floating == 4.0);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgString file = R"(
+            String file = R"(
                 {
                     "player": {
                         "transform": {
@@ -1215,2399 +1215,2399 @@ void hgTest()
                 }
             )";
 
-            HgJson json = hgParseJson(arena, file);
+            Json json = parseJson(arena, file);
 
-            hgAssert(json.errors == nullptr);
-            hgAssert(json.file != nullptr);
+            HG_ASSERT(json.errors == nullptr);
+            HG_ASSERT(json.file != nullptr);
 
-            HgJsonNode* mainStruct = json.file;
-            hgAssert(mainStruct->type == HgJsonType_struct);
-            hgAssert(mainStruct->jstruct.fields != nullptr);
+            JsonNode* mainStruct = json.file;
+            HG_ASSERT(mainStruct->type == JsonType_struct);
+            HG_ASSERT(mainStruct->jstruct.fields != nullptr);
 
-            HgJsonField* player = mainStruct->jstruct.fields;
-            hgAssert(player->next == nullptr);
-            hgAssert(player->name == "player");
-            hgAssert(player->value != nullptr);
-            hgAssert(player->value->type == HgJsonType_struct);
-            hgAssert(player->value->jstruct.fields != nullptr);
+            JsonField* player = mainStruct->jstruct.fields;
+            HG_ASSERT(player->next == nullptr);
+            HG_ASSERT(player->name == "player");
+            HG_ASSERT(player->value != nullptr);
+            HG_ASSERT(player->value->type == JsonType_struct);
+            HG_ASSERT(player->value->jstruct.fields != nullptr);
 
-            HgJsonField* component = player->value->jstruct.fields;
-            hgAssert(component->next != nullptr);
-            hgAssert(component->name == "transform");
-            hgAssert(component->value != nullptr);
-            hgAssert(component->value->type == HgJsonType_struct);
-            hgAssert(component->value->jstruct.fields != nullptr);
+            JsonField* component = player->value->jstruct.fields;
+            HG_ASSERT(component->next != nullptr);
+            HG_ASSERT(component->name == "transform");
+            HG_ASSERT(component->value != nullptr);
+            HG_ASSERT(component->value->type == JsonType_struct);
+            HG_ASSERT(component->value->jstruct.fields != nullptr);
 
-            HgJsonField* field = component->value->jstruct.fields;
-            hgAssert(field->next != nullptr);
-            hgAssert(field->name == "position");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_array);
-            hgAssert(field->value->array.elems != nullptr);
+            JsonField* field = component->value->jstruct.fields;
+            HG_ASSERT(field->next != nullptr);
+            HG_ASSERT(field->name == "position");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_array);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
-            HgJsonElem* elem = field->value->array.elems;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 1.0);
-
-            elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 0.0);
+            JsonElem* elem = field->value->array.elems;
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 1.0);
 
             elem = elem->next;
-            hgAssert(elem->next == nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == -1.0);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 0.0);
+
+            elem = elem->next;
+            HG_ASSERT(elem->next == nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == -1.0);
 
             field = field->next;
-            hgAssert(field->next != nullptr);
-            hgAssert(field->name == "scale");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_array);
-            hgAssert(field->value->array.elems != nullptr);
+            HG_ASSERT(field->next != nullptr);
+            HG_ASSERT(field->name == "scale");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_array);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
             elem = field->value->array.elems;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 1.0);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 1.0);
 
             elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 1.0);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 1.0);
 
             elem = elem->next;
-            hgAssert(elem->next == nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 1.0);
+            HG_ASSERT(elem->next == nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 1.0);
 
             field = field->next;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "rotation");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_array);
-            hgAssert(field->value->array.elems != nullptr);
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "rotation");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_array);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
             elem = field->value->array.elems;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 1.0);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 1.0);
 
             elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 0.0);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 0.0);
 
             elem = elem->next;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 0.0);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 0.0);
 
             elem = elem->next;
-            hgAssert(elem->next == nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 0.0);
+            HG_ASSERT(elem->next == nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 0.0);
 
             component = component->next;
-            hgAssert(component->next == nullptr);
-            hgAssert(component->name == "sprite");
-            hgAssert(component->value != nullptr);
-            hgAssert(component->value->type == HgJsonType_struct);
-            hgAssert(component->value->jstruct.fields != nullptr);
+            HG_ASSERT(component->next == nullptr);
+            HG_ASSERT(component->name == "sprite");
+            HG_ASSERT(component->value != nullptr);
+            HG_ASSERT(component->value->type == JsonType_struct);
+            HG_ASSERT(component->value->jstruct.fields != nullptr);
 
             field = component->value->jstruct.fields;
-            hgAssert(field->next != nullptr);
-            hgAssert(field->name == "texture");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_string);
-            hgAssert(field->value->string == "tex.png");
+            HG_ASSERT(field->next != nullptr);
+            HG_ASSERT(field->name == "texture");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_string);
+            HG_ASSERT(field->value->string == "tex.png");
 
             field = field->next;
-            hgAssert(field->next != nullptr);
-            hgAssert(field->name == "uvPos");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_array);
-            hgAssert(field->value->array.elems != nullptr);
+            HG_ASSERT(field->next != nullptr);
+            HG_ASSERT(field->name == "uvPos");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_array);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
             elem = field->value->array.elems;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 0.0);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 0.0);
 
             elem = elem->next;
-            hgAssert(elem->next == nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 0.0);
+            HG_ASSERT(elem->next == nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 0.0);
 
             field = field->next;
-            hgAssert(field->next == nullptr);
-            hgAssert(field->name == "uvSize");
-            hgAssert(field->value != nullptr);
-            hgAssert(field->value->type == HgJsonType_array);
-            hgAssert(field->value->array.elems != nullptr);
+            HG_ASSERT(field->next == nullptr);
+            HG_ASSERT(field->name == "uvSize");
+            HG_ASSERT(field->value != nullptr);
+            HG_ASSERT(field->value->type == JsonType_array);
+            HG_ASSERT(field->value->array.elems != nullptr);
 
             elem = field->value->array.elems;
-            hgAssert(elem->next != nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 1.0);
+            HG_ASSERT(elem->next != nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 1.0);
 
             elem = elem->next;
-            hgAssert(elem->next == nullptr);
-            hgAssert(elem->value != nullptr);
-            hgAssert(elem->value->type == HgJsonType_float);
-            hgAssert(elem->value->floating == 1.0);
+            HG_ASSERT(elem->next == nullptr);
+            HG_ASSERT(elem->value != nullptr);
+            HG_ASSERT(elem->value->type == JsonType_float);
+            HG_ASSERT(elem->value->floating == 1.0);
         }
     }
 
-    // HgArray
+    // Array
     {
-        HgArray<u32> arr = hgArrayCreate<u32>(0, 2);
-        hgDefer(hgArrayDestroy(&arr));
+        Array<u32> arr = arrayCreate<u32>(0, 2);
+        HG_DEFER(arrayDestroy(&arr));
 
-        hgAssert(arr.count == 0);
-        hgAssert(arr.capacity >= 2);
+        HG_ASSERT(arr.count == 0);
+        HG_ASSERT(arr.capacity >= 2);
 
-        *hgArrayPush(&arr) = 10;
-        *hgArrayPush(&arr) = 20;
+        *arrayPush(&arr) = 10;
+        *arrayPush(&arr) = 20;
 
-        hgAssert(arr.count == 2);
-        hgAssert(arr[0] == 10);
-        hgAssert(arr[1] == 20);
+        HG_ASSERT(arr.count == 2);
+        HG_ASSERT(arr[0] == 10);
+        HG_ASSERT(arr[1] == 20);
 
-        hgArrayResize(&arr, 4);
+        arrayResize(&arr, 4);
 
-        hgAssert(arr.count == 4);
+        HG_ASSERT(arr.count == 4);
 
         arr[2] = 30;
         arr[3] = 40;
 
-        hgAssert(arr[2] == 30);
-        hgAssert(arr[3] == 40);
+        HG_ASSERT(arr[2] == 30);
+        HG_ASSERT(arr[3] == 40);
 
-        u32 popped = hgArrayPop(&arr);
+        u32 popped = arrayPop(&arr);
 
-        hgAssert(popped == 40);
-        hgAssert(arr.count == 3);
+        HG_ASSERT(popped == 40);
+        HG_ASSERT(arr.count == 3);
 
-        hgArrayResize(&arr, 1);
+        arrayResize(&arr, 1);
 
-        hgAssert(arr.count == 1);
-        hgAssert(arr[0] == 10);
+        HG_ASSERT(arr.count == 1);
+        HG_ASSERT(arr[0] == 10);
 
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
+        Arena* arena = scratch();
+        HG_ARENA_SCOPE(arena);
 
-        HgArray<u32> temp = hgArrayTemp<u32>(arena, 0, 4);
+        Array<u32> temp = arrayTemp<u32>(arena, 0, 4);
 
-        *hgArrayPushTemp(arena, &temp) = 123;
-        *hgArrayPushTemp(arena, &temp) = 456;
+        *arrayPushTemp(arena, &temp) = 123;
+        *arrayPushTemp(arena, &temp) = 456;
 
-        hgAssert(temp.count == 2);
-        hgAssert(temp[0] == 123);
-        hgAssert(temp[1] == 456);
+        HG_ASSERT(temp.count == 2);
+        HG_ASSERT(temp[0] == 123);
+        HG_ASSERT(temp[1] == 456);
     }
 
-    // HgArrayAny
+    // ArrayAny
     {
-        HgArrayAny arr = hgArrayAnyCreate(sizeof(u32), alignof(u32), 0, 2);
-        hgDefer(hgArrayAnyDestroy(&arr));
+        ArrayAny arr = arrayAnyCreate(sizeof(u32), alignof(u32), 0, 2);
+        HG_DEFER(arrayAnyDestroy(&arr));
 
-        hgAssert(arr.count == 0);
-        hgAssert(arr.capacity >= 2);
-        hgAssert(arr.width == sizeof(u32));
-        hgAssert(arr.align == alignof(u32));
+        HG_ASSERT(arr.count == 0);
+        HG_ASSERT(arr.capacity >= 2);
+        HG_ASSERT(arr.width == sizeof(u32));
+        HG_ASSERT(arr.align == alignof(u32));
 
-        *(u32*)hgArrayAnyPush(&arr) = 10;
-        *(u32*)hgArrayAnyPush(&arr) = 20;
+        *(u32*)arrayAnyPush(&arr) = 10;
+        *(u32*)arrayAnyPush(&arr) = 20;
 
-        hgAssert(arr.count == 2);
-        hgAssert(*(u32*)arr[0] == 10);
-        hgAssert(*(u32*)arr[1] == 20);
+        HG_ASSERT(arr.count == 2);
+        HG_ASSERT(*(u32*)arr[0] == 10);
+        HG_ASSERT(*(u32*)arr[1] == 20);
 
-        hgArrayAnyResize(&arr, 4);
+        arrayAnyResize(&arr, 4);
 
-        hgAssert(arr.count == 4);
+        HG_ASSERT(arr.count == 4);
 
         *(u32*)arr[2] = 30;
         *(u32*)arr[3] = 40;
 
-        hgAssert(*(u32*)arr[2] == 30);
-        hgAssert(*(u32*)arr[3] == 40);
+        HG_ASSERT(*(u32*)arr[2] == 30);
+        HG_ASSERT(*(u32*)arr[3] == 40);
 
         u32 popped = 0;
-        hgArrayAnyPop(&arr, &popped);
+        arrayAnyPop(&arr, &popped);
 
-        hgAssert(popped == 40);
-        hgAssert(arr.count == 3);
+        HG_ASSERT(popped == 40);
+        HG_ASSERT(arr.count == 3);
 
-        hgArrayAnyResize(&arr, 1);
+        arrayAnyResize(&arr, 1);
 
-        hgAssert(arr.count == 1);
-        hgAssert(*(u32*)arr[0] == 10);
+        HG_ASSERT(arr.count == 1);
+        HG_ASSERT(*(u32*)arr[0] == 10);
 
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
+        Arena* arena = scratch();
+        HG_ARENA_SCOPE(arena);
 
-        HgArrayAny temp = hgArrayAnyTemp(arena, sizeof(u32), alignof(u32), 0, 2);
+        ArrayAny temp = arrayAnyTemp(arena, sizeof(u32), alignof(u32), 0, 2);
 
-        *(u32*)hgArrayAnyPushTemp(arena, &temp) = 123;
-        *(u32*)hgArrayAnyPushTemp(arena, &temp) = 456;
+        *(u32*)arrayAnyPushTemp(arena, &temp) = 123;
+        *(u32*)arrayAnyPushTemp(arena, &temp) = 456;
 
-        hgAssert(temp.count == 2);
-        hgAssert(*(u32*)temp[0] == 123);
-        hgAssert(*(u32*)temp[1] == 456);
+        HG_ASSERT(temp.count == 2);
+        HG_ASSERT(*(u32*)temp[0] == 123);
+        HG_ASSERT(*(u32*)temp[1] == 456);
 
-        hgArrayAnyPushTemp(arena, &temp);
+        arrayAnyPushTemp(arena, &temp);
 
-        hgAssert(temp.count == 3);
+        HG_ASSERT(temp.count == 3);
     }
 
-    // HgQueue
+    // Queue
     {
-        HgQueue<u32> queue = hgQueueCreate<u32>(4);
+        Queue<u32> queue = queueCreate<u32>(4);
 
-        hgAssert(queue.count == 0);
-        hgAssert(queue.capacity >= 4);
+        HG_ASSERT(queue.count == 0);
+        HG_ASSERT(queue.capacity >= 4);
 
-        hgQueuePushBack(&queue, 1);
-        hgQueuePushBack(&queue, 2);
-        hgQueuePushBack(&queue, 3);
-        hgQueuePushBack(&queue, 4);
+        queuePushBack(&queue, 1);
+        queuePushBack(&queue, 2);
+        queuePushBack(&queue, 3);
+        queuePushBack(&queue, 4);
 
-        hgAssert(queue.count == 4);
+        HG_ASSERT(queue.count == 4);
 
-        hgAssert(hgQueuePopFront(&queue) == 1);
-        hgAssert(hgQueuePopFront(&queue) == 2);
+        HG_ASSERT(queuePopFront(&queue) == 1);
+        HG_ASSERT(queuePopFront(&queue) == 2);
 
-        hgAssert(queue.count == 2);
+        HG_ASSERT(queue.count == 2);
 
-        hgQueuePushBack(&queue, 5);
-        hgQueuePushBack(&queue, 6);
+        queuePushBack(&queue, 5);
+        queuePushBack(&queue, 6);
 
-        hgAssert(queue.count == 4);
+        HG_ASSERT(queue.count == 4);
 
-        hgQueuePushBack(&queue, 7);
-        hgQueuePushBack(&queue, 8);
+        queuePushBack(&queue, 7);
+        queuePushBack(&queue, 8);
 
-        hgAssert(queue.count == 6);
-        hgAssert(queue.capacity >= 6);
+        HG_ASSERT(queue.count == 6);
+        HG_ASSERT(queue.capacity >= 6);
 
-        hgAssert(hgQueuePopFront(&queue) == 3);
-        hgAssert(hgQueuePopFront(&queue) == 4);
-        hgAssert(hgQueuePopFront(&queue) == 5);
-        hgAssert(hgQueuePopFront(&queue) == 6);
-        hgAssert(hgQueuePopFront(&queue) == 7);
-        hgAssert(hgQueuePopFront(&queue) == 8);
+        HG_ASSERT(queuePopFront(&queue) == 3);
+        HG_ASSERT(queuePopFront(&queue) == 4);
+        HG_ASSERT(queuePopFront(&queue) == 5);
+        HG_ASSERT(queuePopFront(&queue) == 6);
+        HG_ASSERT(queuePopFront(&queue) == 7);
+        HG_ASSERT(queuePopFront(&queue) == 8);
 
-        hgAssert(queue.count == 0);
+        HG_ASSERT(queue.count == 0);
 
-        hgQueuePushFront(&queue, 10);
-        hgQueuePushFront(&queue, 20);
-        hgQueuePushFront(&queue, 30);
+        queuePushFront(&queue, 10);
+        queuePushFront(&queue, 20);
+        queuePushFront(&queue, 30);
 
-        hgAssert(queue.count == 3);
+        HG_ASSERT(queue.count == 3);
 
-        hgAssert(hgQueuePopFront(&queue) == 30);
-        hgAssert(hgQueuePopFront(&queue) == 20);
-        hgAssert(hgQueuePopFront(&queue) == 10);
+        HG_ASSERT(queuePopFront(&queue) == 30);
+        HG_ASSERT(queuePopFront(&queue) == 20);
+        HG_ASSERT(queuePopFront(&queue) == 10);
 
-        hgAssert(queue.count == 0);
+        HG_ASSERT(queue.count == 0);
 
-        hgQueuePushBack(&queue, 1);
-        hgQueuePushBack(&queue, 2);
-        hgQueuePushFront(&queue, 0);
-        hgQueuePushFront(&queue, -1);
+        queuePushBack(&queue, 1);
+        queuePushBack(&queue, 2);
+        queuePushFront(&queue, 0);
+        queuePushFront(&queue, -1);
 
-        hgAssert(queue.count == 4);
+        HG_ASSERT(queue.count == 4);
 
-        hgAssert(hgQueuePopBack(&queue) == 2);
-        hgAssert(hgQueuePopBack(&queue) == 1);
-        hgAssert(hgQueuePopBack(&queue) == 0);
-        hgAssert(hgQueuePopBack(&queue) == (u32)-1);
+        HG_ASSERT(queuePopBack(&queue) == 2);
+        HG_ASSERT(queuePopBack(&queue) == 1);
+        HG_ASSERT(queuePopBack(&queue) == 0);
+        HG_ASSERT(queuePopBack(&queue) == (u32)-1);
 
-        hgAssert(queue.count == 0);
+        HG_ASSERT(queue.count == 0);
 
-        hgQueueDestroy(&queue);
+        queueDestroy(&queue);
     }
 
-    // HgSet
+    // Set
     {
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
             constexpr u32 count = 128;
 
-            HgSet<u32> set = hgSetTemp<u32>(arena, count);
+            Set<u32> set = setTemp<u32>(arena, count);
 
             for (u32 i = 0; i < 3; ++i)
             {
-                hgAssert(set.count == 0);
-                hgAssert(!hgSetHas(&set, 0));
-                hgAssert(!hgSetHas(&set, 1));
-                hgAssert(!hgSetHas(&set, 12));
-                hgAssert(!hgSetHas(&set, 42));
-                hgAssert(!hgSetHas(&set, 100000));
+                HG_ASSERT(set.count == 0);
+                HG_ASSERT(!setHas(&set, 0));
+                HG_ASSERT(!setHas(&set, 1));
+                HG_ASSERT(!setHas(&set, 12));
+                HG_ASSERT(!setHas(&set, 42));
+                HG_ASSERT(!setHas(&set, 100000));
 
-                hgSetAdd(&set, 1);
-                hgAssert(set.count == 1);
-                hgAssert(hgSetHas(&set, 1));
+                setAdd(&set, 1);
+                HG_ASSERT(set.count == 1);
+                HG_ASSERT(setHas(&set, 1));
 
-                hgSetRemove(&set, 1);
-                hgAssert(set.count == 0);
-                hgAssert(!hgSetHas(&set, 1));
+                setRemove(&set, 1);
+                HG_ASSERT(set.count == 0);
+                HG_ASSERT(!setHas(&set, 1));
 
-                hgAssert(!hgSetHas(&set, 12));
-                hgAssert(!hgSetHas(&set, 12 + count));
+                HG_ASSERT(!setHas(&set, 12));
+                HG_ASSERT(!setHas(&set, 12 + count));
 
-                hgSetAdd(&set, 12);
-                hgAssert(set.count == 1);
-                hgAssert(hgSetHas(&set, 12));
-                hgAssert(!hgSetHas(&set, 12 + count));
+                setAdd(&set, 12);
+                HG_ASSERT(set.count == 1);
+                HG_ASSERT(setHas(&set, 12));
+                HG_ASSERT(!setHas(&set, 12 + count));
 
-                hgSetAdd(&set, 12 + count);
-                hgAssert(set.count == 2);
-                hgAssert(hgSetHas(&set, 12));
-                hgAssert(hgSetHas(&set, 12 + count));
+                setAdd(&set, 12 + count);
+                HG_ASSERT(set.count == 2);
+                HG_ASSERT(setHas(&set, 12));
+                HG_ASSERT(setHas(&set, 12 + count));
 
-                hgSetAdd(&set, 12 + count * 2);
-                hgAssert(set.count == 3);
-                hgAssert(hgSetHas(&set, 12));
-                hgAssert(hgSetHas(&set, 12 + count));
-                hgAssert(hgSetHas(&set, 12 + count * 2));
+                setAdd(&set, 12 + count * 2);
+                HG_ASSERT(set.count == 3);
+                HG_ASSERT(setHas(&set, 12));
+                HG_ASSERT(setHas(&set, 12 + count));
+                HG_ASSERT(setHas(&set, 12 + count * 2));
 
-                hgSetRemove(&set, 12);
-                hgAssert(set.count == 2);
-                hgAssert(!hgSetHas(&set, 12));
-                hgAssert(hgSetHas(&set, 12 + count));
+                setRemove(&set, 12);
+                HG_ASSERT(set.count == 2);
+                HG_ASSERT(!setHas(&set, 12));
+                HG_ASSERT(setHas(&set, 12 + count));
 
-                hgSetAdd(&set, 42);
-                hgAssert(set.count == 3);
-                hgAssert(hgSetHas(&set, 42));
+                setAdd(&set, 42);
+                HG_ASSERT(set.count == 3);
+                HG_ASSERT(setHas(&set, 42));
 
-                hgSetRemove(&set, 12 + count);
-                hgAssert(set.count == 2);
-                hgAssert(!hgSetHas(&set, 12));
-                hgAssert(!hgSetHas(&set, 12 + count));
+                setRemove(&set, 12 + count);
+                HG_ASSERT(set.count == 2);
+                HG_ASSERT(!setHas(&set, 12));
+                HG_ASSERT(!setHas(&set, 12 + count));
 
-                hgSetRemove(&set, 42);
-                hgAssert(set.count == 1);
-                hgAssert(!hgSetHas(&set, 42));
+                setRemove(&set, 42);
+                HG_ASSERT(set.count == 1);
+                HG_ASSERT(!setHas(&set, 42));
 
-                hgSetRemove(&set, 12 + count * 2);
-                hgAssert(set.count == 0);
-                hgAssert(!hgSetHas(&set, 12));
-                hgAssert(!hgSetHas(&set, 12 + count));
-                hgAssert(!hgSetHas(&set, 12 + count * 2));
+                setRemove(&set, 12 + count * 2);
+                HG_ASSERT(set.count == 0);
+                HG_ASSERT(!setHas(&set, 12));
+                HG_ASSERT(!setHas(&set, 12 + count));
+                HG_ASSERT(!setHas(&set, 12 + count * 2));
 
-                hgSetReset(&set);
+                setReset(&set);
             }
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
             using StrHash = u64;
 
-            HgSet<StrHash> set = hgSetTemp<StrHash>(arena, 128);
+            Set<StrHash> set = setTemp<StrHash>(arena, 128);
 
-            StrHash a = hgHash("a");
-            StrHash b = hgHash("b");
-            StrHash ab = hgHash("ab");
-            StrHash scf = hgHash("supercalifragilisticexpialidocious");
+            StrHash a = hash("a");
+            StrHash b = hash("b");
+            StrHash ab = hash("ab");
+            StrHash scf = hash("supercalifragilisticexpialidocious");
 
-            hgAssert(!hgSetHas(&set, a));
-            hgAssert(!hgSetHas(&set, b));
-            hgAssert(!hgSetHas(&set, ab));
-            hgAssert(!hgSetHas(&set, scf));
+            HG_ASSERT(!setHas(&set, a));
+            HG_ASSERT(!setHas(&set, b));
+            HG_ASSERT(!setHas(&set, ab));
+            HG_ASSERT(!setHas(&set, scf));
 
-            hgSetAdd(&set, a);
-            hgSetAdd(&set, b);
-            hgSetAdd(&set, ab);
-            hgSetAdd(&set, scf);
+            setAdd(&set, a);
+            setAdd(&set, b);
+            setAdd(&set, ab);
+            setAdd(&set, scf);
 
-            hgAssert(hgSetHas(&set, a));
-            hgAssert(hgSetHas(&set, b));
-            hgAssert(hgSetHas(&set, ab));
-            hgAssert(hgSetHas(&set, scf));
+            HG_ASSERT(setHas(&set, a));
+            HG_ASSERT(setHas(&set, b));
+            HG_ASSERT(setHas(&set, ab));
+            HG_ASSERT(setHas(&set, scf));
 
-            hgSetRemove(&set, a);
-            hgSetRemove(&set, b);
-            hgSetRemove(&set, ab);
-            hgSetRemove(&set, scf);
+            setRemove(&set, a);
+            setRemove(&set, b);
+            setRemove(&set, ab);
+            setRemove(&set, scf);
 
-            hgAssert(!hgSetHas(&set, a));
-            hgAssert(!hgSetHas(&set, b));
-            hgAssert(!hgSetHas(&set, ab));
-            hgAssert(!hgSetHas(&set, scf));
+            HG_ASSERT(!setHas(&set, a));
+            HG_ASSERT(!setHas(&set, b));
+            HG_ASSERT(!setHas(&set, ab));
+            HG_ASSERT(!setHas(&set, scf));
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgSet<const char*> set = hgSetTemp<const char*>(arena, 128);
+            Set<const char*> set = setTemp<const char*>(arena, 128);
 
             const char* a = "a";
             const char* b = "b";
             const char* ab = "ab";
             const char* scf = "supercalifragilisticexpialidocious";
 
-            hgAssert(!hgSetHas(&set, a));
-            hgAssert(!hgSetHas(&set, b));
-            hgAssert(!hgSetHas(&set, ab));
-            hgAssert(!hgSetHas(&set, scf));
+            HG_ASSERT(!setHas(&set, a));
+            HG_ASSERT(!setHas(&set, b));
+            HG_ASSERT(!setHas(&set, ab));
+            HG_ASSERT(!setHas(&set, scf));
 
-            hgSetAdd(&set, a);
-            hgSetAdd(&set, b);
-            hgSetAdd(&set, ab);
-            hgSetAdd(&set, scf);
+            setAdd(&set, a);
+            setAdd(&set, b);
+            setAdd(&set, ab);
+            setAdd(&set, scf);
 
-            hgAssert(hgSetHas(&set, a));
-            hgAssert(hgSetHas(&set, b));
-            hgAssert(hgSetHas(&set, ab));
-            hgAssert(hgSetHas(&set, scf));
+            HG_ASSERT(setHas(&set, a));
+            HG_ASSERT(setHas(&set, b));
+            HG_ASSERT(setHas(&set, ab));
+            HG_ASSERT(setHas(&set, scf));
 
-            hgSetRemove(&set, a);
-            hgSetRemove(&set, b);
-            hgSetRemove(&set, ab);
-            hgSetRemove(&set, scf);
+            setRemove(&set, a);
+            setRemove(&set, b);
+            setRemove(&set, ab);
+            setRemove(&set, scf);
 
-            hgAssert(!hgSetHas(&set, a));
-            hgAssert(!hgSetHas(&set, b));
-            hgAssert(!hgSetHas(&set, ab));
-            hgAssert(!hgSetHas(&set, scf));
+            HG_ASSERT(!setHas(&set, a));
+            HG_ASSERT(!setHas(&set, b));
+            HG_ASSERT(!setHas(&set, ab));
+            HG_ASSERT(!setHas(&set, scf));
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgSet<HgStringBuilder> set = hgSetTemp<HgStringBuilder>(arena, 128);
+            Set<StringBuilder> set = setTemp<StringBuilder>(arena, 128);
 
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "a")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "b")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "ab")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
+            HG_ASSERT(!setHas(&set, stringCopy(arena, "a")));
+            HG_ASSERT(!setHas(&set, stringCopy(arena, "b")));
+            HG_ASSERT(!setHas(&set, stringCopy(arena, "ab")));
+            HG_ASSERT(!setHas(&set, stringCopy(arena, "supercalifragilisticexpialidocious")));
 
-            hgSetAdd(&set, hgStringCopy(arena, "a"));
-            hgSetAdd(&set, hgStringCopy(arena, "b"));
-            hgSetAdd(&set, hgStringCopy(arena, "ab"));
-            hgSetAdd(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
+            setAdd(&set, stringCopy(arena, "a"));
+            setAdd(&set, stringCopy(arena, "b"));
+            setAdd(&set, stringCopy(arena, "ab"));
+            setAdd(&set, stringCopy(arena, "supercalifragilisticexpialidocious"));
 
-            hgAssert(hgSetHas(&set, hgStringCopy(arena, "a")));
-            hgAssert(hgSetHas(&set, hgStringCopy(arena, "b")));
-            hgAssert(hgSetHas(&set, hgStringCopy(arena, "ab")));
-            hgAssert(hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
+            HG_ASSERT(setHas(&set, stringCopy(arena, "a")));
+            HG_ASSERT(setHas(&set, stringCopy(arena, "b")));
+            HG_ASSERT(setHas(&set, stringCopy(arena, "ab")));
+            HG_ASSERT(setHas(&set, stringCopy(arena, "supercalifragilisticexpialidocious")));
 
-            hgSetRemove(&set, hgStringCopy(arena, "a"));
-            hgSetRemove(&set, hgStringCopy(arena, "b"));
-            hgSetRemove(&set, hgStringCopy(arena, "ab"));
-            hgSetRemove(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
+            setRemove(&set, stringCopy(arena, "a"));
+            setRemove(&set, stringCopy(arena, "b"));
+            setRemove(&set, stringCopy(arena, "ab"));
+            setRemove(&set, stringCopy(arena, "supercalifragilisticexpialidocious"));
 
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "a")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "b")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "ab")));
-            hgAssert(!hgSetHas(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious")));
+            HG_ASSERT(!setHas(&set, stringCopy(arena, "a")));
+            HG_ASSERT(!setHas(&set, stringCopy(arena, "b")));
+            HG_ASSERT(!setHas(&set, stringCopy(arena, "ab")));
+            HG_ASSERT(!setHas(&set, stringCopy(arena, "supercalifragilisticexpialidocious")));
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgSet<HgString> set = hgSetTemp<HgString>(arena, 128);
+            Set<String> set = setTemp<String>(arena, 128);
 
-            hgAssert(!hgSetHas(&set, "a"));
-            hgAssert(!hgSetHas(&set, "b"));
-            hgAssert(!hgSetHas(&set, "ab"));
-            hgAssert(!hgSetHas(&set, "supercalifragilisticexpialidocious"));
+            HG_ASSERT(!setHas(&set, "a"));
+            HG_ASSERT(!setHas(&set, "b"));
+            HG_ASSERT(!setHas(&set, "ab"));
+            HG_ASSERT(!setHas(&set, "supercalifragilisticexpialidocious"));
 
-            hgSetAdd(&set, "a");
-            hgSetAdd(&set, "b");
-            hgSetAdd(&set, "ab");
-            hgSetAdd(&set, "supercalifragilisticexpialidocious");
+            setAdd(&set, "a");
+            setAdd(&set, "b");
+            setAdd(&set, "ab");
+            setAdd(&set, "supercalifragilisticexpialidocious");
 
-            hgAssert(hgSetHas(&set, "a"));
-            hgAssert(hgSetHas(&set, "b"));
-            hgAssert(hgSetHas(&set, "ab"));
-            hgAssert(hgSetHas(&set, "supercalifragilisticexpialidocious"));
+            HG_ASSERT(setHas(&set, "a"));
+            HG_ASSERT(setHas(&set, "b"));
+            HG_ASSERT(setHas(&set, "ab"));
+            HG_ASSERT(setHas(&set, "supercalifragilisticexpialidocious"));
 
-            hgSetRemove(&set, "a");
-            hgSetRemove(&set, "b");
-            hgSetRemove(&set, "ab");
-            hgSetRemove(&set, "supercalifragilisticexpialidocious");
+            setRemove(&set, "a");
+            setRemove(&set, "b");
+            setRemove(&set, "ab");
+            setRemove(&set, "supercalifragilisticexpialidocious");
 
-            hgAssert(!hgSetHas(&set, "a"));
-            hgAssert(!hgSetHas(&set, "b"));
-            hgAssert(!hgSetHas(&set, "ab"));
-            hgAssert(!hgSetHas(&set, "supercalifragilisticexpialidocious"));
+            HG_ASSERT(!setHas(&set, "a"));
+            HG_ASSERT(!setHas(&set, "b"));
+            HG_ASSERT(!setHas(&set, "ab"));
+            HG_ASSERT(!setHas(&set, "supercalifragilisticexpialidocious"));
         }
     }
 
-    // HgMap
+    // Map
     {
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
             constexpr u32 count = 128;
 
-            HgMap<u32, u32> map = hgMapTemp<u32, u32>(arena, count);
+            Map<u32, u32> map = mapTemp<u32, u32>(arena, count);
 
             for (u32 i = 0; i < 3; ++i)
             {
-                hgAssert(map.count == 0);
-                hgAssert(hgMapGet(&map, 0) == nullptr);
-                hgAssert(hgMapGet(&map, 1) == nullptr);
-                hgAssert(hgMapGet(&map, 12) == nullptr);
-                hgAssert(hgMapGet(&map, 42) == nullptr);
-                hgAssert(hgMapGet(&map, 100000) == nullptr);
+                HG_ASSERT(map.count == 0);
+                HG_ASSERT(mapGet(&map, 0) == nullptr);
+                HG_ASSERT(mapGet(&map, 1) == nullptr);
+                HG_ASSERT(mapGet(&map, 12) == nullptr);
+                HG_ASSERT(mapGet(&map, 42) == nullptr);
+                HG_ASSERT(mapGet(&map, 100000) == nullptr);
 
-                hgMapAdd(&map, 1, 1);
-                hgAssert(map.count == 1);
-                hgAssert(hgMapGet(&map, 1) != nullptr);
-                hgAssert(*hgMapGet(&map, 1) == 1);
+                mapAdd(&map, 1, 1);
+                HG_ASSERT(map.count == 1);
+                HG_ASSERT(mapGet(&map, 1) != nullptr);
+                HG_ASSERT(*mapGet(&map, 1) == 1);
 
-                hgMapRemove(&map, 1);
-                hgAssert(map.count == 0);
-                hgAssert(hgMapGet(&map, 1) == nullptr);
+                mapRemove(&map, 1);
+                HG_ASSERT(map.count == 0);
+                HG_ASSERT(mapGet(&map, 1) == nullptr);
 
-                hgAssert(hgMapGet(&map, 12) == nullptr);
-                hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+                HG_ASSERT(mapGet(&map, 12) == nullptr);
+                HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
 
-                hgMapAdd(&map, 12, 42);
-                hgAssert(map.count == 1);
-                hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-                hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+                mapAdd(&map, 12, 42);
+                HG_ASSERT(map.count == 1);
+                HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
+                HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
 
-                hgMapAdd(&map, 12 + count, 100);
-                hgAssert(map.count == 2);
-                hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-                hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+                mapAdd(&map, 12 + count, 100);
+                HG_ASSERT(map.count == 2);
+                HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
+                HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
 
-                hgMapAdd(&map, 12 + count * 2, 200);
-                hgAssert(map.count == 3);
-                hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-                hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
-                hgAssert(hgMapGet(&map, 12 + count * 2) != nullptr && *hgMapGet(&map, 12 + count * 2) == 200);
+                mapAdd(&map, 12 + count * 2, 200);
+                HG_ASSERT(map.count == 3);
+                HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
+                HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
+                HG_ASSERT(mapGet(&map, 12 + count * 2) != nullptr && *mapGet(&map, 12 + count * 2) == 200);
 
-                hgMapRemove(&map, 12);
-                hgAssert(map.count == 2);
-                hgAssert(hgMapGet(&map, 12) == nullptr);
-                hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+                mapRemove(&map, 12);
+                HG_ASSERT(map.count == 2);
+                HG_ASSERT(mapGet(&map, 12) == nullptr);
+                HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
 
-                hgMapAdd(&map, 42, 12);
-                hgAssert(map.count == 3);
-                hgAssert(hgMapGet(&map, 42) != nullptr && *hgMapGet(&map, 42) == 12);
+                mapAdd(&map, 42, 12);
+                HG_ASSERT(map.count == 3);
+                HG_ASSERT(mapGet(&map, 42) != nullptr && *mapGet(&map, 42) == 12);
 
-                hgMapRemove(&map, 12 + count);
-                hgAssert(map.count == 2);
-                hgAssert(hgMapGet(&map, 12) == nullptr);
-                hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+                mapRemove(&map, 12 + count);
+                HG_ASSERT(map.count == 2);
+                HG_ASSERT(mapGet(&map, 12) == nullptr);
+                HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
 
-                hgMapRemove(&map, 42);
-                hgAssert(map.count == 1);
-                hgAssert(hgMapGet(&map, 42) == nullptr);
+                mapRemove(&map, 42);
+                HG_ASSERT(map.count == 1);
+                HG_ASSERT(mapGet(&map, 42) == nullptr);
 
-                hgMapRemove(&map, 12 + count * 2);
-                hgAssert(map.count == 0);
-                hgAssert(hgMapGet(&map, 12) == nullptr);
-                hgAssert(hgMapGet(&map, 12 + count) == nullptr);
-                hgAssert(hgMapGet(&map, 12 + count * 2) == nullptr);
+                mapRemove(&map, 12 + count * 2);
+                HG_ASSERT(map.count == 0);
+                HG_ASSERT(mapGet(&map, 12) == nullptr);
+                HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
+                HG_ASSERT(mapGet(&map, 12 + count * 2) == nullptr);
 
-                hgMapReset(&map);
+                mapReset(&map);
             }
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
             using StrHash = u64;
 
-            HgMap<StrHash, u32> map = hgMapTemp<StrHash, u32>(arena, 128);
+            Map<StrHash, u32> map = mapTemp<StrHash, u32>(arena, 128);
 
-            StrHash a = hgHash("a");
-            StrHash b = hgHash("b");
-            StrHash ab = hgHash("ab");
-            StrHash scf = hgHash("supercalifragilisticexpialidocious");
+            StrHash a = hash("a");
+            StrHash b = hash("b");
+            StrHash ab = hash("ab");
+            StrHash scf = hash("supercalifragilisticexpialidocious");
 
-            hgAssert(hgMapGet(&map, a) == nullptr);
-            hgAssert(hgMapGet(&map, b) == nullptr);
-            hgAssert(hgMapGet(&map, ab) == nullptr);
-            hgAssert(hgMapGet(&map, scf) == nullptr);
+            HG_ASSERT(mapGet(&map, a) == nullptr);
+            HG_ASSERT(mapGet(&map, b) == nullptr);
+            HG_ASSERT(mapGet(&map, ab) == nullptr);
+            HG_ASSERT(mapGet(&map, scf) == nullptr);
 
-            hgMapAdd(&map, a, 1);
-            hgMapAdd(&map, b, 2);
-            hgMapAdd(&map, ab, 3);
-            hgMapAdd(&map, scf, 4);
+            mapAdd(&map, a, 1);
+            mapAdd(&map, b, 2);
+            mapAdd(&map, ab, 3);
+            mapAdd(&map, scf, 4);
 
-            hgAssert(hgMapGet(&map, a) != nullptr && *hgMapGet(&map, a) == 1);
-            hgAssert(hgMapGet(&map, b) != nullptr && *hgMapGet(&map, b) == 2);
-            hgAssert(hgMapGet(&map, ab) != nullptr && *hgMapGet(&map, ab) == 3);
-            hgAssert(hgMapGet(&map, scf) != nullptr && *hgMapGet(&map, scf) == 4);
+            HG_ASSERT(mapGet(&map, a) != nullptr && *mapGet(&map, a) == 1);
+            HG_ASSERT(mapGet(&map, b) != nullptr && *mapGet(&map, b) == 2);
+            HG_ASSERT(mapGet(&map, ab) != nullptr && *mapGet(&map, ab) == 3);
+            HG_ASSERT(mapGet(&map, scf) != nullptr && *mapGet(&map, scf) == 4);
 
-            hgMapRemove(&map, a);
-            hgMapRemove(&map, b);
-            hgMapRemove(&map, ab);
-            hgMapRemove(&map, scf);
+            mapRemove(&map, a);
+            mapRemove(&map, b);
+            mapRemove(&map, ab);
+            mapRemove(&map, scf);
 
-            hgAssert(hgMapGet(&map, a) == nullptr);
-            hgAssert(hgMapGet(&map, b) == nullptr);
-            hgAssert(hgMapGet(&map, ab) == nullptr);
-            hgAssert(hgMapGet(&map, scf) == nullptr);
+            HG_ASSERT(mapGet(&map, a) == nullptr);
+            HG_ASSERT(mapGet(&map, b) == nullptr);
+            HG_ASSERT(mapGet(&map, ab) == nullptr);
+            HG_ASSERT(mapGet(&map, scf) == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgMap<const char*, u32> map = hgMapTemp<const char*, u32>(arena, 128);
+            Map<const char*, u32> map = mapTemp<const char*, u32>(arena, 128);
 
             const char* a = "a";
             const char* b = "b";
             const char* ab = "ab";
             const char* scf = "supercalifragilisticexpialidocious";
 
-            hgAssert(hgMapGet(&map, a) == nullptr);
-            hgAssert(hgMapGet(&map, b) == nullptr);
-            hgAssert(hgMapGet(&map, ab) == nullptr);
-            hgAssert(hgMapGet(&map, scf) == nullptr);
+            HG_ASSERT(mapGet(&map, a) == nullptr);
+            HG_ASSERT(mapGet(&map, b) == nullptr);
+            HG_ASSERT(mapGet(&map, ab) == nullptr);
+            HG_ASSERT(mapGet(&map, scf) == nullptr);
 
-            hgMapAdd(&map, a, 1);
-            hgMapAdd(&map, b, 2);
-            hgMapAdd(&map, ab, 3);
-            hgMapAdd(&map, scf, 4);
+            mapAdd(&map, a, 1);
+            mapAdd(&map, b, 2);
+            mapAdd(&map, ab, 3);
+            mapAdd(&map, scf, 4);
 
-            hgAssert(hgMapGet(&map, a) != nullptr && *hgMapGet(&map, a) == 1);
-            hgAssert(hgMapGet(&map, b) != nullptr && *hgMapGet(&map, b) == 2);
-            hgAssert(hgMapGet(&map, ab) != nullptr && *hgMapGet(&map, ab) == 3);
-            hgAssert(hgMapGet(&map, scf) != nullptr && *hgMapGet(&map, scf) == 4);
+            HG_ASSERT(mapGet(&map, a) != nullptr && *mapGet(&map, a) == 1);
+            HG_ASSERT(mapGet(&map, b) != nullptr && *mapGet(&map, b) == 2);
+            HG_ASSERT(mapGet(&map, ab) != nullptr && *mapGet(&map, ab) == 3);
+            HG_ASSERT(mapGet(&map, scf) != nullptr && *mapGet(&map, scf) == 4);
 
-            hgMapRemove(&map, a);
-            hgMapRemove(&map, b);
-            hgMapRemove(&map, ab);
-            hgMapRemove(&map, scf);
+            mapRemove(&map, a);
+            mapRemove(&map, b);
+            mapRemove(&map, ab);
+            mapRemove(&map, scf);
 
-            hgAssert(hgMapGet(&map, a) == nullptr);
-            hgAssert(hgMapGet(&map, b) == nullptr);
-            hgAssert(hgMapGet(&map, ab) == nullptr);
-            hgAssert(hgMapGet(&map, scf) == nullptr);
+            HG_ASSERT(mapGet(&map, a) == nullptr);
+            HG_ASSERT(mapGet(&map, b) == nullptr);
+            HG_ASSERT(mapGet(&map, ab) == nullptr);
+            HG_ASSERT(mapGet(&map, scf) == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgMap<HgStringBuilder, u32> map = hgMapTemp<HgStringBuilder, u32>(arena, 128);
+            Map<StringBuilder, u32> map = mapTemp<StringBuilder, u32>(arena, 128);
 
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "a")) == nullptr);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "b")) == nullptr);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "ab")) == nullptr);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
 
-            hgMapAdd(&map, hgStringCopy(arena, "a"), 1);
-            hgMapAdd(&map, hgStringCopy(arena, "b"), 2);
-            hgMapAdd(&map, hgStringCopy(arena, "ab"), 3);
-            hgMapAdd(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious"), 4);
+            mapAdd(&map, stringCopy(arena, "a"), 1);
+            mapAdd(&map, stringCopy(arena, "b"), 2);
+            mapAdd(&map, stringCopy(arena, "ab"), 3);
+            mapAdd(&map, stringCopy(arena, "supercalifragilisticexpialidocious"), 4);
 
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) != nullptr);
-            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "a")) == 1);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) != nullptr);
-            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "b")) == 2);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) != nullptr);
-            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "ab")) == 3);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) != nullptr);
-            hgAssert(*hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == 4);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "a")) != nullptr);
+            HG_ASSERT(*mapGet(&map, stringCopy(arena, "a")) == 1);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "b")) != nullptr);
+            HG_ASSERT(*mapGet(&map, stringCopy(arena, "b")) == 2);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "ab")) != nullptr);
+            HG_ASSERT(*mapGet(&map, stringCopy(arena, "ab")) == 3);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "supercalifragilisticexpialidocious")) != nullptr);
+            HG_ASSERT(*mapGet(&map, stringCopy(arena, "supercalifragilisticexpialidocious")) == 4);
 
-            hgMapRemove(&map, hgStringCopy(arena, "a"));
-            hgMapRemove(&map, hgStringCopy(arena, "b"));
-            hgMapRemove(&map, hgStringCopy(arena, "ab"));
-            hgMapRemove(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
+            mapRemove(&map, stringCopy(arena, "a"));
+            mapRemove(&map, stringCopy(arena, "b"));
+            mapRemove(&map, stringCopy(arena, "ab"));
+            mapRemove(&map, stringCopy(arena, "supercalifragilisticexpialidocious"));
 
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "a")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "b")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "ab")) == nullptr);
-            hgAssert(hgMapGet(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "a")) == nullptr);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "b")) == nullptr);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "ab")) == nullptr);
+            HG_ASSERT(mapGet(&map, stringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
         }
 
         {
-            HgArena* arena = hgScratch();
-            hgArenaScope(arena);
+            Arena* arena = scratch();
+            HG_ARENA_SCOPE(arena);
 
-            HgMap<HgString, u32> map = hgMapTemp<HgString, u32>(arena, 6);
+            Map<String, u32> map = mapTemp<String, u32>(arena, 6);
 
-            hgAssert(hgMapGet(&map, "a") == nullptr);
-            hgAssert(hgMapGet(&map, "b") == nullptr);
-            hgAssert(hgMapGet(&map, "ab") == nullptr);
-            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
+            HG_ASSERT(mapGet(&map, "a") == nullptr);
+            HG_ASSERT(mapGet(&map, "b") == nullptr);
+            HG_ASSERT(mapGet(&map, "ab") == nullptr);
+            HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
 
-            hgMapAdd(&map, "a", 1);
-            hgMapAdd(&map, "b", 2);
-            hgMapAdd(&map, "ab", 3);
-            hgMapAdd(&map, "supercalifragilisticexpialidocious", 4);
+            mapAdd(&map, "a", 1);
+            mapAdd(&map, "b", 2);
+            mapAdd(&map, "ab", 3);
+            mapAdd(&map, "supercalifragilisticexpialidocious", 4);
 
-            hgAssert(hgMapGet(&map, "a") != nullptr);
-            hgAssert(*hgMapGet(&map, "a") == 1);
-            hgAssert(hgMapGet(&map, "b") != nullptr);
-            hgAssert(*hgMapGet(&map, "b") == 2);
-            hgAssert(hgMapGet(&map, "ab") != nullptr);
-            hgAssert(*hgMapGet(&map, "ab") == 3);
-            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") != nullptr);
-            hgAssert(*hgMapGet(&map, "supercalifragilisticexpialidocious") == 4);
+            HG_ASSERT(mapGet(&map, "a") != nullptr);
+            HG_ASSERT(*mapGet(&map, "a") == 1);
+            HG_ASSERT(mapGet(&map, "b") != nullptr);
+            HG_ASSERT(*mapGet(&map, "b") == 2);
+            HG_ASSERT(mapGet(&map, "ab") != nullptr);
+            HG_ASSERT(*mapGet(&map, "ab") == 3);
+            HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") != nullptr);
+            HG_ASSERT(*mapGet(&map, "supercalifragilisticexpialidocious") == 4);
 
-            hgMapRemove(&map, "a");
-            hgMapRemove(&map, "b");
-            hgMapRemove(&map, "ab");
-            hgMapRemove(&map, "supercalifragilisticexpialidocious");
+            mapRemove(&map, "a");
+            mapRemove(&map, "b");
+            mapRemove(&map, "ab");
+            mapRemove(&map, "supercalifragilisticexpialidocious");
 
-            hgAssert(hgMapGet(&map, "a") == nullptr);
-            hgAssert(hgMapGet(&map, "b") == nullptr);
-            hgAssert(hgMapGet(&map, "ab") == nullptr);
-            hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
+            HG_ASSERT(mapGet(&map, "a") == nullptr);
+            HG_ASSERT(mapGet(&map, "b") == nullptr);
+            HG_ASSERT(mapGet(&map, "ab") == nullptr);
+            HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
         }
     }
 
-    // HgPool
+    // Pool
     {
-        HgPool pool = hgPoolCreate<u32>();
-        hgDefer(hgPoolDestroy(&pool));
+        Pool pool = poolCreate<u32>();
+        HG_DEFER(poolDestroy(&pool));
 
-        u32* a = (u32*)hgPoolAlloc(&pool);
-        u32* b = (u32*)hgPoolAlloc(&pool);
-        u32* c = (u32*)hgPoolAlloc(&pool);
+        u32* a = (u32*)poolAlloc(&pool);
+        u32* b = (u32*)poolAlloc(&pool);
+        u32* c = (u32*)poolAlloc(&pool);
 
-        hgAssert(a != nullptr);
-        hgAssert(b != nullptr);
-        hgAssert(c != nullptr);
+        HG_ASSERT(a != nullptr);
+        HG_ASSERT(b != nullptr);
+        HG_ASSERT(c != nullptr);
 
         *a = 1;
         *b = 2;
         *c = 3;
 
-        hgAssert(*a == 1);
-        hgAssert(*b == 2);
-        hgAssert(*c == 3);
+        HG_ASSERT(*a == 1);
+        HG_ASSERT(*b == 2);
+        HG_ASSERT(*c == 3);
 
-        hgPoolFree(&pool, b);
-        hgPoolFree(&pool, c);
+        poolFree(&pool, b);
+        poolFree(&pool, c);
 
-        u32* d = (u32*)hgPoolAlloc(&pool);
-        u32* e = (u32*)hgPoolAlloc(&pool);
+        u32* d = (u32*)poolAlloc(&pool);
+        u32* e = (u32*)poolAlloc(&pool);
 
-        hgAssert(d == c);
-        hgAssert(e == b);
+        HG_ASSERT(d == c);
+        HG_ASSERT(e == b);
 
         *d = 40;
         *e = 50;
 
-        hgAssert(*d == 40);
-        hgAssert(*e == 50);
+        HG_ASSERT(*d == 40);
+        HG_ASSERT(*e == 50);
 
         constexpr u32 n = 1500;
 
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
+        Arena* sc = scratch();
+        HG_ARENA_SCOPE(sc);
 
-        HgArray<u32*> ptrs = hgArrayTemp<u32*>(scratch, 0, n);
+        Array<u32*> ptrs = arrayTemp<u32*>(sc, 0, n);
 
         for (u32 i = 0; i < n; ++i)
         {
-            u32* p = (u32*)hgPoolAlloc(&pool);
-            *hgArrayPushTemp(scratch, &ptrs) = p;
-            hgAssert(p != nullptr);
+            u32* p = (u32*)poolAlloc(&pool);
+            *arrayPushTemp(sc, &ptrs) = p;
+            HG_ASSERT(p != nullptr);
         }
 
-        hgAssert(pool.itemStores.count >= 2);
+        HG_ASSERT(pool.itemStores.count >= 2);
 
         for (u32 i = 0; i < ptrs.count; ++i)
         {
             for (u32 j = i + 1; j < ptrs.count; ++j)
             {
-                hgAssert(ptrs[i] != ptrs[j]);
+                HG_ASSERT(ptrs[i] != ptrs[j]);
             }
         }
 
         for (u32 i = 0; i < ptrs.count; ++i)
         {
-            hgPoolFree(&pool, ptrs[i]);
+            poolFree(&pool, ptrs[i]);
         }
     }
 
-    // HgHandlePool
+    // HandlePool
     {
-        HgHandlePool pool = hgHandlePoolCreate();
-        hgDefer(hgHandlePoolDestroy(&pool));
+        HandlePool pool = handlePoolCreate();
+        HG_DEFER(handlePoolDestroy(&pool));
 
-        HgHandle u1 = hgHandlePoolAlloc(&pool);
-        hgAssert(hgHandlePoolAlive(&pool, u1));
-        hgAssert(u1.id == 1);
+        Handle u1 = handlePoolAlloc(&pool);
+        HG_ASSERT(handlePoolAlive(&pool, u1));
+        HG_ASSERT(u1.id == 1);
 
-        HgHandle u2 = hgHandlePoolAlloc(&pool);
-        hgAssert(hgHandlePoolAlive(&pool, u2));
-        hgAssert(u2.id == 2);
+        Handle u2 = handlePoolAlloc(&pool);
+        HG_ASSERT(handlePoolAlive(&pool, u2));
+        HG_ASSERT(u2.id == 2);
 
-        hgHandlePoolFree(&pool, u1);
-        hgAssert(!hgHandlePoolAlive(&pool, u1));
+        handlePoolFree(&pool, u1);
+        HG_ASSERT(!handlePoolAlive(&pool, u1));
 
-        HgHandle u12 = hgHandlePoolAlloc(&pool);
-        hgAssert(hgHandlePoolAlive(&pool, u12));
-        hgAssert(!hgHandlePoolAlive(&pool, u1));
-        hgAssert(u12.id != 1);
-        hgAssert(hgHandleIdx(u12) == 1);
+        Handle u12 = handlePoolAlloc(&pool);
+        HG_ASSERT(handlePoolAlive(&pool, u12));
+        HG_ASSERT(!handlePoolAlive(&pool, u1));
+        HG_ASSERT(u12.id != 1);
+        HG_ASSERT(handleIdx(u12) == 1);
 
-        hgHandlePoolReset(&pool);
-        hgAssert(!hgHandlePoolAlive(&pool, u1));
-        hgAssert(!hgHandlePoolAlive(&pool, u2));
-        hgAssert(!hgHandlePoolAlive(&pool, u12));
+        handlePoolReset(&pool);
+        HG_ASSERT(!handlePoolAlive(&pool, u1));
+        HG_ASSERT(!handlePoolAlive(&pool, u2));
+        HG_ASSERT(!handlePoolAlive(&pool, u12));
     }
 
-    // HgMat
+    // Mat
     {
-        HgMat2 mat{
+        Mat2 mat{
             {1.0f, 0.0f},
             {1.0f, 0.0f},
         };
-        HgVec2 vec{1.0f, 1.0f};
+        Vec2 vec{1.0f, 1.0f};
 
-        HgMat2 identity{
+        Mat2 identity{
             {1.0f, 0.0f},
             {0.0f, 1.0f},
         };
-        hgAssert(identity * mat == mat);
-        hgAssert(identity * vec == vec);
+        HG_ASSERT(identity * mat == mat);
+        HG_ASSERT(identity * vec == vec);
 
-        HgMat2 matRotated{
+        Mat2 matRotated{
             {0.0f, 1.0f},
             {0.0f, 1.0f},
         };
-        HgVec2 vecRotated{-1.0f, 1.0f};
+        Vec2 vecRotated{-1.0f, 1.0f};
 
-        HgMat2 rotation{
+        Mat2 rotation{
             {0.0f, 1.0f},
             {-1.0f, 0.0f},
         };
-        hgAssert(rotation * mat == matRotated);
-        hgAssert(rotation * vec == vecRotated);
+        HG_ASSERT(rotation * mat == matRotated);
+        HG_ASSERT(rotation * vec == vecRotated);
 
-        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
-        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
-        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
-        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
+        HG_ASSERT((identity * rotation) * mat == identity * (rotation * mat));
+        HG_ASSERT((identity * rotation) * vec == identity * (rotation * vec));
+        HG_ASSERT((rotation * rotation) * mat == rotation * (rotation * mat));
+        HG_ASSERT((rotation * rotation) * vec == rotation * (rotation * vec));
     }
 
-    // HgQuat
+    // Quat
     {
-        HgMat3 identityMat = HgMat3{1.0f};
-        HgVec3 upVec{0.0f, -1.0f, 0.0f};
-        HgQuat rotation = hgQuatAxisAngle({0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
+        Mat3 identityMat = Mat3{1.0f};
+        Vec3 upVec{0.0f, -1.0f, 0.0f};
+        Quat rotation = quatAxisAngle({0.0f, 0.0f, -1.0f}, -(f32)HG_PI * 0.5f);
 
-        HgVec3 rotatedVec = hgVecRot3(rotation, upVec);
-        HgMat3 rotatedMat = hgMatRot3(rotation, identityMat);
+        Vec3 rotatedVec = vecRot3(rotation, upVec);
+        Mat3 rotatedMat = matRot3(rotation, identityMat);
 
-        HgVec3 matRotatedVec = rotatedMat * upVec;
+        Vec3 matRotatedVec = rotatedMat * upVec;
 
-        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
+        HG_ASSERT(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
               && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
               && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
 
-        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
+        HG_ASSERT(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
               && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
               && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
     }
 
-    // HgCircle
+    // Circle
     {
         {
-            HgCircle circle{{0.0f, 0.0f}, 5.0f};
-            hgAssert(hgContainsPointCircle({0.0f, 0.0f}, circle));
+            Circle circle{{0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(containsPointCircle({0.0f, 0.0f}, circle));
         }
 
         {
-            HgCircle circle{{0.0f, 0.0f}, 5.0f};
-            hgAssert(hgContainsPointCircle({3.0f, 4.0f}, circle));
+            Circle circle{{0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(containsPointCircle({3.0f, 4.0f}, circle));
         }
 
         {
-            HgCircle circle{{0.0f, 0.0f}, 5.0f};
-            hgAssert(hgContainsPointCircle({5.0f, 0.0f}, circle));
+            Circle circle{{0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(containsPointCircle({5.0f, 0.0f}, circle));
         }
 
         {
-            HgCircle circle{{0.0f, 0.0f}, 5.0f};
-            hgAssert(!hgContainsPointCircle({5.01f, 0.0f}, circle));
+            Circle circle{{0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(!containsPointCircle({5.01f, 0.0f}, circle));
         }
 
         {
-            HgCircle circle{{2.0f, -3.0f}, 2.0f};
-            hgAssert(hgContainsPointCircle({2.0f, -3.0f}, circle));
-            hgAssert(hgContainsPointCircle({4.0f, -3.0f}, circle));
-            hgAssert(!hgContainsPointCircle({4.1f, -3.0f}, circle));
+            Circle circle{{2.0f, -3.0f}, 2.0f};
+            HG_ASSERT(containsPointCircle({2.0f, -3.0f}, circle));
+            HG_ASSERT(containsPointCircle({4.0f, -3.0f}, circle));
+            HG_ASSERT(!containsPointCircle({4.1f, -3.0f}, circle));
         }
 
         {
-            HgCircle circle{{0.0f, 0.0f}, 0.0f};
-            hgAssert(hgContainsPointCircle({0.0f, 0.0f}, circle));
-            hgAssert(!hgContainsPointCircle({0.01f, 0.0f}, circle));
+            Circle circle{{0.0f, 0.0f}, 0.0f};
+            HG_ASSERT(containsPointCircle({0.0f, 0.0f}, circle));
+            HG_ASSERT(!containsPointCircle({0.01f, 0.0f}, circle));
         }
     }
 
-    // HgRect
+    // Rect
     {
         {
-            HgRect rect = hgRectEmpty();
-            hgAssert(!hgContainsPointRect({0.0f, 0.0f}, rect));
-            hgAssert(!hgContainsPointRect({1.0f, 1.0f}, rect));
+            Rect rect = rectEmpty();
+            HG_ASSERT(!containsPointRect({0.0f, 0.0f}, rect));
+            HG_ASSERT(!containsPointRect({1.0f, 1.0f}, rect));
         }
 
         {
-            HgRect rect = hgRectEmpty();
-            rect = hgRectAddPoint(rect, {2.0f, 3.0f});
-            hgAssert(hgContainsPointRect({2.0f, 3.0f}, rect));
+            Rect rect = rectEmpty();
+            rect = rectAddPoint(rect, {2.0f, 3.0f});
+            HG_ASSERT(containsPointRect({2.0f, 3.0f}, rect));
         }
 
         {
-            HgRect rect = hgRectEmpty();
-            rect = hgRectAddPoint(rect, {1.0f, 2.0f});
-            hgAssert(hgContainsPointRect({1.0f, 2.0f}, rect));
+            Rect rect = rectEmpty();
+            rect = rectAddPoint(rect, {1.0f, 2.0f});
+            HG_ASSERT(containsPointRect({1.0f, 2.0f}, rect));
         }
 
         {
-            HgRect rect = hgRectEmpty();
-            rect = hgRectAddPoint(rect, {2.0f, 2.0f});
-            rect = hgRectAddPoint(rect, {5.0f, 7.0f});
+            Rect rect = rectEmpty();
+            rect = rectAddPoint(rect, {2.0f, 2.0f});
+            rect = rectAddPoint(rect, {5.0f, 7.0f});
 
-            hgAssert(hgContainsPointRect({2.0f, 2.0f}, rect));
-            hgAssert(hgContainsPointRect({5.0f, 7.0f}, rect));
-            hgAssert(hgContainsPointRect({3.0f, 4.0f}, rect));
+            HG_ASSERT(containsPointRect({2.0f, 2.0f}, rect));
+            HG_ASSERT(containsPointRect({5.0f, 7.0f}, rect));
+            HG_ASSERT(containsPointRect({3.0f, 4.0f}, rect));
         }
 
         {
-            HgRect rect = hgRectEmpty();
-            rect = hgRectAddPoint(rect, {5.0f, 5.0f});
-            rect = hgRectAddPoint(rect, {-2.0f, -3.0f});
+            Rect rect = rectEmpty();
+            rect = rectAddPoint(rect, {5.0f, 5.0f});
+            rect = rectAddPoint(rect, {-2.0f, -3.0f});
 
-            hgAssert(hgContainsPointRect({-2.0f, -3.0f}, rect));
-            hgAssert(hgContainsPointRect({5.0f, 5.0f}, rect));
-            hgAssert(hgContainsPointRect({0.0f, 0.0f}, rect));
+            HG_ASSERT(containsPointRect({-2.0f, -3.0f}, rect));
+            HG_ASSERT(containsPointRect({5.0f, 5.0f}, rect));
+            HG_ASSERT(containsPointRect({0.0f, 0.0f}, rect));
         }
 
         {
-            HgRect rect = hgRectEmpty();
-            rect = hgRectAddPoint(rect, {1.0f, 1.0f});
-            rect = hgRectAddPoint(rect, {1.0f, 1.0f});
+            Rect rect = rectEmpty();
+            rect = rectAddPoint(rect, {1.0f, 1.0f});
+            rect = rectAddPoint(rect, {1.0f, 1.0f});
 
-            hgAssert(hgContainsPointRect({1.0f, 1.0f}, rect));
+            HG_ASSERT(containsPointRect({1.0f, 1.0f}, rect));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 5.0f}};
-            hgAssert(hgContainsPointRect({5.0f, 2.5f}, rect));
+            Rect rect{{0.0f, 0.0f}, {10.0f, 5.0f}};
+            HG_ASSERT(containsPointRect({5.0f, 2.5f}, rect));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 5.0f}};
-            hgAssert(hgContainsPointRect({0.0f, 0.0f}, rect));
-            hgAssert(hgContainsPointRect({10.0f, 5.0f}, rect));
+            Rect rect{{0.0f, 0.0f}, {10.0f, 5.0f}};
+            HG_ASSERT(containsPointRect({0.0f, 0.0f}, rect));
+            HG_ASSERT(containsPointRect({10.0f, 5.0f}, rect));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 5.0f}};
-            hgAssert(!hgContainsPointRect({-0.01f, 0.0f}, rect));
-            hgAssert(!hgContainsPointRect({10.01f, 5.0f}, rect));
-            hgAssert(!hgContainsPointRect({5.0f, 5.01f}, rect));
+            Rect rect{{0.0f, 0.0f}, {10.0f, 5.0f}};
+            HG_ASSERT(!containsPointRect({-0.01f, 0.0f}, rect));
+            HG_ASSERT(!containsPointRect({10.01f, 5.0f}, rect));
+            HG_ASSERT(!containsPointRect({5.0f, 5.01f}, rect));
         }
 
         {
-            HgRect rect{{-5.0f, -3.0f}, {2.0f, 8.0f}};
-            hgAssert(hgContainsPointRect({-4.0f, 0.0f}, rect));
-            hgAssert(!hgContainsPointRect({-2.9f, 0.0f}, rect));
+            Rect rect{{-5.0f, -3.0f}, {2.0f, 8.0f}};
+            HG_ASSERT(containsPointRect({-4.0f, 0.0f}, rect));
+            HG_ASSERT(!containsPointRect({-2.9f, 0.0f}, rect));
         }
 
         {
-            HgRect rect{{2.0f, 2.0f}, {0.0f, 0.0f}};
-            hgAssert(hgContainsPointRect({2.0f, 2.0f}, rect));
-            hgAssert(!hgContainsPointRect({2.01f, 2.0f}, rect));
+            Rect rect{{2.0f, 2.0f}, {0.0f, 0.0f}};
+            HG_ASSERT(containsPointRect({2.0f, 2.0f}, rect));
+            HG_ASSERT(!containsPointRect({2.01f, 2.0f}, rect));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgVec2 p = hgClosestPointRect({-5.0f, 5.0f}, rect);
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Vec2 p = closestPointRect({-5.0f, 5.0f}, rect);
 
-            hgAssert(p.x == 0.0f);
-            hgAssert(p.y == 5.0f);
+            HG_ASSERT(p.x == 0.0f);
+            HG_ASSERT(p.y == 5.0f);
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgVec2 p = hgClosestPointRect({15.0f, 5.0f}, rect);
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Vec2 p = closestPointRect({15.0f, 5.0f}, rect);
 
-            hgAssert(p.x == 10.0f);
-            hgAssert(p.y == 5.0f);
+            HG_ASSERT(p.x == 10.0f);
+            HG_ASSERT(p.y == 5.0f);
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgVec2 p = hgClosestPointRect({5.0f, -3.0f}, rect);
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Vec2 p = closestPointRect({5.0f, -3.0f}, rect);
 
-            hgAssert(p.x == 5.0f);
-            hgAssert(p.y == 0.0f);
+            HG_ASSERT(p.x == 5.0f);
+            HG_ASSERT(p.y == 0.0f);
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgVec2 p = hgClosestPointRect({-3.0f, 15.0f}, rect);
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Vec2 p = closestPointRect({-3.0f, 15.0f}, rect);
 
-            hgAssert(p.x == 0.0f);
-            hgAssert(p.y == 10.0f);
+            HG_ASSERT(p.x == 0.0f);
+            HG_ASSERT(p.y == 10.0f);
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgVec2 p = hgClosestPointRect({5.0f, 5.0f}, rect);
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Vec2 p = closestPointRect({5.0f, 5.0f}, rect);
 
-            hgAssert(p.x == 5.0f);
-            hgAssert(p.y == 5.0f);
+            HG_ASSERT(p.x == 5.0f);
+            HG_ASSERT(p.y == 5.0f);
         }
 
         {
-            HgRect a{{0.0f, 0.0f}, {5.0f, 5.0}};
-            HgRect b{{3.0f, 3.0f}, {5.0f, 5.0f}};
+            Rect a{{0.0f, 0.0f}, {5.0f, 5.0}};
+            Rect b{{3.0f, 3.0f}, {5.0f, 5.0f}};
 
-            hgAssert(hgIntersectRects(a, b));
-            hgAssert(hgIntersectRects(b, a));
+            HG_ASSERT(intersectRects(a, b));
+            HG_ASSERT(intersectRects(b, a));
         }
 
         {
-            HgRect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
-            HgRect b{{5.0f, 0.0f}, {2.0f, 2.0f}};
+            Rect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
+            Rect b{{5.0f, 0.0f}, {2.0f, 2.0f}};
 
-            hgAssert(hgIntersectRects(a, b));
+            HG_ASSERT(intersectRects(a, b));
         }
 
         {
-            HgRect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
-            HgRect b{{5.0f, 5.0f}, {2.0f, 2.0f}};
+            Rect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
+            Rect b{{5.0f, 5.0f}, {2.0f, 2.0f}};
 
-            hgAssert(hgIntersectRects(a, b));
+            HG_ASSERT(intersectRects(a, b));
         }
 
         {
-            HgRect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
-            HgRect b{{5.01f, 0.0f}, {2.0f, 2.0f}};
+            Rect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
+            Rect b{{5.01f, 0.0f}, {2.0f, 2.0f}};
 
-            hgAssert(!hgIntersectRects(a, b));
+            HG_ASSERT(!intersectRects(a, b));
         }
 
         {
-            HgRect a{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgRect b{{2.0f, 2.0f}, {2.0f, 2.0f}};
+            Rect a{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Rect b{{2.0f, 2.0f}, {2.0f, 2.0f}};
 
-            hgAssert(hgIntersectRects(a, b));
+            HG_ASSERT(intersectRects(a, b));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgCircle circle{{5.0f, 5.0f}, 2.0f};
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Circle circle{{5.0f, 5.0f}, 2.0f};
 
-            hgAssert(hgIntersectRectCircle(rect, circle));
+            HG_ASSERT(intersectRectCircle(rect, circle));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgCircle circle{{12.0f, 5.0f}, 2.0f};
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Circle circle{{12.0f, 5.0f}, 2.0f};
 
-            hgAssert(hgIntersectRectCircle(rect, circle));
+            HG_ASSERT(intersectRectCircle(rect, circle));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgCircle circle{{13.0f, 5.0f}, 2.0f};
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Circle circle{{13.0f, 5.0f}, 2.0f};
 
-            hgAssert(!hgIntersectRectCircle(rect, circle));
+            HG_ASSERT(!intersectRectCircle(rect, circle));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgCircle circle{{12.0f, 12.0f}, std::sqrt(8.0f) + FLT_EPSILON};
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Circle circle{{12.0f, 12.0f}, std::sqrt(8.0f) + FLT_EPSILON};
 
-            hgAssert(hgIntersectRectCircle(rect, circle));
+            HG_ASSERT(intersectRectCircle(rect, circle));
         }
 
         {
-            HgRect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            HgCircle circle{{13.0f, 13.0f}, 2.0f};
+            Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+            Circle circle{{13.0f, 13.0f}, 2.0f};
 
-            hgAssert(!hgIntersectRectCircle(rect, circle));
+            HG_ASSERT(!intersectRectCircle(rect, circle));
         }
     }
 
-    // HgRay2D
+    // Ray2D
     {
         {
-            HgRay2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgRay2D b{{5.0f, -5.0f}, {0.0f, 1.0f}};
+            Ray2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Ray2D b{{5.0f, -5.0f}, {0.0f, 1.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRays2D(a, b, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRays2D(a, b, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgRay2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgRay2D b{{5.0f, 5.0f}, {0.0f, 1.0f}};
+            Ray2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Ray2D b{{5.0f, 5.0f}, {0.0f, 1.0f}};
 
-            hgAssert(!hgIntersectRays2D(a, b, nullptr));
+            HG_ASSERT(!intersectRays2D(a, b, nullptr));
         }
 
         {
-            HgRay2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgRay2D b{{-5.0f, -5.0f}, {0.0f, 1.0f}};
+            Ray2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Ray2D b{{-5.0f, -5.0f}, {0.0f, 1.0f}};
 
-            hgAssert(!hgIntersectRays2D(a, b, nullptr));
+            HG_ASSERT(!intersectRays2D(a, b, nullptr));
         }
 
         {
-            HgRay2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgRay2D b{{0.0f, 1.0f}, {1.0f, 0.0f}};
+            Ray2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Ray2D b{{0.0f, 1.0f}, {1.0f, 0.0f}};
 
-            hgAssert(!hgIntersectRays2D(a, b, nullptr));
+            HG_ASSERT(!intersectRays2D(a, b, nullptr));
         }
 
         {
-            HgRay2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgRay2D b{{0.0f, 0.0f}, {0.0f, 1.0f}};
+            Ray2D a{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Ray2D b{{0.0f, 0.0f}, {0.0f, 1.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRays2D(a, b, &hit));
-            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
+            Hit2D hit;
+            HG_ASSERT(intersectRays2D(a, b, &hit));
+            HG_ASSERT(std::abs(hit.dist) <= FLT_EPSILON);
         }
 
         {
-            HgRay2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgLine2D line{{5.0f, -2.0f}, {5.0f, 2.0f}};
+            Ray2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Line2D line{{5.0f, -2.0f}, {5.0f, 2.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayLine2D(ray, line, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRayLine2D(ray, line, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgRay2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgLine2D line{{-5.0f, -2.0f}, {-5.0f, 2.0f}};
+            Ray2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Line2D line{{-5.0f, -2.0f}, {-5.0f, 2.0f}};
 
-            hgAssert(!hgIntersectRayLine2D(ray, line, nullptr));
+            HG_ASSERT(!intersectRayLine2D(ray, line, nullptr));
         }
 
         {
-            HgRay2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgLine2D line{{5.0f, 1.0f}, {8.0f, 1.0f}};
+            Ray2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Line2D line{{5.0f, 1.0f}, {8.0f, 1.0f}};
 
-            hgAssert(!hgIntersectRayLine2D(ray, line, nullptr));
+            HG_ASSERT(!intersectRayLine2D(ray, line, nullptr));
         }
 
         {
-            HgRay2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgLine2D line{{5.0f, 0.0f}, {5.0f, 5.0f}};
+            Ray2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Line2D line{{5.0f, 0.0f}, {5.0f, 5.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayLine2D(ray, line, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            Hit2D hit;
+            HG_ASSERT(intersectRayLine2D(ray, line, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
         }
 
         {
-            HgRay2D ray{{5.0f, 0.0f}, {1.0f, 0.0f}};
-            HgLine2D line{{5.0f, -5.0f}, {5.0f, 5.0f}};
+            Ray2D ray{{5.0f, 0.0f}, {1.0f, 0.0f}};
+            Line2D line{{5.0f, -5.0f}, {5.0f, 5.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayLine2D(ray, line, &hit));
-            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
+            Hit2D hit;
+            HG_ASSERT(intersectRayLine2D(ray, line, &hit));
+            HG_ASSERT(std::abs(hit.dist) <= FLT_EPSILON);
         }
 
         {
-            HgRay2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Ray2D ray{{0.0f, 0.0f}, {1.0f, 0.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayCircle(ray, circle, &hit));
-            hgAssert(std::abs(hit.dist - 8.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRayCircle(ray, circle, &hit));
+            HG_ASSERT(std::abs(hit.dist - 8.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgRay2D ray{{0.0f, 2.0f}, {1.0f, 0.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Ray2D ray{{0.0f, 2.0f}, {1.0f, 0.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayCircle(ray, circle, &hit));
-            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            Hit2D hit;
+            HG_ASSERT(intersectRayCircle(ray, circle, &hit));
+            HG_ASSERT(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
         }
 
         {
-            HgRay2D ray{{0.0f, 3.0f}, {1.0f, 0.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Ray2D ray{{0.0f, 3.0f}, {1.0f, 0.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            hgAssert(!hgIntersectRayCircle(ray, circle, nullptr));
+            HG_ASSERT(!intersectRayCircle(ray, circle, nullptr));
         }
 
         {
-            HgRay2D ray{{10.0f, 0.0f}, {1.0f, 0.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Ray2D ray{{10.0f, 0.0f}, {1.0f, 0.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayCircle(ray, circle, &hit));
-            hgAssert(std::abs(hit.dist - 2.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRayCircle(ray, circle, &hit));
+            HG_ASSERT(std::abs(hit.dist - 2.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {1.0f, 0.0f}));
         }
 
         {
-            HgRay2D ray{{20.0f, 0.0f}, {1.0f, 0.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Ray2D ray{{20.0f, 0.0f}, {1.0f, 0.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            hgAssert(!hgIntersectRayCircle(ray, circle, nullptr));
+            HG_ASSERT(!intersectRayCircle(ray, circle, nullptr));
         }
 
         {
-            HgRay2D ray{{0.0f, 5.0f}, {1.0f, 0.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Ray2D ray{{0.0f, 5.0f}, {1.0f, 0.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayRect(ray, rect, &hit));
-            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRayRect(ray, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgRay2D ray{{20.0f, 5.0f}, {-1.0f, 0.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Ray2D ray{{20.0f, 5.0f}, {-1.0f, 0.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayRect(ray, rect, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRayRect(ray, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {1.0f, 0.0f}));
         }
 
         {
-            HgRay2D ray{{12.5f, -5.0f}, {0.0f, 1.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Ray2D ray{{12.5f, -5.0f}, {0.0f, 1.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayRect(ray, rect, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {0.0f, -1.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRayRect(ray, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {0.0f, -1.0f}));
         }
 
         {
-            HgRay2D ray{{12.5f, 20.0f}, {0.0f, -1.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Ray2D ray{{12.5f, 20.0f}, {0.0f, -1.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayRect(ray, rect, &hit));
-            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {0.0f, 1.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRayRect(ray, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {0.0f, 1.0f}));
         }
 
         {
-            HgRay2D ray{{0.0f, 0.0f}, {1.0f, 1.0f}};
-            HgRect rect{{10.0f, 10.0f}, {5.0f, 5.0f}};
+            Ray2D ray{{0.0f, 0.0f}, {1.0f, 1.0f}};
+            Rect rect{{10.0f, 10.0f}, {5.0f, 5.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayRect(ray, rect, &hit));
-            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            Hit2D hit;
+            HG_ASSERT(intersectRayRect(ray, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
         }
 
         {
-            HgRay2D ray{{0.0f, 5.0f}, {-1.0f, 0.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Ray2D ray{{0.0f, 5.0f}, {-1.0f, 0.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            hgAssert(!hgIntersectRayRect(ray, rect, nullptr));
+            HG_ASSERT(!intersectRayRect(ray, rect, nullptr));
         }
 
         {
-            HgRay2D ray{{12.5f, 5.0f}, {1.0f, 0.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Ray2D ray{{12.5f, 5.0f}, {1.0f, 0.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectRayRect(ray, rect, &hit));
-            hgAssert(hit.dist == 0.0f);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectRayRect(ray, rect, &hit));
+            HG_ASSERT(hit.dist == 0.0f);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgRay2D ray{{0.0f, 20.0f}, {1.0f, 0.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Ray2D ray{{0.0f, 20.0f}, {1.0f, 0.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            hgAssert(!hgIntersectRayRect(ray, rect, nullptr));
+            HG_ASSERT(!intersectRayRect(ray, rect, nullptr));
         }
 
     }
 
-    // HgLine2D
+    // Line2D
     {
         {
-            HgLine2D a{{0.0f, 0.0f}, {10.0f, 0.0f}};
-            HgLine2D b{{5.0f, -5.0f}, {5.0f, 5.0f}};
+            Line2D a{{0.0f, 0.0f}, {10.0f, 0.0f}};
+            Line2D b{{5.0f, -5.0f}, {5.0f, 5.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLines2D(a, b, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectLines2D(a, b, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgLine2D a{{0.0f, 0.0f}, {10.0f, 0.0f}};
-            HgLine2D b{{15.0f, -5.0f}, {15.0f, 5.0f}};
+            Line2D a{{0.0f, 0.0f}, {10.0f, 0.0f}};
+            Line2D b{{15.0f, -5.0f}, {15.0f, 5.0f}};
 
-            hgAssert(!hgIntersectLines2D(a, b, nullptr));
+            HG_ASSERT(!intersectLines2D(a, b, nullptr));
         }
 
         {
-            HgLine2D a{{0.0f, 0.0f}, {10.0f, 0.0f}};
-            HgLine2D b{{10.0f, 0.0f}, {10.0f, 5.0f}};
+            Line2D a{{0.0f, 0.0f}, {10.0f, 0.0f}};
+            Line2D b{{10.0f, 0.0f}, {10.0f, 5.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLines2D(a, b, &hit));
-            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+            Hit2D hit;
+            HG_ASSERT(intersectLines2D(a, b, &hit));
+            HG_ASSERT(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
         }
 
         {
-            HgLine2D a{{0.0f, 0.0f}, {10.0f, 0.0f}};
-            HgLine2D b{{0.0f, 1.0f}, {10.0f, 1.0f}};
+            Line2D a{{0.0f, 0.0f}, {10.0f, 0.0f}};
+            Line2D b{{0.0f, 1.0f}, {10.0f, 1.0f}};
 
-            hgAssert(!hgIntersectLines2D(a, b, nullptr));
+            HG_ASSERT(!intersectLines2D(a, b, nullptr));
         }
 
         {
-            HgLine2D line{{0.0f, 0.0f}, {10.0f, 0.0f}};
-            HgRay2D ray{{5.0f, -5.0f}, {0.0f, 1.0f}};
+            Line2D line{{0.0f, 0.0f}, {10.0f, 0.0f}};
+            Ray2D ray{{5.0f, -5.0f}, {0.0f, 1.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineRay2D(line, ray, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectLineRay2D(line, ray, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgLine2D line{{0.0f, 0.0f}, {10.0f, 0.0f}};
-            HgRay2D ray{{15.0f, -5.0f}, {0.0f, 1.0f}};
+            Line2D line{{0.0f, 0.0f}, {10.0f, 0.0f}};
+            Ray2D ray{{15.0f, -5.0f}, {0.0f, 1.0f}};
 
-            hgAssert(!hgIntersectLineRay2D(line, ray, nullptr));
+            HG_ASSERT(!intersectLineRay2D(line, ray, nullptr));
         }
 
         {
-            HgLine2D line{{0.0f, 0.0f}, {10.0f, 0.0f}};
-            HgRay2D ray{{10.0f, -5.0f}, {0.0f, 1.0f}};
+            Line2D line{{0.0f, 0.0f}, {10.0f, 0.0f}};
+            Ray2D ray{{10.0f, -5.0f}, {0.0f, 1.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineRay2D(line, ray, &hit));
-            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+            Hit2D hit;
+            HG_ASSERT(intersectLineRay2D(line, ray, &hit));
+            HG_ASSERT(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
         }
 
         {
-            HgLine2D line{{0.0f, 0.0f}, {10.0f, 0.0f}};
-            HgRay2D ray{{5.0f, 5.0f}, {0.0f, 1.0f}};
+            Line2D line{{0.0f, 0.0f}, {10.0f, 0.0f}};
+            Ray2D ray{{5.0f, 5.0f}, {0.0f, 1.0f}};
 
-            hgAssert(!hgIntersectLineRay2D(line, ray, nullptr));
+            HG_ASSERT(!intersectLineRay2D(line, ray, nullptr));
         }
 
         {
-            HgLine2D line{{0.0f, 0.0f}, {20.0f, 0.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Line2D line{{0.0f, 0.0f}, {20.0f, 0.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineCircle(line, circle, &hit));
-            hgAssert(std::abs(hit.dist - 0.4f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectLineCircle(line, circle, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.4f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgLine2D line{{0.0f, 2.0f}, {20.0f, 2.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Line2D line{{0.0f, 2.0f}, {20.0f, 2.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineCircle(line, circle, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            Hit2D hit;
+            HG_ASSERT(intersectLineCircle(line, circle, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
         }
 
         {
-            HgLine2D line{{0.0f, 3.0f}, {20.0f, 3.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Line2D line{{0.0f, 3.0f}, {20.0f, 3.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            hgAssert(!hgIntersectLineCircle(line, circle, nullptr));
+            HG_ASSERT(!intersectLineCircle(line, circle, nullptr));
         }
 
         {
-            HgLine2D line{{0.0f, 0.0f}, {5.0f, 0.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Line2D line{{0.0f, 0.0f}, {5.0f, 0.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            hgAssert(!hgIntersectLineCircle(line, circle, nullptr));
+            HG_ASSERT(!intersectLineCircle(line, circle, nullptr));
         }
 
         {
-            HgLine2D line{{10.0f, 0.0f}, {20.0f, 0.0f}};
-            HgCircle circle{{10.0f, 0.0f}, 2.0f};
+            Line2D line{{10.0f, 0.0f}, {20.0f, 0.0f}};
+            Circle circle{{10.0f, 0.0f}, 2.0f};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineCircle(line, circle, &hit));
-            hgAssert(std::abs(hit.dist - 0.2f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectLineCircle(line, circle, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.2f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {1.0f, 0.0f}));
         }
 
         {
-            HgLine2D line{{0.0f, 5.0f}, {20.0f, 5.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Line2D line{{0.0f, 5.0f}, {20.0f, 5.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineRect(line, rect, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {-1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectLineRect(line, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {-1.0f, 0.0f}));
         }
 
         {
-            HgLine2D line{{20.0f, 5.0f}, {0.0f, 5.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Line2D line{{20.0f, 5.0f}, {0.0f, 5.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineRect(line, rect, &hit));
-            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectLineRect(line, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {1.0f, 0.0f}));
         }
 
         {
-            HgLine2D line{{12.5f, -5.0f}, {12.5f, 15.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Line2D line{{12.5f, -5.0f}, {12.5f, 15.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineRect(line, rect, &hit));
-            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {0.0f, -1.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectLineRect(line, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {0.0f, -1.0f}));
         }
 
         {
-            HgLine2D line{{0.0f, 20.0f}, {20.0f, 20.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Line2D line{{0.0f, 20.0f}, {20.0f, 20.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            hgAssert(!hgIntersectLineRect(line, rect, nullptr));
+            HG_ASSERT(!intersectLineRect(line, rect, nullptr));
         }
 
         {
-            HgLine2D line{{12.5f, 5.0f}, {17.5f, 5.0f}};
-            HgRect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Line2D line{{12.5f, 5.0f}, {17.5f, 5.0f}};
+            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
 
-            HgHit2D hit;
-            hgAssert(hgIntersectLineRect(line, rect, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq2(hit.normal, {1.0f, 0.0f}));
+            Hit2D hit;
+            HG_ASSERT(intersectLineRect(line, rect, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq2(hit.normal, {1.0f, 0.0f}));
         }
     }
 
-    // HgSphere
+    // Sphere
     {
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            hgAssert(hgContainsPointSphere({0.0f, 0.0f, 0.0f}, sphere));
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(containsPointSphere({0.0f, 0.0f, 0.0f}, sphere));
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            hgAssert(hgContainsPointSphere({3.0f, 4.0f, 0.0f}, sphere));
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(containsPointSphere({3.0f, 4.0f, 0.0f}, sphere));
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            hgAssert(hgContainsPointSphere({5.0f, 0.0f, 0.0f}, sphere));
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(containsPointSphere({5.0f, 0.0f, 0.0f}, sphere));
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            hgAssert(!hgContainsPointSphere({5.01f, 0.0f, 0.0f}, sphere));
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(!containsPointSphere({5.01f, 0.0f, 0.0f}, sphere));
         }
 
         {
-            HgSphere sphere{{2.0f, -3.0f, 4.0f}, 2.0f};
-            hgAssert(hgContainsPointSphere({2.0f, -3.0f, 4.0f}, sphere));
-            hgAssert(hgContainsPointSphere({4.0f, -3.0f, 4.0f}, sphere));
-            hgAssert(!hgContainsPointSphere({4.1f, -3.0f, 4.0f}, sphere));
+            Sphere sphere{{2.0f, -3.0f, 4.0f}, 2.0f};
+            HG_ASSERT(containsPointSphere({2.0f, -3.0f, 4.0f}, sphere));
+            HG_ASSERT(containsPointSphere({4.0f, -3.0f, 4.0f}, sphere));
+            HG_ASSERT(!containsPointSphere({4.1f, -3.0f, 4.0f}, sphere));
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 0.0f};
-            hgAssert(hgContainsPointSphere({0.0f, 0.0f, 0.0f}, sphere));
-            hgAssert(!hgContainsPointSphere({0.01f, 0.0f, 0.0f}, sphere));
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 0.0f};
+            HG_ASSERT(containsPointSphere({0.0f, 0.0f, 0.0f}, sphere));
+            HG_ASSERT(!containsPointSphere({0.01f, 0.0f, 0.0f}, sphere));
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            hgAssert(std::abs(hgDistPointSphere({10.0f, 0.0f, 0.0f}, sphere) - 5.0f) <= FLT_EPSILON);
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(std::abs(distPointSphere({10.0f, 0.0f, 0.0f}, sphere) - 5.0f) <= FLT_EPSILON);
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            hgAssert(std::abs(hgDistPointSphere({5.0f, 0.0f, 0.0f}, sphere)) <= FLT_EPSILON);
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(std::abs(distPointSphere({5.0f, 0.0f, 0.0f}, sphere)) <= FLT_EPSILON);
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            hgAssert(std::abs(hgDistPointSphere({0.0f, 0.0f, 0.0f}, sphere) + 5.0f) <= FLT_EPSILON);
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            HG_ASSERT(std::abs(distPointSphere({0.0f, 0.0f, 0.0f}, sphere) + 5.0f) <= FLT_EPSILON);
         }
 
         {
-            HgSphere sphere{{2.0f, 3.0f, 4.0f}, 2.0f};
-            hgAssert(std::abs(hgDistPointSphere({6.0f, 3.0f, 4.0f}, sphere) - 2.0f) <= FLT_EPSILON);
+            Sphere sphere{{2.0f, 3.0f, 4.0f}, 2.0f};
+            HG_ASSERT(std::abs(distPointSphere({6.0f, 3.0f, 4.0f}, sphere) - 2.0f) <= FLT_EPSILON);
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgVec3 p = hgClosestPointSphere({10.0f, 0.0f, 0.0f}, sphere);
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Vec3 p = closestPointSphere({10.0f, 0.0f, 0.0f}, sphere);
 
-            hgAssert(hgVecEq3(p, {5.0f, 0.0f, 0.0f}));
+            HG_ASSERT(vecEq3(p, {5.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgVec3 p = hgClosestPointSphere({0.0f, 10.0f, 0.0f}, sphere);
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Vec3 p = closestPointSphere({0.0f, 10.0f, 0.0f}, sphere);
 
-            hgAssert(hgVecEq3(p, {0.0f, 5.0f, 0.0f}));
+            HG_ASSERT(vecEq3(p, {0.0f, 5.0f, 0.0f}));
         }
 
         {
-            HgSphere sphere{{2.0f, 1.0f, -3.0f}, 3.0f};
-            HgVec3 p = hgClosestPointSphere({5.0f, 1.0f, -3.0f}, sphere);
+            Sphere sphere{{2.0f, 1.0f, -3.0f}, 3.0f};
+            Vec3 p = closestPointSphere({5.0f, 1.0f, -3.0f}, sphere);
 
-            hgAssert(hgVecEq3(p, {5.0f, 1.0f, -3.0f}));
+            HG_ASSERT(vecEq3(p, {5.0f, 1.0f, -3.0f}));
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgVec3 p = hgClosestPointSphere({0.0f, 0.0f, 0.0f}, sphere);
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Vec3 p = closestPointSphere({0.0f, 0.0f, 0.0f}, sphere);
 
-            hgAssert(hgDistPointSphere(p, sphere) <= FLT_EPSILON);
+            HG_ASSERT(distPointSphere(p, sphere) <= FLT_EPSILON);
         }
 
         {
-            HgSphere sphere{{0.0f, 0.0f, 0.0f}, 0.0f};
-            HgVec3 p = hgClosestPointSphere({10.0f, 2.0f, -5.0f}, sphere);
+            Sphere sphere{{0.0f, 0.0f, 0.0f}, 0.0f};
+            Vec3 p = closestPointSphere({10.0f, 2.0f, -5.0f}, sphere);
 
-            hgAssert(hgVecEq3(p, {0.0f, 0.0f, 0.0f}));
+            HG_ASSERT(vecEq3(p, {0.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgSphere b{{8.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere b{{8.0f, 0.0f, 0.0f}, 5.0f};
 
-            hgAssert(hgIntersectSpheres(a, b));
-            hgAssert(hgIntersectSpheres(b, a));
+            HG_ASSERT(intersectSpheres(a, b));
+            HG_ASSERT(intersectSpheres(b, a));
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgSphere b{{10.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere b{{10.0f, 0.0f, 0.0f}, 5.0f};
 
-            hgAssert(hgIntersectSpheres(a, b));
+            HG_ASSERT(intersectSpheres(a, b));
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgSphere b{{10.1f, 0.0f, 0.0f}, 5.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere b{{10.1f, 0.0f, 0.0f}, 5.0f};
 
-            hgAssert(!hgIntersectSpheres(a, b));
+            HG_ASSERT(!intersectSpheres(a, b));
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgSphere b{{0.0f, 0.0f, 0.0f}, 2.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere b{{0.0f, 0.0f, 0.0f}, 2.0f};
 
-            hgAssert(hgIntersectSpheres(a, b));
+            HG_ASSERT(intersectSpheres(a, b));
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 0.0f};
-            HgSphere b{{0.0f, 0.0f, 0.0f}, 0.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 0.0f};
+            Sphere b{{0.0f, 0.0f, 0.0f}, 0.0f};
 
-            hgAssert(hgIntersectSpheres(a, b));
+            HG_ASSERT(intersectSpheres(a, b));
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgSphere b{{20.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere b{{20.0f, 0.0f, 0.0f}, 5.0f};
 
-            hgAssert(std::abs(hgDistSpheres(a, b) - 10.0f) <= FLT_EPSILON);
+            HG_ASSERT(std::abs(distSpheres(a, b) - 10.0f) <= FLT_EPSILON);
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgSphere b{{10.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere b{{10.0f, 0.0f, 0.0f}, 5.0f};
 
-            hgAssert(std::abs(hgDistSpheres(a, b)) <= FLT_EPSILON);
+            HG_ASSERT(std::abs(distSpheres(a, b)) <= FLT_EPSILON);
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgSphere b{{5.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere b{{5.0f, 0.0f, 0.0f}, 5.0f};
 
-            hgAssert(hgDistSpheres(a, b) < 0.0f);
+            HG_ASSERT(distSpheres(a, b) < 0.0f);
         }
 
         {
-            HgSphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
-            HgSphere b{{0.0f, 0.0f, 0.0f}, 1.0f};
+            Sphere a{{0.0f, 0.0f, 0.0f}, 5.0f};
+            Sphere b{{0.0f, 0.0f, 0.0f}, 1.0f};
 
-            hgAssert(hgDistSpheres(a, b) < 0.0f);
+            HG_ASSERT(distSpheres(a, b) < 0.0f);
         }
     }
 
-    // HgBox
+    // Box
     {
         {
-            HgBox box = hgBoxEmpty();
+            Box box = boxEmpty();
 
-            hgAssert(!hgContainsPointBox({0.0f, 0.0f, 0.0f}, box));
-            hgAssert(!hgContainsPointBox({1.0f, 1.0f, 1.0f}, box));
+            HG_ASSERT(!containsPointBox({0.0f, 0.0f, 0.0f}, box));
+            HG_ASSERT(!containsPointBox({1.0f, 1.0f, 1.0f}, box));
         }
 
         {
-            HgBox box = hgBoxEmpty();
-            box = hgBoxAddPoint(box, {2.0f, 3.0f, 4.0f});
+            Box box = boxEmpty();
+            box = boxAddPoint(box, {2.0f, 3.0f, 4.0f});
 
-            hgAssert(hgContainsPointBox({2.0f, 3.0f, 4.0f}, box));
+            HG_ASSERT(containsPointBox({2.0f, 3.0f, 4.0f}, box));
         }
 
         {
-            HgBox box = hgBoxEmpty();
-            box = hgBoxAddPoint(box, {1.0f, 2.0f, 3.0f});
+            Box box = boxEmpty();
+            box = boxAddPoint(box, {1.0f, 2.0f, 3.0f});
 
-            hgAssert(hgContainsPointBox({1.0f, 2.0f, 3.0f}, box));
+            HG_ASSERT(containsPointBox({1.0f, 2.0f, 3.0f}, box));
         }
 
         {
-            HgBox box = hgBoxEmpty();
-            box = hgBoxAddPoint(box, {2.0f, 2.0f, 2.0f});
-            box = hgBoxAddPoint(box, {5.0f, 7.0f, 11.0f});
+            Box box = boxEmpty();
+            box = boxAddPoint(box, {2.0f, 2.0f, 2.0f});
+            box = boxAddPoint(box, {5.0f, 7.0f, 11.0f});
 
-            hgAssert(hgContainsPointBox({2.0f, 2.0f, 2.0f}, box));
-            hgAssert(hgContainsPointBox({5.0f, 7.0f, 11.0f}, box));
-            hgAssert(hgContainsPointBox({3.0f, 4.0f, 5.0f}, box));
+            HG_ASSERT(containsPointBox({2.0f, 2.0f, 2.0f}, box));
+            HG_ASSERT(containsPointBox({5.0f, 7.0f, 11.0f}, box));
+            HG_ASSERT(containsPointBox({3.0f, 4.0f, 5.0f}, box));
         }
 
         {
-            HgBox box = hgBoxEmpty();
-            box = hgBoxAddPoint(box, {5.0f, 5.0f, 5.0f});
-            box = hgBoxAddPoint(box, {-2.0f, -3.0f, -4.0f});
+            Box box = boxEmpty();
+            box = boxAddPoint(box, {5.0f, 5.0f, 5.0f});
+            box = boxAddPoint(box, {-2.0f, -3.0f, -4.0f});
 
-            hgAssert(hgContainsPointBox({-2.0f, -3.0f, -4.0f}, box));
-            hgAssert(hgContainsPointBox({5.0f, 5.0f, 5.0f}, box));
-            hgAssert(hgContainsPointBox({0.0f, 0.0f, 0.0f}, box));
+            HG_ASSERT(containsPointBox({-2.0f, -3.0f, -4.0f}, box));
+            HG_ASSERT(containsPointBox({5.0f, 5.0f, 5.0f}, box));
+            HG_ASSERT(containsPointBox({0.0f, 0.0f, 0.0f}, box));
         }
 
         {
-            HgBox box = hgBoxEmpty();
-            box = hgBoxAddPoint(box, {1.0f, 1.0f, 1.0f});
-            box = hgBoxAddPoint(box, {1.0f, 1.0f, 1.0f});
+            Box box = boxEmpty();
+            box = boxAddPoint(box, {1.0f, 1.0f, 1.0f});
+            box = boxAddPoint(box, {1.0f, 1.0f, 1.0f});
 
-            hgAssert(hgContainsPointBox({1.0f, 1.0f, 1.0f}, box));
+            HG_ASSERT(containsPointBox({1.0f, 1.0f, 1.0f}, box));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 5.0f, 8.0f}};
-            hgAssert(hgContainsPointBox({5.0f, 2.5f, 4.0f}, box));
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 5.0f, 8.0f}};
+            HG_ASSERT(containsPointBox({5.0f, 2.5f, 4.0f}, box));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 5.0f, 8.0f}};
-            hgAssert(hgContainsPointBox({0.0f, 0.0f, 0.0f}, box));
-            hgAssert(hgContainsPointBox({10.0f, 5.0f, 8.0f}, box));
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 5.0f, 8.0f}};
+            HG_ASSERT(containsPointBox({0.0f, 0.0f, 0.0f}, box));
+            HG_ASSERT(containsPointBox({10.0f, 5.0f, 8.0f}, box));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 5.0f, 8.0f}};
-            hgAssert(!hgContainsPointBox({-0.01f, 0.0f, 0.0f}, box));
-            hgAssert(!hgContainsPointBox({10.01f, 5.0f, 8.0f}, box));
-            hgAssert(!hgContainsPointBox({5.0f, 5.01f, 4.0f}, box));
-            hgAssert(!hgContainsPointBox({5.0f, 2.5f, 8.01f}, box));
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 5.0f, 8.0f}};
+            HG_ASSERT(!containsPointBox({-0.01f, 0.0f, 0.0f}, box));
+            HG_ASSERT(!containsPointBox({10.01f, 5.0f, 8.0f}, box));
+            HG_ASSERT(!containsPointBox({5.0f, 5.01f, 4.0f}, box));
+            HG_ASSERT(!containsPointBox({5.0f, 2.5f, 8.01f}, box));
         }
 
         {
-            HgBox box{{-5.0f, -3.0f, -2.0f}, {2.0f, 8.0f, 6.0f}};
-            hgAssert(hgContainsPointBox({-4.0f, 0.0f, 0.0f}, box));
-            hgAssert(!hgContainsPointBox({-2.9f, 0.0f, 0.0f}, box));
+            Box box{{-5.0f, -3.0f, -2.0f}, {2.0f, 8.0f, 6.0f}};
+            HG_ASSERT(containsPointBox({-4.0f, 0.0f, 0.0f}, box));
+            HG_ASSERT(!containsPointBox({-2.9f, 0.0f, 0.0f}, box));
         }
 
         {
-            HgBox box{{2.0f, 2.0f, 2.0f}, {0.0f, 0.0f, 0.0f}};
-            hgAssert(hgContainsPointBox({2.0f, 2.0f, 2.0f}, box));
-            hgAssert(!hgContainsPointBox({2.01f, 2.0f, 2.0f}, box));
+            Box box{{2.0f, 2.0f, 2.0f}, {0.0f, 0.0f, 0.0f}};
+            HG_ASSERT(containsPointBox({2.0f, 2.0f, 2.0f}, box));
+            HG_ASSERT(!containsPointBox({2.01f, 2.0f, 2.0f}, box));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgVec3 p = hgClosestPointBox({-5.0f, 5.0f, 5.0f}, box);
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Vec3 p = closestPointBox({-5.0f, 5.0f, 5.0f}, box);
 
-            hgAssert(hgVecEq3(p, {0.0f, 5.0f, 5.0f}));
+            HG_ASSERT(vecEq3(p, {0.0f, 5.0f, 5.0f}));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgVec3 p = hgClosestPointBox({15.0f, 5.0f, 5.0f}, box);
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Vec3 p = closestPointBox({15.0f, 5.0f, 5.0f}, box);
 
-            hgAssert(hgVecEq3(p, {10.0f, 5.0f, 5.0f}));
+            HG_ASSERT(vecEq3(p, {10.0f, 5.0f, 5.0f}));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgVec3 p = hgClosestPointBox({5.0f, -3.0f, 5.0f}, box);
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Vec3 p = closestPointBox({5.0f, -3.0f, 5.0f}, box);
 
-            hgAssert(hgVecEq3(p, {5.0f, 0.0f, 5.0f}));
+            HG_ASSERT(vecEq3(p, {5.0f, 0.0f, 5.0f}));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgVec3 p = hgClosestPointBox({5.0f, 5.0f, 15.0f}, box);
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Vec3 p = closestPointBox({5.0f, 5.0f, 15.0f}, box);
 
-            hgAssert(hgVecEq3(p, {5.0f, 5.0f, 10.0f}));
+            HG_ASSERT(vecEq3(p, {5.0f, 5.0f, 10.0f}));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgVec3 p = hgClosestPointBox({-5.0f, 15.0f, -3.0f}, box);
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Vec3 p = closestPointBox({-5.0f, 15.0f, -3.0f}, box);
 
-            hgAssert(hgVecEq3(p, {0.0f, 10.0f, 0.0f}));
+            HG_ASSERT(vecEq3(p, {0.0f, 10.0f, 0.0f}));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgVec3 p = hgClosestPointBox({5.0f, 5.0f, 5.0f}, box);
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Vec3 p = closestPointBox({5.0f, 5.0f, 5.0f}, box);
 
-            hgAssert(hgVecEq3(p, {5.0f, 5.0f, 5.0f}));
+            HG_ASSERT(vecEq3(p, {5.0f, 5.0f, 5.0f}));
         }
 
         {
-            HgBox a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            HgBox b{{3.0f, 3.0f, 3.0f}, {5.0f, 5.0f, 5.0f}};
+            Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
+            Box b{{3.0f, 3.0f, 3.0f}, {5.0f, 5.0f, 5.0f}};
 
-            hgAssert(hgIntersectBox(a, b));
-            hgAssert(hgIntersectBox(b, a));
+            HG_ASSERT(intersectBox(a, b));
+            HG_ASSERT(intersectBox(b, a));
         }
 
         {
-            HgBox a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            HgBox b{{5.0f, 0.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
+            Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
+            Box b{{5.0f, 0.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
 
-            hgAssert(hgIntersectBox(a, b));
+            HG_ASSERT(intersectBox(a, b));
         }
 
         {
-            HgBox a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            HgBox b{{0.0f, 5.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
+            Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
+            Box b{{0.0f, 5.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
 
-            hgAssert(hgIntersectBox(a, b));
+            HG_ASSERT(intersectBox(a, b));
         }
 
         {
-            HgBox a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            HgBox b{{0.0f, 0.0f, 5.0f}, {2.0f, 2.0f, 2.0f}};
+            Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
+            Box b{{0.0f, 0.0f, 5.0f}, {2.0f, 2.0f, 2.0f}};
 
-            hgAssert(hgIntersectBox(a, b));
+            HG_ASSERT(intersectBox(a, b));
         }
 
         {
-            HgBox a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            HgBox b{{5.0f, 5.0f, 5.0f}, {2.0f, 2.0f, 2.0f}};
+            Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
+            Box b{{5.0f, 5.0f, 5.0f}, {2.0f, 2.0f, 2.0f}};
 
-            hgAssert(hgIntersectBox(a, b));
+            HG_ASSERT(intersectBox(a, b));
         }
 
         {
-            HgBox a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            HgBox b{{5.01f, 0.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
+            Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
+            Box b{{5.01f, 0.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
 
-            hgAssert(!hgIntersectBox(a, b));
+            HG_ASSERT(!intersectBox(a, b));
         }
 
         {
-            HgBox a{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgBox b{{2.0f, 2.0f, 2.0f}, {2.0f, 2.0f, 2.0f}};
+            Box a{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Box b{{2.0f, 2.0f, 2.0f}, {2.0f, 2.0f, 2.0f}};
 
-            hgAssert(hgIntersectBox(a, b));
+            HG_ASSERT(intersectBox(a, b));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgSphere sphere{{5.0f, 5.0f, 5.0f}, 2.0f};
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Sphere sphere{{5.0f, 5.0f, 5.0f}, 2.0f};
 
-            hgAssert(hgIntersectBoxSphere(box, sphere));
+            HG_ASSERT(intersectBoxSphere(box, sphere));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgSphere sphere{{12.0f, 5.0f, 5.0f}, 2.0f};
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Sphere sphere{{12.0f, 5.0f, 5.0f}, 2.0f};
 
-            hgAssert(hgIntersectBoxSphere(box, sphere));
+            HG_ASSERT(intersectBoxSphere(box, sphere));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgSphere sphere{{5.0f, 12.0f, 5.0f}, 2.0f};
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Sphere sphere{{5.0f, 12.0f, 5.0f}, 2.0f};
 
-            hgAssert(hgIntersectBoxSphere(box, sphere));
+            HG_ASSERT(intersectBoxSphere(box, sphere));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgSphere sphere{{5.0f, 5.0f, 12.0f}, 2.0f};
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Sphere sphere{{5.0f, 5.0f, 12.0f}, 2.0f};
 
-            hgAssert(hgIntersectBoxSphere(box, sphere));
+            HG_ASSERT(intersectBoxSphere(box, sphere));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgSphere sphere{{13.0f, 5.0f, 5.0f}, 2.0f};
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Sphere sphere{{13.0f, 5.0f, 5.0f}, 2.0f};
 
-            hgAssert(!hgIntersectBoxSphere(box, sphere));
+            HG_ASSERT(!intersectBoxSphere(box, sphere));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgSphere sphere{{12.0f, 12.0f, 12.0f}, std::sqrt(12.0f)};
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Sphere sphere{{12.0f, 12.0f, 12.0f}, std::sqrt(12.0f)};
 
-            hgAssert(hgIntersectBoxSphere(box, sphere));
+            HG_ASSERT(intersectBoxSphere(box, sphere));
         }
 
         {
-            HgBox box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            HgSphere sphere{{13.0f, 13.0f, 13.0f}, 2.0f};
+            Box box{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
+            Sphere sphere{{13.0f, 13.0f, 13.0f}, 2.0f};
 
-            hgAssert(!hgIntersectBoxSphere(box, sphere));
+            HG_ASSERT(!intersectBoxSphere(box, sphere));
         }
     }
 
-    // HgPlane
+    // Plane
     {
         {
-            HgPlane plane = hgPlaneFromPoint({0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
-            hgAssert(hgVecEq3(plane.normal, {0.0f, 1.0f, 0.0f}));
-            hgAssert(std::abs(plane.dist) <= FLT_EPSILON);
+            Plane plane = planeFromPoint({0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            HG_ASSERT(vecEq3(plane.normal, {0.0f, 1.0f, 0.0f}));
+            HG_ASSERT(std::abs(plane.dist) <= FLT_EPSILON);
         }
 
         {
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
-            hgAssert(hgVecEq3(plane.normal, {0.0f, 1.0f, 0.0f}));
-            hgAssert(std::abs(plane.dist - 5.0f) <= FLT_EPSILON);
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            HG_ASSERT(vecEq3(plane.normal, {0.0f, 1.0f, 0.0f}));
+            HG_ASSERT(std::abs(plane.dist - 5.0f) <= FLT_EPSILON);
         }
 
         {
-            HgPlane plane = hgPlaneFromPoint({3.0f, 2.0f, -1.0f}, {1.0f, 0.0f, 0.0f});
-            hgAssert(hgVecEq3(plane.normal, {1.0f, 0.0f, 0.0f}));
-            hgAssert(std::abs(plane.dist - 3.0f) <= FLT_EPSILON);
+            Plane plane = planeFromPoint({3.0f, 2.0f, -1.0f}, {1.0f, 0.0f, 0.0f});
+            HG_ASSERT(vecEq3(plane.normal, {1.0f, 0.0f, 0.0f}));
+            HG_ASSERT(std::abs(plane.dist - 3.0f) <= FLT_EPSILON);
         }
 
         {
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromTri(tri);
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Plane plane = planeFromTri(tri);
 
-            hgAssert(hgVecEq3(plane.normal, {0.0f, 0.0f, 1.0f}));
-            hgAssert(std::abs(plane.dist) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(plane.normal, {0.0f, 0.0f, 1.0f}));
+            HG_ASSERT(std::abs(plane.dist) <= FLT_EPSILON);
         }
 
         {
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromTri(tri);
+            Tri tri{{0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+            Plane plane = planeFromTri(tri);
 
-            hgAssert(hgVecEq3(plane.normal, {0.0f, 0.0f, -1.0f}));
-            hgAssert(std::abs(plane.dist) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(plane.normal, {0.0f, 0.0f, -1.0f}));
+            HG_ASSERT(std::abs(plane.dist) <= FLT_EPSILON);
         }
 
         {
-            HgTri tri{{1.0f, 2.0f, 5.0f}, {4.0f, 2.0f, 5.0f}, {1.0f, 6.0f, 5.0f}};
-            HgPlane plane = hgPlaneFromTri(tri);
+            Tri tri{{1.0f, 2.0f, 5.0f}, {4.0f, 2.0f, 5.0f}, {1.0f, 6.0f, 5.0f}};
+            Plane plane = planeFromTri(tri);
 
-            hgAssert(hgVecEq3(plane.normal, {0.0f, 0.0f, 1.0f}));
-            hgAssert(std::abs(plane.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(plane.normal, {0.0f, 0.0f, 1.0f}));
+            HG_ASSERT(std::abs(plane.dist - 5.0f) <= FLT_EPSILON);
         }
     }
 
-    // HgRay3D
+    // Ray3D
     {
         {
-            HgRay3D ray{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Ray3D ray{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRaySphere(ray, sphere, &hit));
-            hgAssert(std::abs(hit.dist - 8.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRaySphere(ray, sphere, &hit));
+            HG_ASSERT(std::abs(hit.dist - 8.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgRay3D ray{{0.0f, 2.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Ray3D ray{{0.0f, 2.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRaySphere(ray, sphere, &hit));
-            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectRaySphere(ray, sphere, &hit));
+            HG_ASSERT(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
         }
 
         {
-            HgRay3D ray{{0.0f, 3.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Ray3D ray{{0.0f, 3.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            hgAssert(!hgIntersectRaySphere(ray, sphere, nullptr));
+            HG_ASSERT(!intersectRaySphere(ray, sphere, nullptr));
         }
 
         {
-            HgRay3D ray{{10.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Ray3D ray{{10.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRaySphere(ray, sphere, &hit));
-            hgAssert(std::abs(hit.dist - 2.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRaySphere(ray, sphere, &hit));
+            HG_ASSERT(std::abs(hit.dist - 2.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgRay3D ray{{20.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Ray3D ray{{20.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            hgAssert(!hgIntersectRaySphere(ray, sphere, nullptr));
+            HG_ASSERT(!intersectRaySphere(ray, sphere, nullptr));
         }
 
         {
-            HgRay3D ray{{0.0f, 5.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Ray3D ray{{0.0f, 5.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayBox(ray, box, &hit));
-            hgAssert(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRayBox(ray, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 10.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgRay3D ray{{20.0f, 5.0f, 5.0f}, {-1.0f, 0.0f, 0.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Ray3D ray{{20.0f, 5.0f, 5.0f}, {-1.0f, 0.0f, 0.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayBox(ray, box, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRayBox(ray, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgRay3D ray{{12.5f, -5.0f, 5.0f}, {0.0f, 1.0f, 0.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Ray3D ray{{12.5f, -5.0f, 5.0f}, {0.0f, 1.0f, 0.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayBox(ray, box, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRayBox(ray, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
         }
 
         {
-            HgRay3D ray{{12.5f, 5.0f, -5.0f}, {0.0f, 0.0f, 1.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Ray3D ray{{12.5f, 5.0f, -5.0f}, {0.0f, 0.0f, 1.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayBox(ray, box, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRayBox(ray, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
         }
 
         {
-            HgRay3D ray{{0.0f, 20.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Ray3D ray{{0.0f, 20.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            hgAssert(!hgIntersectRayBox(ray, box, nullptr));
+            HG_ASSERT(!intersectRayBox(ray, box, nullptr));
         }
 
         {
-            HgRay3D ray{{12.5f, 5.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Ray3D ray{{12.5f, 5.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayBox(ray, box, &hit));
-            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRayBox(ray, box, &hit));
+            HG_ASSERT(std::abs(hit.dist) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgRay3D ray{{0.25f, 0.25f, -1.0f}, {0.0f, 0.0f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Ray3D ray{{0.25f, 0.25f, -1.0f}, {0.0f, 0.0f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayTri(ray, tri, &hit));
-            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRayTri(ray, tri, &hit));
+            HG_ASSERT(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
         }
 
         {
-            HgRay3D ray{{0.5f, 0.0f, -1.0f}, {0.0f, 0.0f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Ray3D ray{{0.5f, 0.0f, -1.0f}, {0.0f, 0.0f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayTri(ray, tri, &hit));
-            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectRayTri(ray, tri, &hit));
+            HG_ASSERT(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
         }
 
         {
-            HgRay3D ray{{0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Ray3D ray{{0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayTri(ray, tri, &hit));
-            hgAssert(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectRayTri(ray, tri, &hit));
+            HG_ASSERT(std::abs(hit.dist - 1.0f) <= FLT_EPSILON);
         }
 
         {
-            HgRay3D ray{{0.75f, 0.75f, -1.0f}, {0.0f, 0.0f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Ray3D ray{{0.75f, 0.75f, -1.0f}, {0.0f, 0.0f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            hgAssert(!hgIntersectRayTri(ray, tri, nullptr));
+            HG_ASSERT(!intersectRayTri(ray, tri, nullptr));
         }
 
         {
-            HgRay3D ray{{0.25f, 0.25f, 1.0f}, {0.0f, 0.0f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Ray3D ray{{0.25f, 0.25f, 1.0f}, {0.0f, 0.0f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            hgAssert(!hgIntersectRayTri(ray, tri, nullptr));
+            HG_ASSERT(!intersectRayTri(ray, tri, nullptr));
         }
 
         {
-            HgRay3D ray{{0.25f, 0.25f, -1.0f}, {1.0f, 0.0f, 0.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Ray3D ray{{0.25f, 0.25f, -1.0f}, {1.0f, 0.0f, 0.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            hgAssert(!hgIntersectRayTri(ray, tri, nullptr));
+            HG_ASSERT(!intersectRayTri(ray, tri, nullptr));
         }
 
         {
-            HgRay3D ray{{0.0f, 10.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Ray3D ray{{0.0f, 10.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayPlane(ray, plane, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, 1.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRayPlane(ray, plane, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, 1.0f, 0.0f}));
         }
 
         {
-            HgRay3D ray{{0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Ray3D ray{{0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayPlane(ray, plane, &hit));
-            hgAssert(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectRayPlane(ray, plane, &hit));
+            HG_ASSERT(std::abs(hit.dist - 5.0f) <= FLT_EPSILON);
         }
 
         {
-            HgRay3D ray{{0.0f, 10.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Ray3D ray{{0.0f, 10.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            hgAssert(!hgIntersectRayPlane(ray, plane, nullptr));
+            HG_ASSERT(!intersectRayPlane(ray, plane, nullptr));
         }
 
         {
-            HgRay3D ray{{0.0f, 2.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Ray3D ray{{0.0f, 2.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            hgAssert(!hgIntersectRayPlane(ray, plane, nullptr));
+            HG_ASSERT(!intersectRayPlane(ray, plane, nullptr));
         }
 
         {
-            HgRay3D ray{{1.0f, 5.0f, 2.0f}, {0.0f, 1.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Ray3D ray{{1.0f, 5.0f, 2.0f}, {0.0f, 1.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayPlane(ray, plane, &hit));
-            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectRayPlane(ray, plane, &hit));
+            HG_ASSERT(std::abs(hit.dist) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
         }
 
         {
-            HgRay3D ray{{0.0f, 10.0f, 0.0f}, {0.0f, -2.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Ray3D ray{{0.0f, 10.0f, 0.0f}, {0.0f, -2.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            HgHit3D hit;
-            hgAssert(hgIntersectRayPlane(ray, plane, &hit));
-            hgAssert(std::abs(hit.dist - 2.5f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectRayPlane(ray, plane, &hit));
+            HG_ASSERT(std::abs(hit.dist - 2.5f) <= FLT_EPSILON);
         }
     }
 
-    // HgLine3D
+    // Line3D
     {
         {
-            HgLine3D line{{0.0f, 0.0f, 0.0f}, {20.0f, 0.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Line3D line{{0.0f, 0.0f, 0.0f}, {20.0f, 0.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineSphere(line, sphere, &hit));
-            hgAssert(std::abs(hit.dist - 0.4f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLineSphere(line, sphere, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.4f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgLine3D line{{0.0f, 2.0f, 0.0f}, {20.0f, 2.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Line3D line{{0.0f, 2.0f, 0.0f}, {20.0f, 2.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineSphere(line, sphere, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectLineSphere(line, sphere, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
         }
 
         {
-            HgLine3D line{{0.0f, 3.0f, 0.0f}, {20.0f, 3.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Line3D line{{0.0f, 3.0f, 0.0f}, {20.0f, 3.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            hgAssert(!hgIntersectLineSphere(line, sphere, nullptr));
+            HG_ASSERT(!intersectLineSphere(line, sphere, nullptr));
         }
 
         {
-            HgLine3D line{{0.0f, 0.0f, 0.0f}, {5.0f, 0.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Line3D line{{0.0f, 0.0f, 0.0f}, {5.0f, 0.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            hgAssert(!hgIntersectLineSphere(line, sphere, nullptr));
+            HG_ASSERT(!intersectLineSphere(line, sphere, nullptr));
         }
 
         {
-            HgLine3D line{{10.0f, 0.0f, 0.0f}, {20.0f, 0.0f, 0.0f}};
-            HgSphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
+            Line3D line{{10.0f, 0.0f, 0.0f}, {20.0f, 0.0f, 0.0f}};
+            Sphere sphere{{10.0f, 0.0f, 0.0f}, 2.0f};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineSphere(line, sphere, &hit));
-            hgAssert(std::abs(hit.dist - 0.2f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectLineSphere(line, sphere, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.2f) <= FLT_EPSILON);
         }
 
         {
-            HgLine3D line{{0.0f, 5.0f, 5.0f}, {20.0f, 5.0f, 5.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Line3D line{{0.0f, 5.0f, 5.0f}, {20.0f, 5.0f, 5.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineBox(line, box, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLineBox(line, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {-1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgLine3D line{{20.0f, 5.0f, 5.0f}, {0.0f, 5.0f, 5.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Line3D line{{20.0f, 5.0f, 5.0f}, {0.0f, 5.0f, 5.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineBox(line, box, &hit));
-            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLineBox(line, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgLine3D line{{12.5f, -5.0f, 5.0f}, {12.5f, 15.0f, 5.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Line3D line{{12.5f, -5.0f, 5.0f}, {12.5f, 15.0f, 5.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineBox(line, box, &hit));
-            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLineBox(line, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
         }
 
         {
-            HgLine3D line{{12.5f, 5.0f, -5.0f}, {12.5f, 5.0f, 15.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Line3D line{{12.5f, 5.0f, -5.0f}, {12.5f, 5.0f, 15.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineBox(line, box, &hit));
-            hgAssert(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLineBox(line, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.25f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
         }
 
         {
-            HgLine3D line{{0.0f, 20.0f, 5.0f}, {20.0f, 20.0f, 5.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Line3D line{{0.0f, 20.0f, 5.0f}, {20.0f, 20.0f, 5.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            hgAssert(!hgIntersectLineBox(line, box, nullptr));
+            HG_ASSERT(!intersectLineBox(line, box, nullptr));
         }
 
         {
-            HgLine3D line{{12.5f, 5.0f, 5.0f}, {17.5f, 5.0f, 5.0f}};
-            HgBox box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Line3D line{{12.5f, 5.0f, 5.0f}, {17.5f, 5.0f, 5.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineBox(line, box, &hit));
-            hgAssert(std::abs(hit.dist - 0.5) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLineBox(line, box, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {1.0f, 0.0f, 0.0f}));
         }
 
         {
-            HgLine3D line{{0.25f, 0.25f, -1.0f}, {0.25f, 0.25f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Line3D line{{0.25f, 0.25f, -1.0f}, {0.25f, 0.25f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineTri(line, tri, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLineTri(line, tri, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, 0.0f, -1.0f}));
         }
 
         {
-            HgLine3D line{{0.5f, 0.0f, -1.0f}, {0.5f, 0.0f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Line3D line{{0.5f, 0.0f, -1.0f}, {0.5f, 0.0f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineTri(line, tri, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectLineTri(line, tri, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
         }
 
         {
-            HgLine3D line{{0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Line3D line{{0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineTri(line, tri, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            Hit3D hit;
+            HG_ASSERT(intersectLineTri(line, tri, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
         }
 
         {
-            HgLine3D line{{0.75f, 0.75f, -1.0f}, {0.75f, 0.75f, 1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Line3D line{{0.75f, 0.75f, -1.0f}, {0.75f, 0.75f, 1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            hgAssert(!hgIntersectLineTri(line, tri, nullptr));
+            HG_ASSERT(!intersectLineTri(line, tri, nullptr));
         }
 
         {
-            HgLine3D line{{0.25f, 0.25f, -1.0f}, {0.25f, 0.25f, -0.5f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Line3D line{{0.25f, 0.25f, -1.0f}, {0.25f, 0.25f, -0.5f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            hgAssert(!hgIntersectLineTri(line, tri, nullptr));
+            HG_ASSERT(!intersectLineTri(line, tri, nullptr));
         }
 
         {
-            HgLine3D line{{0.25f, 0.25f, 1.0f}, {0.25f, 0.25f, -1.0f}};
-            HgTri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+            Line3D line{{0.25f, 0.25f, 1.0f}, {0.25f, 0.25f, -1.0f}};
+            Tri tri{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLineTri(line, tri, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, 0.0f, 1.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLineTri(line, tri, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, 0.0f, 1.0f}));
         }
 
         {
-            HgLine3D line{{0.0f, 10.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Line3D line{{0.0f, 10.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLinePlane(line, plane, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, 1.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLinePlane(line, plane, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, 1.0f, 0.0f}));
         }
 
         {
-            HgLine3D line{{0.0f, 0.0f, 0.0f}, {0.0f, 10.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Line3D line{{0.0f, 0.0f, 0.0f}, {0.0f, 10.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLinePlane(line, plane, &hit));
-            hgAssert(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLinePlane(line, plane, &hit));
+            HG_ASSERT(std::abs(hit.dist - 0.5f) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
         }
 
         {
-            HgLine3D line{{0.0f, 10.0f, 0.0f}, {10.0f, 10.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Line3D line{{0.0f, 10.0f, 0.0f}, {10.0f, 10.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            hgAssert(!hgIntersectLinePlane(line, plane, nullptr));
+            HG_ASSERT(!intersectLinePlane(line, plane, nullptr));
         }
 
         {
-            HgLine3D line{{0.0f, 0.0f, 0.0f}, {0.0f, 4.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Line3D line{{0.0f, 0.0f, 0.0f}, {0.0f, 4.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            hgAssert(!hgIntersectLinePlane(line, plane, nullptr));
+            HG_ASSERT(!intersectLinePlane(line, plane, nullptr));
         }
 
         {
-            HgLine3D line{{1.0f, 5.0f, 2.0f}, {1.0f, 10.0f, 2.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Line3D line{{1.0f, 5.0f, 2.0f}, {1.0f, 10.0f, 2.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            HgHit3D hit;
-            hgAssert(hgIntersectLinePlane(line, plane, &hit));
-            hgAssert(std::abs(hit.dist) <= FLT_EPSILON);
-            hgAssert(hgVecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
+            Hit3D hit;
+            HG_ASSERT(intersectLinePlane(line, plane, &hit));
+            HG_ASSERT(std::abs(hit.dist) <= FLT_EPSILON);
+            HG_ASSERT(vecEq3(hit.normal, {0.0f, -1.0f, 0.0f}));
         }
 
         {
-            HgLine3D line{{0.0f, 10.0f, 0.0f}, {0.0f, 20.0f, 0.0f}};
-            HgPlane plane = hgPlaneFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+            Line3D line{{0.0f, 10.0f, 0.0f}, {0.0f, 20.0f, 0.0f}};
+            Plane plane = planeFromPoint({0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-            hgAssert(!hgIntersectLinePlane(line, plane, nullptr));
+            HG_ASSERT(!intersectLinePlane(line, plane, nullptr));
         }
     }
 
-    // HgAssetManager and HgBinary
+    // AssetManager and Binary
     {
         {
-            HgBinaryAsset* bin1 = hgAssetCreate<HgBinary>();
-            hgAssert(bin1 != nullptr);
-            hgAssert(bin1->path == "");
+            BinaryAsset* bin1 = assetCreate<Binary>();
+            HG_ASSERT(bin1 != nullptr);
+            HG_ASSERT(bin1->path == "");
 
-            HgBinaryAsset* bin2 = hgAssetCreate<HgBinary>();
-            hgAssert(bin2 != nullptr);
-            hgAssert(bin2->path == "");
-            hgAssert(bin2 != bin1);
+            BinaryAsset* bin2 = assetCreate<Binary>();
+            HG_ASSERT(bin2 != nullptr);
+            HG_ASSERT(bin2->path == "");
+            HG_ASSERT(bin2 != bin1);
 
-            hgAssetUnload(bin1);
-            hgAssetUnload(bin2);
+            assetUnload(bin1);
+            assetUnload(bin2);
         }
 
         {
-            HgBinaryAsset* bin = hgAssetLoad<HgBinary>("file_does_not_exist.bin");
-            hgAssert(bin->asset.data == nullptr);
-            hgAssert(bin->asset.size == 0);
-            hgAssetUnload(bin);
+            BinaryAsset* bin = assetLoad<Binary>("file_does_not_exist.bin");
+            HG_ASSERT(bin->asset.data == nullptr);
+            HG_ASSERT(bin->asset.size == 0);
+            assetUnload(bin);
         }
 
         u32 saveData[]{12, 42, 100, 128};
 
         {
-            HgBinary bin{saveData, sizeof(saveData)};
+            Binary bin{saveData, sizeof(saveData)};
 
-            hgBinaryStore(bin, "dir/does/not/exist.bin");
+            binaryStore(bin, "dir/does/not/exist.bin");
 
             FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
-            hgAssert(fileHandle == nullptr);
+            HG_ASSERT(fileHandle == nullptr);
         }
 
         {
-            HgBinary bin{saveData, sizeof(saveData)};
+            Binary bin{saveData, sizeof(saveData)};
 
-            HgString filePath = "hg_test_dir/file_bin_test.bin";
+            String filePath = "hg_test_dir/file_bin_test.bin";
 
-            hgBinaryStore(bin, filePath);
+            binaryStore(bin, filePath);
 
-            HgBinaryAsset* newBin = hgAssetLoad<HgBinary>(filePath);
+            BinaryAsset* newBin = assetLoad<Binary>(filePath);
 
-            hgAssert(newBin->asset.data != nullptr);
-            hgAssert(newBin->asset.data != saveData);
-            hgAssert(newBin->asset.size == sizeof(saveData));
-            hgAssert(hgMemEqual(saveData, newBin->asset.data, newBin->asset.size));
+            HG_ASSERT(newBin->asset.data != nullptr);
+            HG_ASSERT(newBin->asset.data != saveData);
+            HG_ASSERT(newBin->asset.size == sizeof(saveData));
+            HG_ASSERT(memEqual(saveData, newBin->asset.data, newBin->asset.size));
 
-            HgBinaryAsset* newBin2 = hgAssetLoad<HgBinary>(filePath);
-            hgAssert(newBin2 == newBin);
+            BinaryAsset* newBin2 = assetLoad<Binary>(filePath);
+            HG_ASSERT(newBin2 == newBin);
 
-            hgAssetUnload(newBin);
-            hgAssetUnload(newBin2);
+            assetUnload(newBin);
+            assetUnload(newBin2);
         }
     }
 
-    // HgImage
+    // Image
     {
         struct color {
             u8 r, g, b, a;
@@ -3625,106 +3625,106 @@ void hgTest()
             {blue, yellow},
         };
 
-        HgString path = "hg_test_dir/image_test.png";
+        String path = "hg_test_dir/image_test.png";
 
-        HgTextureData testImage{};
+        TextureData testImage{};
         testImage.width = 2;
         testImage.height = 2;
         testImage.depth = 1;
-        testImage.format = HgFormat_r8g8b8a8_srgb;
+        testImage.format = Format_r8g8b8a8_srgb;
         testImage.pixels = saveData;
 
         {
-            hgTextureStorePng(&testImage, path);
+            textureStorePng(&testImage, path);
 
-            HgTextureDataAsset* image = hgAssetLoad<HgTextureData>(path);
-            hgDefer(hgAssetUnload(image));
-            hgAssert(image->asset.width == testImage.width);
-            hgAssert(image->asset.height == testImage.height);
-            hgAssert(hgMemEqual(image->asset.pixels, saveData, sizeof(saveData)));
+            TextureDataAsset* image = assetLoad<TextureData>(path);
+            HG_DEFER(assetUnload(image));
+            HG_ASSERT(image->asset.width == testImage.width);
+            HG_ASSERT(image->asset.height == testImage.height);
+            HG_ASSERT(memEqual(image->asset.pixels, saveData, sizeof(saveData)));
         }
     }
 
-    // HgEcs basics
+    // Ecs basics
     {
-        HgEcs ecs = hgEcsCreate();
-        hgDefer(hgEcsDestroy(&ecs));
+        Ecs ecs = ecsCreate();
+        HG_DEFER(ecsDestroy(&ecs));
 
-        hgEcsRegisterType(&ecs, u32);
-        hgEcsRegisterType(&ecs, u64);
+        HG_ECS_REGISTER_TYPE(&ecs, u32);
+        HG_ECS_REGISTER_TYPE(&ecs, u64);
 
-        HgEntity e1 = hgEcsSpawn(&ecs);
-        HgEntity e2 = hgEcsSpawn(&ecs);
-        HgEntity e3 = {};
-        hgAssert(hgEcsAlive(&ecs, e1));
-        hgAssert(hgEcsAlive(&ecs, e2));
-        hgAssert(!hgEcsAlive(&ecs, e3));
+        Entity e1 = ecsSpawn(&ecs);
+        Entity e2 = ecsSpawn(&ecs);
+        Entity e3 = {};
+        HG_ASSERT(ecsAlive(&ecs, e1));
+        HG_ASSERT(ecsAlive(&ecs, e2));
+        HG_ASSERT(!ecsAlive(&ecs, e3));
 
-        hgEcsDespawn(&ecs, e1);
-        hgAssert(!hgEcsAlive(&ecs, e1));
-        e3 = hgEcsSpawn(&ecs);
-        hgAssert(hgEcsAlive(&ecs, e3));
-        hgAssert(hgHandleIdx(e3.handle) == hgHandleIdx(e1.handle) && e3.handle.id != e1.handle.id);
+        ecsDespawn(&ecs, e1);
+        HG_ASSERT(!ecsAlive(&ecs, e1));
+        e3 = ecsSpawn(&ecs);
+        HG_ASSERT(ecsAlive(&ecs, e3));
+        HG_ASSERT(handleIdx(e3.handle) == handleIdx(e1.handle) && e3.handle.id != e1.handle.id);
 
-        e1 = hgEcsSpawn(&ecs);
-        hgAssert(hgEcsAlive(&ecs, e1));
+        e1 = ecsSpawn(&ecs);
+        HG_ASSERT(ecsAlive(&ecs, e1));
 
         {
-            hgAssert(!hgEcsHas<u32>(&ecs, e1));
-            hgAssert(!hgEcsHas<u32>(&ecs, e2));
-            hgAssert(!hgEcsHas<u32>(&ecs, e3));
+            HG_ASSERT(!ecsHas<u32>(&ecs, e1));
+            HG_ASSERT(!ecsHas<u32>(&ecs, e2));
+            HG_ASSERT(!ecsHas<u32>(&ecs, e3));
 
-            *hgEcsAdd<u32>(&ecs, e1) = 1;
-            hgAssert(hgEcsHas<u32>(&ecs, e1) && *hgEcsGet<u32>(&ecs, e1) == 1);
-            hgAssert(!hgEcsHas<u32>(&ecs, e2));
-            hgAssert(!hgEcsHas<u32>(&ecs, e3));
-            *hgEcsAdd<u32>(&ecs, e2) = 2;
-            hgAssert(hgEcsHas<u32>(&ecs, e1) && *hgEcsGet<u32>(&ecs, e1) == 1);
-            hgAssert(hgEcsHas<u32>(&ecs, e2) && *hgEcsGet<u32>(&ecs, e2) == 2);
-            hgAssert(!hgEcsHas<u32>(&ecs, e3));
-            *hgEcsAdd<u32>(&ecs, e3) = 3;
-            hgAssert(hgEcsHas<u32>(&ecs, e1) && *hgEcsGet<u32>(&ecs, e1) == 1);
-            hgAssert(hgEcsHas<u32>(&ecs, e2) && *hgEcsGet<u32>(&ecs, e2) == 2);
-            hgAssert(hgEcsHas<u32>(&ecs, e3) && *hgEcsGet<u32>(&ecs, e3) == 3);
+            *ecsAdd<u32>(&ecs, e1) = 1;
+            HG_ASSERT(ecsHas<u32>(&ecs, e1) && *ecsGet<u32>(&ecs, e1) == 1);
+            HG_ASSERT(!ecsHas<u32>(&ecs, e2));
+            HG_ASSERT(!ecsHas<u32>(&ecs, e3));
+            *ecsAdd<u32>(&ecs, e2) = 2;
+            HG_ASSERT(ecsHas<u32>(&ecs, e1) && *ecsGet<u32>(&ecs, e1) == 1);
+            HG_ASSERT(ecsHas<u32>(&ecs, e2) && *ecsGet<u32>(&ecs, e2) == 2);
+            HG_ASSERT(!ecsHas<u32>(&ecs, e3));
+            *ecsAdd<u32>(&ecs, e3) = 3;
+            HG_ASSERT(ecsHas<u32>(&ecs, e1) && *ecsGet<u32>(&ecs, e1) == 1);
+            HG_ASSERT(ecsHas<u32>(&ecs, e2) && *ecsGet<u32>(&ecs, e2) == 2);
+            HG_ASSERT(ecsHas<u32>(&ecs, e3) && *ecsGet<u32>(&ecs, e3) == 3);
 
-            hgEcsRemove<u32>(&ecs, e1);
-            hgAssert(!hgEcsHas<u32>(&ecs, e1));
-            hgAssert(hgEcsHas<u32>(&ecs, e2) && *hgEcsGet<u32>(&ecs, e2) == 2);
-            hgAssert(hgEcsHas<u32>(&ecs, e3) && *hgEcsGet<u32>(&ecs, e3) == 3);
-            hgEcsRemove<u32>(&ecs, e2);
-            hgAssert(!hgEcsHas<u32>(&ecs, e1));
-            hgAssert(!hgEcsHas<u32>(&ecs, e2));
-            hgAssert(hgEcsHas<u32>(&ecs, e3) && *hgEcsGet<u32>(&ecs, e3) == 3);
-            hgEcsRemove<u32>(&ecs, e3);
-            hgAssert(!hgEcsHas<u32>(&ecs, e1));
-            hgAssert(!hgEcsHas<u32>(&ecs, e2));
-            hgAssert(!hgEcsHas<u32>(&ecs, e3));
+            ecsRemove<u32>(&ecs, e1);
+            HG_ASSERT(!ecsHas<u32>(&ecs, e1));
+            HG_ASSERT(ecsHas<u32>(&ecs, e2) && *ecsGet<u32>(&ecs, e2) == 2);
+            HG_ASSERT(ecsHas<u32>(&ecs, e3) && *ecsGet<u32>(&ecs, e3) == 3);
+            ecsRemove<u32>(&ecs, e2);
+            HG_ASSERT(!ecsHas<u32>(&ecs, e1));
+            HG_ASSERT(!ecsHas<u32>(&ecs, e2));
+            HG_ASSERT(ecsHas<u32>(&ecs, e3) && *ecsGet<u32>(&ecs, e3) == 3);
+            ecsRemove<u32>(&ecs, e3);
+            HG_ASSERT(!ecsHas<u32>(&ecs, e1));
+            HG_ASSERT(!ecsHas<u32>(&ecs, e2));
+            HG_ASSERT(!ecsHas<u32>(&ecs, e3));
         }
 
         {
             bool hasUnknown = false;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32*)
+            ecsForEach<u32>(&ecs, [&](Entity, u32*)
             {
                 hasUnknown = true;
             });
-            hgAssert(!hasUnknown);
+            HG_ASSERT(!hasUnknown);
 
-            hgAssert(hgEcsCount<u32>(&ecs) == 0);
-            hgAssert(hgEcsCount<u64>(&ecs) == 0);
+            HG_ASSERT(ecsCount<u32>(&ecs) == 0);
+            HG_ASSERT(ecsCount<u64>(&ecs) == 0);
         }
 
         {
-            *hgEcsAdd<u32>(&ecs, e1) = 12;
-            *hgEcsAdd<u32>(&ecs, e2) = 42;
-            *hgEcsAdd<u32>(&ecs, e3) = 100;
-            hgAssert(hgEcsCount<u32>(&ecs) == 3);
-            hgAssert(hgEcsCount<u64>(&ecs) == 0);
+            *ecsAdd<u32>(&ecs, e1) = 12;
+            *ecsAdd<u32>(&ecs, e2) = 42;
+            *ecsAdd<u32>(&ecs, e3) = 100;
+            HG_ASSERT(ecsCount<u32>(&ecs) == 3);
+            HG_ASSERT(ecsCount<u64>(&ecs) == 0);
 
             bool hasUnknown = false;
             bool has12 = false;
             bool has42 = false;
             bool has100 = false;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity e, u32* c)
+            ecsForEach<u32>(&ecs, [&](Entity e, u32* c)
             {
                 switch (*c)
                 {
@@ -3742,17 +3742,17 @@ void hgTest()
                         break;
                 }
             });
-            hgAssert(has12);
-            hgAssert(has42);
-            hgAssert(has100);
-            hgAssert(!hasUnknown);
+            HG_ASSERT(has12);
+            HG_ASSERT(has42);
+            HG_ASSERT(has100);
+            HG_ASSERT(!hasUnknown);
         }
 
         {
-            *hgEcsAdd<u64>(&ecs, e2) = 2042;
-            *hgEcsAdd<u64>(&ecs, e3) = 2100;
-            hgAssert(hgEcsCount<u32>(&ecs) == 3);
-            hgAssert(hgEcsCount<u64>(&ecs) == 2);
+            *ecsAdd<u64>(&ecs, e2) = 2042;
+            *ecsAdd<u64>(&ecs, e3) = 2100;
+            HG_ASSERT(ecsCount<u32>(&ecs) == 3);
+            HG_ASSERT(ecsCount<u64>(&ecs) == 2);
 
             bool hasUnknown = false;
             bool has12 = false;
@@ -3760,7 +3760,7 @@ void hgTest()
             bool has100 = false;
             bool has2042 = false;
             bool has2100 = false;
-            hgEcsForEach<u32, u64>(&ecs, [&](HgEntity e, u32* comp32, u64* comp64)
+            ecsForEach<u32, u64>(&ecs, [&](Entity e, u32* comp32, u64* comp64)
             {
                 switch (*comp32)
                 {
@@ -3790,24 +3790,24 @@ void hgTest()
                         break;
                 }
             });
-            hgAssert(!has12);
-            hgAssert(has42);
-            hgAssert(has100);
-            hgAssert(has2042);
-            hgAssert(has2100);
-            hgAssert(!hasUnknown);
+            HG_ASSERT(!has12);
+            HG_ASSERT(has42);
+            HG_ASSERT(has100);
+            HG_ASSERT(has2042);
+            HG_ASSERT(has2100);
+            HG_ASSERT(!hasUnknown);
         }
 
         {
-            hgEcsDespawn(&ecs, e1);
-            hgAssert(hgEcsCount<u32>(&ecs) == 2);
-            hgAssert(hgEcsCount<u64>(&ecs) == 2);
+            ecsDespawn(&ecs, e1);
+            HG_ASSERT(ecsCount<u32>(&ecs) == 2);
+            HG_ASSERT(ecsCount<u64>(&ecs) == 2);
 
             bool hasUnknown = false;
             bool has12 = false;
             bool has42 = false;
             bool has100 = false;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity e, u32* c)
+            ecsForEach<u32>(&ecs, [&](Entity e, u32* c)
             {
                 switch (*c)
                 {
@@ -3825,79 +3825,79 @@ void hgTest()
                         break;
                 }
             });
-            hgAssert(!has12);
-            hgAssert(has42);
-            hgAssert(has100);
-            hgAssert(!hasUnknown);
+            HG_ASSERT(!has12);
+            HG_ASSERT(has42);
+            HG_ASSERT(has100);
+            HG_ASSERT(!hasUnknown);
         }
 
         {
-            hgEcsDespawn(&ecs, e2);
-            hgAssert(hgEcsCount<u32>(&ecs) == 1);
-            hgAssert(hgEcsCount<u64>(&ecs) == 1);
+            ecsDespawn(&ecs, e2);
+            HG_ASSERT(ecsCount<u32>(&ecs) == 1);
+            HG_ASSERT(ecsCount<u64>(&ecs) == 1);
         }
     }
 
     // Ecs concurrency
     {
-        HgEcs ecs = hgEcsCreate();
-        hgDefer(hgEcsDestroy(&ecs));
+        Ecs ecs = ecsCreate();
+        HG_DEFER(ecsDestroy(&ecs));
 
-        hgEcsRegisterType(&ecs, u32);
-        hgEcsRegisterType(&ecs, u64);
+        HG_ECS_REGISTER_TYPE(&ecs, u32);
+        HG_ECS_REGISTER_TYPE(&ecs, u64);
 
         {
             for (u32 i = 0; i < 4; ++i)
             {
-                HgEntity e = hgEcsSpawn(&ecs);
+                Entity e = ecsSpawn(&ecs);
                 switch (i % 3)
                 {
                     case 0:
-                        *hgEcsAdd<u32>(&ecs, e) = 12;
-                        *hgEcsAdd<u64>(&ecs, e) = 42;
+                        *ecsAdd<u32>(&ecs, e) = 12;
+                        *ecsAdd<u64>(&ecs, e) = 42;
                         break;
                     case 1:
-                        *hgEcsAdd<u32>(&ecs, e) = 12;
+                        *ecsAdd<u32>(&ecs, e) = 12;
                         break;
                     case 2:
-                        *hgEcsAdd<u64>(&ecs, e) = 42;
+                        *ecsAdd<u64>(&ecs, e) = 42;
                         break;
                 }
             }
 
             bool success;
-            hgEcsForPar<u32>(&ecs, [&](HgEntity, u32* c)
+            ecsForPar<u32>(&ecs, [&](Entity, u32* c)
             {
                 *c += 4;
             });
             success = true;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
+            ecsForEach<u32>(&ecs, [&](Entity, u32* c)
             {
                 if (*c != 16)
                     success = false;
             });
-            hgAssert(success);
+            HG_ASSERT(success);
 
-            hgEcsForPar<u64>(&ecs, [&](HgEntity, u64* c)
+            ecsForPar<u64>(&ecs, [&](Entity, u64* c)
             {
                 *c += 3;
             });
             success = true;
-            hgEcsForEach<u64>(&ecs, [&](HgEntity, u64* c)
+            ecsForEach<u64>(&ecs, [&](Entity, u64* c)
             {
                 if (*c != 45)
                     success = false;
             });
-            hgAssert(success);
+            HG_ASSERT(success);
 
-            hgEcsForPar<u32, u64>(&ecs, [&](HgEntity, u32* c32, u64* c64)
+            ecsForPar<u32, u64>(&ecs, [&](Entity, u32* c32, u64* c64)
             {
                 *c64 -= *c32;
             });
             success = true;
-            hgEcsForEach<u64>(&ecs, [&](HgEntity e, u64* c)
+            ecsForEach<u64>(&ecs, [&](Entity e, u64* c)
             {
-                if (hgEcsHas<u32>(&ecs, e))
+                if (ecsHas<u32>(&ecs, e))
                 {
                     if (*c != 29)
                         success = false;
@@ -3906,330 +3906,330 @@ void hgTest()
                         success = false;
                 }
             });
-            hgAssert(success);
+            HG_ASSERT(success);
         }
     }
 
     // Ecs sort
     {
-        HgEcs ecs = hgEcsCreate();
-        hgDefer(hgEcsDestroy(&ecs));
+        Ecs ecs = ecsCreate();
+        HG_DEFER(ecsDestroy(&ecs));
 
-        hgEcsRegisterType(&ecs, u32);
-        hgEcsRegisterType(&ecs, u64);
+        HG_ECS_REGISTER_TYPE(&ecs, u32);
+        HG_ECS_REGISTER_TYPE(&ecs, u64);
 
-        auto comparison = [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs)
+        auto comparison = [](void*, Ecs* ecs, Entity lhs, Entity rhs)
         {
-            return *hgEcsGet<u32>(ecs, lhs) < *hgEcsGet<u32>(ecs, rhs);
+            return *ecsGet<u32>(ecs, lhs) < *ecsGet<u32>(ecs, rhs);
         };
 
         {
-            *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = 42;
+            *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = 42;
 
-            hgEcsSort<u32>(&ecs, nullptr, comparison);
+            ecsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
+            ecsForEach<u32>(&ecs, [&](Entity, u32* c)
             {
                 if (*c != 42)
                     success = false;
             });
-            hgAssert(success);
+            HG_ASSERT(success);
 
-            hgEcsReset(&ecs);
+            ecsReset(&ecs);
         }
 
         {
             u32 smallScramble1[]{1, 0};
-            for (u32 i = 0; i < hgArrayCount(smallScramble1); ++i)
+            for (u32 i = 0; i < arrayCount(smallScramble1); ++i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = smallScramble1[i];
+                *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = smallScramble1[i];
             }
 
             {
-                hgEcsSort<u32>(&ecs, nullptr, comparison);
+                ecsSort<u32>(&ecs, nullptr, comparison);
 
                 bool success = true;
                 u32 elem = 0;
-                hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
+                ecsForEach<u32>(&ecs, [&](Entity, u32* c)
                 {
                     if (*c != elem)
                         success = false;
                     ++elem;
                 });
-                hgAssert(success);
+                HG_ASSERT(success);
             }
 
             {
-                hgEcsSort<u32>(&ecs, nullptr, comparison);
+                ecsSort<u32>(&ecs, nullptr, comparison);
 
                 bool success = true;
                 u32 elem = 0;
-                hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
+                ecsForEach<u32>(&ecs, [&](Entity, u32* c)
                 {
                     if (*c != elem)
                         success = false;
                     ++elem;
                 });
-                hgAssert(success);
+                HG_ASSERT(success);
             }
 
-            hgEcsReset(&ecs);
+            ecsReset(&ecs);
         }
 
         {
             u32 mediumScramble1[]{8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
-            for (u32 i = 0; i < hgArrayCount(mediumScramble1); ++i)
+            for (u32 i = 0; i < arrayCount(mediumScramble1); ++i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = mediumScramble1[i];
+                *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = mediumScramble1[i];
             }
-            hgEcsSort<u32>(&ecs, nullptr, comparison);
+            ecsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
+            ecsForEach<u32>(&ecs, [&](Entity, u32* c)
             {
                 if (*c != elem)
                     success = false;
                 ++elem;
             });
-            hgAssert(success);
+            HG_ASSERT(success);
 
-            hgEcsReset(&ecs);
+            ecsReset(&ecs);
         }
 
         {
             u32 mediumScramble2[]{3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
-            for (u32 i = 0; i < hgArrayCount(mediumScramble2); ++i)
+            for (u32 i = 0; i < arrayCount(mediumScramble2); ++i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = mediumScramble2[i];
+                *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = mediumScramble2[i];
             }
-            hgEcsSort<u32>(&ecs, nullptr, comparison);
-            hgEcsSort<u32>(&ecs, nullptr, comparison);
+            ecsSort<u32>(&ecs, nullptr, comparison);
+            ecsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
+            ecsForEach<u32>(&ecs, [&](Entity, u32* c)
             {
                 if (*c != elem)
                     success = false;
                 ++elem;
             });
-            hgAssert(success);
+            HG_ASSERT(success);
 
-            hgEcsReset(&ecs);
+            ecsReset(&ecs);
         }
 
         {
             for (u32 i = 127; i < 128; --i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = i;
+                *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = i;
             }
-            hgEcsSort<u32>(&ecs, nullptr, comparison);
+            ecsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
+            ecsForEach<u32>(&ecs, [&](Entity, u32* c)
             {
                 if (*c != elem)
                     success = false;
                 ++elem;
             });
-            hgAssert(success);
+            HG_ASSERT(success);
 
-            hgEcsReset(&ecs);
+            ecsReset(&ecs);
         }
 
         {
             for (u32 i = 127; i < 128; --i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = i / 2;
+                *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = i / 2;
             }
-            hgEcsSort<u32>(&ecs, nullptr, comparison);
-            hgEcsSort<u32>(&ecs, nullptr, comparison);
+            ecsSort<u32>(&ecs, nullptr, comparison);
+            ecsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
+            ecsForEach<u32>(&ecs, [&](Entity, u32* c)
             {
                 if (*c != elem / 2)
                     success = false;
                 ++elem;
             });
-            hgAssert(success);
+            HG_ASSERT(success);
 
-            hgEcsReset(&ecs);
+            ecsReset(&ecs);
         }
     }
 
-    // HgEcs serialization
+    // Ecs serialization
     {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
+        Arena* arena = scratch();
+        HG_ARENA_SCOPE(arena);
 
-        HgSerialNode* scene{};
+        SerialNode* scene{};
 
         {
-            HgEcs ecs = hgEcsCreate();
-            hgDefer(hgEcsDestroy(&ecs));
+            Ecs ecs = ecsCreate();
+            HG_DEFER(ecsDestroy(&ecs));
 
-            hgEcsRegisterType(&ecs, HgNode);
-            hgEcsRegisterType(&ecs, u32);
+            HG_ECS_REGISTER_TYPE(&ecs, Node);
+            HG_ECS_REGISTER_TYPE(&ecs, u32);
 
-            HgEntity root = hgEcsSpawn(&ecs);
-            HgEntity a = hgEcsSpawn(&ecs);
-            HgEntity b = hgEcsSpawn(&ecs);
+            Entity root = ecsSpawn(&ecs);
+            Entity a = ecsSpawn(&ecs);
+            Entity b = ecsSpawn(&ecs);
 
-            hgNodeAdd(&ecs, root);
-            hgNodeAdd(&ecs, a);
-            hgNodeAdd(&ecs, b);
+            nodeAdd(&ecs, root);
+            nodeAdd(&ecs, a);
+            nodeAdd(&ecs, b);
 
-            *hgEcsAdd<u32>(&ecs, a) = 12;
-            *hgEcsAdd<u32>(&ecs, b) = 42;
+            *ecsAdd<u32>(&ecs, a) = 12;
+            *ecsAdd<u32>(&ecs, b) = 42;
 
-            hgNodeAddChild(&ecs, root, b);
-            hgNodeAddChild(&ecs, root, a);
+            nodeAddChild(&ecs, root, b);
+            nodeAddChild(&ecs, root, a);
 
-            HgSerializer s = hgSerialWriter(arena);
-            hgSerialize(&s, &ecs);
+            Serializer s = serialWriter(arena);
+            serialize(&s, &ecs);
             scene = s.current;
         }
 
         {
-            HgEcs ecs = hgEcsCreate();
-            hgDefer(hgEcsDestroy(&ecs));
+            Ecs ecs = ecsCreate();
+            HG_DEFER(ecsDestroy(&ecs));
 
-            hgEcsRegisterType(&ecs, HgNode);
-            hgEcsRegisterType(&ecs, u32);
+            HG_ECS_REGISTER_TYPE(&ecs, Node);
+            HG_ECS_REGISTER_TYPE(&ecs, u32);
 
-            HgSerializer s = hgSerialReader(arena, scene);
-            hgSerialize(&s, &ecs);
+            Serializer s = serialReader(arena, scene);
+            serialize(&s, &ecs);
 
-            HgEntity root = hgEcsEntities<HgNode>(&ecs)[0];
+            Entity root = ecsEntities<Node>(&ecs)[0];
 
-            hgAssert(hgEcsHas<HgNode>(&ecs, root));
-            HgNode* rootNode = hgEcsGet<HgNode>(&ecs, root);
-            hgAssert(rootNode->parent.handle == hgHandleNull);
-            hgAssert(rootNode->nextSibling.handle == hgHandleNull);
-            hgAssert(rootNode->prevSibling.handle == hgHandleNull);
-            hgAssert(rootNode->firstChild.handle != hgHandleNull);
+            HG_ASSERT(ecsHas<Node>(&ecs, root));
+            Node* rootNode = ecsGet<Node>(&ecs, root);
+            HG_ASSERT(rootNode->parent.handle == handleNull);
+            HG_ASSERT(rootNode->nextSibling.handle == handleNull);
+            HG_ASSERT(rootNode->prevSibling.handle == handleNull);
+            HG_ASSERT(rootNode->firstChild.handle != handleNull);
 
-            HgEntity a = rootNode->firstChild;
-            hgAssert(a.handle != hgHandleNull);
+            Entity a = rootNode->firstChild;
+            HG_ASSERT(a.handle != handleNull);
 
-            hgAssert(hgEcsHas<HgNode>(&ecs, a));
-            HgNode* aNode = hgEcsGet<HgNode>(&ecs, a);
-            hgAssert(aNode->parent == root);
-            hgAssert(aNode->prevSibling.handle == hgHandleNull);
-            hgAssert(aNode->nextSibling.handle != hgHandleNull);
-            hgAssert(aNode->firstChild.handle == hgHandleNull);
+            HG_ASSERT(ecsHas<Node>(&ecs, a));
+            Node* aNode = ecsGet<Node>(&ecs, a);
+            HG_ASSERT(aNode->parent == root);
+            HG_ASSERT(aNode->prevSibling.handle == handleNull);
+            HG_ASSERT(aNode->nextSibling.handle != handleNull);
+            HG_ASSERT(aNode->firstChild.handle == handleNull);
 
-            HgEntity b = aNode->nextSibling;
-            hgAssert(b.handle != hgHandleNull);
+            Entity b = aNode->nextSibling;
+            HG_ASSERT(b.handle != handleNull);
 
-            hgAssert(hgEcsHas<HgNode>(&ecs, b));
-            HgNode* bNode = hgEcsGet<HgNode>(&ecs, b);
-            hgAssert(bNode->parent == root);
-            hgAssert(bNode->prevSibling == a);
-            hgAssert(bNode->nextSibling.handle == hgHandleNull);
-            hgAssert(bNode->firstChild.handle == hgHandleNull);
+            HG_ASSERT(ecsHas<Node>(&ecs, b));
+            Node* bNode = ecsGet<Node>(&ecs, b);
+            HG_ASSERT(bNode->parent == root);
+            HG_ASSERT(bNode->prevSibling == a);
+            HG_ASSERT(bNode->nextSibling.handle == handleNull);
+            HG_ASSERT(bNode->firstChild.handle == handleNull);
 
-            hgAssert(hgEcsHas<u32>(&ecs, a));
-            hgAssert(*hgEcsGet<u32>(&ecs, a) == 12);
+            HG_ASSERT(ecsHas<u32>(&ecs, a));
+            HG_ASSERT(*ecsGet<u32>(&ecs, a) == 12);
 
-            hgAssert(hgEcsHas<u32>(&ecs, b));
-            hgAssert(*hgEcsGet<u32>(&ecs, b) == 42);
+            HG_ASSERT(ecsHas<u32>(&ecs, b));
+            HG_ASSERT(*ecsGet<u32>(&ecs, b) == 42);
         }
     }
 
-    // HgNode
+    // Node
     {
-        HgEcs ecs = hgEcsCreate();
-        hgDefer(hgEcsDestroy(&ecs));
+        Ecs ecs = ecsCreate();
+        HG_DEFER(ecsDestroy(&ecs));
 
-        hgEcsRegisterType(&ecs, HgNode);
+        HG_ECS_REGISTER_TYPE(&ecs, Node);
 
         {
-            HgEntity a = hgEcsSpawn(&ecs);
-            HgEntity b = hgEcsSpawn(&ecs);
-            HgEntity aa = hgEcsSpawn(&ecs);
-            HgEntity ab = hgEcsSpawn(&ecs);
+            Entity a = ecsSpawn(&ecs);
+            Entity b = ecsSpawn(&ecs);
+            Entity aa = ecsSpawn(&ecs);
+            Entity ab = ecsSpawn(&ecs);
 
-            *hgNodeAdd(&ecs, a) = {};
-            *hgNodeAdd(&ecs, b) = {};
-            *hgNodeAdd(&ecs, aa) = {};
-            *hgNodeAdd(&ecs, ab) = {};
+            *nodeAdd(&ecs, a) = {};
+            *nodeAdd(&ecs, b) = {};
+            *nodeAdd(&ecs, aa) = {};
+            *nodeAdd(&ecs, ab) = {};
 
-            hgNodeAddChild(&ecs, a, aa);
-            hgNodeAddChild(&ecs, a, ab);
+            nodeAddChild(&ecs, a, aa);
+            nodeAddChild(&ecs, a, ab);
 
-            hgAssert(hgEcsAlive(&ecs, a));
-            hgAssert(hgEcsAlive(&ecs, b));
-            hgAssert(hgEcsAlive(&ecs, aa));
-            hgAssert(hgEcsAlive(&ecs, ab));
+            HG_ASSERT(ecsAlive(&ecs, a));
+            HG_ASSERT(ecsAlive(&ecs, b));
+            HG_ASSERT(ecsAlive(&ecs, aa));
+            HG_ASSERT(ecsAlive(&ecs, ab));
 
-            hgNodeDestroy(&ecs, a);
+            nodeDestroy(&ecs, a);
 
-            hgAssert(!hgEcsAlive(&ecs, a));
-            hgAssert(hgEcsAlive(&ecs, b));
-            hgAssert(!hgEcsAlive(&ecs, aa));
-            hgAssert(!hgEcsAlive(&ecs, ab));
+            HG_ASSERT(!ecsAlive(&ecs, a));
+            HG_ASSERT(ecsAlive(&ecs, b));
+            HG_ASSERT(!ecsAlive(&ecs, aa));
+            HG_ASSERT(!ecsAlive(&ecs, ab));
 
-            hgEcsDespawn(&ecs, b);
+            ecsDespawn(&ecs, b);
         }
 
         {
-            HgEntity a = hgEcsSpawn(&ecs);
-            HgEntity b = hgEcsSpawn(&ecs);
-            HgEntity aa = hgEcsSpawn(&ecs);
-            HgEntity ab = hgEcsSpawn(&ecs);
-            HgEntity aba = hgEcsSpawn(&ecs);
-            HgEntity abb = hgEcsSpawn(&ecs);
+            Entity a = ecsSpawn(&ecs);
+            Entity b = ecsSpawn(&ecs);
+            Entity aa = ecsSpawn(&ecs);
+            Entity ab = ecsSpawn(&ecs);
+            Entity aba = ecsSpawn(&ecs);
+            Entity abb = ecsSpawn(&ecs);
 
-            *hgNodeAdd(&ecs, a) = {};
-            *hgNodeAdd(&ecs, b) = {};
-            *hgNodeAdd(&ecs, aa) = {};
-            *hgNodeAdd(&ecs, ab) = {};
-            *hgNodeAdd(&ecs, aba) = {};
-            *hgNodeAdd(&ecs, abb) = {};
+            *nodeAdd(&ecs, a) = {};
+            *nodeAdd(&ecs, b) = {};
+            *nodeAdd(&ecs, aa) = {};
+            *nodeAdd(&ecs, ab) = {};
+            *nodeAdd(&ecs, aba) = {};
+            *nodeAdd(&ecs, abb) = {};
 
-            hgNodeAddChild(&ecs, ab, aba);
-            hgNodeAddChild(&ecs, ab, abb);
-            hgNodeAddChild(&ecs, a, aa);
-            hgNodeAddChild(&ecs, a, ab);
+            nodeAddChild(&ecs, ab, aba);
+            nodeAddChild(&ecs, ab, abb);
+            nodeAddChild(&ecs, a, aa);
+            nodeAddChild(&ecs, a, ab);
 
-            hgAssert(hgEcsAlive(&ecs, a));
-            hgAssert(hgEcsAlive(&ecs, b));
-            hgAssert(hgEcsAlive(&ecs, aa));
-            hgAssert(hgEcsAlive(&ecs, ab));
-            hgAssert(hgEcsAlive(&ecs, aba));
-            hgAssert(hgEcsAlive(&ecs, abb));
+            HG_ASSERT(ecsAlive(&ecs, a));
+            HG_ASSERT(ecsAlive(&ecs, b));
+            HG_ASSERT(ecsAlive(&ecs, aa));
+            HG_ASSERT(ecsAlive(&ecs, ab));
+            HG_ASSERT(ecsAlive(&ecs, aba));
+            HG_ASSERT(ecsAlive(&ecs, abb));
 
-            hgNodeDestroy(&ecs, ab);
+            nodeDestroy(&ecs, ab);
 
-            hgAssert(hgEcsAlive(&ecs, a));
-            hgAssert(hgEcsAlive(&ecs, b));
-            hgAssert(hgEcsAlive(&ecs, aa));
-            hgAssert(!hgEcsAlive(&ecs, ab));
-            hgAssert(!hgEcsAlive(&ecs, aba));
-            hgAssert(!hgEcsAlive(&ecs, abb));
+            HG_ASSERT(ecsAlive(&ecs, a));
+            HG_ASSERT(ecsAlive(&ecs, b));
+            HG_ASSERT(ecsAlive(&ecs, aa));
+            HG_ASSERT(!ecsAlive(&ecs, ab));
+            HG_ASSERT(!ecsAlive(&ecs, aba));
+            HG_ASSERT(!ecsAlive(&ecs, abb));
 
-            hgNodeDestroy(&ecs, a);
+            nodeDestroy(&ecs, a);
 
-            hgAssert(!hgEcsAlive(&ecs, a));
-            hgAssert(hgEcsAlive(&ecs, b));
-            hgAssert(!hgEcsAlive(&ecs, aa));
-            hgAssert(!hgEcsAlive(&ecs, ab));
-            hgAssert(!hgEcsAlive(&ecs, aba));
-            hgAssert(!hgEcsAlive(&ecs, abb));
+            HG_ASSERT(!ecsAlive(&ecs, a));
+            HG_ASSERT(ecsAlive(&ecs, b));
+            HG_ASSERT(!ecsAlive(&ecs, aa));
+            HG_ASSERT(!ecsAlive(&ecs, ab));
+            HG_ASSERT(!ecsAlive(&ecs, aba));
+            HG_ASSERT(!ecsAlive(&ecs, abb));
 
-            hgEcsDespawn(&ecs, b);
+            ecsDespawn(&ecs, b);
         }
     }
 
-    hgWarn("HgMesh test : TODO\n");
+    HG_WARN("Mesh test : TODO\n");
 
-    printf("HurdyGurdy: Tests Complete in %fms\n", hgClockTick(&timer) * 1000.0f);
+    printf("HurdyGurdy: Tests Complete in %fms\n", clockTick(&timer) * 1000.0f);
 }
 
 } // namespace hg

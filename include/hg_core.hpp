@@ -153,40 +153,40 @@ typedef double f64;
 /**
  * A block of binary data
  */
-struct HgBinary;
+struct Binary;
 
 /**
  * A view into a string
  */
-struct HgString;
+struct String;
 
 /**
  * Get this thread's most recent error message
  */
-HgString hgErrorGet();
+String errorGet();
 
 /**
  * Set this thread's current error message
  */
-void hgErrorSet(HgString error);
+void errorSet(String error);
 
 /**
  * Format and set this thread's current error message
  */
-void hgErrorFormat(HgString errorFmt, ...);
+void errorFormat(String errorFmt, ...);
 
-#define hgMacroConcatInternal(x, y) x##y
+#define HG_MACRO_CONCAT_INTERNAL(x, y) x##y
 
 /**
  * Concatenate two macros
  */
-#define hgMacroConcat(x, y) hgMacroConcatInternal(x, y)
+#define HG_MACRO_CONCAT(x, y) HG_MACRO_CONCAT_INTERNAL(x, y)
 
 /**
  * A template to defer code execution until end of scope
  */
 template<typename F>
-struct HgDefer {
+struct Defer {
     /**
      * The function to execute
      */
@@ -195,12 +195,12 @@ struct HgDefer {
     /**
      * Prepare the function to defer
      */
-    HgDefer(F fnVal) : fn(fnVal) {}
+    Defer(F fnVal) : fn(fnVal) {}
 
     /**
      * Execute the function
      */
-    ~HgDefer()
+    ~Defer()
     {
         fn();
     }
@@ -209,44 +209,44 @@ struct HgDefer {
 /**
  * Defers a piece of code until the end of the scope
  */
-#define hgDefer(...) [[maybe_unused]] HgDefer hgMacroConcat(hgDefer_, __LINE__){[&]{ __VA_ARGS__ ;}};
+#define HG_DEFER(...) [[maybe_unused]] Defer HG_MACRO_CONCAT(defer_, __LINE__){[&]{ __VA_ARGS__ ;}};
 
 /**
  * Format and print a string to stdout
  */
-void hgPrintStdout(HgString str);
+void printStdout(String str);
 
 /**
  * Format and print a string to stderr
  */
-void hgPrintStderr(HgString str);
+void printStderr(String str);
 
 /**
  * Formats and logs a message to stderr for debugging purposes
  */
-void hgLogInternal(HgString format, ...);
+void logInternal(String format, ...);
 
 /**
  * Formats and logs a message to stderr as a warning
  */
-void hgWarnInternal(HgString format, ...);
+void warnInternal(String format, ...);
 
 /**
  * Formats and logs a message to stderr and aborts the program
  */
-[[noreturn]] void hgPanicInternal(HgString format, ...);
+[[noreturn]] void panicInternal(String format, ...);
 
 #ifdef HG_LOGGING
 
-#define hgLog(...) do { hgLogInternal(__VA_ARGS__); } while(0)
-#define hgWarn(...) do { hgWarnInternal(__VA_ARGS__); } while(0)
-#define hgPanic(...) do { hgPanicInternal(__VA_ARGS__); } while(0)
+#define HG_LOG(...) do { logInternal(__VA_ARGS__); } while(0)
+#define HG_WARN(...) do { warnInternal(__VA_ARGS__); } while(0)
+#define HG_PANIC(...) do { panicInternal(__VA_ARGS__); } while(0)
 
 #else
 
-#define hgLog(...) do {} while(0)
-#define hgWarn(...) do {} while(0)
-#define hgPanic(...) do { abort(); } while(0)
+#define HG_LOG(...) do {} while(0)
+#define HG_WARN(...) do {} while(0)
+#define HG_PANIC(...) do { abort(); } while(0)
 
 #endif
 
@@ -255,9 +255,9 @@ void hgWarnInternal(HgString format, ...);
 /**
  * Asserts condition, or aborts the program
  */
-#define hgAssert(cond) do { \
+#define HG_ASSERT(cond) do { \
     if (!(cond)) \
-        hgPanic("Assertion failed in " __FILE__ ":%d %s() \"" #cond "\"\n", __LINE__, __func__); \
+        HG_PANIC("Assertion failed in " __FILE__ ":%d %s() \"" #cond "\"\n", __LINE__, __func__); \
 } while(0)
 
 #else
@@ -265,14 +265,14 @@ void hgWarnInternal(HgString format, ...);
 /**
  * Asserts condition, or aborts the program
  */
-#define hgAssert(cond) do {} while(0)
+#define HG_ASSERT(cond) do {} while(0)
 
 #endif
 
 /**
  * A block of binary data
  */
-struct HgBinary {
+struct Binary {
     /**
      * The data
      */
@@ -286,7 +286,7 @@ struct HgBinary {
 /**
  * A view into a string
  */
-struct HgString {
+struct String {
     /**
      * The characters
      */
@@ -299,21 +299,21 @@ struct HgString {
     /**
      * Construct uninitialized
      */
-    HgString() = default;
+    String() = default;
 
     /**
      * Create a string view from a pointer and length
      */
-    constexpr HgString(const char* charsVal, u64 lengthVal)
+    constexpr String(const char* charsVal, u64 lengthVal)
         : chars{charsVal}, length{lengthVal} {}
 
     /**
      * Create a string view from begin and end pointers
      */
-    constexpr HgString(const char* charsBegin, const char* charsEnd)
+    constexpr String(const char* charsBegin, const char* charsEnd)
         : chars{charsBegin}, length{(uptr)(charsEnd - charsBegin)}
     {
-        hgAssert(charsBegin <= charsEnd);
+        HG_ASSERT(charsBegin <= charsEnd);
     }
 
     /**
@@ -321,14 +321,14 @@ struct HgString {
      *
      * Potentially dangerous, c string should be at most 4096 chars
      */
-    constexpr HgString(const char* cStr) : chars{cStr}, length{0}
+    constexpr String(const char* cStr) : chars{cStr}, length{0}
     {
         if (cStr != nullptr)
         {
             while (cStr[length] != '\0')
             {
                 ++length;
-                hgAssert(length <= 4096);
+                HG_ASSERT(length <= 4096);
             }
         }
     }
@@ -338,8 +338,8 @@ struct HgString {
      */
     constexpr const char& operator[](u64 idx) const
     {
-        hgAssert(chars != nullptr);
-        hgAssert(idx < length);
+        HG_ASSERT(chars != nullptr);
+        HG_ASSERT(idx < length);
         return chars[idx];
     }
 };
@@ -347,16 +347,16 @@ struct HgString {
 /**
  * The Hurdy Gurdy subsystems
  */
-enum HgSubsystem : u32 {
-    HgSubsystem_memory = 0x1,
-    HgSubsystem_concurrency = 0x2,
-    HgSubsystem_gpu = 0x4,
-    HgSubsystem_assets = 0x8,
-    HgSubsystem_windowing = 0x10,
-    HgSubsystem_audio = 0x20,
-    HgSubsystem_all = (u32)-1,
+enum Subsystem : u32 {
+    Subsystem_memory = 0x1,
+    Subsystem_concurrency = 0x2,
+    Subsystem_gpu = 0x4,
+    Subsystem_assets = 0x8,
+    Subsystem_windowing = 0x10,
+    Subsystem_audio = 0x20,
+    Subsystem_all = (u32)-1,
 };
-typedef u32 HgSubsystemFlags;
+typedef u32 SubsystemFlags;
 
 /**
  * Initialize the Hurdy Gurdy library
@@ -367,18 +367,18 @@ typedef u32 HgSubsystemFlags;
  * Returns
  * - Whether initialization succeeded
  */
-bool hgInit(HgSubsystemFlags init = HgSubsystem_all);
+bool init(SubsystemFlags init = Subsystem_all);
 
 /**
  * Shut down the Hurdy Gurdy library
  */
-void hgDeinit();
+void deinit();
 
 /**
  * Run Hurdy Gurdy tests, asserting success
  */
-void hgTest();
+void test();
 
 } // namespace hg
 
-#endif // HG_CORE_HPP
+#endif // CORE_HPP

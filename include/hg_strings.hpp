@@ -41,7 +41,7 @@ namespace hg {
  * - dst A pointer to store the read data
  * - size The size in bytes to read
  */
-void hgBinaryRead(HgBinary bin, u64 idx, void* dst, u64 len);
+void binaryRead(Binary bin, u64 idx, void* dst, u64 len);
 
 /**
  * Read data of arbitrary type from the file
@@ -50,17 +50,17 @@ void hgBinaryRead(HgBinary bin, u64 idx, void* dst, u64 len);
  * - idx The index into the file in bytes to read from
  */
 template<typename T>
-T hgBinaryRead(HgBinary bin, u64 idx)
+T binaryRead(Binary bin, u64 idx)
 {
     T ret;
-    hgBinaryRead(bin, idx, &ret, sizeof(T));
+    binaryRead(bin, idx, &ret, sizeof(T));
     return ret;
 }
 
 /**
  * A binary builder
  */
-struct HgBinaryBuilder {
+struct BinaryBuilder {
     /**
      * The data
      */
@@ -71,9 +71,9 @@ struct HgBinaryBuilder {
     u64 size;
 
     /**
-     * Implicitly convert to HgBinary
+     * Implicitly convert to Binary
      */
-    constexpr operator HgBinary()
+    constexpr operator Binary()
     {
         return {data, size};
     }
@@ -86,7 +86,7 @@ struct HgBinaryBuilder {
  * - arena The arena to allocate from
  * - newSize The new size of the file in bytes
  */
-void hgBinaryResize(HgArena* arena, HgBinaryBuilder* bin, u64 newSize);
+void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize);
 
 /**
  * Overwrite data at the index
@@ -96,7 +96,7 @@ void hgBinaryResize(HgArena* arena, HgBinaryBuilder* bin, u64 newSize);
  * - src The data to write
  * - size The size of the data in bytes
  */
-void hgBinaryOverwrite(HgBinaryBuilder* bin, u64 idx, const void* src, u64 len);
+void binaryOverwrite(BinaryBuilder* bin, u64 idx, const void* src, u64 len);
 
 /**
  * Overwrite data of arbitrary type at the index
@@ -106,23 +106,23 @@ void hgBinaryOverwrite(HgBinaryBuilder* bin, u64 idx, const void* src, u64 len);
  * - src The data to write
  */
 template<typename T>
-void hgBinaryOverwrite(HgBinaryBuilder* bin, u64 idx, const T& src)
+void binaryOverwrite(BinaryBuilder* bin, u64 idx, const T& src)
 {
-    hgBinaryOverwrite(bin, idx, &src, sizeof(T));
+    binaryOverwrite(bin, idx, &src, sizeof(T));
 }
 
 /**
  * Compare strings
  */
-constexpr bool operator==(HgString lhs, HgString rhs)
+constexpr bool operator==(String lhs, String rhs)
 {
-    return lhs.length == rhs.length && hgMemEqual(lhs.chars, rhs.chars, lhs.length);
+    return lhs.length == rhs.length && memEqual(lhs.chars, rhs.chars, lhs.length);
 }
 
 /**
  * Compare strings
  */
-constexpr bool operator!=(HgString lhs, HgString rhs)
+constexpr bool operator!=(String lhs, String rhs)
 {
     return !(lhs == rhs);
 }
@@ -134,22 +134,22 @@ constexpr bool operator!=(HgString lhs, HgString rhs)
  * - arena The arena to allocate from
  * - str The string to create from
  */
-char* hgCString(HgArena* arena, HgString str);
+char* cString(Arena* arena, String str);
 
 /**
  * Create a new owning string
  */
-HgString hgStringCreate(HgString data);
+String stringCreate(String data);
 
 /**
  * Destroy an owning string
  */
-void hgStringDestroy(HgString* str);
+void stringDestroy(String* str);
 
 /**
  * A string builder using arenas
  */
-struct HgStringBuilder {
+struct StringBuilder {
     /**
      * The string data
      */
@@ -164,14 +164,14 @@ struct HgStringBuilder {
      */
     constexpr char& operator[](u64 index) const
     {
-        hgAssert(index < length);
+        HG_ASSERT(index < length);
         return chars[index];
     }
 
     /**
      * Implicit converts to a string view
      */
-    constexpr operator HgString() const
+    constexpr operator String() const
     {
         return {chars, length};
     }
@@ -180,15 +180,15 @@ struct HgStringBuilder {
 /**
  * Compare string builders
  */
-inline bool operator==(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
+inline bool operator==(const StringBuilder& lhs, const StringBuilder& rhs)
 {
-    return HgString{lhs} == HgString{rhs};
+    return String{lhs} == String{rhs};
 }
 
 /**
  * Compare string builders
  */
-inline bool operator!=(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
+inline bool operator!=(const StringBuilder& lhs, const StringBuilder& rhs)
 {
     return !(lhs == rhs);
 }
@@ -200,7 +200,7 @@ inline bool operator!=(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
  * - arena The arena to allocate from
  * - init The initial string to copy from
  */
-HgStringBuilder hgStringCopy(HgArena* arena, HgString str);
+StringBuilder stringCopy(Arena* arena, String str);
 
 // /**
 //  * Create a formatted string : TODO
@@ -212,7 +212,7 @@ HgStringBuilder hgStringCopy(HgArena* arena, HgString str);
 //  * - float with 6 decimals (f64): "{f}"
 //  * - float with N decimals (f64): "{fN}"
 //  * - char (char): "{c}"
-//  * - string (HgStringView): "{s}"
+//  * - string (StringView): "{s}"
 //  * - c string (char*): "{cstr}"
 //  *
 //  * Use {{ and }} to escape the format specifier
@@ -222,17 +222,17 @@ HgStringBuilder hgStringCopy(HgArena* arena, HgString str);
 //  * - fmt The format string
 //  * - ... The format parameters
 //  */
-// HgStringBuilder hgStringFormat(HgArena* arena, HgString fmt, ...);
+// StringBuilder stringFormat(Arena* arena, String fmt, ...);
 
 /**
  * Create a formatted string, interally using snprintf
  */
-HgStringBuilder hgStringFormat(HgArena* arena, HgString fmt, ...);
+StringBuilder stringFormat(Arena* arena, String fmt, ...);
 
 /**
  * Create a formatted string with varargs, interally using snprintf
  */
-HgStringBuilder hgStringFormatVar(HgArena* arena, HgString fmt, va_list args);
+StringBuilder stringFormatVar(Arena* arena, String fmt, va_list args);
 
 /**
  * Copies another string into the string at index
@@ -243,22 +243,22 @@ HgStringBuilder hgStringFormatVar(HgArena* arena, HgString fmt, va_list args);
  * - idx The index into dst
  * - src The string to copy from
  */
-void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgString src);
+void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, String src);
 
 /**
  * Copies another string to the end of the string
  */
-inline void hgStringAppend(HgArena* arena, HgStringBuilder* dst, HgString src)
+inline void stringAppend(Arena* arena, StringBuilder* dst, String src)
 {
-    hgStringInsert(arena, dst, dst->length, src);
+    stringInsert(arena, dst, dst->length, src);
 }
 
 /**
  * Copies another string to the beginning of the string
  */
-inline void hgStringPrepend(HgArena* arena, HgStringBuilder* dst, HgString src)
+inline void stringPrepend(Arena* arena, StringBuilder* dst, String src)
 {
-    hgStringInsert(arena, dst, 0, src);
+    stringInsert(arena, dst, 0, src);
 }
 
 /**
@@ -270,56 +270,56 @@ inline void hgStringPrepend(HgArena* arena, HgStringBuilder* dst, HgString src)
  * - idx The index into dst
  * - c The character to insert
  */
-inline void hgStringInsertC(HgArena* arena, HgStringBuilder* dst, u64 idx, char c)
+inline void stringInsertC(Arena* arena, StringBuilder* dst, u64 idx, char c)
 {
-    hgStringInsert(arena, dst, idx, {&c, 1});
+    stringInsert(arena, dst, idx, {&c, 1});
 }
 
 /**
  * Copies another string to the end of the string
  */
-inline void hgStringAppendC(HgArena* arena, HgStringBuilder* dst, char c)
+inline void stringAppendC(Arena* arena, StringBuilder* dst, char c)
 {
-    hgStringInsertC(arena, dst, dst->length, c);
+    stringInsertC(arena, dst, dst->length, c);
 }
 
 /**
  * Copies another string to the beginning of the string
  */
-inline void hgStringPrependC(HgArena* arena, HgStringBuilder* dst, char c)
+inline void stringPrependC(Arena* arena, StringBuilder* dst, char c)
 {
-    hgStringInsertC(arena, dst, 0, c);
+    stringInsertC(arena, dst, 0, c);
 }
 
 /**
  * Check whether a character is whitespace (space, tab, or newline)
  */
-bool hgIsWhitespace(char c);
+bool isWhitespace(char c);
 
 /**
  * Check whether a character is a base 10 numeral (0-9)
  */
-bool hgIsNumeral(char c);
+bool isNumeral(char c);
 
 /**
  * Check whether a string is a base 10 integer
  */
-bool hgIsInteger(HgString str);
+bool isInteger(String str);
 
 /**
  * Check whether a string is a base 10 floating point number
  */
-bool hgIsFloat(HgString str);
+bool isFloat(String str);
 
 /**
  * Create an integer from a base 10 string
  */
-i64 hgStringToInteger(HgString str);
+i64 stringToInteger(String str);
 
 /**
  * Create a float from a base 10 string
  */
-f64 hgStringToFloat(HgString str);
+f64 stringToFloat(String str);
 
 /**
  * Create a base 10 string from an integer
@@ -328,7 +328,7 @@ f64 hgStringToFloat(HgString str);
  * - arena The arena to allocate from
  * - num The integer number to create from
  */
-HgStringBuilder hgIntegerToString(HgArena* arena, i64 num);
+StringBuilder integerToString(Arena* arena, i64 num);
 
 /**
  * Create a base 10 string from an integer
@@ -338,11 +338,11 @@ HgStringBuilder hgIntegerToString(HgArena* arena, i64 num);
  * - num The integer number to create from
  * - decimalCount The number of trailing decimal digits
  */
-HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount);
+StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
 
 } // namespace hg
 
-#endif // HG_STRINGS_HPP
+#endif // STRINGS_HPP

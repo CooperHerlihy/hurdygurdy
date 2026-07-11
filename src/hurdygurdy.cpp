@@ -28,261 +28,261 @@ namespace hg {
 thread_local static char errorMessageData[4096];
 thread_local static u64 errorMessageLength = 0;
 
-void hgPrintStdout(HgString str)
+void printStdout(String str)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    fputs(hgCString(scratch, str), stdout);
+    fputs(cString(sc, str), stdout);
 }
 
-void hgPrintStderr(HgString str)
+void printStderr(String str)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    fputs(hgCString(scratch, str), stderr);
+    fputs(cString(sc, str), stderr);
 }
 
-void hgLogInternal(HgString format, ...)
+void logInternal(String format, ...)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     va_list args;
     va_start(args, format);
 
-    HgStringBuilder begin = hgStringCopy(scratch, "HurdyGurdy Log: ");
-    hgStringAppend(scratch, &begin, format);
-    HgStringBuilder formatted = hgStringFormatVar(scratch, begin, args);
-    hgPrintStderr(formatted);
+    StringBuilder begin = stringCopy(sc, "HurdyGurdy Log: ");
+    stringAppend(sc, &begin, format);
+    StringBuilder formatted = stringFormatVar(sc, begin, args);
+    printStderr(formatted);
 
     va_end(args);
 }
 
-void hgWarnInternal(HgString format, ...)
+void warnInternal(String format, ...)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     va_list args;
     va_start(args, format);
 
-    HgStringBuilder begin = hgStringCopy(scratch, "HurdyGurdy Warn: ");
-    hgStringAppend(scratch, &begin, format);
-    hgPrintStderr(hgStringFormatVar(scratch, begin, args));
+    StringBuilder begin = stringCopy(sc, "HurdyGurdy Warn: ");
+    stringAppend(sc, &begin, format);
+    printStderr(stringFormatVar(sc, begin, args));
 
     va_end(args);
 }
 
-void hgPanicInternal(HgString format, ...)
+void panicInternal(String format, ...)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     va_list args;
     va_start(args, format);
 
-    HgStringBuilder begin = hgStringCopy(scratch, "HurdyGurdy Panic: ");
-    hgStringAppend(scratch, &begin, format);
-    begin.length += hgStringFormat(scratch, "\tLast error: \"%.*s\"\n", (int)hgErrorGet().length, hgErrorGet().chars).length;
-    hgPrintStderr(hgStringFormatVar(scratch, begin, args));
+    StringBuilder begin = stringCopy(sc, "HurdyGurdy Panic: ");
+    stringAppend(sc, &begin, format);
+    begin.length += stringFormat(sc, "\tLast error: \"%.*s\"\n", (int)errorGet().length, errorGet().chars).length;
+    printStderr(stringFormatVar(sc, begin, args));
 
     va_end(args);
 
     abort();
 }
 
-HgString hgErrorGet()
+String errorGet()
 {
     return {errorMessageData, errorMessageLength};
 }
 
-void hgErrorSet(HgString error)
+void errorSet(String error)
 {
-    u64 newLength = hgMin(error.length, sizeof(errorMessageData));
-    hgMemCopy(errorMessageData, error.chars, newLength);
+    u64 newLength = min(error.length, sizeof(errorMessageData));
+    memCopy(errorMessageData, error.chars, newLength);
     errorMessageLength = newLength;
 }
 
-void hgErrorFormat(HgString errorFmt, ...)
+void errorFormat(String errorFmt, ...)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     va_list args;
     va_start(args, errorFmt);
-    hgErrorSet(hgStringFormatVar(scratch, errorFmt, args));
+    errorSet(stringFormatVar(sc, errorFmt, args));
     va_end(args);
 }
 
-static HgSubsystemFlags initialized = 0;
+static SubsystemFlags initialized = 0;
 
-bool hgInit(HgSubsystemFlags init)
+bool init(SubsystemFlags init)
 {
-    if (init & HgSubsystem_memory)
+    if (init & Subsystem_memory)
     {
-        hgScratchInit(2, (u64)1 << 24);
-        initialized |= HgSubsystem_memory;
+        scratchInit(2, (u64)1 << 24);
+        initialized |= Subsystem_memory;
     }
 
-    if (init & HgSubsystem_concurrency)
+    if (init & Subsystem_concurrency)
     {
-        hgConcurrencyInit();
-        initialized |= HgSubsystem_concurrency;
+        concurrencyInit();
+        initialized |= Subsystem_concurrency;
     }
 
-    if (init & HgSubsystem_gpu ||
-        init & HgSubsystem_windowing ||
-        init & HgSubsystem_audio)
+    if (init & Subsystem_gpu ||
+        init & Subsystem_windowing ||
+        init & Subsystem_audio)
     {
-        if (!hgPlatformInit())
+        if (!platformInit())
             goto platformFailed;
     }
 
-    if (init & HgSubsystem_gpu ||
-        init & HgSubsystem_windowing)
+    if (init & Subsystem_gpu ||
+        init & Subsystem_windowing)
     {
-        if (!hgGpuInit())
+        if (!gpuInit())
             goto gpuFailed;
-        initialized |= HgSubsystem_gpu;
+        initialized |= Subsystem_gpu;
     }
 
-    if (init & HgSubsystem_assets)
+    if (init & Subsystem_assets)
     {
-        hgAssetInitDefaults();
-        initialized |= HgSubsystem_assets;
+        assetInitDefaults();
+        initialized |= Subsystem_assets;
     }
 
-    if (init & HgSubsystem_windowing)
+    if (init & Subsystem_windowing)
     {
-        hgWindowsInit();
-        initialized |= HgSubsystem_windowing;
+        windowsInit();
+        initialized |= Subsystem_windowing;
     }
 
-    if (init & HgSubsystem_audio)
+    if (init & Subsystem_audio)
     {
-        if (!hgAudioInit())
+        if (!audioInit())
             goto audioFailed;
-        initialized |= HgSubsystem_audio;
+        initialized |= Subsystem_audio;
     }
 
     return true;
 
 audioFailed:
-    if (initialized & HgSubsystem_windowing)
-        hgWindowsDeinit();
-    if (initialized & HgSubsystem_assets)
-        hgAssetDeinitDefaults();
-    if (initialized & HgSubsystem_gpu)
-        hgGpuDeinit();
+    if (initialized & Subsystem_windowing)
+        windowsDeinit();
+    if (initialized & Subsystem_assets)
+        assetDeinitDefaults();
+    if (initialized & Subsystem_gpu)
+        gpuDeinit();
 gpuFailed:
-    if (initialized & HgSubsystem_gpu ||
-        initialized & HgSubsystem_windowing ||
-        initialized & HgSubsystem_audio)
-        hgPlatformDeinit();
+    if (initialized & Subsystem_gpu ||
+        initialized & Subsystem_windowing ||
+        initialized & Subsystem_audio)
+        platformDeinit();
 platformFailed:
-    if (initialized & HgSubsystem_concurrency)
-        hgConcurrencyDeinit();
-    if (initialized & HgSubsystem_memory)
-        hgScratchDeinit();
+    if (initialized & Subsystem_concurrency)
+        concurrencyDeinit();
+    if (initialized & Subsystem_memory)
+        scratchDeinit();
     initialized = 0;
     return false;
 }
 
-void hgDeinit()
+void deinit()
 {
-    if (initialized & HgSubsystem_audio)
-        hgAudioDeinit();
+    if (initialized & Subsystem_audio)
+        audioDeinit();
 
-    if (initialized & HgSubsystem_windowing)
-        hgWindowsDeinit();
+    if (initialized & Subsystem_windowing)
+        windowsDeinit();
 
-    if (initialized & HgSubsystem_assets)
-        hgAssetDeinitDefaults();
+    if (initialized & Subsystem_assets)
+        assetDeinitDefaults();
 
-    if (initialized & HgSubsystem_gpu)
-        hgGpuDeinit();
+    if (initialized & Subsystem_gpu)
+        gpuDeinit();
 
-    if (initialized & HgSubsystem_gpu ||
-        initialized & HgSubsystem_windowing ||
-        initialized & HgSubsystem_audio)
-        hgPlatformDeinit();
+    if (initialized & Subsystem_gpu ||
+        initialized & Subsystem_windowing ||
+        initialized & Subsystem_audio)
+        platformDeinit();
 
-    if (initialized & HgSubsystem_concurrency)
-        hgConcurrencyDeinit();
+    if (initialized & Subsystem_concurrency)
+        concurrencyDeinit();
 
-    if (initialized & HgSubsystem_memory)
-        hgScratchDeinit();
+    if (initialized & Subsystem_memory)
+        scratchDeinit();
 
     initialized = 0;
 }
 
-void hgSwap(void* a, void* b, u64 size)
+void swap(void* a, void* b, u64 size)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    void* tmp = hgArenaAlloc(scratch, size, 1);
-    hgMemCopy(tmp, a, size);
-    hgMemCopy(a, b, size);
-    hgMemCopy(b, tmp, size);
+    void* tmp = arenaAlloc(sc, size, 1);
+    memCopy(tmp, a, size);
+    memCopy(a, b, size);
+    memCopy(b, tmp, size);
 }
 
-void hgMemClear(void* dst, u64 size, u8 val)
+void memClear(void* dst, u64 size, u8 val)
 {
     memset(dst, val, size);
 }
 
-void hgMemCopy(void* __restrict dst, const void* __restrict src, u64 size)
+void memCopy(void* __restrict dst, const void* __restrict src, u64 size)
 {
     memcpy(dst, src, size);
 }
 
-void hgMemMove(void* dst, const void* src, u64 size)
+void memMove(void* dst, const void* src, u64 size)
 {
     memmove(dst, src, size);
 }
 
-bool hgMemEqual(const void* dst, const void* src, u64 size)
+bool memEqual(const void* dst, const void* src, u64 size)
 {
     return size == 0 || memcmp(dst, src, size) == 0;
 }
 
-void* hgGpaAlloc(u64 size, u64 alignment)
+void* gpaAlloc(u64 size, u64 alignment)
 {
     (void)alignment;
     void* alloc = malloc(size);
     if (alloc == nullptr)
-        hgPanic("malloc out of memory");
+        HG_PANIC("malloc out of memory");
     return alloc;
 }
 
-void* hgGpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
+void* gpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 {
     (void)oldSize;
     (void)alignment;
     void* alloc = realloc(allocation, newSize);
     if (alloc == nullptr)
-        hgPanic("malloc out of memory");
+        HG_PANIC("malloc out of memory");
     return alloc;
 }
 
 template<>
-void hgGpaFree(void* allocation, u64 size)
+void gpaFree(void* allocation, u64 size)
 {
     (void)size;
     free(allocation);
 }
 
-void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment)
+void* arenaAlloc(Arena* arena, u64 size, u64 alignment)
 {
-    hgAssert(arena != nullptr);
+    HG_ASSERT(arena != nullptr);
 
-    u64 newHead = hgAlign((u64)arena->head, alignment) + size;
+    u64 newHead = align((u64)arena->head, alignment) + size;
     if (newHead > arena->capacity)
     {
-        hgErrorSet("Arena out of memory");
+        errorSet("Arena out of memory");
         return nullptr;
     }
 
@@ -290,9 +290,9 @@ void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment)
     return (void*)((uptr)arena->memory + arena->head - size);
 }
 
-void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment)
+void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 {
-    hgAssert(arena != nullptr);
+    HG_ASSERT(arena != nullptr);
 
     if (allocation >= arena->memory && (uptr)allocation + oldSize <= (uptr)arena->memory + arena->capacity)
     {
@@ -301,7 +301,7 @@ void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize,
             u64 newHead = (uptr)allocation + newSize - (uptr)arena->memory;
             if (newHead > arena->capacity)
             {
-                hgErrorSet("Arena out of memory");
+                errorSet("Arena out of memory");
                 return nullptr;
             }
 
@@ -313,23 +313,23 @@ void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize,
             return allocation;
     }
 
-    void* newAllocation = hgArenaAlloc(arena, newSize, alignment);
+    void* newAllocation = arenaAlloc(arena, newSize, alignment);
     if (allocation != nullptr)
-        hgMemCopy(newAllocation, allocation, hgMin(oldSize, newSize));
+        memCopy(newAllocation, allocation, min(oldSize, newSize));
     return newAllocation;
 }
 
-static thread_local HgArena* arenas{};
+static thread_local Arena* arenas{};
 static thread_local u32 arenaCount = 0;
 
-void hgScratchInit(u32 count, u64 size)
+void scratchInit(u32 count, u64 size)
 {
-    size = hgAlign(size, 16);
-    hgAssert(size < UINT64_MAX / count);
+    size = align(size, 16);
+    HG_ASSERT(size < UINT64_MAX / count);
 
-    void* block = hgGpaAlloc(count * size, 16);
-    HgArena base = {block, size, 0};
-    arenas = hgArenaAlloc<HgArena>(&base, count);
+    void* block = gpaAlloc(count * size, 16);
+    Arena base = {block, size, 0};
+    arenas = arenaAlloc<Arena>(&base, count);
     arenaCount = count;
 
     arenas[0] = base;
@@ -339,22 +339,22 @@ void hgScratchInit(u32 count, u64 size)
     }
 }
 
-void hgScratchDeinit()
+void scratchDeinit()
 {
     if (arenas != nullptr)
     {
-        hgGpaFree(arenas[0].memory, arenas[0].capacity * arenaCount);
+        gpaFree(arenas[0].memory, arenas[0].capacity * arenaCount);
     }
 }
 
-HgArena* hgScratch(HgArena const* const* conflicts, u32 count)
+Arena* scratch(Arena const* const* conflicts, u32 count)
 {
     if (conflicts != nullptr)
-        hgAssert(count > 0);
+        HG_ASSERT(count > 0);
 
     for (u32 i = 0; i < arenaCount; ++i)
     {
-        hgAssert(arenas[i].memory != nullptr);
+        HG_ASSERT(arenas[i].memory != nullptr);
 
         for (u32 j = 0; j < count; ++j)
         {
@@ -365,140 +365,140 @@ HgArena* hgScratch(HgArena const* const* conflicts, u32 count)
 next:
         continue;
     }
-    hgPanic("No scratch arena available\n");
+    HG_PANIC("No sc arena available\n");
 }
 
-void hgBinaryRead(HgBinary bin, u64 idx, void* dst, u64 len)
+void binaryRead(Binary bin, u64 idx, void* dst, u64 len)
 {
-    hgAssert(idx + len <= bin.size);
-    hgMemCopy(dst, (u8*)bin.data + idx, len);
+    HG_ASSERT(idx + len <= bin.size);
+    memCopy(dst, (u8*)bin.data + idx, len);
 }
 
-void hgBinaryResize(HgArena* arena, HgBinaryBuilder* bin, u64 newSize)
+void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize)
 {
-    bin->data = hgArenaRealloc(arena, bin->data, bin->size, newSize, 1);
+    bin->data = arenaRealloc(arena, bin->data, bin->size, newSize, 1);
     bin->size = newSize;
 }
 
-void hgBinaryOverwrite(HgBinaryBuilder* bin, u64 idx, const void* src, u64 len)
+void binaryOverwrite(BinaryBuilder* bin, u64 idx, const void* src, u64 len)
 {
-    hgAssert(idx + len <= bin->size);
-    hgMemCopy((u8*)bin->data + idx, src, len);
+    HG_ASSERT(idx + len <= bin->size);
+    memCopy((u8*)bin->data + idx, src, len);
 }
 
-char* hgCString(HgArena* arena, HgString str)
+char* cString(Arena* arena, String str)
 {
-    hgAssert(arena != nullptr);
+    HG_ASSERT(arena != nullptr);
     if (str.length > 0)
-        hgAssert(str.chars != nullptr);
+        HG_ASSERT(str.chars != nullptr);
 
-    char* cStr = hgArenaAlloc<char>(arena, str.length + 1);
-    hgMemCopy(cStr, str.chars, str.length);
+    char* cStr = arenaAlloc<char>(arena, str.length + 1);
+    memCopy(cStr, str.chars, str.length);
     cStr[str.length] = 0;
     return cStr;
 }
 
-HgString hgStringCreate(HgString data)
+String stringCreate(String data)
 {
-    HgString str{};
+    String str{};
     if (data != "")
     {
-        str.chars = hgGpaAlloc<char>(data.length);
-        hgMemCopy((char*)str.chars, data.chars, data.length);
+        str.chars = gpaAlloc<char>(data.length);
+        memCopy((char*)str.chars, data.chars, data.length);
         str.length = data.length;
     }
     return str;
 }
 
-void hgStringDestroy(HgString* str)
+void stringDestroy(String* str)
 {
-    hgGpaFree((char*)str->chars, str->length);
+    gpaFree((char*)str->chars, str->length);
 }
 
-HgStringBuilder hgStringCopy(HgArena* arena, HgString str)
+StringBuilder stringCopy(Arena* arena, String str)
 {
-    hgAssert(arena != nullptr);
+    HG_ASSERT(arena != nullptr);
 
-    HgStringBuilder copy{};
-    copy.chars = hgArenaAlloc<char>(arena, str.length);
-    hgMemCopy(copy.chars, str.chars, str.length);
+    StringBuilder copy{};
+    copy.chars = arenaAlloc<char>(arena, str.length);
+    memCopy(copy.chars, str.chars, str.length);
     copy.length = str.length;
     return copy;
 }
 
-HgStringBuilder hgStringFormat(HgArena* arena, HgString format, ...)
+StringBuilder stringFormat(Arena* arena, String format, ...)
 {
     va_list args;
     va_start(args, format);
-    HgStringBuilder ret = hgStringFormatVar(arena, format, args);
+    StringBuilder ret = stringFormatVar(arena, format, args);
     va_end(args);
     return ret;
 }
 
-HgStringBuilder hgStringFormatVar(HgArena* arena, HgString fmt, va_list args)
+StringBuilder stringFormatVar(Arena* arena, String fmt, va_list args)
 {
-    HgArena* scratch = hgScratch(&arena, 1);
-    hgArenaScope(scratch);
+    Arena* sc = scratch(&arena, 1);
+    HG_ARENA_SCOPE(sc);
 
-    int len = vsnprintf((char*)arena->memory + arena->head, arena->capacity - arena->head, hgCString(scratch, fmt), args);
+    int len = vsnprintf((char*)arena->memory + arena->head, arena->capacity - arena->head, cString(sc, fmt), args);
     if (len < 0)
-        hgPanic("snprintf returned an error");
+        HG_PANIC("snprintf returned an error");
 
-    HgStringBuilder ret{(char*)arena->memory + arena->head, (u64)len};
+    StringBuilder ret{(char*)arena->memory + arena->head, (u64)len};
     arena->head += (u64)len;
 
     return ret;
 }
 
-void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgString src)
+void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, String src)
 {
-    hgAssert(arena != nullptr);
-    hgAssert(dst != nullptr);
-    hgAssert(idx <= dst->length);
+    HG_ASSERT(arena != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(idx <= dst->length);
     if (src.length > 0)
-        hgAssert(src.chars != nullptr);
+        HG_ASSERT(src.chars != nullptr);
 
     u64 newLength = dst->length + src.length;
 
-    dst->chars = hgArenaRealloc(arena, dst->chars, dst->length, newLength);
+    dst->chars = arenaRealloc(arena, dst->chars, dst->length, newLength);
 
     if (idx != dst->length)
-        hgMemMove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
-    hgMemCopy(&dst->chars[idx], src.chars, src.length);
+        memMove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
+    memCopy(&dst->chars[idx], src.chars, src.length);
 
     dst->length = newLength;
 }
 
-bool hgIsWhitespace(char c)
+bool isWhitespace(char c)
 {
     return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
-bool hgIsNumeral(char c)
+bool isNumeral(char c)
 {
     return c >= '0' && c <= '9';
 }
 
-bool hgIsInteger(HgString str)
+bool isInteger(String str)
 {
     if (str.length == 0)
         return false;
 
     u64 head = 0;
-    if (!hgIsNumeral(str[head]) && str[head] != '+' && str[head] != '-')
+    if (!isNumeral(str[head]) && str[head] != '+' && str[head] != '-')
         return false;
 
     ++head;
     while (head < str.length)
     {
-        if (!hgIsNumeral(str[head]))
+        if (!isNumeral(str[head]))
             return false;
         ++head;
     }
     return true;
 }
 
-bool hgIsFloat(HgString str)
+bool isFloat(String str)
 {
     if (str.length == 0)
         return false;
@@ -508,7 +508,7 @@ bool hgIsFloat(HgString str)
 
     u64 head = 0;
 
-    if (!hgIsNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
+    if (!isNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
         return false;
 
     if (str[head] == '.')
@@ -517,7 +517,7 @@ bool hgIsFloat(HgString str)
     ++head;
     while (head < str.length)
     {
-        if (hgIsNumeral(str[head]))
+        if (isNumeral(str[head]))
         {
             ++head;
             continue;
@@ -534,7 +534,7 @@ bool hgIsFloat(HgString str)
         {
             hasExponent = true;
             ++head;
-            if (hgIsNumeral(str[head]) || str[head] == '+' || str[head] == '-')
+            if (isNumeral(str[head]) || str[head] == '+' || str[head] == '-')
             {
                 ++head;
                 continue;
@@ -551,9 +551,9 @@ bool hgIsFloat(HgString str)
     return hasDecimal || hasExponent;
 }
 
-i64 hgStringToInteger(HgString str)
+i64 stringToInteger(String str)
 {
-    hgAssert(hgIsInteger(str));
+    HG_ASSERT(isInteger(str));
 
     i64 power = 1;
     i64 ret = 0;
@@ -577,9 +577,9 @@ i64 hgStringToInteger(HgString str)
     return ret;
 }
 
-f64 hgStringToFloat(HgString str)
+f64 stringToFloat(String str)
 {
-    hgAssert(hgIsFloat(str));
+    HG_ASSERT(isFloat(str));
 
     f64 ret = 0.0;
     u64 head = 0;
@@ -588,14 +588,14 @@ f64 hgStringToFloat(HgString str)
     if (isNegative || str[head] == '+')
         ++head;
 
-    if (hgIsNumeral(str[head]))
+    if (isNumeral(str[head]))
     {
         u64 intPartBegin = head;
         while (head < str.length && str[head] != '.' && str[head] != 'e')
         {
             ++head;
         }
-        ret += (f64)hgStringToInteger({&str[intPartBegin], &str[head]});
+        ret += (f64)stringToInteger({&str[intPartBegin], &str[head]});
     }
 
     if (head < str.length && str[head] == '.')
@@ -603,7 +603,7 @@ f64 hgStringToFloat(HgString str)
         ++head;
 
         f64 power = 0.1;
-        while (head < str.length && hgIsNumeral(str[head]))
+        while (head < str.length && isNumeral(str[head]))
         {
             ret += (f64)(str[head] - '0') * power;
             power *= 0.1;
@@ -620,12 +620,12 @@ f64 hgStringToFloat(HgString str)
             ++head;
 
         u64 expBegin = head;
-        while (head < str.length && hgIsNumeral(str[head]))
+        while (head < str.length && isNumeral(str[head]))
         {
             ++head;
         }
 
-        i64 exp = hgStringToInteger({&str[expBegin], str.chars + head});
+        i64 exp = stringToInteger({&str[expBegin], str.chars + head});
         if (exp != 0)
         {
             if (expIsNegative)
@@ -651,91 +651,91 @@ f64 hgStringToFloat(HgString str)
     return ret;
 }
 
-HgStringBuilder hgIntegerToString(HgArena* arena, i64 num)
+StringBuilder integerToString(Arena* arena, i64 num)
 {
-    hgAssert(arena != nullptr);
+    HG_ASSERT(arena != nullptr);
 
-    HgArena* scratch = hgScratch(&arena, 1);
-    hgArenaScope(scratch);
+    Arena* sc = scratch(&arena, 1);
+    HG_ARENA_SCOPE(sc);
 
     if (num == 0)
-        return hgStringCopy(arena, "0");
+        return stringCopy(arena, "0");
 
     bool isNegative = num < 0;
     u64 unum = (u64)std::abs(num);
 
-    HgStringBuilder reverse{};
+    StringBuilder reverse{};
     while (unum != 0)
     {
         u64 digit = unum % 10;
         unum = (u64)((f64)unum / 10.0);
-        hgStringAppendC(scratch, &reverse, '0' + (char)digit);
+        stringAppendC(sc, &reverse, '0' + (char)digit);
     }
 
-    HgStringBuilder ret{};
+    StringBuilder ret{};
     if (isNegative)
-        hgStringAppendC(arena, &ret, '-');
+        stringAppendC(arena, &ret, '-');
     for (u64 i = reverse.length - 1; i < reverse.length; --i)
     {
-        hgStringAppendC(arena, &ret, reverse[i]);
+        stringAppendC(arena, &ret, reverse[i]);
     }
     return ret;
 }
 
-HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
+StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
 {
-    hgAssert(arena != nullptr);
+    HG_ASSERT(arena != nullptr);
 
-    HgArena* scratch = hgScratch(&arena, 1);
-    hgArenaScope(scratch);
+    Arena* sc = scratch(&arena, 1);
+    HG_ARENA_SCOPE(sc);
 
     if (num == 0.0)
-        return hgStringCopy(arena, "0.0");
+        return stringCopy(arena, "0.0");
 
-    HgStringBuilder intStr = hgIntegerToString(scratch, (i64)std::abs(num));
+    StringBuilder intStr = integerToString(sc, (i64)std::abs(num));
 
-    HgStringBuilder decStr{};
-    hgStringAppendC(scratch, &decStr, '.');
+    StringBuilder decStr{};
+    stringAppendC(sc, &decStr, '.');
 
     f64 decPart = std::abs(num);
     for (u64 i = 0; i < decimalCount; ++i)
     {
         decPart *= 10.0;
-        hgStringAppendC(scratch, &decStr, '0' + (char)((u64)decPart % 10));
+        stringAppendC(sc, &decStr, '0' + (char)((u64)decPart % 10));
     }
 
-    HgStringBuilder ret{};
+    StringBuilder ret{};
     if (num < 0.0)
-        hgStringAppendC(arena, &ret, '-');
-    hgStringAppend(arena, &ret, intStr);
-    hgStringAppend(arena, &ret, decStr);
+        stringAppendC(arena, &ret, '-');
+    stringAppend(arena, &ret, intStr);
+    stringAppend(arena, &ret, decStr);
     return ret;
 }
 
-const char* hgSerialTypeToString(HgSerialType s)
+const char* serialTypeToString(SerialType s)
 {
     switch (s)
     {
-        case HgSerialType_object:
-            return "HgSerialType_object";
-        case HgSerialType_string:
-            return "HgSerialType_string";
-        case HgSerialType_integer:
-            return "HgSerialType_integer";
-        case HgSerialType_floating:
-            return "HgSerialType_floating";
-        case HgSerialType_boolean:
-            return "HgSerialType_boolean";
+        case SerialType_object:
+            return "SerialType_object";
+        case SerialType_string:
+            return "SerialType_string";
+        case SerialType_integer:
+            return "SerialType_integer";
+        case SerialType_floating:
+            return "SerialType_floating";
+        case SerialType_boolean:
+            return "SerialType_boolean";
         default:
-            return "invalid HgSerialType";
+            return "invalid SerialType";
     }
 }
 
-HgSerializer hgSerialWriter(HgArena* arena)
+Serializer serialWriter(Arena* arena)
 {
-    HgSerializer s{};
+    Serializer s{};
     s.arena = arena;
-    s.root = hgArenaAlloc<HgSerialNode>(arena, 1);
+    s.root = arenaAlloc<SerialNode>(arena, 1);
     s.root->parent = nullptr;
     s.root->next = nullptr;
     s.parent = nullptr;
@@ -744,9 +744,9 @@ HgSerializer hgSerialWriter(HgArena* arena)
     return s;
 }
 
-HgSerializer hgSerialReader(HgArena* arena, HgSerialNode* begin)
+Serializer serialReader(Arena* arena, SerialNode* begin)
 {
-    HgSerializer s{};
+    Serializer s{};
     s.arena = arena;
     s.root = begin;
     s.parent = nullptr;
@@ -755,13 +755,13 @@ HgSerializer hgSerialReader(HgArena* arena, HgSerialNode* begin)
     return s;
 }
 
-void hgSerializeNodeStart(HgSerializer* s)
+void serializeNodeStart(Serializer* s)
 {
     if (s->writing)
     {
         if (s->current != nullptr)
         {
-            s->current->next = hgArenaAlloc<HgSerialNode>(s->arena, 1);
+            s->current->next = arenaAlloc<SerialNode>(s->arena, 1);
             s->current = s->current->next;
             s->current->parent = s->parent;
             s->current->next = nullptr;
@@ -770,14 +770,14 @@ void hgSerializeNodeStart(HgSerializer* s)
         {
             if (s->parent != nullptr)
             {
-                s->current = hgArenaAlloc<HgSerialNode>(s->arena, 1);
+                s->current = arenaAlloc<SerialNode>(s->arena, 1);
                 s->parent->children = s->current;
                 s->current->parent = s->parent;
                 s->current->next = nullptr;
             }
             else
             {
-                hgAssert(s->root != nullptr);
+                HG_ASSERT(s->root != nullptr);
                 s->current = s->root;
             }
         }
@@ -799,20 +799,20 @@ void hgSerializeNodeStart(HgSerializer* s)
             }
             else
             {
-                hgAssert(s->root != nullptr);
+                HG_ASSERT(s->root != nullptr);
                 s->current = s->root;
             }
         }
     }
 }
 
-void hgSerializeBegin(HgSerializer* s, u32* size)
+void serializeBegin(Serializer* s, u32* size)
 {
-    hgSerializeNodeStart(s);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
-        s->current->type = HgSerialType_object;
+        s->current->type = SerialType_object;
         s->current->count = 0;
         s->current->children = nullptr;
     }
@@ -826,203 +826,203 @@ void hgSerializeBegin(HgSerializer* s, u32* size)
     s->current = nullptr;
 }
 
-void hgSerializeEnd(HgSerializer* s)
+void serializeEnd(Serializer* s)
 {
-    hgAssert(s->parent != nullptr);
+    HG_ASSERT(s->parent != nullptr);
 
     s->current = s->parent;
     s->parent = s->parent->parent;
 }
 
-void hgSerializeVoid(HgSerializer* s, void* val, u32 size)
+void serializeVoid(Serializer* s, void* val, u32 size)
 {
-    hgSerializeNodeStart(s);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
-        s->current->type = HgSerialType_string;
-        s->current->string = hgStringCopy(s->arena, {(char*)val, size});
+        s->current->type = SerialType_string;
+        s->current->string = stringCopy(s->arena, {(char*)val, size});
     }
     else
     {
-        hgAssert(s->current->type == HgSerialType_string);
-        hgAssert(s->current->string.length == size);
-        hgMemCopy(val, s->current->string.chars, size);
+        HG_ASSERT(s->current->type == SerialType_string);
+        HG_ASSERT(s->current->string.length == size);
+        memCopy(val, s->current->string.chars, size);
     }
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgBinary* val)
+void serialize(Serializer* s, Binary* val)
 {
-    hgSerialize(s, (HgString*)val);
+    serialize(s, (String*)val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgString* val)
+void serialize(Serializer* s, String* val)
 {
-    hgSerializeNodeStart(s);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
-        s->current->type = HgSerialType_string;
-        s->current->string = hgStringCopy(s->arena, *val);
+        s->current->type = SerialType_string;
+        s->current->string = stringCopy(s->arena, *val);
     }
     else
     {
-        hgAssert(s->current->type == HgSerialType_string);
-        *val = hgStringCreate(s->current->string);
+        HG_ASSERT(s->current->type == SerialType_string);
+        *val = stringCreate(s->current->string);
     }
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgStringBuilder* val)
+void serialize(Serializer* s, StringBuilder* val)
 {
-    hgSerializeNodeStart(s);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
-        s->current->type = HgSerialType_string;
-        s->current->string = hgStringCopy(s->arena, *val);
+        s->current->type = SerialType_string;
+        s->current->string = stringCopy(s->arena, *val);
     }
     else
     {
-        hgAssert(s->current->type == HgSerialType_string);
-        *val = hgStringCopy(s->arena, s->current->string);
+        HG_ASSERT(s->current->type == SerialType_string);
+        *val = stringCopy(s->arena, s->current->string);
     }
 }
 
 template<typename T>
-static void serializeInt(HgSerializer* s, T* val)
+static void serializeInt(Serializer* s, T* val)
 {
-    hgSerializeNodeStart(s);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
-        s->current->type = HgSerialType_integer;
+        s->current->type = SerialType_integer;
         s->current->integer = (i64)*val;
     }
     else
     {
-        hgAssert(s->current->type == HgSerialType_integer);
+        HG_ASSERT(s->current->type == SerialType_integer);
         *val = (T)s->current->integer;
     }
 }
 
 template<>
-void hgSerialize(HgSerializer* s, u8* val)
+void serialize(Serializer* s, u8* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, u16* val)
+void serialize(Serializer* s, u16* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, u32* val)
+void serialize(Serializer* s, u32* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, u64* val)
+void serialize(Serializer* s, u64* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, i8* val)
+void serialize(Serializer* s, i8* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, i16* val)
+void serialize(Serializer* s, i16* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, i32* val)
+void serialize(Serializer* s, i32* val)
 {
     serializeInt(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, i64* val)
+void serialize(Serializer* s, i64* val)
 {
     serializeInt(s, val);
 }
 
 template<typename T>
-static void serializeFloat(HgSerializer* s, T* val)
+static void serializeFloat(Serializer* s, T* val)
 {
-    hgSerializeNodeStart(s);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
-        s->current->type = HgSerialType_floating;
+        s->current->type = SerialType_floating;
         s->current->floating = (f64)*val;
     }
     else
     {
-        hgAssert(s->current->type == HgSerialType_floating);
+        HG_ASSERT(s->current->type == SerialType_floating);
         *val = (T)s->current->floating;
     }
 }
 
 template<>
-void hgSerialize(HgSerializer* s, f32* val)
+void serialize(Serializer* s, f32* val)
 {
     serializeFloat(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, f64* val)
+void serialize(Serializer* s, f64* val)
 {
     serializeFloat(s, val);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, bool* val)
+void serialize(Serializer* s, bool* val)
 {
-    hgSerializeNodeStart(s);
+    serializeNodeStart(s);
 
     if (s->writing)
     {
-        s->current->type = HgSerialType_boolean;
+        s->current->type = SerialType_boolean;
         s->current->boolean = *val;
     }
     else
     {
-        hgAssert(s->current->type == HgSerialType_boolean);
+        HG_ASSERT(s->current->type == SerialType_boolean);
         *val = s->current->boolean;
     }
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgVec2* val)
+void serialize(Serializer* s, Vec2* val)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &val->x,
         &val->y);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgVec3* val)
+void serialize(Serializer* s, Vec3* val)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &val->x,
         &val->y,
         &val->z);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgVec4* val)
+void serialize(Serializer* s, Vec4* val)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &val->x,
         &val->y,
         &val->z,
@@ -1030,26 +1030,26 @@ void hgSerialize(HgSerializer* s, HgVec4* val)
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgMat2* val)
+void serialize(Serializer* s, Mat2* val)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &val->x,
         &val->y);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgMat3* val)
+void serialize(Serializer* s, Mat3* val)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &val->x,
         &val->y,
         &val->z);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgMat4* val)
+void serialize(Serializer* s, Mat4* val)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &val->x,
         &val->y,
         &val->z,
@@ -1057,24 +1057,24 @@ void hgSerialize(HgSerializer* s, HgMat4* val)
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgComplex* val)
+void serialize(Serializer* s, Complex* val)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &val->r,
         &val->i);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgQuat* val)
+void serialize(Serializer* s, Quat* val)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &val->r,
         &val->i,
         &val->j,
         &val->k);
 }
 
-static constexpr char serialBinTag[] = "HgData";
+static constexpr char serialBinTag[] = "Data";
 static constexpr u32 serialBinVersionMajor = 0;
 static constexpr u32 serialBinVersionMinor = 0;
 static constexpr u32 serialBinVersionPatch = 0;
@@ -1099,7 +1099,7 @@ struct SerialBinString {
 };
 
 struct SerialBinNode {
-    HgSerialType type;
+    SerialType type;
     union {
         SerialBinObject object;
         SerialBinString string;
@@ -1109,58 +1109,58 @@ struct SerialBinNode {
     };
 };
 
-static void serialBinWriteNode(HgArena* arena, HgBinaryBuilder* bin, u32 idx, HgSerialNode* node);
+static void serialBinWriteNode(Arena* arena, BinaryBuilder* bin, u32 idx, SerialNode* node);
 
-static void serialBinWriteString(HgArena* arena, HgBinaryBuilder* bin, u32 idx, HgString string)
+static void serialBinWriteString(Arena* arena, BinaryBuilder* bin, u32 idx, String string)
 {
     SerialBinNode node{};
-    node.type = HgSerialType_string;
+    node.type = SerialType_string;
     node.string.length = (u32)string.length;
 
     node.string.begin = (u32)bin->size;
-    hgBinaryResize(arena, bin, bin->size + string.length);
+    binaryResize(arena, bin, bin->size + string.length);
 
-    hgBinaryOverwrite(bin, idx, node);
+    binaryOverwrite(bin, idx, node);
 
-    hgBinaryOverwrite(bin, node.string.begin, string.chars, string.length);
+    binaryOverwrite(bin, node.string.begin, string.chars, string.length);
 }
 
-static void serialBinWriteInteger(HgBinaryBuilder* bin, u32 idx, i64 integer)
+static void serialBinWriteInteger(BinaryBuilder* bin, u32 idx, i64 integer)
 {
     SerialBinNode node{};
-    node.type = HgSerialType_integer;
+    node.type = SerialType_integer;
     node.integer = integer;
-    hgBinaryOverwrite(bin, idx, node);
+    binaryOverwrite(bin, idx, node);
 }
 
-static void serialBinWriteFloating(HgBinaryBuilder* bin, u32 idx, f64 floating)
+static void serialBinWriteFloating(BinaryBuilder* bin, u32 idx, f64 floating)
 {
     SerialBinNode node{};
-    node.type = HgSerialType_floating;
+    node.type = SerialType_floating;
     node.floating = floating;
-    hgBinaryOverwrite(bin, idx, node);
+    binaryOverwrite(bin, idx, node);
 }
 
-static void serialBinWriteBoolean(HgBinaryBuilder* bin, u32 idx, bool boolean)
+static void serialBinWriteBoolean(BinaryBuilder* bin, u32 idx, bool boolean)
 {
     SerialBinNode node{};
-    node.type = HgSerialType_boolean;
+    node.type = SerialType_boolean;
     node.boolean = boolean;
-    hgBinaryOverwrite(bin, idx, node);
+    binaryOverwrite(bin, idx, node);
 }
 
-static void serialBinWriteObject(HgArena* arena, HgBinaryBuilder* bin, u32 idx, HgSerialNode* object)
+static void serialBinWriteObject(Arena* arena, BinaryBuilder* bin, u32 idx, SerialNode* object)
 {
     SerialBinNode node{};
-    node.type = HgSerialType_object;
+    node.type = SerialType_object;
     node.object.fieldCount = object->count;
 
     node.object.fieldsBegin = (u32)bin->size;
-    hgBinaryResize(arena, bin, bin->size + object->count * sizeof(SerialBinNode));
+    binaryResize(arena, bin, bin->size + object->count * sizeof(SerialBinNode));
 
-    hgBinaryOverwrite(bin, idx, node);
+    binaryOverwrite(bin, idx, node);
 
-    HgSerialNode* data = object->children;
+    SerialNode* data = object->children;
     for (u32 i = 0; i < object->count; ++i)
     {
         serialBinWriteNode(arena, bin, node.object.fieldsBegin + i * (u32)sizeof(SerialBinNode), data);
@@ -1168,168 +1168,168 @@ static void serialBinWriteObject(HgArena* arena, HgBinaryBuilder* bin, u32 idx, 
     }
 }
 
-static void serialBinWriteNode(HgArena* arena, HgBinaryBuilder* bin, u32 idx, HgSerialNode* node)
+static void serialBinWriteNode(Arena* arena, BinaryBuilder* bin, u32 idx, SerialNode* node)
 {
     switch (node->type)
     {
-        case HgSerialType_object:
+        case SerialType_object:
             serialBinWriteObject(arena, bin, idx, node);
             return;
-        case HgSerialType_string:
+        case SerialType_string:
             serialBinWriteString(arena, bin, idx, node->string);
             return;
-        case HgSerialType_integer:
+        case SerialType_integer:
             serialBinWriteInteger(bin, idx, node->integer);
             return;
-        case HgSerialType_floating:
+        case SerialType_floating:
             serialBinWriteFloating(bin, idx, node->floating);
             return;
-        case HgSerialType_boolean:
+        case SerialType_boolean:
             serialBinWriteBoolean(bin, idx, node->boolean);
             return;
         default:
-            hgPanic("Invalid HgSerialType: %s\n", hgSerialTypeToString(node->type));
+            HG_PANIC("Invalid SerialType: %s\n", serialTypeToString(node->type));
     }
 }
 
-HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer* serial)
+Binary binaryWriteSerial(Arena* arena, Serializer* serial)
 {
-    HgBinaryBuilder bin{};
+    BinaryBuilder bin{};
 
     SerialBinHeader header{};
-    hgBinaryResize(arena, &bin, bin.size + sizeof(header));
+    binaryResize(arena, &bin, bin.size + sizeof(header));
 
-    hgMemCopy(header.tag, serialBinTag, sizeof(serialBinTag));
+    memCopy(header.tag, serialBinTag, sizeof(serialBinTag));
     header.versionMajor = serialBinVersionMajor;
     header.versionMinor = serialBinVersionMinor;
     header.versionPatch = serialBinVersionPatch;
 
     header.nodeBegin = (u32)bin.size;
-    hgBinaryResize(arena, &bin, bin.size + sizeof(SerialBinNode));
+    binaryResize(arena, &bin, bin.size + sizeof(SerialBinNode));
 
-    hgBinaryOverwrite(&bin, 0, header);
+    binaryOverwrite(&bin, 0, header);
 
     serialBinWriteNode(arena, &bin, header.nodeBegin, serial->current);
 
     return bin;
 }
 
-static void serialBinReadNode(HgBinary bin, u32 idx, HgSerializer* s);
+static void serialBinReadNode(Binary bin, u32 idx, Serializer* s);
 
-static void serialBinReadObject(HgBinary bin, SerialBinObject object, HgSerializer* s)
+static void serialBinReadObject(Binary bin, SerialBinObject object, Serializer* s)
 {
-    hgSerializeBegin(s);
+    serializeBegin(s);
     for (u32 i = 0; i < object.fieldCount; ++i)
     {
         serialBinReadNode(bin, object.fieldsBegin + i * (u32)sizeof(SerialBinNode), s);
     }
-    hgSerializeEnd(s);
+    serializeEnd(s);
 }
 
-static void serialBinReadString(HgBinary bin, SerialBinString string, HgSerializer* s)
+static void serialBinReadString(Binary bin, SerialBinString string, Serializer* s)
 {
-    HgString val = {(char*)bin.data + string.begin, string.length};
-    hgSerialize(s, &val);
+    String val = {(char*)bin.data + string.begin, string.length};
+    serialize(s, &val);
 }
 
-static void serialBinReadNode(HgBinary bin, u32 idx, HgSerializer* s)
+static void serialBinReadNode(Binary bin, u32 idx, Serializer* s)
 {
-    SerialBinNode node = hgBinaryRead<SerialBinNode>(bin, idx);
+    SerialBinNode node = binaryRead<SerialBinNode>(bin, idx);
     switch (node.type)
     {
-        case HgSerialType_object:
+        case SerialType_object:
             serialBinReadObject(bin, node.object, s);
             return;
-        case HgSerialType_string:
+        case SerialType_string:
             serialBinReadString(bin, node.string, s);
             return;
-        case HgSerialType_integer:
-            hgSerialize(s, &node.integer);
+        case SerialType_integer:
+            serialize(s, &node.integer);
             return;
-        case HgSerialType_floating:
-            hgSerialize(s, &node.floating);
+        case SerialType_floating:
+            serialize(s, &node.floating);
             return;
-        case HgSerialType_boolean:
-            hgSerialize(s, &node.boolean);
+        case SerialType_boolean:
+            serialize(s, &node.boolean);
             return;
         default:
-            hgPanic("Invalid HgSerialType: %s\n", hgSerialTypeToString(node.type));
+            HG_PANIC("Invalid SerialType: %s\n", serialTypeToString(node.type));
     }
 }
 
-HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin)
+Serializer binaryReadSerial(Arena* arena, Binary bin)
 {
-    SerialBinHeader header = hgBinaryRead<SerialBinHeader>(bin, 0);
+    SerialBinHeader header = binaryRead<SerialBinHeader>(bin, 0);
 
-    if (!hgMemEqual(header.tag, serialBinTag, sizeof(serialBinTag)))
+    if (!memEqual(header.tag, serialBinTag, sizeof(serialBinTag)))
     {
-        hgWarn("Serial binary could not be read, does not have a header\n");
+        HG_WARN("Serial binary could not be read, does not have a header\n");
         return {};
     }
     else if (header.versionMajor != serialBinVersionMajor)
     {
-        hgWarn("Serial binary has wrong major version: %d instead of %d", header.versionMajor, serialBinVersionMajor);
+        HG_WARN("Serial binary has wrong major version: %d instead of %d", header.versionMajor, serialBinVersionMajor);
     }
     else if (header.versionMinor != serialBinVersionMinor)
     {
-        hgWarn("Serial binary has wrong minor version: %d instead of %d", header.versionMinor, serialBinVersionMinor);
+        HG_WARN("Serial binary has wrong minor version: %d instead of %d", header.versionMinor, serialBinVersionMinor);
     }
     else if (header.versionPatch != serialBinVersionPatch)
     {
-        hgWarn("Serial binary has wrong patch version: %d instead of %d", header.versionPatch, serialBinVersionPatch);
+        HG_WARN("Serial binary has wrong patch version: %d instead of %d", header.versionPatch, serialBinVersionPatch);
     }
 
-    HgSerializer s = hgSerialWriter(arena);
+    Serializer s = serialWriter(arena);
     serialBinReadNode(bin, header.nodeBegin, &s);
-    return hgSerialReader(arena, s.current);
+    return serialReader(arena, s.current);
 }
 
-static void serialJsonWriteNode(HgArena* arena, HgStringBuilder* str, u32 indentation, HgSerialNode* node);
+static void serialJsonWriteNode(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node);
 
-static void serialJsonWriteString(HgArena* arena, HgStringBuilder* str, HgString string)
+static void serialJsonWriteString(Arena* arena, StringBuilder* str, String string)
 {
-    hgStringAppendC(arena, str, '"');
+    stringAppendC(arena, str, '"');
     for (u32 i = 0; i < string.length; ++i)
     {
         switch (string[i])
         {
         case '\\':
-            hgStringAppend(arena, str, "\\\\");
+            stringAppend(arena, str, "\\\\");
             break;
         case '\"':
-            hgStringAppend(arena, str, "\\\"");
+            stringAppend(arena, str, "\\\"");
             break;
         case '\n':
-            hgStringAppend(arena, str, "\\n");
+            stringAppend(arena, str, "\\n");
             break;
         case '\r':
-            hgStringAppend(arena, str, "\\r");
+            stringAppend(arena, str, "\\r");
             break;
         case '\f':
-            hgStringAppend(arena, str, "\\f");
+            stringAppend(arena, str, "\\f");
             break;
         case '\b':
-            hgStringAppend(arena, str, "\\b");
+            stringAppend(arena, str, "\\b");
             break;
         default:
-            hgStringAppendC(arena, str, string[i]);
+            stringAppendC(arena, str, string[i]);
             break;
         }
     }
-    hgStringAppendC(arena, str, '"');
+    stringAppendC(arena, str, '"');
 }
 
-static void serialJsonWriteArray(HgArena* arena, HgStringBuilder* str, u32 indentation, HgSerialNode* node)
+static void serialJsonWriteArray(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node)
 {
     if (node->count > 0)
     {
-        hgStringAppend(arena, str, "[\n");
+        stringAppend(arena, str, "[\n");
 
-        HgSerialNode* elem = node->children;
+        SerialNode* elem = node->children;
 
         for (u32 i = 0; i < indentation + 1; ++i)
         {
-            hgStringAppend(arena, str, "    ");
+            stringAppend(arena, str, "    ");
         }
         serialJsonWriteNode(arena, str, indentation + 1, elem);
 
@@ -1337,129 +1337,129 @@ static void serialJsonWriteArray(HgArena* arena, HgStringBuilder* str, u32 inden
 
         for (u32 i = 1; i < node->count; ++i)
         {
-            hgStringAppend(arena, str, ",\n");
+            stringAppend(arena, str, ",\n");
             for (u32 i = 0; i < indentation + 1; ++i)
             {
-                hgStringAppend(arena, str, "    ");
+                stringAppend(arena, str, "    ");
             }
             serialJsonWriteNode(arena, str, indentation + 1, elem);
 
             elem = elem->next;
         }
 
-        hgStringAppendC(arena, str, '\n');
+        stringAppendC(arena, str, '\n');
         for (u32 i = 0; i < indentation; ++i)
         {
-            hgStringAppend(arena, str, "    ");
+            stringAppend(arena, str, "    ");
         }
-        hgStringAppendC(arena, str, ']');
+        stringAppendC(arena, str, ']');
     }
     else
     {
-        hgStringAppend(arena, str, "[]");
+        stringAppend(arena, str, "[]");
     }
 }
 
-// static void serialJsonWriteObject(HgArena* arena, HgStringBuilder* str, u32 indentation, HgSerialNode* node)
+// static void serialJsonWriteObject(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node)
 // {
 //     if (node->count > 0)
 //     {
-//         hgStringAppend(arena, str, "{\n");
+//         stringAppend(arena, str, "{\n");
 //
-//         HgSerialNode* field = node->children;
+//         SerialNode* field = node->children;
 //
 //         for (u32 i = 0; i < indentation + 1; ++i)
 //         {
-//             hgStringAppend(arena, str, "    ");
+//             stringAppend(arena, str, "    ");
 //         }
 //         serialJsonWriteString(arena, str, field->name);
-//         hgStringAppend(arena, str, " : ");
+//         stringAppend(arena, str, " : ");
 //         serialJsonWriteNode(arena, str, indentation + 1, field);
 //
 //         field = field->next;
 //
 //         for (u32 i = 1; i < node->count; ++i)
 //         {
-//             hgStringAppend(arena, str, ",\n");
+//             stringAppend(arena, str, ",\n");
 //             for (u32 i = 0; i < indentation + 1; ++i)
 //             {
-//                 hgStringAppend(arena, str, "    ");
+//                 stringAppend(arena, str, "    ");
 //             }
 //             serialJsonWriteString(arena, str, field->name);
-//             hgStringAppend(arena, str, " : ");
+//             stringAppend(arena, str, " : ");
 //             serialJsonWriteNode(arena, str, indentation + 1, field);
 //
 //             field = field->next;
 //         }
 //
-//         hgStringAppendC(arena, str, '\n');
+//         stringAppendC(arena, str, '\n');
 //         for (u32 i = 0; i < indentation; ++i)
 //         {
-//             hgStringAppend(arena, str, "    ");
+//             stringAppend(arena, str, "    ");
 //         }
-//         hgStringAppendC(arena, str, '}');
+//         stringAppendC(arena, str, '}');
 //     }
 //     else
 //     {
-//         hgStringAppend(arena, str, "{}");
+//         stringAppend(arena, str, "{}");
 //     }
 // }
 
-static void serialJsonWriteNode(HgArena* arena, HgStringBuilder* str, u32 indentation, HgSerialNode* node)
+static void serialJsonWriteNode(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node)
 {
     switch (node->type)
     {
-        case HgSerialType_object:
+        case SerialType_object:
             serialJsonWriteArray(arena, str, indentation, node);
             return;
-        case HgSerialType_string:
+        case SerialType_string:
             serialJsonWriteString(arena, str, node->string);
             return;
-        case HgSerialType_integer:
-            hgStringAppend(arena, str, hgIntegerToString(hgScratch(), node->integer));
+        case SerialType_integer:
+            stringAppend(arena, str, integerToString(scratch(), node->integer));
             return;
-        case HgSerialType_floating:
-            hgStringAppend(arena, str, hgFloatToString(hgScratch(), node->floating, 6));
+        case SerialType_floating:
+            stringAppend(arena, str, floatToString(scratch(), node->floating, 6));
             return;
-        case HgSerialType_boolean:
+        case SerialType_boolean:
             if (node->boolean)
-                hgStringAppend(arena, str, "true");
+                stringAppend(arena, str, "true");
             else
-                hgStringAppend(arena, str, "false");
+                stringAppend(arena, str, "false");
             return;
         default:
-            hgPanic("Invalid HgSerialType: %s\n", hgSerialTypeToString(node->type));
+            HG_PANIC("Invalid SerialType: %s\n", serialTypeToString(node->type));
     }
 }
 
-HgString hgJsonWriteSerial(HgArena* arena, HgSerializer* serial)
+String jsonWriteSerial(Arena* arena, Serializer* serial)
 {
-    HgStringBuilder str{};
+    StringBuilder str{};
     serialJsonWriteNode(arena, &str, 0, serial->current);
-    hgStringAppendC(arena, &str, '\n');
+    stringAppendC(arena, &str, '\n');
     return str;
 }
 
-// HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json)
+// Serializer jsonReadSerial(Arena* arena, StringView json)
 // {
 // }
 
 struct JsonParseState {
-    HgString text;
+    String text;
     u64 head;
     u64 line;
 };
 
-static HgJson jsonParseNext(HgArena* arena, JsonParseState* state);
-static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state);
-static HgJson jsonParseArray(HgArena* arena, JsonParseState* state);
-static HgJson jsonParseString(HgArena* arena, JsonParseState* state);
-static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state);
-static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state);
+static Json jsonParseNext(Arena* arena, JsonParseState* state);
+static Json jsonParseStruct(Arena* arena, JsonParseState* state);
+static Json jsonParseArray(Arena* arena, JsonParseState* state);
+static Json jsonParseString(Arena* arena, JsonParseState* state);
+static Json jsonParseNumber(Arena* arena, JsonParseState* state);
+static Json jsonParseBoolean(Arena* arena, JsonParseState* state);
 
-static HgJson jsonParseNext(HgArena* arena, JsonParseState* state)
+static Json jsonParseNext(Arena* arena, JsonParseState* state)
 {
-    while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+    while (state->head < state->text.length && isWhitespace(state->text[state->head]))
     {
         if (state->text[state->head] == '\n')
             ++state->line;
@@ -1488,65 +1488,65 @@ static HgJson jsonParseNext(HgArena* arena, JsonParseState* state)
         case 'f':
             return jsonParseBoolean(arena, state);
         case '}': {
-            HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+            JsonError* error = arenaAlloc<JsonError>(arena, 1);
             error->next = nullptr;
-            HgStringBuilder msg{};
-            hgStringAppend(arena, &msg, "on line ");
-            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &msg, ", found unexpected token \"}\"\n");
+            StringBuilder msg{};
+            stringAppend(arena, &msg, "on line ");
+            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, ", found unexpected token \"}\"\n");
             error->msg = msg;
             return {nullptr, error};
         }
         case ']': {
-            HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+            JsonError* error = arenaAlloc<JsonError>(arena, 1);
             error->next = nullptr;
-            HgStringBuilder msg{};
-            hgStringAppend(arena, &msg, "on line ");
-            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &msg, ", found unexpected token \"]\"\n");
+            StringBuilder msg{};
+            stringAppend(arena, &msg, "on line ");
+            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, ", found unexpected token \"]\"\n");
             error->msg = msg;
             return {nullptr, error};
         }
     }
-    if (hgIsNumeral(state->text[state->head]))
+    if (isNumeral(state->text[state->head]))
     {
         return jsonParseNumber(arena, state);
     }
 
-    HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+    JsonError* error = arenaAlloc<JsonError>(arena, 1);
     error->next = nullptr;
 
     u64 begin = state->head;
-    while (state->head < state->text.length && !hgIsWhitespace(state->text[state->head]))
+    while (state->head < state->text.length && !isWhitespace(state->text[state->head]))
     {
         if (state->text[state->head] == '\n')
             ++state->line;
         ++state->head;
     }
-    HgStringBuilder msg{};
-    hgStringAppend(arena, &msg, "on line ");
-    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-    hgStringAppend(arena, &msg, ", found unexpected token \"");
-    hgStringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
-    hgStringAppend(arena, &msg, "\"\n");
+    StringBuilder msg{};
+    stringAppend(arena, &msg, "on line ");
+    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+    stringAppend(arena, &msg, ", found unexpected token \"");
+    stringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
+    stringAppend(arena, &msg, "\"\n");
     error->msg = msg;
 
     return {nullptr, error};
 }
 
-static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
+static Json jsonParseStruct(Arena* arena, JsonParseState* state)
 {
-    HgJson json{};
-    json.file = hgArenaAlloc<HgJsonNode>(arena, 1);
-    json.file->type = HgJsonType::HgJsonType_struct;
+    Json json{};
+    json.file = arenaAlloc<JsonNode>(arena, 1);
+    json.file->type = JsonType::JsonType_struct;
     json.file->jstruct.fields = nullptr;
 
-    HgJsonField* lastField = nullptr;
-    HgJsonError* lastError = nullptr;
+    JsonField* lastField = nullptr;
+    JsonError* lastError = nullptr;
 
     for (;;)
     {
-        while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
         {
             if (state->text[state->head] == '\n')
                 ++state->line;
@@ -1554,12 +1554,12 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
         }
         if (state->head >= state->text.length)
         {
-            HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+            JsonError* error = arenaAlloc<JsonError>(arena, 1);
             error->next = nullptr;
-            HgStringBuilder msg{};
-            hgStringAppend(arena, &msg, "on line ");
-            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &msg, ", expected struct to terminate\n");
+            StringBuilder msg{};
+            stringAppend(arena, &msg, "on line ");
+            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, ", expected struct to terminate\n");
             error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
@@ -1570,12 +1570,12 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
         }
         if (state->text[state->head] == ']')
         {
-            HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+            JsonError* error = arenaAlloc<JsonError>(arena, 1);
             error->next = nullptr;
-            HgStringBuilder msg{};
-            hgStringAppend(arena, &msg, "on line ");
-            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &msg, ", struct ends with \"]\" instead of \"}\"\n");
+            StringBuilder msg{};
+            stringAppend(arena, &msg, "on line ");
+            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, ", struct ends with \"]\" instead of \"}\"\n");
             error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
@@ -1583,7 +1583,7 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
                 lastError->next = error;
             lastError = error;
             ++state->head;
-            while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+            while (state->head < state->text.length && isWhitespace(state->text[state->head]))
             {
                 if (state->text[state->head] == '\n')
                     ++state->line;
@@ -1596,7 +1596,7 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
         if (state->text[state->head] == '}')
         {
             ++state->head;
-            while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+            while (state->head < state->text.length && isWhitespace(state->text[state->head]))
             {
                 if (state->text[state->head] == '\n')
                     ++state->line;
@@ -1607,18 +1607,18 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
             break;
         }
 
-        HgJson value = jsonParseNext(arena, state);
+        Json value = jsonParseNext(arena, state);
 
         if (value.file != nullptr)
         {
-            if (value.file->type != HgJsonType::HgJsonType_field)
+            if (value.file->type != JsonType::JsonType_field)
             {
-                HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+                JsonError* error = arenaAlloc<JsonError>(arena, 1);
                 error->next = nullptr;
-                HgStringBuilder msg{};
-                hgStringAppend(arena, &msg, "on line ");
-                hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-                hgStringAppend(arena, &msg, ", struct has a literal instead of a field\n");
+                StringBuilder msg{};
+                stringAppend(arena, &msg, "on line ");
+                stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+                stringAppend(arena, &msg, ", struct has a literal instead of a field\n");
                 error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
@@ -1627,14 +1627,14 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
                 lastError = error;
             } else if (value.file->field.value == nullptr)
             {
-                HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+                JsonError* error = arenaAlloc<JsonError>(arena, 1);
                 error->next = nullptr;
-                HgStringBuilder msg{};
-                hgStringAppend(arena, &msg, "on line ");
-                hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-                hgStringAppend(arena, &msg, ", struct has a field named \"");
-                hgStringAppend(arena, &msg, value.file->field.name);
-                hgStringAppend(arena, &msg, "\" which has no value\n");
+                StringBuilder msg{};
+                stringAppend(arena, &msg, "on line ");
+                stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+                stringAppend(arena, &msg, ", struct has a field named \"");
+                stringAppend(arena, &msg, value.file->field.name);
+                stringAppend(arena, &msg, "\" which has no value\n");
                 error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
@@ -1662,19 +1662,19 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
     return json;
 }
 
-static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
+static Json jsonParseArray(Arena* arena, JsonParseState* state)
 {
-    HgJson json{};
-    json.file = hgArenaAlloc<HgJsonNode>(arena, 1);
-    json.file->type = HgJsonType::HgJsonType_array;
+    Json json{};
+    json.file = arenaAlloc<JsonNode>(arena, 1);
+    json.file->type = JsonType::JsonType_array;
 
-    HgJsonType type = HgJsonType::HgJsonType_none;
-    HgJsonElem* lastElem = nullptr;
-    HgJsonError* lastError = nullptr;
+    JsonType type = JsonType::JsonType_none;
+    JsonElem* lastElem = nullptr;
+    JsonError* lastError = nullptr;
 
     for (;;)
     {
-        while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
         {
             if (state->text[state->head] == '\n')
                 ++state->line;
@@ -1682,12 +1682,12 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
         }
         if (state->head >= state->text.length)
         {
-            HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+            JsonError* error = arenaAlloc<JsonError>(arena, 1);
             error->next = nullptr;
-            HgStringBuilder msg{};
-            hgStringAppend(arena, &msg, "on line ");
-            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &msg, ", expected struct to terminate\n");
+            StringBuilder msg{};
+            stringAppend(arena, &msg, "on line ");
+            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, ", expected struct to terminate\n");
             error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
@@ -1698,12 +1698,12 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
         }
         if (state->text[state->head] == '}')
         {
-            HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+            JsonError* error = arenaAlloc<JsonError>(arena, 1);
             error->next = nullptr;
-            HgStringBuilder msg{};
-            hgStringAppend(arena, &msg, "on line ");
-            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &msg, ", array ends with \"}\" instead of \"]\"\n");
+            StringBuilder msg{};
+            stringAppend(arena, &msg, "on line ");
+            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, ", array ends with \"}\" instead of \"]\"\n");
             error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
@@ -1711,7 +1711,7 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
                 lastError->next = error;
             lastError = error;
             ++state->head;
-            while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+            while (state->head < state->text.length && isWhitespace(state->text[state->head]))
             {
                 if (state->text[state->head] == '\n')
                     ++state->line;
@@ -1724,7 +1724,7 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
         if (state->text[state->head] == ']')
         {
             ++state->head;
-            while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+            while (state->head < state->text.length && isWhitespace(state->text[state->head]))
             {
                 if (state->text[state->head] == '\n')
                     ++state->line;
@@ -1735,26 +1735,26 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
             break;
         }
 
-        HgJsonElem* elem = hgArenaAlloc<HgJsonElem>(arena, 1);
+        JsonElem* elem = arenaAlloc<JsonElem>(arena, 1);
         elem->next = nullptr;
 
-        HgJson value = jsonParseNext(arena, state);
+        Json value = jsonParseNext(arena, state);
         elem->value = value.file;
 
         if (value.file != nullptr)
         {
-            if (type == HgJsonType::HgJsonType_none)
+            if (type == JsonType::JsonType_none)
             {
-                if (value.file->type != HgJsonType::HgJsonType_field)
+                if (value.file->type != JsonType::JsonType_field)
                 {
                     type = value.file->type;
                 } else {
-                    HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+                    JsonError* error = arenaAlloc<JsonError>(arena, 1);
                     error->next = nullptr;
-                    HgStringBuilder msg{};
-                    hgStringAppend(arena, &msg, "on line ");
-                    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-                    hgStringAppend(arena, &msg, ", array has a field as an element\n");
+                    StringBuilder msg{};
+                    stringAppend(arena, &msg, "on line ");
+                    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+                    stringAppend(arena, &msg, ", array has a field as an element\n");
                     error->msg = msg;
                     if (lastError == nullptr)
                         json.errors = lastError = error;
@@ -1765,12 +1765,12 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
             }
             if (value.file->type != type)
             {
-                HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+                JsonError* error = arenaAlloc<JsonError>(arena, 1);
                 error->next = nullptr;
-                HgStringBuilder msg{};
-                hgStringAppend(arena, &msg, "on line ");
-                hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-                hgStringAppend(arena, &msg, ", array has element which is not the same type as the first valid element\n");
+                StringBuilder msg{};
+                stringAppend(arena, &msg, "on line ");
+                stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+                stringAppend(arena, &msg, ", array has element which is not the same type as the first valid element\n");
                 error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
@@ -1798,7 +1798,7 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
     return json;
 }
 
-static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
+static Json jsonParseString(Arena* arena, JsonParseState* state)
 {
     u64 begin = state->head;
     while (state->head < state->text.length && state->text[state->head] != '"')
@@ -1811,7 +1811,7 @@ static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
     if (state->head < state->text.length)
     {
         ++state->head;
-        HgStringBuilder str{};
+        StringBuilder str{};
         for (u64 i = begin; i < end; ++i)
         {
             char c = state->text[i];
@@ -1819,13 +1819,13 @@ static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
             {
                 // escape sequences : TODO
             }
-            hgStringAppendC(arena, &str, c);
+            stringAppendC(arena, &str, c);
         }
 
-        HgJson json{};
-        json.file = hgArenaAlloc<HgJsonNode>(arena, 1);
+        Json json{};
+        json.file = arenaAlloc<JsonNode>(arena, 1);
 
-        while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
         {
             if (state->text[state->head] == '\n')
                 ++state->line;
@@ -1834,17 +1834,17 @@ static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
         if (state->head < state->text.length && state->text[state->head] == ':')
         {
             ++state->head;
-            json.file->type = HgJsonType::HgJsonType_field;
+            json.file->type = JsonType::JsonType_field;
             json.file->field.next = nullptr;
             json.file->field.name = str;
-            HgJson next = jsonParseNext(arena, state);
+            Json next = jsonParseNext(arena, state);
             json.file->field.value = next.file;
             json.errors = next.errors;
         } else {
-            json.file->type = HgJsonType::HgJsonType_string;
+            json.file->type = JsonType::JsonType_string;
             json.file->string = str;
         }
-        while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
         {
             if (state->text[state->head] == '\n')
                 ++state->line;
@@ -1855,21 +1855,21 @@ static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
         return json;
     }
 
-    HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
-    HgStringBuilder msg{};
-    hgStringAppend(arena, &msg, "on line ");
-    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-    hgStringAppend(arena, &msg, ", expected string to terminate\n");
+    JsonError* error = arenaAlloc<JsonError>(arena, 1);
+    StringBuilder msg{};
+    stringAppend(arena, &msg, "on line ");
+    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+    stringAppend(arena, &msg, ", expected string to terminate\n");
     error->msg = msg;
     return {nullptr, error};
 }
 
-static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state)
+static Json jsonParseNumber(Arena* arena, JsonParseState* state)
 {
-    bool isFloat = false;
+    bool isNumFloat = false;
     u64 begin = state->head;
     while (state->head < state->text.length && (
-        hgIsNumeral(state->text[state->head]) ||
+        isNumeral(state->text[state->head]) ||
         state->text[state->head] == '-' ||
         state->text[state->head] == '+' ||
         state->text[state->head] == '.' ||
@@ -1877,11 +1877,11 @@ static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state)
     ))
     {
         if (state->text[state->head] == '.' || state->text[state->head] == 'e')
-            isFloat = true;
+            isNumFloat = true;
         ++state->head;
     }
-    HgString num{&state->text[begin], &state->text[state->head]};
-    while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+    String num{&state->text[begin], &state->text[state->head]};
+    while (state->head < state->text.length && isWhitespace(state->text[state->head]))
     {
         if (state->text[state->head] == '\n')
             ++state->line;
@@ -1890,36 +1890,36 @@ static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state)
     if (state->head < state->text.length && state->text[state->head] == ',')
         ++state->head;
 
-    if (isFloat)
+    if (isNumFloat)
     {
-        if (hgIsFloat(num))
+        if (isFloat(num))
         {
-            HgJsonNode* node = hgArenaAlloc<HgJsonNode>(arena, 1);
-            node->type = HgJsonType::HgJsonType_float;
-            node->floating = hgStringToFloat(num);
+            JsonNode* node = arenaAlloc<JsonNode>(arena, 1);
+            node->type = JsonType::JsonType_float;
+            node->floating = stringToFloat(num);
             return {node, nullptr};
         }
     } else {
-        if (hgIsInteger(num))
+        if (isInteger(num))
         {
-            HgJsonNode* node = hgArenaAlloc<HgJsonNode>(arena, 1);
-            node->type = HgJsonType::HgJsonType_integer;
-            node->integer = hgStringToInteger(num);
+            JsonNode* node = arenaAlloc<JsonNode>(arena, 1);
+            node->type = JsonType::JsonType_integer;
+            node->integer = stringToInteger(num);
             return {node, nullptr};
         }
     }
 
-    HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+    JsonError* error = arenaAlloc<JsonError>(arena, 1);
 
-    HgStringBuilder msg{};
-    hgStringAppend(arena, &msg, "on line ");
-    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-    hgStringAppend(arena, &msg, ", expected numeral value, found \"");
-    hgStringAppend(arena, &msg, num);
-    hgStringAppend(arena, &msg, "\"\n");
+    StringBuilder msg{};
+    stringAppend(arena, &msg, "on line ");
+    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+    stringAppend(arena, &msg, ", expected numeral value, found \"");
+    stringAppend(arena, &msg, num);
+    stringAppend(arena, &msg, "\"\n");
     error->msg = msg;
 
-    while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+    while (state->head < state->text.length && isWhitespace(state->text[state->head]))
     {
         if (state->text[state->head] == '\n')
             ++state->line;
@@ -1929,18 +1929,18 @@ static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state)
     {
         return {nullptr, error};
     } else {
-        HgJson next = jsonParseNext(arena, state);
+        Json next = jsonParseNext(arena, state);
         error->next = next.errors;
         return {next.file, error};
     }
 }
 
-static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
+static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
 {
-    if (state->head + 4 <= state->text.length && HgString{&state->text[state->head], 4} == "true")
+    if (state->head + 4 <= state->text.length && String{&state->text[state->head], 4} == "true")
     {
         state->head += 4;
-        while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
         {
             if (state->text[state->head] == '\n')
                 ++state->line;
@@ -1949,15 +1949,15 @@ static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
         if (state->head < state->text.length && state->text[state->head] == ',')
             ++state->head;
 
-        HgJsonNode* node = hgArenaAlloc<HgJsonNode>(arena, 1);
-        node->type = HgJsonType::HgJsonType_bool;
+        JsonNode* node = arenaAlloc<JsonNode>(arena, 1);
+        node->type = JsonType::JsonType_bool;
         node->boolean = true;
         return {node, nullptr};
     }
-    if (state->head + 5 <= state->text.length && HgString{&state->text[state->head], 5} == "false")
+    if (state->head + 5 <= state->text.length && String{&state->text[state->head], 5} == "false")
     {
         state->head += 5;
-        while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
         {
             if (state->text[state->head] == '\n')
                 ++state->line;
@@ -1966,16 +1966,16 @@ static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
         if (state->head < state->text.length && state->text[state->head] == ',')
             ++state->head;
 
-        HgJsonNode* node = hgArenaAlloc<HgJsonNode>(arena, 1);
-        node->type = HgJsonType::HgJsonType_bool;
+        JsonNode* node = arenaAlloc<JsonNode>(arena, 1);
+        node->type = JsonType::JsonType_bool;
         node->boolean = false;
         return {node, nullptr};
     }
 
-    HgJsonError* error = hgArenaAlloc<HgJsonError>(arena, 1);
+    JsonError* error = arenaAlloc<JsonError>(arena, 1);
 
     u64 begin = state->head;
-    while (state->head < state->text.length && !hgIsWhitespace(state->text[state->head])
+    while (state->head < state->text.length && !isWhitespace(state->text[state->head])
         && state->text[state->head] != ','
         && state->text[state->head] != '}'
         && state->text[state->head] != ']'
@@ -1985,18 +1985,18 @@ static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
             ++state->line;
         ++state->head;
     }
-    HgStringBuilder msg{};
-    hgStringAppend(arena, &msg, "on line ");
-    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
-    hgStringAppend(arena, &msg, ", expected boolean value, found \"");
-    hgStringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
-    hgStringAppend(arena, &msg, "\"\n");
+    StringBuilder msg{};
+    stringAppend(arena, &msg, "on line ");
+    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+    stringAppend(arena, &msg, ", expected boolean value, found \"");
+    stringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
+    stringAppend(arena, &msg, "\"\n");
     error->msg = msg;
 
     if (state->text[state->head] == ',')
         ++state->head;
 
-    while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
+    while (state->head < state->text.length && isWhitespace(state->text[state->head]))
     {
         if (state->text[state->head] == '\n')
             ++state->line;
@@ -2006,17 +2006,17 @@ static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
     {
         return {nullptr, error};
     } else {
-        HgJson next = jsonParseNext(arena, state);
+        Json next = jsonParseNext(arena, state);
         error->next = next.errors;
         return {next.file, error};
     }
 }
 
-HgJson hgParseJson(HgArena* arena, HgString text)
+Json parseJson(Arena* arena, String text)
 {
-    hgAssert(arena != nullptr);
+    HG_ASSERT(arena != nullptr);
     if (text.length > 0)
-        hgAssert(text.chars != nullptr);
+        HG_ASSERT(text.chars != nullptr);
 
     JsonParseState parseState{};
     parseState.text = text;
@@ -2025,85 +2025,85 @@ HgJson hgParseJson(HgArena* arena, HgString text)
     return jsonParseNext(arena, &parseState);
 }
 
-void hgAssetInitDefaults()
+void assetInitDefaults()
 {
-    hgAssetInit<HgBinary>();
-    hgAssetInit<HgTextureData>();
-    hgAssetInit<HgTexture>();
-    hgAssetInit<HgMeshData>();
-    hgAssetInit<HgMesh>();
-    hgAssetInit<HgSound>();
+    assetInit<Binary>();
+    assetInit<TextureData>();
+    assetInit<Texture>();
+    assetInit<MeshData>();
+    assetInit<Mesh>();
+    assetInit<Sound>();
 }
 
-void hgAssetDeinitDefaults()
+void assetDeinitDefaults()
 {
-    hgAssetDeinit<HgSound>();
-    hgAssetDeinit<HgMesh>();
-    hgAssetDeinit<HgMeshData>();
-    hgAssetDeinit<HgTexture>();
-    hgAssetDeinit<HgTextureData>();
-    hgAssetDeinit<HgBinary>();
+    assetDeinit<Sound>();
+    assetDeinit<Mesh>();
+    assetDeinit<MeshData>();
+    assetDeinit<Texture>();
+    assetDeinit<TextureData>();
+    assetDeinit<Binary>();
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgBinary>* data)
+void assetLoadImpl(Asset<Binary>* data)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    char* cpath = hgCString(scratch, data->path);
+    char* cpath = cString(sc, data->path);
 
     FILE* fileHandle = fopen(cpath, "rb");
     if (fileHandle == nullptr)
     {
-        hgErrorFormat("Could not find file to read binary: %s", cpath);
+        errorFormat("Could not find file to read binary: %s", cpath);
         return;
     }
-    hgDefer(fclose(fileHandle));
+    HG_DEFER(fclose(fileHandle));
 
     if (fseek(fileHandle, 0, SEEK_END) != 0)
     {
-        hgErrorFormat("Failed to read binary from file: %s", cpath);
+        errorFormat("Failed to read binary from file: %s", cpath);
         return;
     }
 
     data->asset.size = (u64)ftell(fileHandle);
-    data->asset.data = hgGpaAlloc(data->asset.size, 1);
+    data->asset.data = gpaAlloc(data->asset.size, 1);
 
     rewind(fileHandle);
     if (fread((void*)data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
     {
-        hgGpaFree((void*)data->asset.data, data->asset.size);
-        hgErrorFormat("Failed to read binary from file: %s", cpath);
+        gpaFree((void*)data->asset.data, data->asset.size);
+        errorFormat("Failed to read binary from file: %s", cpath);
         data->asset = {};
         return;
     }
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgBinary>* data)
+void assetUnloadImpl(Asset<Binary>* data)
 {
-    hgGpaFree((void*)data->asset.data, data->asset.size);
+    gpaFree((void*)data->asset.data, data->asset.size);
 }
 
-bool hgBinaryStore(HgBinary bin, HgString path)
+bool binaryStore(Binary bin, String path)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    char* cpath = hgCString(scratch, path);
+    char* cpath = cString(sc, path);
 
     FILE* fileHandle = fopen(cpath, "wb");
     if (fileHandle == nullptr)
     {
-        hgErrorFormat("Failed to create file to write binary: %s", cpath);
+        errorFormat("Failed to create file to write binary: %s", cpath);
         return false;
     }
-    hgDefer(fclose(fileHandle));
+    HG_DEFER(fclose(fileHandle));
 
     if (fwrite(bin.data, 1, bin.size, fileHandle) != bin.size)
     {
-        hgErrorFormat("Failed to write binary data to file: %s", cpath);
+        errorFormat("Failed to write binary data to file: %s", cpath);
         return false;
     }
 
@@ -2111,31 +2111,31 @@ bool hgBinaryStore(HgBinary bin, HgString path)
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgJson>* data)
+void assetLoadImpl(Asset<Json>* data)
 {
-    HgBinaryAsset* bin = hgAssetLoad<HgBinary>(data->path);
-    hgDefer(hgAssetUnload(bin));
+    BinaryAsset* bin = assetLoad<Binary>(data->path);
+    HG_DEFER(assetUnload(bin));
 
-    HgArena* scratch = hgScratch();
-    u64 head = scratch->head;
-    hgDefer(scratch->head = head);
+    Arena* sc = scratch();
+    u64 head = sc->head;
+    HG_DEFER(sc->head = head);
 
-    HgString jsonStr = {(char*)bin->asset.data, bin->asset.size};
-    HgJson parse = hgParseJson(scratch, jsonStr);
+    String jsonStr = {(char*)bin->asset.data, bin->asset.size};
+    Json parse = parseJson(sc, jsonStr);
 
-    HgJsonError* e = parse.errors;
+    JsonError* e = parse.errors;
     if (e != nullptr)
-        hgErrorSet("Json parse errors");
+        errorSet("Json parse errors");
     while (e != nullptr)
     {
-        hgWarn("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
+        HG_WARN("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
         e = e->next;
     }
 
-    data->asset.file = (HgJsonNode*)malloc(scratch->head - head);
+    data->asset.file = (JsonNode*)malloc(sc->head - head);
     if (parse.errors != nullptr)
     {
-        data->asset.errors = (HgJsonError*)(
+        data->asset.errors = (JsonError*)(
             (u8*)data->asset.file +
                 ((uptr)parse.errors - (uptr)parse.file));
     }
@@ -2143,36 +2143,36 @@ void hgAssetLoadImpl(HgAsset<HgJson>* data)
     {
         data->asset.errors = nullptr;
     }
-    hgMemCopy((void*)data->asset.file, (void*)parse.file, scratch->head - head);
+    memCopy((void*)data->asset.file, (void*)parse.file, sc->head - head);
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgJson>* data)
+void assetUnloadImpl(Asset<Json>* data)
 {
     free(data->asset.file);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgArrayAny* arr)
+void serialize(Serializer* s, ArrayAny* arr)
 {
-    hgSerializeBegin(s);
-    hgSerialize(s, &arr->width);
-    hgSerialize(s, &arr->align);
-    hgSerialize(s, &arr->count);
-    hgSerialize(s, &arr->capacity);
+    serializeBegin(s);
+    serialize(s, &arr->width);
+    serialize(s, &arr->align);
+    serialize(s, &arr->count);
+    serialize(s, &arr->capacity);
     if (!s->writing)
-        arr->vals = hgGpaAlloc(arr->capacity * arr->width, arr->align);
-    hgSerializeVoid(s, arr->vals, arr->count * arr->width);
-    hgSerializeEnd(s);
+        arr->vals = gpaAlloc(arr->capacity * arr->width, arr->align);
+    serializeVoid(s, arr->vals, arr->count * arr->width);
+    serializeEnd(s);
 }
 
-HgArrayAny hgArrayAnyCreate(u32 width, u32 align, u32 count, u32 capacity)
+ArrayAny arrayAnyCreate(u32 width, u32 align, u32 count, u32 capacity)
 {
     if (capacity < count)
         capacity = count;
 
-    HgArrayAny arr{};
-    arr.vals = hgGpaAlloc(capacity * width, align);
+    ArrayAny arr{};
+    arr.vals = gpaAlloc(capacity * width, align);
     arr.count = count;
     arr.capacity = capacity;
     arr.width = width;
@@ -2181,20 +2181,20 @@ HgArrayAny hgArrayAnyCreate(u32 width, u32 align, u32 count, u32 capacity)
     return arr;
 }
 
-void hgArrayAnyDestroy(HgArrayAny* arr)
+void arrayAnyDestroy(ArrayAny* arr)
 {
-    hgAssert(arr != nullptr);
+    HG_ASSERT(arr != nullptr);
 
-    hgGpaFree(arr->vals, arr->capacity * arr->width);
+    gpaFree(arr->vals, arr->capacity * arr->width);
 }
 
-HgArrayAny hgArrayAnyTemp(HgArena* arena, u32 width, u32 align, u32 count, u32 capacity)
+ArrayAny arrayAnyTemp(Arena* arena, u32 width, u32 align, u32 count, u32 capacity)
 {
-    hgAssert(arena != nullptr);
-    hgAssert(count <= capacity);
+    HG_ASSERT(arena != nullptr);
+    HG_ASSERT(count <= capacity);
 
-    HgArrayAny arr{};
-    arr.vals = hgArenaAlloc(arena, capacity * width, align);
+    ArrayAny arr{};
+    arr.vals = arenaAlloc(arena, capacity * width, align);
     arr.count = count;
     arr.capacity = capacity;
     arr.width = width;
@@ -2203,11 +2203,11 @@ HgArrayAny hgArrayAnyTemp(HgArena* arena, u32 width, u32 align, u32 count, u32 c
     return arr;
 }
 
-void hgArrayAnyResize(HgArrayAny* arr, u32 newCount)
+void arrayAnyResize(ArrayAny* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = hgGpaRealloc(
+        arr->vals = gpaRealloc(
             arr->vals,
             arr->capacity * arr->width,
             newCount * 2 * arr->width,
@@ -2217,11 +2217,11 @@ void hgArrayAnyResize(HgArrayAny* arr, u32 newCount)
     arr->count = newCount;
 }
 
-void hgArrayAnyResizeTemp(HgArena* arena, HgArrayAny* arr, u32 newCount)
+void arrayAnyResizeTemp(Arena* arena, ArrayAny* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = hgArenaRealloc(
+        arr->vals = arenaRealloc(
             arena,
             arr->vals,
             arr->capacity * arr->width,
@@ -2232,12 +2232,12 @@ void hgArrayAnyResizeTemp(HgArena* arena, HgArrayAny* arr, u32 newCount)
     arr->count = newCount;
 }
 
-void* hgArrayAnyPush(HgArrayAny* arr)
+void* arrayAnyPush(ArrayAny* arr)
 {
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = hgGpaRealloc(
+        arr->vals = gpaRealloc(
             arr->vals,
             arr->capacity * arr->width,
             newCapacity * arr->width,
@@ -2247,12 +2247,12 @@ void* hgArrayAnyPush(HgArrayAny* arr)
     return (u8*)arr->vals + arr->count++ * arr->width;
 }
 
-void* hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr)
+void* arrayAnyPushTemp(Arena* arena, ArrayAny* arr)
 {
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = hgArenaRealloc(
+        arr->vals = arenaRealloc(
             arena,
             arr->vals,
             arr->capacity * arr->width,
@@ -2263,14 +2263,14 @@ void* hgArrayAnyPushTemp(HgArena* arena, HgArrayAny* arr)
     return (u8*)arr->vals + arr->count++ * arr->width;
 }
 
-void hgArrayAnyRemove(HgArrayAny* arr, u32 idx, void* dst)
+void arrayAnyRemove(ArrayAny* arr, u32 idx, void* dst)
 {
-    hgAssert(idx < arr->count);
+    HG_ASSERT(idx < arr->count);
 
-    hgMemCopy(dst, (*arr)[idx], arr->width);
+    memCopy(dst, (*arr)[idx], arr->width);
     if (idx + 1 < arr->count)
     {
-        hgMemCopy(
+        memCopy(
             (*arr)[idx],
             (*arr)[idx + 1],
             (arr->count - (idx + 1)) * arr->width);
@@ -2278,14 +2278,14 @@ void hgArrayAnyRemove(HgArrayAny* arr, u32 idx, void* dst)
     --arr->count;
 }
 
-void hgArrayAnyRemoveSwap(HgArrayAny* arr, u32 idx, void* dst)
+void arrayAnyRemoveSwap(ArrayAny* arr, u32 idx, void* dst)
 {
-    hgAssert(idx < arr->count);
+    HG_ASSERT(idx < arr->count);
 
-    hgMemCopy(dst, (*arr)[idx], arr->width);
+    memCopy(dst, (*arr)[idx], arr->width);
     if (idx + 1 < arr->count)
     {
-        hgMemCopy(
+        memCopy(
             (*arr)[idx],
             (*arr)[arr->count - 1],
             arr->width);
@@ -2293,162 +2293,162 @@ void hgArrayAnyRemoveSwap(HgArrayAny* arr, u32 idx, void* dst)
     --arr->count;
 }
 
-void hgArrayAnyPop(HgArrayAny* arr, void* dst)
+void arrayAnyPop(ArrayAny* arr, void* dst)
 {
-    hgAssert(arr->count > 0);
+    HG_ASSERT(arr->count > 0);
     --arr->count;
     if (dst != nullptr)
-        hgMemCopy(dst, (u8*)arr->vals + arr->count * arr->width, arr->width);
+        memCopy(dst, (u8*)arr->vals + arr->count * arr->width, arr->width);
 }
 
 static constexpr u32 poolStockSize = 1024;
 
-static void poolRestock(HgPool* pool)
+static void poolRestock(Pool* pool)
 {
-    hgAssert(pool != nullptr);
+    HG_ASSERT(pool != nullptr);
 
-    void* store = hgGpaAlloc(poolStockSize * pool->width, pool->align);
+    void* store = gpaAlloc(poolStockSize * pool->width, pool->align);
     for (u32 i = 0; i < poolStockSize; ++i)
     {
-        hgQueuePushBack(&pool->freeList, (u8*)store + i * pool->width);
+        queuePushBack(&pool->freeList, (u8*)store + i * pool->width);
     }
-    *hgArrayPush(&pool->itemStores) = store;
+    *arrayPush(&pool->itemStores) = store;
 }
 
-HgPool hgPoolCreate(u32 width, u32 align)
+Pool poolCreate(u32 width, u32 align)
 {
-    HgPool pool{};
-    pool.freeList = hgQueueCreate<void*>();
-    pool.itemStores = hgArrayCreate<void*>(0, 4);
+    Pool pool{};
+    pool.freeList = queueCreate<void*>();
+    pool.itemStores = arrayCreate<void*>(0, 4);
     pool.width = width;
     pool.align = align;
     poolRestock(&pool);
     return pool;
 }
 
-void hgPoolDestroy(HgPool* pool)
+void poolDestroy(Pool* pool)
 {
-    hgAssert(pool != nullptr);
+    HG_ASSERT(pool != nullptr);
 
     for (u32 i = 0; i < pool->itemStores.count; ++i)
     {
-        hgGpaFree(pool->itemStores[i], poolStockSize);
+        gpaFree(pool->itemStores[i], poolStockSize);
     }
-    hgArrayDestroy(&pool->itemStores);
-    hgQueueDestroy(&pool->freeList);
+    arrayDestroy(&pool->itemStores);
+    queueDestroy(&pool->freeList);
 }
 
-void* hgPoolAlloc(HgPool* pool)
+void* poolAlloc(Pool* pool)
 {
-    hgAssert(pool != nullptr);
+    HG_ASSERT(pool != nullptr);
 
     if (pool->freeList.count == 0)
     {
         poolRestock(pool);
     }
 
-    return hgQueuePopFront(&pool->freeList);
+    return queuePopFront(&pool->freeList);
 }
 
-void hgPoolFree(HgPool* pool, void* item)
+void poolFree(Pool* pool, void* item)
 {
-    hgAssert(pool != nullptr);
-    hgAssert(item != nullptr);
-    hgQueuePushFront(&pool->freeList, item);
+    HG_ASSERT(pool != nullptr);
+    HG_ASSERT(item != nullptr);
+    queuePushFront(&pool->freeList, item);
 }
 
-HgHandlePool hgHandlePoolCreate()
+HandlePool handlePoolCreate()
 {
-    HgHandlePool handles{};
-    handles.handles = hgArrayCreate<HgHandle>();
-    handles.freed = hgArrayCreate<HgHandle>();
+    HandlePool handles{};
+    handles.handles = arrayCreate<Handle>();
+    handles.freed = arrayCreate<Handle>();
 
-    hgHandlePoolAlloc(&handles);
+    handlePoolAlloc(&handles);
 
     return handles;
 }
 
-void hgHandlePoolDestroy(HgHandlePool* pool)
+void handlePoolDestroy(HandlePool* pool)
 {
-    hgAssert(pool != nullptr);
+    HG_ASSERT(pool != nullptr);
 
-    hgArrayDestroy(&pool->handles);
-    hgArrayDestroy(&pool->freed);
+    arrayDestroy(&pool->handles);
+    arrayDestroy(&pool->freed);
 }
 
-void hgHandlePoolReset(HgHandlePool* pool)
+void handlePoolReset(HandlePool* pool)
 {
-    hgAssert(pool != nullptr);
+    HG_ASSERT(pool != nullptr);
 
     pool->handles.count = 0;
     pool->freed.count = 0;
 
-    hgHandlePoolAlloc(pool);
+    handlePoolAlloc(pool);
 }
 
-HgHandle hgHandlePoolAlloc(HgHandlePool* pool)
+Handle handlePoolAlloc(HandlePool* pool)
 {
-    hgAssert(pool != nullptr);
+    HG_ASSERT(pool != nullptr);
 
     if (pool->freed.count > 0)
     {
-        HgHandle handle = hgArrayPop(&pool->freed);
-        pool->handles[hgHandleIdx(handle)] = handle;
+        Handle handle = arrayPop(&pool->freed);
+        pool->handles[handleIdx(handle)] = handle;
         return handle;
     }
     else
     {
-        HgHandle handle = {pool->handles.count};
-        *hgArrayPush(&pool->handles) = handle;
+        Handle handle = {pool->handles.count};
+        *arrayPush(&pool->handles) = handle;
         return handle;
     }
 }
 
-bool hgHandlePoolAlive(HgHandlePool* pool, HgHandle handle)
+bool handlePoolAlive(HandlePool* pool, Handle handle)
 {
-    hgAssert(pool != nullptr);
+    HG_ASSERT(pool != nullptr);
 
-    u32 idx = hgHandleIdx(handle);
-    return handle != hgHandleNull && idx < pool->handles.count && pool->handles[idx] == handle;
+    u32 idx = handleIdx(handle);
+    return handle != handleNull && idx < pool->handles.count && pool->handles[idx] == handle;
 }
 
-void hgHandlePoolFree(HgHandlePool* pool, HgHandle handle)
+void handlePoolFree(HandlePool* pool, Handle handle)
 {
-    hgAssert(pool != nullptr);
-    hgAssert(hgHandlePoolAlive(pool, handle));
-    pool->handles[hgHandleIdx(handle)] = hgHandleNull;
-    *hgArrayPush(&pool->freed) = hgHandleNextGeneration(handle);
+    HG_ASSERT(pool != nullptr);
+    HG_ASSERT(handlePoolAlive(pool, handle));
+    pool->handles[handleIdx(handle)] = handleNull;
+    *arrayPush(&pool->freed) = handleNextGeneration(handle);
 }
 
-HgVec2& HgVec2::operator+=(HgVec2 other)
+Vec2& Vec2::operator+=(Vec2 other)
 {
     x += other.x;
     y += other.y;
     return* this;
 }
 
-HgVec2& HgVec2::operator-=(HgVec2 other)
+Vec2& Vec2::operator-=(Vec2 other)
 {
     x -= other.x;
     y -= other.y;
     return* this;
 }
 
-HgVec2& HgVec2::operator*=(HgVec2 other)
+Vec2& Vec2::operator*=(Vec2 other)
 {
     x *= other.x;
     y *= other.y;
     return* this;
 }
 
-HgVec2& HgVec2::operator/=(HgVec2 other)
+Vec2& Vec2::operator/=(Vec2 other)
 {
     x /= other.x;
     y /= other.y;
     return* this;
 }
 
-HgVec3& HgVec3::operator+=(HgVec3 other)
+Vec3& Vec3::operator+=(Vec3 other)
 {
     x += other.x;
     y += other.y;
@@ -2456,7 +2456,7 @@ HgVec3& HgVec3::operator+=(HgVec3 other)
     return* this;
 }
 
-HgVec3& HgVec3::operator-=(HgVec3 other)
+Vec3& Vec3::operator-=(Vec3 other)
 {
     x -= other.x;
     y -= other.y;
@@ -2464,7 +2464,7 @@ HgVec3& HgVec3::operator-=(HgVec3 other)
     return* this;
 }
 
-HgVec3& HgVec3::operator*=(HgVec3 other)
+Vec3& Vec3::operator*=(Vec3 other)
 {
     x *= other.x;
     y *= other.y;
@@ -2472,7 +2472,7 @@ HgVec3& HgVec3::operator*=(HgVec3 other)
     return* this;
 }
 
-HgVec3& HgVec3::operator/=(HgVec3 other)
+Vec3& Vec3::operator/=(Vec3 other)
 {
     x /= other.x;
     y /= other.y;
@@ -2480,7 +2480,7 @@ HgVec3& HgVec3::operator/=(HgVec3 other)
     return* this;
 }
 
-HgVec4& HgVec4::operator+=(HgVec4 other)
+Vec4& Vec4::operator+=(Vec4 other)
 {
     x += other.x;
     y += other.y;
@@ -2489,7 +2489,7 @@ HgVec4& HgVec4::operator+=(HgVec4 other)
     return* this;
 }
 
-HgVec4& HgVec4::operator-=(HgVec4 other)
+Vec4& Vec4::operator-=(Vec4 other)
 {
     x -= other.x;
     y -= other.y;
@@ -2498,7 +2498,7 @@ HgVec4& HgVec4::operator-=(HgVec4 other)
     return* this;
 }
 
-HgVec4& HgVec4::operator*=(HgVec4 other)
+Vec4& Vec4::operator*=(Vec4 other)
 {
     x *= other.x;
     y *= other.y;
@@ -2507,7 +2507,7 @@ HgVec4& HgVec4::operator*=(HgVec4 other)
     return* this;
 }
 
-HgVec4& HgVec4::operator/=(HgVec4 other)
+Vec4& Vec4::operator/=(Vec4 other)
 {
     x /= other.x;
     y /= other.y;
@@ -2516,21 +2516,21 @@ HgVec4& HgVec4::operator/=(HgVec4 other)
     return* this;
 }
 
-HgMat2& HgMat2::operator+=(const HgMat2& other)
+Mat2& Mat2::operator+=(const Mat2& other)
 {
     x += other.x;
     y += other.y;
     return* this;
 }
 
-HgMat2& HgMat2::operator-=(const HgMat2& other)
+Mat2& Mat2::operator-=(const Mat2& other)
 {
     x -= other.x;
     y -= other.y;
     return* this;
 }
 
-HgMat3& HgMat3::operator+=(const HgMat3& other)
+Mat3& Mat3::operator+=(const Mat3& other)
 {
     x += other.x;
     y += other.y;
@@ -2538,7 +2538,7 @@ HgMat3& HgMat3::operator+=(const HgMat3& other)
     return* this;
 }
 
-HgMat3& HgMat3::operator-=(const HgMat3& other)
+Mat3& Mat3::operator-=(const Mat3& other)
 {
     x -= other.x;
     y -= other.y;
@@ -2546,7 +2546,7 @@ HgMat3& HgMat3::operator-=(const HgMat3& other)
     return* this;
 }
 
-HgMat4& HgMat4::operator+=(const HgMat4& other)
+Mat4& Mat4::operator+=(const Mat4& other)
 {
     x += other.x;
     y += other.y;
@@ -2555,7 +2555,7 @@ HgMat4& HgMat4::operator+=(const HgMat4& other)
     return* this;
 }
 
-HgMat4& HgMat4::operator-=(const HgMat4& other)
+Mat4& Mat4::operator-=(const Mat4& other)
 {
     x -= other.x;
     y -= other.y;
@@ -2564,7 +2564,7 @@ HgMat4& HgMat4::operator-=(const HgMat4& other)
     return* this;
 }
 
-void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat)
+void matTranspose(u32 width, u32 height, f32* dst, const f32* mat)
 {
     for (u32 i = 0; i < width; ++i)
     {
@@ -2575,42 +2575,42 @@ void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat)
     }
 }
 
-HgMat2 hgMatTranspose2(const HgMat2& mat)
+Mat2 matTranspose2(const Mat2& mat)
 {
-    HgMat2 ret;
-    hgMatTranspose(2, 2, &ret.x.x, &mat.x.x);
+    Mat2 ret;
+    matTranspose(2, 2, &ret.x.x, &mat.x.x);
     return ret;
 }
 
-HgMat3 hgMatTranspose3(const HgMat3& mat)
+Mat3 matTranspose3(const Mat3& mat)
 {
-    HgMat3 ret;
-    hgMatTranspose(3, 3, &ret.x.x, &mat.x.x);
+    Mat3 ret;
+    matTranspose(3, 3, &ret.x.x, &mat.x.x);
     return ret;
 }
 
-HgMat4 hgMatTranspose4(const HgMat4& mat)
+Mat4 matTranspose4(const Mat4& mat)
 {
-    HgMat4 ret;
-    hgMatTranspose(4, 4, &ret.x.x, &mat.x.x);
+    Mat4 ret;
+    matTranspose(4, 4, &ret.x.x, &mat.x.x);
     return ret;
 }
 
-HgComplex& HgComplex::operator+=(HgComplex other)
+Complex& Complex::operator+=(Complex other)
 {
     r += other.r;
     i += other.i;
     return* this;
 }
 
-HgComplex& HgComplex::operator-=(HgComplex other)
+Complex& Complex::operator-=(Complex other)
 {
     r -= other.r;
     i -= other.i;
     return* this;
 }
 
-HgQuat& HgQuat::operator+=(HgQuat other)
+Quat& Quat::operator+=(Quat other)
 {
     r += other.r;
     i += other.i;
@@ -2619,7 +2619,7 @@ HgQuat& HgQuat::operator+=(HgQuat other)
     return* this;
 }
 
-HgQuat& HgQuat::operator-=(HgQuat other)
+Quat& Quat::operator-=(Quat other)
 {
     r -= other.r;
     i -= other.i;
@@ -2628,77 +2628,77 @@ HgQuat& HgQuat::operator-=(HgQuat other)
     return* this;
 }
 
-void hgVecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+void vecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     for (u32 i = 0; i < size; ++i)
     {
         dst[i] = lhs[i] + rhs[i];
     }
 }
 
-void hgVecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+void vecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     for (u32 i = 0; i < size; ++i)
     {
         dst[i] = lhs[i] - rhs[i];
     }
 }
 
-void hgVecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+void vecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     for (u32 i = 0; i < size; ++i)
     {
         dst[i] = lhs[i] * rhs[i];
     }
 }
 
-void hgVecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec)
+void vecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(vec != nullptr);
     for (u32 i = 0; i < size; ++i)
     {
         dst[i] = scalar * vec[i];
     }
 }
 
-void hgVecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+void vecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     for (u32 i = 0; i < size; ++i)
     {
-        hgAssert(rhs[i] != 0);
+        HG_ASSERT(rhs[i] != 0);
         dst[i] = lhs[i] / rhs[i];
     }
 }
 
-void hgVecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar)
+void vecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    hgAssert(scalar != 0);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(vec != nullptr);
+    HG_ASSERT(scalar != 0);
     for (u32 i = 0; i < size; ++i)
     {
         dst[i] = vec[i] / scalar;
     }
 }
 
-void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+void vecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     *dst = 0;
     for (u32 i = 0; i < size; ++i)
     {
@@ -2706,84 +2706,84 @@ void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
     }
 }
 
-void hgVecLenSqr(u32 size, f32* dst, const f32* vec)
+void vecLenSqr(u32 size, f32* dst, const f32* vec)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    hgVecDot(size, dst, vec, vec);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(vec != nullptr);
+    vecDot(size, dst, vec, vec);
 }
 
-void hgVecLen(u32 size, f32* dst, const f32* vec)
+void vecLen(u32 size, f32* dst, const f32* vec)
 {
-    hgVecLenSqr(size, dst, vec);
+    vecLenSqr(size, dst, vec);
     *dst = std::sqrt(*dst);
 }
 
-f32 hgVecLen2(HgVec2 vec)
+f32 vecLen2(Vec2 vec)
 {
-    return std::sqrt(hgVecLenSqr2(vec));
+    return std::sqrt(vecLenSqr2(vec));
 }
 
-f32 hgVecLen3(HgVec3 vec)
+f32 vecLen3(Vec3 vec)
 {
-    return std::sqrt(hgVecLenSqr3(vec));
+    return std::sqrt(vecLenSqr3(vec));
 }
 
-f32 hgVecLen4(HgVec4 vec)
+f32 vecLen4(Vec4 vec)
 {
-    return std::sqrt(hgVecLenSqr4(vec));
+    return std::sqrt(vecLenSqr4(vec));
 }
 
-void hgVecNorm(u32 size, f32* dst, const f32* vec)
+void vecNorm(u32 size, f32* dst, const f32* vec)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(vec != nullptr);
     f32 len;
-    hgVecLen(size, &len, vec);
-    hgAssert(len != 0);
+    vecLen(size, &len, vec);
+    HG_ASSERT(len != 0);
     for (u32 i = 0; i < size; ++i)
     {
         dst[i] = vec[i] / len;
     }
 }
 
-HgVec2 hgVecNorm2(HgVec2 vec)
+Vec2 vecNorm2(Vec2 vec)
 {
-    f32 len = hgVecLen2(vec);
-    hgAssert(len != 0);
+    f32 len = vecLen2(vec);
+    HG_ASSERT(len != 0);
     return {vec.x / len, vec.y / len};
 }
 
-HgVec3 hgVecNorm3(HgVec3 vec)
+Vec3 vecNorm3(Vec3 vec)
 {
-    f32 len = hgVecLen3(vec);
-    hgAssert(len != 0);
+    f32 len = vecLen3(vec);
+    HG_ASSERT(len != 0);
     return {vec.x / len, vec.y / len, vec.z / len};
 }
 
-HgVec4 hgVecNorm4(HgVec4 vec)
+Vec4 vecNorm4(Vec4 vec)
 {
-    f32 len = hgVecLen4(vec);
-    hgAssert(len != 0);
+    f32 len = vecLen4(vec);
+    HG_ASSERT(len != 0);
     return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
 }
 
-void hgVecCross3(f32* dst, const f32* lhs, const f32* rhs)
+void vecCross3(f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
     dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
     dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
 }
 
-f32 hgVecCross2(HgVec2 lhs, HgVec2 rhs)
+f32 vecCross2(Vec2 lhs, Vec2 rhs)
 {
     return lhs.x * rhs.y - lhs.y * rhs.x;
 }
 
-HgVec3 hgVecCross3(HgVec3 lhs, HgVec3 rhs)
+Vec3 vecCross3(Vec3 lhs, Vec3 rhs)
 {
     return {
         lhs.y * rhs.z - lhs.z * rhs.y,
@@ -2792,11 +2792,11 @@ HgVec3 hgVecCross3(HgVec3 lhs, HgVec3 rhs)
     };
 }
 
-void hgMatAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+void matAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     for (u32 i = 0; i < width; ++i)
     {
         for (u32 j = 0; j < height; ++j)
@@ -2806,32 +2806,32 @@ void hgMatAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
     }
 }
 
-HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs)
+Mat2 operator+(const Mat2& lhs, const Mat2& rhs)
 {
-    HgMat2 result{};
-    hgMatAdd(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    Mat2 result{};
+    matAdd(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs)
+Mat3 operator+(const Mat3& lhs, const Mat3& rhs)
 {
-    HgMat3 result{};
-    hgMatAdd(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    Mat3 result{};
+    matAdd(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs)
+Mat4 operator+(const Mat4& lhs, const Mat4& rhs)
 {
-    HgMat4 result{};
-    hgMatAdd(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    Mat4 result{};
+    matAdd(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-void hgMatSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+void matSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     for (u32 i = 0; i < width; ++i)
     {
         for (u32 j = 0; j < height; ++j)
@@ -2841,33 +2841,33 @@ void hgMatSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
     }
 }
 
-HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs)
+Mat2 operator-(const Mat2& lhs, const Mat2& rhs)
 {
-    HgMat2 result{};
-    hgMatSub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    Mat2 result{};
+    matSub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs)
+Mat3 operator-(const Mat3& lhs, const Mat3& rhs)
 {
-    HgMat3 result{};
-    hgMatSub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    Mat3 result{};
+    matSub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs)
+Mat4 operator-(const Mat4& lhs, const Mat4& rhs)
 {
-    HgMat4 result{};
-    hgMatSub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    Mat4 result{};
+    matSub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-void hgMatMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
+void matMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
 {
-    hgAssert(hr == wl);
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
+    HG_ASSERT(hr == wl);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(lhs != nullptr);
+    HG_ASSERT(rhs != nullptr);
     (void)hr;
     for (u32 i = 0; i < wl; ++i)
     {
@@ -2882,32 +2882,32 @@ void hgMatMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f3
     }
 }
 
-HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs)
+Mat2 operator*(const Mat2& lhs, const Mat2& rhs)
 {
-    HgMat2 result{};
-    hgMatMul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
+    Mat2 result{};
+    matMul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
     return result;
 }
 
-HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs)
+Mat3 operator*(const Mat3& lhs, const Mat3& rhs)
 {
-    HgMat3 result{};
-    hgMatMul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
+    Mat3 result{};
+    matMul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
     return result;
 }
 
-HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs)
+Mat4 operator*(const Mat4& lhs, const Mat4& rhs)
 {
-    HgMat4 result{};
-    hgMatMul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
+    Mat4 result{};
+    matMul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
     return result;
 }
 
-void hgMatMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
+void matMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(mat != nullptr);
-    hgAssert(vec != nullptr);
+    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(mat != nullptr);
+    HG_ASSERT(vec != nullptr);
     for (u32 i = 0; i < height; ++i)
     {
         dst[i] = 0.0f;
@@ -2918,53 +2918,53 @@ void hgMatMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec
     }
 }
 
-HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs)
+Vec2 operator*(const Mat2& lhs, Vec2 rhs)
 {
-    HgVec2 result{};
-    hgMatMulVec(2, 2, &result.x, &lhs.x.x, &rhs.x);
+    Vec2 result{};
+    matMulVec(2, 2, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs)
+Vec3 operator*(const Mat3& lhs, Vec3 rhs)
 {
-    HgVec3 result{};
-    hgMatMulVec(3, 3, &result.x, &lhs.x.x, &rhs.x);
+    Vec3 result{};
+    matMulVec(3, 3, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs)
+Vec4 operator*(const Mat4& lhs, Vec4 rhs)
 {
-    HgVec4 result{};
-    hgMatMulVec(4, 4, &result.x, &lhs.x.x, &rhs.x);
+    Vec4 result{};
+    matMulVec(4, 4, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-f32 hgComplexAbsSqr(HgComplex comp)
+f32 complexAbsSqr(Complex comp)
 {
     return comp.r * comp.r + comp.i * comp.i;
 }
 
-f32 hgComplexAbs(HgComplex comp)
+f32 complexAbs(Complex comp)
 {
-    return sqrtf(hgComplexAbsSqr(comp));
+    return sqrtf(complexAbsSqr(comp));
 }
 
-HgComplex hgComplexNorm(HgComplex comp)
+Complex complexNorm(Complex comp)
 {
-    f32 len = hgComplexAbs(comp);
-    hgAssert(len != 0);
-    return HgComplex{comp.r / len, comp.i / len};
+    f32 len = complexAbs(comp);
+    HG_ASSERT(len != 0);
+    return Complex{comp.r / len, comp.i / len};
 }
 
-HgVec2 hgVecRot2(HgComplex lhs, HgVec2 rhs)
+Vec2 vecRot2(Complex lhs, Vec2 rhs)
 {
-    HgComplex c = lhs * HgComplex{rhs.x, rhs.y};
+    Complex c = lhs * Complex{rhs.x, rhs.y};
     return {c.r, c.i};
 }
 
-HgQuat operator*(HgQuat lhs, HgQuat rhs)
+Quat operator*(Quat lhs, Quat rhs)
 {
-    return HgQuat{
+    return Quat{
         lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
         lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
         lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
@@ -2972,27 +2972,27 @@ HgQuat operator*(HgQuat lhs, HgQuat rhs)
     };
 }
 
-f32 hgQuatAbsSqr(HgQuat quat)
+f32 quatAbsSqr(Quat quat)
 {
     return quat.r * quat.r + quat.i * quat.i + quat.j * quat.j + quat.k * quat.k;
 }
 
-f32 hgQuatAbs(HgQuat quat)
+f32 quatAbs(Quat quat)
 {
-    return sqrtf(hgQuatAbsSqr(quat));
+    return sqrtf(quatAbsSqr(quat));
 }
 
-HgQuat hgQuatNorm(HgQuat quat)
+Quat quatNorm(Quat quat)
 {
-    f32 len = hgQuatAbs(quat);
-    return HgQuat{quat.r / len, quat.i / len, quat.j / len, quat.k / len};
+    f32 len = quatAbs(quat);
+    return Quat{quat.r / len, quat.i / len, quat.j / len, quat.k / len};
 }
 
-HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle)
+Quat quatAxisAngle(Vec3 axis, f32 angle)
 {
     f32 halfAngle = angle * (f32)0.5;
     f32 sinHalfAngle = sinf(halfAngle);
-    return HgQuat{
+    return Quat{
         cosf(halfAngle),
         axis.x * sinHalfAngle,
         axis.y * sinHalfAngle,
@@ -3000,79 +3000,79 @@ HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle)
     };
 }
 
-HgQuat hgQuatBetween(HgVec3 from, HgVec3 to)
+Quat quatBetween(Vec3 from, Vec3 to)
 {
-    hgAssert(from != HgVec3{0});
-    hgAssert(to != HgVec3{0});
+    HG_ASSERT(from != Vec3{0});
+    HG_ASSERT(to != Vec3{0});
 
-    from = hgVecNorm3(from);
-    to = hgVecNorm3(to);
+    from = vecNorm3(from);
+    to = vecNorm3(to);
 
-    f32 dot = hgVecDot3(from, to);
+    f32 dot = vecDot3(from, to);
 
     if (dot > 1 - FLT_EPSILON)
     {
-        return HgQuat{1};
+        return Quat{1};
     }
 
     if (dot < -1 + FLT_EPSILON)
     {
-        HgVec3 axis = std::abs(from.x) >= 1 - FLT_EPSILON
-            ? hgVecCross3(from, {0, 1, 0})
-            : hgVecCross3(from, {1, 0, 0});
-        return HgQuat(0, axis.x, axis.y, axis.z);
+        Vec3 axis = std::abs(from.x) >= 1 - FLT_EPSILON
+            ? vecCross3(from, {0, 1, 0})
+            : vecCross3(from, {1, 0, 0});
+        return Quat(0, axis.x, axis.y, axis.z);
     }
 
-    HgVec3 axis = hgVecCross3(from, to);
-    return hgQuatNorm(HgQuat{dot + 1, axis.x, axis.y, axis.z});
+    Vec3 axis = vecCross3(from, to);
+    return quatNorm(Quat{dot + 1, axis.x, axis.y, axis.z});
 }
 
-HgVec3 hgVecRot3(HgQuat lhs, HgVec3 rhs)
+Vec3 vecRot3(Quat lhs, Vec3 rhs)
 {
-    HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hgQuatConj(lhs);
+    Quat q = lhs * Quat{0, rhs.x, rhs.y, rhs.z} * quatConj(lhs);
     return {q.i, q.j, q.k};
 }
 
-HgMat3 hgMatRot3(HgQuat lhs, HgMat3 rhs)
+Mat3 matRot3(Quat lhs, Mat3 rhs)
 {
-    return HgMat3{
-        hgVecRot3(lhs, rhs.x),
-        hgVecRot3(lhs, rhs.y),
-        hgVecRot3(lhs, rhs.z),
+    return Mat3{
+        vecRot3(lhs, rhs.x),
+        vecRot3(lhs, rhs.y),
+        vecRot3(lhs, rhs.z),
     };
 }
 
-HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation)
+Mat4 matModel2D(Vec3 position, Vec2 scale, f32 rotation)
 {
-    HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
+    Mat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
     f32 rotSin = sinf(rotation);
     f32 rotCos = cosf(rotation);
-    HgMat2 rot{{rotCos, rotSin}, {-rotSin, rotCos}};
-    HgMat4 m4 = HgMat4{rot * m2};
+    Mat2 rot{{rotCos, rotSin}, {-rotSin, rotCos}};
+    Mat4 m4 = Mat4{rot * m2};
     m4.w.x = position.x;
     m4.w.y = position.y;
     m4.w.z = position.z;
     return m4;
 }
 
-HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation)
+Mat4 matModel3D(const Vec3& position, const Vec3& scale, const Quat& rotation)
 {
-    HgMat3 m3{1.0f};
+    Mat3 m3{1.0f};
     m3.x.x = scale.x;
     m3.y.y = scale.y;
     m3.z.z = scale.z;
-    m3 = hgMatRot3(rotation, m3);
-    HgMat4 m4 = HgMat4{m3};
+    m3 = matRot3(rotation, m3);
+    Mat4 m4 = Mat4{m3};
     m4.w.x = position.x;
     m4.w.y = position.y;
     m4.w.z = position.z;
     return m4;
 }
 
-HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation)
+Mat4 matView(const Vec3& position, const Vec3& zoom, const Quat& rotation)
 {
-    HgMat4 rot{hgMatRot3(hgQuatConj(rotation), HgMat3{1.0f})};
-    HgMat4 pos{1.0f};
+    Mat4 rot{matRot3(quatConj(rotation), Mat3{1.0f})};
+    Mat4 pos{1.0f};
     pos.x.x = zoom.x;
     pos.y.y = zoom.y;
     pos.z.z = zoom.z;
@@ -3082,24 +3082,24 @@ HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotat
     return rot * pos;
 }
 
-HgMat4 hgMatModelToView(const HgMat4& model)
+Mat4 matModelToView(const Mat4& model)
 {
-    if (HgVec3{model.x} == HgVec3{0} || HgVec3{model.y} == HgVec3{0} || HgVec3{model.z} == HgVec3{0})
-        return HgMat4{HgMat3{0}};
+    if (Vec3{model.x} == Vec3{0} || Vec3{model.y} == Vec3{0} || Vec3{model.z} == Vec3{0})
+        return Mat4{Mat3{0}};
 
-    HgMat3 inv3 = hgMatTranspose3(HgMat3{
-        hgVecNorm3(HgVec3{model.x}),
-        hgVecNorm3(HgVec3{model.y}),
-        hgVecNorm3(HgVec3{model.z}),
+    Mat3 inv3 = matTranspose3(Mat3{
+        vecNorm3(Vec3{model.x}),
+        vecNorm3(Vec3{model.y}),
+        vecNorm3(Vec3{model.z}),
     });
-    HgMat4 inv4{inv3};
-    inv4.w = HgVec4{inv3 * HgVec3{model.w} * -1, 1};
+    Mat4 inv4{inv3};
+    inv4.w = Vec4{inv3 * Vec3{model.w} * -1, 1};
     return inv4;
 }
 
-HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
+Mat4 matOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
 {
-    return HgMat4{
+    return Mat4{
         {2.0f / (right - left), 0.0f, 0.0f, 0.0f},
         {0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
         {0.0f, 0.0f, 1.0f / (far - near), 0.0f},
@@ -3107,12 +3107,12 @@ HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32
     };
 }
 
-HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
+Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far)
 {
-    hgAssert(near > 0.0f);
-    hgAssert(far > near);
+    HG_ASSERT(near > 0.0f);
+    HG_ASSERT(far > near);
     f32 scale = 1.0f / (f32)tan(fov * 0.5f);
-    return HgMat4{
+    return Mat4{
         {scale / aspect, 0.0f, 0.0f, 0.0f},
         {0.0f, scale, 0.0f, 0.0f},
         {0.0f, 0.0f, far / (far - near), 1.0f},
@@ -3120,90 +3120,90 @@ HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
     };
 }
 
-bool hgContainsPointCircle(HgVec2 point, HgCircle circle)
+bool containsPointCircle(Vec2 point, Circle circle)
 {
-    return hgDistPointCircle(point, circle) <= FLT_EPSILON;
+    return distPointCircle(point, circle) <= FLT_EPSILON;
 }
 
-f32 hgDistPointCircle(HgVec2 point, HgCircle circle)
+f32 distPointCircle(Vec2 point, Circle circle)
 {
-    return hgVecLen2(point - circle.pos) - circle.radius;
+    return vecLen2(point - circle.pos) - circle.radius;
 }
 
-HgVec2 hgClosestPointCircle(HgVec2 pos, HgCircle circle)
+Vec2 closestPointCircle(Vec2 pos, Circle circle)
 {
-    return circle.pos + circle.radius * hgVecNorm2(pos - circle.pos);
+    return circle.pos + circle.radius * vecNorm2(pos - circle.pos);
 }
 
-bool hgIntersectCircles(HgCircle a, HgCircle b)
+bool intersectCircles(Circle a, Circle b)
 {
-    return hgDistCircles(a, b) <= FLT_EPSILON;
+    return distCircles(a, b) <= FLT_EPSILON;
 }
 
-f32 hgDistCircles(HgCircle a, HgCircle b)
+f32 distCircles(Circle a, Circle b)
 {
-    return hgVecLen2(a.pos - b.pos) - a.radius - b.radius;
+    return vecLen2(a.pos - b.pos) - a.radius - b.radius;
 }
 
-HgRect hgRectEmpty()
+Rect rectEmpty()
 {
     return {
-        HgVec2{INFINITY},
-        HgVec2{-INFINITY},
+        Vec2{INFINITY},
+        Vec2{-INFINITY},
     };
 }
 
-HgRect hgRectAddPoint(HgRect rect, HgVec2 point)
+Rect rectAddPoint(Rect rect, Vec2 point)
 {
-    HgRect newRect;
-    newRect.pos.x = hgMin(rect.pos.x, point.x - FLT_EPSILON);
-    newRect.pos.y = hgMin(rect.pos.y, point.y - FLT_EPSILON);
-    newRect.size.x = hgMax(rect.size.x + rect.pos.x, point.x + FLT_EPSILON) - newRect.pos.x;
-    newRect.size.y = hgMax(rect.size.y + rect.pos.y, point.y + FLT_EPSILON) - newRect.pos.y;
+    Rect newRect;
+    newRect.pos.x = min(rect.pos.x, point.x - FLT_EPSILON);
+    newRect.pos.y = min(rect.pos.y, point.y - FLT_EPSILON);
+    newRect.size.x = max(rect.size.x + rect.pos.x, point.x + FLT_EPSILON) - newRect.pos.x;
+    newRect.size.y = max(rect.size.y + rect.pos.y, point.y + FLT_EPSILON) - newRect.pos.y;
     return newRect;
 }
 
-bool hgContainsPointRect(HgVec2 point, HgRect rect)
+bool containsPointRect(Vec2 point, Rect rect)
 {
     return point.x >= rect.pos.x - FLT_EPSILON && point.x <= rect.pos.x + rect.size.x + FLT_EPSILON
         && point.y >= rect.pos.y - FLT_EPSILON && point.y <= rect.pos.y + rect.size.y + FLT_EPSILON;
 }
 
-HgVec2 hgClosestPointRect(HgVec2 pos, HgRect rect)
+Vec2 closestPointRect(Vec2 pos, Rect rect)
 {
     return {
-        hgClamp(pos.x, rect.pos.x, rect.pos.x + rect.size.x),
-        hgClamp(pos.y, rect.pos.y, rect.pos.y + rect.size.y),
+        clamp(pos.x, rect.pos.x, rect.pos.x + rect.size.x),
+        clamp(pos.y, rect.pos.y, rect.pos.y + rect.size.y),
     };
 }
 
-bool hgIntersectRects(HgRect a, HgRect b)
+bool intersectRects(Rect a, Rect b)
 {
     return a.pos.x + a.size.x >= b.pos.x && a.pos.x <= b.pos.x + b.size.x
         && a.pos.y + a.size.y >= b.pos.y && a.pos.y <= b.pos.y + b.size.y;
 }
 
-bool hgIntersectRectCircle(HgRect rect, HgCircle circle)
+bool intersectRectCircle(Rect rect, Circle circle)
 {
-    return hgContainsPointCircle(hgClosestPointRect(circle.pos, rect), circle);
+    return containsPointCircle(closestPointRect(circle.pos, rect), circle);
 }
 
-bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgHit2D* hit)
+bool intersectRays2D(Ray2D ray, Ray2D other, Hit2D* hit)
 {
-    hgAssert(ray.dir != HgVec2{0});
-    hgAssert(other.dir != HgVec2{0});
+    HG_ASSERT(ray.dir != Vec2{0});
+    HG_ASSERT(other.dir != Vec2{0});
 
-    f32 denom = hgVecCross2(ray.dir, other.dir);
+    f32 denom = vecCross2(ray.dir, other.dir);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
-    HgVec2 diff = other.pos - ray.pos;
+    Vec2 diff = other.pos - ray.pos;
 
-    f32 t = hgVecCross2(diff, other.dir) / denom;
+    f32 t = vecCross2(diff, other.dir) / denom;
     if (t < -FLT_EPSILON)
         return false;
 
-    f32 tOther = hgVecCross2(diff, ray.dir) / denom;
+    f32 tOther = vecCross2(diff, ray.dir) / denom;
     if (tOther < -FLT_EPSILON)
         return false;
 
@@ -3211,31 +3211,31 @@ bool hgIntersectRays2D(HgRay2D ray, HgRay2D other, HgHit2D* hit)
     {
         hit->dist = t;
         hit->normal = denom < 0
-            ? hgVecNorm2({other.dir.y, -other.dir.x})
-            : hgVecNorm2({-other.dir.y, other.dir.x});
+            ? vecNorm2({other.dir.y, -other.dir.x})
+            : vecNorm2({-other.dir.y, other.dir.x});
     }
     return true;
 }
 
-bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgHit2D* hit)
+bool intersectRayLine2D(Ray2D ray, Line2D line, Hit2D* hit)
 {
-    hgAssert(ray.dir != HgVec2{0});
-    if (hgVecEq2(line.begin, line.end))
+    HG_ASSERT(ray.dir != Vec2{0});
+    if (vecEq2(line.begin, line.end))
         return false;
 
-    HgVec2 lineDir = line.end - line.begin;
+    Vec2 lineDir = line.end - line.begin;
 
-    f32 denom = hgVecCross2(ray.dir, lineDir);
+    f32 denom = vecCross2(ray.dir, lineDir);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
-    HgVec2 diff = line.begin - ray.pos;
+    Vec2 diff = line.begin - ray.pos;
 
-    f32 t = hgVecCross2(diff, lineDir) / denom;
+    f32 t = vecCross2(diff, lineDir) / denom;
     if (t < -FLT_EPSILON)
         return false;
 
-    f32 tOther = hgVecCross2(diff, ray.dir) / denom;
+    f32 tOther = vecCross2(diff, ray.dir) / denom;
     if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
         return false;
 
@@ -3243,22 +3243,22 @@ bool hgIntersectRayLine2D(HgRay2D ray, HgLine2D line, HgHit2D* hit)
     {
         hit->dist = t;
         hit->normal = denom < 0
-            ? hgVecNorm2({lineDir.y, -lineDir.x})
-            : hgVecNorm2({-lineDir.y, lineDir.x});
+            ? vecNorm2({lineDir.y, -lineDir.x})
+            : vecNorm2({-lineDir.y, lineDir.x});
     }
     return true;
 }
 
-bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgHit2D* hit)
+bool intersectRayCircle(Ray2D ray, Circle circle, Hit2D* hit)
 {
-    hgAssert(ray.dir != HgVec2{0});
+    HG_ASSERT(ray.dir != Vec2{0});
 
-    HgVec2 rel = ray.pos - circle.pos;
-    f32 a = hgVecDot2(ray.dir, ray.dir);
-    f32 b = 2 * hgVecDot2(ray.dir, rel);
-    f32 c = hgVecDot2(rel, rel) - hgSquare(circle.radius);
+    Vec2 rel = ray.pos - circle.pos;
+    f32 a = vecDot2(ray.dir, ray.dir);
+    f32 b = 2 * vecDot2(ray.dir, rel);
+    f32 c = vecDot2(rel, rel) - square(circle.radius);
 
-    f32 det = hgSquare(b) - 4 * a * c;
+    f32 det = square(b) - 4 * a * c;
     if (det < 0)
         return false;
     f32 rtdet = sqrtf(det);
@@ -3277,13 +3277,13 @@ bool hgIntersectRayCircle(HgRay2D ray, HgCircle circle, HgHit2D* hit)
     return true;
 }
 
-bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgHit2D* hit)
+bool intersectRayRect(Ray2D ray, Rect rect, Hit2D* hit)
 {
-    hgAssert(ray.dir != HgVec2{0});
-    if (hgVecEq2(rect.size, HgVec2{0}))
+    HG_ASSERT(ray.dir != Vec2{0});
+    if (vecEq2(rect.size, Vec2{0}))
         return false;
 
-    if (hgContainsPointRect(ray.pos, rect))
+    if (containsPointRect(ray.pos, rect))
     {
         if (hit != nullptr)
         {
@@ -3300,7 +3300,7 @@ bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgHit2D* hit)
         (rect.pos.y + rect.size.y - ray.pos.y) / ray.dir.y,
     };
 
-    constexpr HgVec2 norms[4] = {
+    constexpr Vec2 norms[4] = {
         {-1, 0},
         {0, -1},
         {1, 0},
@@ -3308,13 +3308,13 @@ bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgHit2D* hit)
     };
 
     f32 t = INFINITY;
-    HgVec2 norm;
-    for (u32 i = 0; i < hgArrayCount(hits); ++i)
+    Vec2 norm;
+    for (u32 i = 0; i < arrayCount(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON)
             continue;
 
-        if (!hgContainsPointRect(ray.pos + hits[i] * ray.dir, rect))
+        if (!containsPointRect(ray.pos + hits[i] * ray.dir, rect))
             continue;
 
         if (hits[i] < t)
@@ -3334,25 +3334,25 @@ bool hgIntersectRayRect(HgRay2D ray, HgRect rect, HgHit2D* hit)
     return true;
 }
 
-bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgHit2D* hit)
+bool intersectLines2D(Line2D line, Line2D other, Hit2D* hit)
 {
-    if (hgVecEq2(line.begin, line.end) || hgVecEq2(other.begin, other.end))
+    if (vecEq2(line.begin, line.end) || vecEq2(other.begin, other.end))
         return false;
 
-    HgVec2 lineDir = line.end - line.begin;
-    HgVec2 otherDir = other.end - other.begin;
+    Vec2 lineDir = line.end - line.begin;
+    Vec2 otherDir = other.end - other.begin;
 
-    f32 denom = hgVecCross2(lineDir, otherDir);
+    f32 denom = vecCross2(lineDir, otherDir);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
-    HgVec2 diff = other.begin - line.begin;
+    Vec2 diff = other.begin - line.begin;
 
-    f32 t = hgVecCross2(diff, otherDir) / denom;
+    f32 t = vecCross2(diff, otherDir) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return false;
 
-    f32 tOther = hgVecCross2(diff, lineDir) / denom;
+    f32 tOther = vecCross2(diff, lineDir) / denom;
     if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
         return false;
 
@@ -3360,31 +3360,31 @@ bool hgIntersectLines2D(HgLine2D line, HgLine2D other, HgHit2D* hit)
     {
         hit->dist = t;
         hit->normal = denom < 0
-            ? hgVecNorm2({otherDir.y, -otherDir.x})
-            : hgVecNorm2({-otherDir.y, otherDir.x});
+            ? vecNorm2({otherDir.y, -otherDir.x})
+            : vecNorm2({-otherDir.y, otherDir.x});
     }
     return true;
 }
 
-bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgHit2D* hit)
+bool intersectLineRay2D(Line2D line, Ray2D ray, Hit2D* hit)
 {
-    if (hgVecEq2(line.begin, line.end))
+    if (vecEq2(line.begin, line.end))
         return false;
-    hgAssert(ray.dir != HgVec2{0});
+    HG_ASSERT(ray.dir != Vec2{0});
 
-    HgVec2 lineDir = line.end - line.begin;
+    Vec2 lineDir = line.end - line.begin;
 
-    f32 denom = hgVecCross2(lineDir, ray.dir);
+    f32 denom = vecCross2(lineDir, ray.dir);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
-    HgVec2 diff = ray.pos - line.begin;
+    Vec2 diff = ray.pos - line.begin;
 
-    f32 t = hgVecCross2(diff, ray.dir) / denom;
+    f32 t = vecCross2(diff, ray.dir) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return false;
 
-    f32 tRay = hgVecCross2(diff, lineDir) / denom;
+    f32 tRay = vecCross2(diff, lineDir) / denom;
     if (tRay < -FLT_EPSILON)
         return false;
 
@@ -3392,22 +3392,22 @@ bool hgIntersectLineRay2D(HgLine2D line, HgRay2D ray, HgHit2D* hit)
     {
         hit->dist = t;
         hit->normal = denom < 0
-            ? hgVecNorm2({ray.dir.y, -ray.dir.x})
-            : hgVecNorm2({-ray.dir.y, ray.dir.x});
+            ? vecNorm2({ray.dir.y, -ray.dir.x})
+            : vecNorm2({-ray.dir.y, ray.dir.x});
     }
     return true;
 }
 
-bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgHit2D* hit)
+bool intersectLineCircle(Line2D line, Circle circle, Hit2D* hit)
 {
-    HgVec2 dir = line.end - line.begin;
+    Vec2 dir = line.end - line.begin;
 
-    HgVec2 rel = line.begin - circle.pos;
-    f32 a = hgVecDot2(dir, dir);
-    f32 b = 2 * hgVecDot2(dir, rel);
-    f32 c = hgVecDot2(rel, rel) - hgSquare(circle.radius);
+    Vec2 rel = line.begin - circle.pos;
+    f32 a = vecDot2(dir, dir);
+    f32 b = 2 * vecDot2(dir, rel);
+    f32 c = vecDot2(rel, rel) - square(circle.radius);
 
-    f32 det = hgSquare(b) - 4 * a * c;
+    f32 det = square(b) - 4 * a * c;
     if (det < 0)
         return false;
     f32 rtdet = sqrtf(det);
@@ -3428,9 +3428,9 @@ bool hgIntersectLineCircle(HgLine2D line, HgCircle circle, HgHit2D* hit)
     return true;
 }
 
-bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgHit2D* hit)
+bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit)
 {
-    if (hgVecEq2(line.begin, line.end) || hgVecEq2(rect.size, HgVec2{0}))
+    if (vecEq2(line.begin, line.end) || vecEq2(rect.size, Vec2{0}))
         return false;
 
     f32 hits[4] = {
@@ -3440,7 +3440,7 @@ bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgHit2D* hit)
         (rect.pos.y + rect.size.y - line.begin.y) / (line.end.y - line.begin.y),
     };
 
-    constexpr HgVec2 norms[4] = {
+    constexpr Vec2 norms[4] = {
         {-1, 0},
         {0, -1},
         {1, 0},
@@ -3448,13 +3448,13 @@ bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgHit2D* hit)
     };
 
     f32 t = INFINITY;
-    HgVec2 norm;
-    for (u32 i = 0; i < hgArrayCount(hits); ++i)
+    Vec2 norm;
+    for (u32 i = 0; i < arrayCount(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON || hits[i] > 1 + FLT_EPSILON)
             continue;
 
-        if (!hgContainsPointRect(line.begin + hits[i] * (line.end - line.begin), rect))
+        if (!containsPointRect(line.begin + hits[i] * (line.end - line.begin), rect))
             continue;
 
         if (hits[i] < t)
@@ -3474,108 +3474,108 @@ bool hgIntersectLineRect(HgLine2D line, HgRect rect, HgHit2D* hit)
     return true;
 }
 
-bool hgContainsPointSphere(HgVec3 point, HgSphere sphere)
+bool containsPointSphere(Vec3 point, Sphere sphere)
 {
-    return hgDistPointSphere(point, sphere) <= 0;
+    return distPointSphere(point, sphere) <= 0;
 }
 
-f32 hgDistPointSphere(HgVec3 point, HgSphere sphere)
+f32 distPointSphere(Vec3 point, Sphere sphere)
 {
-    return hgVecLen3(point - sphere.pos) - sphere.radius;
+    return vecLen3(point - sphere.pos) - sphere.radius;
 }
 
-HgVec3 hgClosestPointSphere(HgVec3 pos, HgSphere sphere)
+Vec3 closestPointSphere(Vec3 pos, Sphere sphere)
 {
-    HgVec3 rel = pos - sphere.pos;
-    if (hgVecLenSqr3(rel) <= sphere.radius + FLT_EPSILON)
+    Vec3 rel = pos - sphere.pos;
+    if (vecLenSqr3(rel) <= sphere.radius + FLT_EPSILON)
         return pos;
-    return sphere.pos + sphere.radius * hgVecNorm3(rel);
+    return sphere.pos + sphere.radius * vecNorm3(rel);
 }
 
-bool hgIntersectSpheres(HgSphere a, HgSphere b)
+bool intersectSpheres(Sphere a, Sphere b)
 {
-    return hgDistSpheres(a, b) <= 0;
+    return distSpheres(a, b) <= 0;
 }
 
-f32 hgDistSpheres(HgSphere a, HgSphere b)
+f32 distSpheres(Sphere a, Sphere b)
 {
-    return hgVecLen3(a.pos - b.pos) - a.radius - b.radius;
+    return vecLen3(a.pos - b.pos) - a.radius - b.radius;
 }
 
-HgBox hgBoxEmpty()
+Box boxEmpty()
 {
     return {
-        HgVec3{INFINITY},
-        HgVec3{-INFINITY},
+        Vec3{INFINITY},
+        Vec3{-INFINITY},
     };
 }
 
-HgBox hgBoxAddPoint(HgBox box, HgVec3 point)
+Box boxAddPoint(Box box, Vec3 point)
 {
-    HgBox newBox;
-    newBox.pos.x = hgMin(box.pos.x, point.x - FLT_EPSILON);
-    newBox.pos.y = hgMin(box.pos.y, point.y - FLT_EPSILON);
-    newBox.pos.z = hgMin(box.pos.z, point.z - FLT_EPSILON);
-    newBox.size.x = hgMax(box.size.x + box.pos.x, point.x + FLT_EPSILON) - newBox.pos.x;
-    newBox.size.y = hgMax(box.size.y + box.pos.y, point.y + FLT_EPSILON) - newBox.pos.y;
-    newBox.size.z = hgMax(box.size.z + box.pos.z, point.z + FLT_EPSILON) - newBox.pos.z;
+    Box newBox;
+    newBox.pos.x = min(box.pos.x, point.x - FLT_EPSILON);
+    newBox.pos.y = min(box.pos.y, point.y - FLT_EPSILON);
+    newBox.pos.z = min(box.pos.z, point.z - FLT_EPSILON);
+    newBox.size.x = max(box.size.x + box.pos.x, point.x + FLT_EPSILON) - newBox.pos.x;
+    newBox.size.y = max(box.size.y + box.pos.y, point.y + FLT_EPSILON) - newBox.pos.y;
+    newBox.size.z = max(box.size.z + box.pos.z, point.z + FLT_EPSILON) - newBox.pos.z;
     return newBox;
 }
 
-bool hgContainsPointBox(HgVec3 point, HgBox box)
+bool containsPointBox(Vec3 point, Box box)
 {
     return point.x >= box.pos.x && point.x <= box.pos.x + box.size.x
         && point.y >= box.pos.y && point.y <= box.pos.y + box.size.y
         && point.z >= box.pos.z && point.z <= box.pos.z + box.size.z;
 }
 
-HgVec3 hgClosestPointBox(HgVec3 pos, HgBox box)
+Vec3 closestPointBox(Vec3 pos, Box box)
 {
     return {
-        hgClamp(pos.x, box.pos.x, box.pos.x + box.size.x),
-        hgClamp(pos.y, box.pos.y, box.pos.y + box.size.y),
-        hgClamp(pos.z, box.pos.z, box.pos.z + box.size.z),
+        clamp(pos.x, box.pos.x, box.pos.x + box.size.x),
+        clamp(pos.y, box.pos.y, box.pos.y + box.size.y),
+        clamp(pos.z, box.pos.z, box.pos.z + box.size.z),
     };
 }
 
-bool hgIntersectBox(HgBox a, HgBox b)
+bool intersectBox(Box a, Box b)
 {
     return a.pos.x + a.size.x >= b.pos.x && a.pos.x <= b.pos.x + b.size.x
         && a.pos.y + a.size.y >= b.pos.y && a.pos.y <= b.pos.y + b.size.y
         && a.pos.z + a.size.z >= b.pos.z && a.pos.z <= b.pos.z + b.size.z;
 }
 
-bool hgIntersectBoxSphere(HgBox box, HgSphere sphere)
+bool intersectBoxSphere(Box box, Sphere sphere)
 {
-    return hgContainsPointSphere(hgClosestPointBox(sphere.pos, box), sphere);
+    return containsPointSphere(closestPointBox(sphere.pos, box), sphere);
 }
 
-HgPlane hgPlaneFromPoint(HgVec3 point, HgVec3 normal)
+Plane planeFromPoint(Vec3 point, Vec3 normal)
 {
-    HgPlane plane;
-    plane.normal = hgVecNorm3(normal);
-    plane.dist = hgVecDot3(plane.normal, point);
+    Plane plane;
+    plane.normal = vecNorm3(normal);
+    plane.dist = vecDot3(plane.normal, point);
     return plane;
 }
 
-HgPlane hgPlaneFromTri(HgTri tri)
+Plane planeFromTri(Tri tri)
 {
-    HgPlane plane;
-    plane.normal = hgVecNorm3(hgVecCross3(tri.b - tri.a, tri.c - tri.a));
-    plane.dist = hgVecDot3(plane.normal, tri.a);
+    Plane plane;
+    plane.normal = vecNorm3(vecCross3(tri.b - tri.a, tri.c - tri.a));
+    plane.dist = vecDot3(plane.normal, tri.a);
     return plane;
 }
 
-bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgHit3D* hit)
+bool intersectRaySphere(Ray3D ray, Sphere sphere, Hit3D* hit)
 {
-    hgAssert(ray.dir != HgVec3{0});
+    HG_ASSERT(ray.dir != Vec3{0});
 
-    HgVec3 rel = ray.pos - sphere.pos;
-    f32 a = hgVecDot3(ray.dir, ray.dir);
-    f32 b = 2 * hgVecDot3(ray.dir, rel);
-    f32 c = hgVecDot3(rel, rel) - hgSquare(sphere.radius);
+    Vec3 rel = ray.pos - sphere.pos;
+    f32 a = vecDot3(ray.dir, ray.dir);
+    f32 b = 2 * vecDot3(ray.dir, rel);
+    f32 c = vecDot3(rel, rel) - square(sphere.radius);
 
-    f32 det = hgSquare(b) - 4 * a * c;
+    f32 det = square(b) - 4 * a * c;
     if (det < 0)
         return false;
     f32 rtdet = sqrtf(det);
@@ -3594,13 +3594,13 @@ bool hgIntersectRaySphere(HgRay3D ray, HgSphere sphere, HgHit3D* hit)
     return true;
 }
 
-bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit)
+bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit)
 {
-    hgAssert(ray.dir != HgVec3{0});
-    if (hgVecEq3(box.size, HgVec3{0}))
+    HG_ASSERT(ray.dir != Vec3{0});
+    if (vecEq3(box.size, Vec3{0}))
         return false;
 
-    if (hgContainsPointBox(ray.pos, box))
+    if (containsPointBox(ray.pos, box))
     {
         if (hit != nullptr)
         {
@@ -3619,7 +3619,7 @@ bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit)
         (box.pos.z + box.size.z - ray.pos.y) / ray.dir.z,
     };
 
-    constexpr HgVec3 norms[6] = {
+    constexpr Vec3 norms[6] = {
         {-1, 0, 0},
         {0, -1, 0},
         {0, 0, -1},
@@ -3629,13 +3629,13 @@ bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit)
     };
 
     f32 t = INFINITY;
-    HgVec3 norm;
-    for (u32 i = 0; i < hgArrayCount(hits); ++i)
+    Vec3 norm;
+    for (u32 i = 0; i < arrayCount(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON)
             continue;
 
-        if (!hgContainsPointBox(ray.pos + hits[i] * ray.dir, box))
+        if (!containsPointBox(ray.pos + hits[i] * ray.dir, box))
             continue;
 
         if (hits[i] < t)
@@ -3656,34 +3656,34 @@ bool hgIntersectRayBox(HgRay3D ray, HgBox box, HgHit3D* hit)
 }
 
 // Moller-Trumbore, Real Time Rendering 4th Edition
-bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgHit3D* hit)
+bool intersectRayTri(Ray3D ray, Tri tri, Hit3D* hit)
 {
-    hgAssert(ray.dir != HgVec3{0});
+    HG_ASSERT(ray.dir != Vec3{0});
 
     if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
         return false;
 
-    HgVec3 e1 = tri.b - tri.a;
-    HgVec3 e2 = tri.c - tri.a;
-    HgVec3 q = hgVecCross3(ray.dir, e2);
+    Vec3 e1 = tri.b - tri.a;
+    Vec3 e2 = tri.c - tri.a;
+    Vec3 q = vecCross3(ray.dir, e2);
 
-    f32 a = hgVecDot3(e1, q);
+    f32 a = vecDot3(e1, q);
     if (std::abs(a) < FLT_EPSILON)
         return false;
 
-    HgVec3 s = ray.pos - tri.a;
+    Vec3 s = ray.pos - tri.a;
 
-    f32 u = hgVecDot3(s, q) / a;
+    f32 u = vecDot3(s, q) / a;
     if (u < -FLT_EPSILON)
         return false;
 
-    HgVec3 r = hgVecCross3(s, e1);
+    Vec3 r = vecCross3(s, e1);
 
-    f32 v = hgVecDot3(ray.dir, r) / a;
+    f32 v = vecDot3(ray.dir, r) / a;
     if (v < -FLT_EPSILON || u + v > 1 + FLT_EPSILON)
         return false;
 
-    f32 t = hgVecDot3(e2, r) / a;
+    f32 t = vecDot3(e2, r) / a;
     if (t < -FLT_EPSILON)
         return false;
 
@@ -3691,22 +3691,22 @@ bool hgIntersectRayTri(HgRay3D ray, HgTri tri, HgHit3D* hit)
     {
         hit->dist = t;
         hit->normal = a < 0
-            ? hgVecNorm3(hgVecCross3(e2, e1))
-            : hgVecNorm3(hgVecCross3(e1, e2));
+            ? vecNorm3(vecCross3(e2, e1))
+            : vecNorm3(vecCross3(e1, e2));
     }
     return true;
 }
 
-bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgHit3D* hit)
+bool intersectRayPlane(Ray3D ray, Plane plane, Hit3D* hit)
 {
-    hgAssert(ray.dir != HgVec3{0});
-    hgAssert(plane.normal != HgVec3{0});
+    HG_ASSERT(ray.dir != Vec3{0});
+    HG_ASSERT(plane.normal != Vec3{0});
 
-    f32 denom = hgVecDot3(ray.dir, plane.normal);
+    f32 denom = vecDot3(ray.dir, plane.normal);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
-    f32 t = (plane.dist - hgVecDot3(ray.pos, plane.normal)) / denom;
+    f32 t = (plane.dist - vecDot3(ray.pos, plane.normal)) / denom;
     if (t < -FLT_EPSILON)
         return false;
 
@@ -3720,16 +3720,16 @@ bool hgIntersectRayPlane(HgRay3D ray, HgPlane plane, HgHit3D* hit)
     return true;
 }
 
-bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgHit3D* hit)
+bool intersectLineSphere(Line3D line, Sphere sphere, Hit3D* hit)
 {
-    HgVec3 dir = line.end - line.begin;
+    Vec3 dir = line.end - line.begin;
 
-    HgVec3 rel = line.begin - sphere.pos;
-    f32 a = hgVecDot3(dir, dir);
-    f32 b = 2 * hgVecDot3(dir, rel);
-    f32 c = hgVecDot3(rel, rel) - hgSquare(sphere.radius);
+    Vec3 rel = line.begin - sphere.pos;
+    f32 a = vecDot3(dir, dir);
+    f32 b = 2 * vecDot3(dir, rel);
+    f32 c = vecDot3(rel, rel) - square(sphere.radius);
 
-    f32 det = hgSquare(b) - 4 * a * c;
+    f32 det = square(b) - 4 * a * c;
     if (det < 0)
         return false;
     f32 rtdet = sqrtf(det);
@@ -3750,9 +3750,9 @@ bool hgIntersectLineSphere(HgLine3D line, HgSphere sphere, HgHit3D* hit)
     return true;
 }
 
-bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit)
+bool intersectLineBox(Line3D line, Box box, Hit3D* hit)
 {
-    if (hgVecEq3(line.begin, line.end) || hgVecEq3(box.size, HgVec3{0}))
+    if (vecEq3(line.begin, line.end) || vecEq3(box.size, Vec3{0}))
         return false;
 
     f32 hits[6] = {
@@ -3764,7 +3764,7 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit)
         (box.pos.z + box.size.z - line.begin.z) / (line.end.z - line.begin.z),
     };
 
-    constexpr HgVec3 norms[6] = {
+    constexpr Vec3 norms[6] = {
         {-1, 0, 0},
         {0, -1, 0},
         {0, 0, -1},
@@ -3774,13 +3774,13 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit)
     };
 
     f32 t = INFINITY;
-    HgVec3 norm;
-    for (u32 i = 0; i < hgArrayCount(hits); ++i)
+    Vec3 norm;
+    for (u32 i = 0; i < arrayCount(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON || hits[i] > 1 + FLT_EPSILON)
             continue;
 
-        if (!hgContainsPointBox(line.begin + hits[i] * (line.end - line.begin), box))
+        if (!containsPointBox(line.begin + hits[i] * (line.end - line.begin), box))
             continue;
 
         if (hits[i] < t)
@@ -3801,37 +3801,37 @@ bool hgIntersectLineBox(HgLine3D line, HgBox box, HgHit3D* hit)
 }
 
 // Moller-Trumbore, Real Time Rendering 4th Edition
-bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgHit3D* hit)
+bool intersectLineTri(Line3D line, Tri tri, Hit3D* hit)
 {
-    if (hgVecEq3(line.begin, line.end))
+    if (vecEq3(line.begin, line.end))
         return false;
 
     if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
         return false;
 
-    HgVec3 lineDir = line.end - line.begin;
+    Vec3 lineDir = line.end - line.begin;
 
-    HgVec3 e1 = tri.b - tri.a;
-    HgVec3 e2 = tri.c - tri.a;
-    HgVec3 q = hgVecCross3(lineDir, e2);
+    Vec3 e1 = tri.b - tri.a;
+    Vec3 e2 = tri.c - tri.a;
+    Vec3 q = vecCross3(lineDir, e2);
 
-    f32 a = hgVecDot3(e1, q);
+    f32 a = vecDot3(e1, q);
     if (std::abs(a) < FLT_EPSILON)
         return false;
 
-    HgVec3 s = line.begin - tri.a;
+    Vec3 s = line.begin - tri.a;
 
-    f32 u = hgVecDot3(s, q) / a;
+    f32 u = vecDot3(s, q) / a;
     if (u < -FLT_EPSILON)
         return false;
 
-    HgVec3 r = hgVecCross3(s, e1);
+    Vec3 r = vecCross3(s, e1);
 
-    f32 v = hgVecDot3(lineDir, r) / a;
+    f32 v = vecDot3(lineDir, r) / a;
     if (v < -FLT_EPSILON || u + v > 1 + FLT_EPSILON)
         return false;
 
-    f32 t = hgVecDot3(e2, r) / a;
+    f32 t = vecDot3(e2, r) / a;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return false;
 
@@ -3839,26 +3839,26 @@ bool hgIntersectLineTri(HgLine3D line, HgTri tri, HgHit3D* hit)
     {
         hit->dist = t;
         hit->normal = a < 0
-            ? hgVecNorm3(hgVecCross3(e2, e1))
-            : hgVecNorm3(hgVecCross3(e1, e2));
+            ? vecNorm3(vecCross3(e2, e1))
+            : vecNorm3(vecCross3(e1, e2));
     }
     return true;
 }
 
-bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgHit3D* hit)
+bool intersectLinePlane(Line3D line, Plane plane, Hit3D* hit)
 {
     if (line.begin == line.end)
         return false;
 
-    hgAssert(plane.normal != HgVec3{0});
+    HG_ASSERT(plane.normal != Vec3{0});
 
-    HgVec3 lineDir = line.end - line.begin;
+    Vec3 lineDir = line.end - line.begin;
 
-    f32 denom = hgVecDot3(lineDir, plane.normal);
+    f32 denom = vecDot3(lineDir, plane.normal);
     if (std::abs(denom) < FLT_EPSILON)
         return false;
 
-    f32 t = (plane.dist - hgVecDot3(line.begin, plane.normal)) / denom;
+    f32 t = (plane.dist - vecDot3(line.begin, plane.normal)) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return false;
 
@@ -3872,7 +3872,7 @@ bool hgIntersectLinePlane(HgLine3D line, HgPlane plane, HgHit3D* hit)
     return true;
 }
 
-u32 hgNoise(u32 seed, u32 pos)
+u32 noise(u32 seed, u32 pos)
 {
     u32 ret = (pos + 384521713u) * 955740521u;
     ret ^= ret >> 13;
@@ -3883,55 +3883,55 @@ u32 hgNoise(u32 seed, u32 pos)
     return ret;
 }
 
-u32 hgNoise2D(u32 seed, u32 x, u32 y)
+u32 noise2D(u32 seed, u32 x, u32 y)
 {
-    return hgNoise(seed, x + (y * 425537443u));
+    return noise(seed, x + (y * 425537443u));
 }
 
-u32 hgNoise3D(u32 seed, u32 x, u32 y, u32 z)
+u32 noise3D(u32 seed, u32 x, u32 y, u32 z)
 {
-    return hgNoise(seed, x + y * 425537443u + z * 682607u);
+    return noise(seed, x + y * 425537443u + z * 682607u);
 }
 
-u32 hgNoise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
+u32 noise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
 {
-    return hgNoise(seed, x + y * 425537443u + z * 682607u + w * 9067u);
+    return noise(seed, x + y * 425537443u + z * 682607u + w * 9067u);
 }
 
-f32 hgNoiseNorm(u32 seed, f32 pos)
+f32 noiseNorm(u32 seed, f32 pos)
 {
     union Convert {
         f32 asF32;
         u32 asU32;
     };
-    return (f32)hgNoise(seed, Convert{pos}.asU32) / (f32)UINT32_MAX;
+    return (f32)noise(seed, Convert{pos}.asU32) / (f32)UINT32_MAX;
 }
 
-f32 hgNoiseNorm2D(u32 seed, HgVec2 pos)
+f32 noiseNorm2D(u32 seed, Vec2 pos)
 {
     union Convert {
         f32 asF32;
         u32 asU32;
     };
-    return (f32)hgNoise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32) / (f32)UINT32_MAX;
+    return (f32)noise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32) / (f32)UINT32_MAX;
 }
 
-f32 hgNoiseNorm3D(u32 seed, HgVec3 pos)
+f32 noiseNorm3D(u32 seed, Vec3 pos)
 {
     union Convert {
         f32 asF32;
         u32 asU32;
     };
-    return (f32)hgNoise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32) / (f32)UINT32_MAX;
+    return (f32)noise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32) / (f32)UINT32_MAX;
 }
 
-f32 hgNoiseNorm4D(u32 seed, HgVec4 pos)
+f32 noiseNorm4D(u32 seed, Vec4 pos)
 {
     union Convert {
         f32 asF32;
         u32 asU32;
     };
-    return (f32)hgNoise4D(
+    return (f32)noise4D(
         seed,
         Convert{pos.x}.asU32,
         Convert{pos.y}.asU32,
@@ -3939,78 +3939,78 @@ f32 hgNoiseNorm4D(u32 seed, HgVec4 pos)
         Convert{pos.w}.asU32) / (f32)UINT32_MAX;
 }
 
-f32 hgNoiseVec1D(u32 seed, f32 pos)
+f32 noiseVec1D(u32 seed, f32 pos)
 {
-    return hgNoiseNorm(seed, pos) * 2.0f - 1.0f;
+    return noiseNorm(seed, pos) * 2.0f - 1.0f;
 }
 
-HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos)
+Vec2 noiseVec2D(u32 seed, Vec2 pos)
 {
-    f32 rot = 2.0f * (f32)hgPi * hgNoiseNorm2D(seed, pos);
-    return HgVec2(cosf(rot), sinf(rot));
+    f32 rot = 2.0f * (f32)HG_PI * noiseNorm2D(seed, pos);
+    return Vec2(cosf(rot), sinf(rot));
 }
 
-u32 hgTrueRandom()
+u32 trueRandom()
 {
     static std::random_device trueRandom{};
     return trueRandom();
 }
 
-void hgRngSeed(HgRng* rng, u32 seed)
+void rngSeed(Rng* rng, u32 seed)
 {
     rng->seed = seed;
 }
 
-u32 hgRngNext(HgRng* rng)
+u32 rngNext(Rng* rng)
 {
-    return rng->pos = hgNoise(rng->seed, rng->pos);
+    return rng->pos = noise(rng->seed, rng->pos);
 }
 
-u64 hgRngNext64(HgRng* rng)
+u64 rngNext64(Rng* rng)
 {
-    return ((u64)hgRngNext(rng) << 32) | (u64)hgRngNext(rng);
+    return ((u64)rngNext(rng) << 32) | (u64)rngNext(rng);
 }
 
-u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
+u32 getMaxMipmaps(u32 width, u32 height, u32 depth)
 {
     u32 max = width > height ? width : height;
     max = max > depth ? max : depth;
     return max == 0 ? 0 : (u32)log2((f32)max) + 1;
 }
 
-HgPerf hgPerfCreate(HgArena* arena, u32 count)
+Perf perfCreate(Arena* arena, u32 count)
 {
-    hgAssert(arena != nullptr);
+    HG_ASSERT(arena != nullptr);
 
-    HgPerf perf;
-    perf.times = hgArenaAlloc<f64>(arena, count);
+    Perf perf;
+    perf.times = arenaAlloc<f64>(arena, count);
     perf.count = count;
     perf.current = 0;
     return perf;
 }
 
-void hgPerfBegin(HgPerf* perf)
+void perfBegin(Perf* perf)
 {
-    hgAssert(perf != nullptr);
-    hgClockTick(&perf->clock);
+    HG_ASSERT(perf != nullptr);
+    clockTick(&perf->clock);
 }
 
-f64 hgPerfEnd(HgPerf* perf)
+f64 perfEnd(Perf* perf)
 {
-    hgAssert(perf != nullptr);
-    hgAssert(perf->current < perf->count);
+    HG_ASSERT(perf != nullptr);
+    HG_ASSERT(perf->current < perf->count);
 
-    f64 time = hgClockTick(&perf->clock);
+    f64 time = clockTick(&perf->clock);
     perf->times[perf->current++] = time;
 
     return time;
 }
 
-HgPerfStats hgPerfAnalyze(const HgPerf* perf)
+PerfStats perfAnalyze(const Perf* perf)
 {
-    hgAssert(perf != nullptr);
+    HG_ASSERT(perf != nullptr);
 
-    HgPerfStats stats;
+    PerfStats stats;
     stats.avg = 0.0;
     stats.best = INFINITY;
     stats.worst = 0.0;
@@ -4028,27 +4028,27 @@ HgPerfStats hgPerfAnalyze(const HgPerf* perf)
     return stats;
 }
 
-void hgPerfLog(HgString title, const HgPerfStats* stats, HgPerfScale scale)
+void perfLog(String title, const PerfStats* stats, PerfScale scale)
 {
-    hgAssert(stats != nullptr);
+    HG_ASSERT(stats != nullptr);
     if (title.length == 0 || title.chars == nullptr)
         title = "Title Missing";
 
     switch (scale)
     {
-        case HgPerfScale_seconds:
+        case PerfScale_seconds:
             printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
                 (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
             break;
-        case HgPerfScale_milli:
+        case PerfScale_milli:
             printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
                 (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
             break;
-        case HgPerfScale_micro:
+        case PerfScale_micro:
             printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
                 (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
             break;
-        case HgPerfScale_nano:
+        case PerfScale_nano:
             printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
                 (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
             break;
@@ -4056,37 +4056,37 @@ void hgPerfLog(HgString title, const HgPerfStats* stats, HgPerfScale scale)
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgTextureData>* data)
+void assetLoadImpl(Asset<TextureData>* data)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
-    char* cpath = hgCString(scratch, data->path);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
+    char* cpath = cString(sc, data->path);
 
     int x, y, channels;
     data->asset.pixels = stbi_load(cpath, &x, &y, &channels, 4);
     if (data->asset.pixels == nullptr)
     {
-        hgErrorFormat("Could not load image: %s", cpath);
+        errorFormat("Could not load image: %s", cpath);
         return;
     }
     data->asset.width = (u32)x;
     data->asset.height = (u32)y;
     data->asset.depth = 1;
-    data->asset.format = HgFormat_r8g8b8a8_srgb;
+    data->asset.format = Format_r8g8b8a8_srgb;
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgTextureData>* data)
+void assetUnloadImpl(Asset<TextureData>* data)
 {
     free(data->asset.pixels);
 }
 
-bool hgTextureStorePng(HgTextureData* texture, HgString path)
+bool textureStorePng(TextureData* texture, String path)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    const char* cpath = hgCString(scratch, path);
+    const char* cpath = cString(sc, path);
 
     if (!stbi_write_png(
          cpath,
@@ -4096,67 +4096,67 @@ bool hgTextureStorePng(HgTextureData* texture, HgString path)
          texture->pixels,
          (int)(texture->width * sizeof(u32))))
     {
-        hgErrorFormat("Could not store image: %s", cpath);
+        errorFormat("Could not store image: %s", cpath);
         return false;
     }
     return true;
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgTexture>* data)
+void assetLoadImpl(Asset<Texture>* data)
 {
-    HgTextureDataAsset* tex = hgAssetLoad<HgTextureData>(data->path);
-    hgDefer(hgAssetUnload(tex));
+    TextureDataAsset* tex = assetLoad<TextureData>(data->path);
+    HG_DEFER(assetUnload(tex));
     if (tex->asset.pixels == nullptr)
         return;
 
-    HgGpuImageCreateEx imageInfo{};
+    GpuImageCreateEx imageInfo{};
     imageInfo.format = tex->asset.format;
     imageInfo.width = tex->asset.width;
     imageInfo.height = tex->asset.height;
     imageInfo.depth = tex->asset.depth;
-    imageInfo.usage = HgGpuImageUsage_transferDst | HgGpuImageUsage_sampled;
+    imageInfo.usage = GpuImageUsage_transferDst | GpuImageUsage_sampled;
 
-    data->asset.image = hgGpuImageCreateEx(&imageInfo);
-    data->asset.view = hgGpuViewCreate(data->asset.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    data->asset.image = gpuImageCreateEx(&imageInfo);
+    data->asset.view = gpuViewCreate(data->asset.image, GpuAspect_color, GpuFilter_nearest);
 
-    hgGpuImageWrite(data->asset.view, tex->asset.pixels);
+    gpuImageWrite(data->asset.view, tex->asset.pixels);
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgTexture>* data)
+void assetUnloadImpl(Asset<Texture>* data)
 {
-    hgGpuViewDestroy(data->asset.view);
-    hgGpuImageDestroy(data->asset.image);
+    gpuViewDestroy(data->asset.view);
+    gpuImageDestroy(data->asset.image);
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgMeshData>* data)
+void assetLoadImpl(Asset<MeshData>* data)
 {
     (void)data;
-    hgPanic("load gltf file : TODO\n");
+    HG_PANIC("load gltf file : TODO\n");
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgMeshData>* data)
+void assetUnloadImpl(Asset<MeshData>* data)
 {
-    hgGpaFree(data->asset.indices, data->asset.indexCount);
-    hgGpaFree(data->asset.vertices, data->asset.vertexCount);
+    gpaFree(data->asset.indices, data->asset.indexCount);
+    gpaFree(data->asset.vertices, data->asset.vertexCount);
 }
 
-void hgMeshStoreGltf(HgMeshData* data, HgString path, HgFence* fence)
+void meshStoreGltf(MeshData* data, String path, Fence* fence)
 {
     (void)data;
     (void)path;
     (void)fence;
-    hgPanic("store gltf file : TODO\n");
+    HG_PANIC("store gltf file : TODO\n");
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgMesh>* data)
+void assetLoadImpl(Asset<Mesh>* data)
 {
-    HgMeshDataAsset* mesh = hgAssetLoad<HgMeshData>(data->path);
-    hgDefer(hgAssetUnload(mesh));
+    MeshDataAsset* mesh = assetLoad<MeshData>(data->path);
+    HG_DEFER(assetUnload(mesh));
 
     if (mesh->asset.vertices == nullptr || mesh->asset.indices == nullptr)
         return;
@@ -4165,21 +4165,21 @@ void hgAssetLoadImpl(HgAsset<HgMesh>* data)
     data->asset.vertexWidth = mesh->asset.vertexWidth;
     data->asset.indexCount = mesh->asset.indexCount;
 
-    data->asset.vertexBuffer = hgGpuBufferCreate(
+    data->asset.vertexBuffer = gpuBufferCreate(
         data->asset.vertexCount * data->asset.vertexWidth,
-        HgGpuBufferUsage_storageBuffer | HgGpuBufferUsage_transferDst);
+        GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
 
-    data->asset.indexBuffer = hgGpuBufferCreate(
+    data->asset.indexBuffer = gpuBufferCreate(
         data->asset.indexCount * sizeof(u32),
-        HgGpuBufferUsage_storageBuffer | HgGpuBufferUsage_transferDst);
+        GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
 
-    hgGpuBufferWrite(
+    gpuBufferWrite(
         data->asset.vertexBuffer,
         0,
         mesh->asset.vertices,
         data->asset.vertexCount * data->asset.vertexWidth);
 
-    hgGpuBufferWrite(
+    gpuBufferWrite(
         data->asset.indexBuffer,
         0,
         mesh->asset.indices,
@@ -4187,22 +4187,22 @@ void hgAssetLoadImpl(HgAsset<HgMesh>* data)
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgMesh>* data)
+void assetUnloadImpl(Asset<Mesh>* data)
 {
-    hgGpuBufferDestroy(data->asset.vertexBuffer);
-    hgGpuBufferDestroy(data->asset.indexBuffer);
+    gpuBufferDestroy(data->asset.vertexBuffer);
+    gpuBufferDestroy(data->asset.indexBuffer);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgCamera* camera)
+void serialize(Serializer* s, Camera* camera)
 {
-    hgSerializeBegin(s);
-    hgSerialize(s, &camera->rotation);
-    hgSerialize(s, &camera->position);
-    hgSerialize(s, &camera->type);
-    if (camera->type == HgCameraType_perspective)
+    serializeBegin(s);
+    serialize(s, &camera->rotation);
+    serialize(s, &camera->position);
+    serialize(s, &camera->type);
+    if (camera->type == CameraType_perspective)
     {
-        hgSerializeObject(s,
+        serializeObject(s,
             &camera->perspective.aspect,
             &camera->perspective.fov,
             &camera->perspective.near,
@@ -4210,7 +4210,7 @@ void hgSerialize(HgSerializer* s, HgCamera* camera)
     }
     else
     {
-        hgSerializeObject(s,
+        serializeObject(s,
             &camera->orthographic.left,
             &camera->orthographic.right,
             &camera->orthographic.top,
@@ -4218,46 +4218,46 @@ void hgSerialize(HgSerializer* s, HgCamera* camera)
             &camera->orthographic.near,
             &camera->orthographic.far);
     }
-    hgSerializeEnd(s);
+    serializeEnd(s);
 }
 
 struct VPUniform {
-    HgMat4 proj;
-    HgMat4 view;
+    Mat4 proj;
+    Mat4 view;
 };
 
-HgCamera hgCameraCreate()
+Camera cameraCreate()
 {
-    HgCamera camera{};
+    Camera camera{};
 
-    camera.vpBuffer = hgGpuBufferCreate(
+    camera.vpBuffer = gpuBufferCreate(
         sizeof(VPUniform),
-        HgGpuBufferUsage_uniformBuffer,
-        HgGpuMemoryUsage_frequentUpdate);
+        GpuBufferUsage_uniformBuffer,
+        GpuMemoryUsage_frequentUpdate);
 
-    camera.rotation = HgQuat{1.0f};
-    camera.position = HgVec3{0.0f};
+    camera.rotation = Quat{1.0f};
+    camera.position = Vec3{0.0f};
 
     return camera;
 }
 
-void hgCameraDestroy(HgCamera* camera)
+void cameraDestroy(Camera* camera)
 {
-    hgGpuBufferDestroy(camera->vpBuffer);
+    gpuBufferDestroy(camera->vpBuffer);
 }
 
-void hgCameraSetPerspective(HgCamera* camera, f32 aspect, f32 fov, f32 near, f32 far)
+void cameraSetPerspective(Camera* camera, f32 aspect, f32 fov, f32 near, f32 far)
 {
-    camera->type = HgCameraType_perspective;
+    camera->type = CameraType_perspective;
     camera->perspective.aspect = aspect;
     camera->perspective.fov = fov;
     camera->perspective.near = near;
     camera->perspective.far = far;
 }
 
-void hgCameraSetOrthographic(HgCamera* camera, f32 width, f32 height, f32 actualAspect)
+void cameraSetOrthographic(Camera* camera, f32 width, f32 height, f32 actualAspect)
 {
-    camera->type = HgCameraType_orthographic;
+    camera->type = CameraType_orthographic;
     camera->orthographic.left = 0;
     camera->orthographic.right = width;
     camera->orthographic.top = 0;
@@ -4282,13 +4282,13 @@ void hgCameraSetOrthographic(HgCamera* camera, f32 width, f32 height, f32 actual
     }
 }
 
-void hgCameraUpdate(HgCamera* camera)
+void cameraUpdate(Camera* camera)
 {
     VPUniform vp{};
-    vp.view = hgMatView(camera->position, HgVec3{1.0f}, camera->rotation);
-    if (camera->type == HgCameraType_perspective)
+    vp.view = matView(camera->position, Vec3{1.0f}, camera->rotation);
+    if (camera->type == CameraType_perspective)
     {
-        vp.proj = hgMatPerspective(
+        vp.proj = matPerspective(
             camera->perspective.fov,
             camera->perspective.aspect,
             camera->perspective.near,
@@ -4296,7 +4296,7 @@ void hgCameraUpdate(HgCamera* camera)
     }
     else
     {
-        vp.proj = hgMatOrthographic(
+        vp.proj = matOrthographic(
             camera->orthographic.left,
             camera->orthographic.right,
             camera->orthographic.top,
@@ -4305,37 +4305,37 @@ void hgCameraUpdate(HgCamera* camera)
             camera->orthographic.far);
     }
 
-    hgGpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
+    gpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
 }
 
-HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e)
+Camera* cameraAdd(Ecs* ecs, Entity e)
 {
-    HgCamera* camera = hgEcsAdd<HgCamera>(ecs, e);
-    *camera = hgCameraCreate();
+    Camera* camera = ecsAdd<Camera>(ecs, e);
+    *camera = cameraCreate();
     return camera;
 }
 
 template<>
-void hgEcsDtor(HgCamera* camera)
+void ecsDtor(Camera* camera)
 {
-    hgCameraDestroy(camera);
+    cameraDestroy(camera);
 }
 
-void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e)
+void cameraUpdateEcs(Ecs* ecs, Entity e)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsHas<HgCamera>(ecs, e));
-    hgAssert(hgEcsHas<HgTransform>(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsHas<Camera>(ecs, e));
+    HG_ASSERT(ecsHas<Transform>(ecs, e));
 
-    HgCamera* camera = hgEcsGet<HgCamera>(ecs, e);
-    HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
-    hgAssert(camera->type == HgCameraType_perspective || camera->type == HgCameraType_orthographic);
+    Camera* camera = ecsGet<Camera>(ecs, e);
+    Transform* tf = ecsGet<Transform>(ecs, e);
+    HG_ASSERT(camera->type == CameraType_perspective || camera->type == CameraType_orthographic);
 
     VPUniform vp{};
-    vp.view = hgMatModelToView(tf->mat);
-    if (camera->type == HgCameraType_perspective)
+    vp.view = matModelToView(tf->mat);
+    if (camera->type == CameraType_perspective)
     {
-        vp.proj = hgMatPerspective(
+        vp.proj = matPerspective(
             camera->perspective.fov,
             camera->perspective.aspect,
             camera->perspective.near,
@@ -4343,7 +4343,7 @@ void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e)
     }
     else
     {
-        vp.proj = hgMatOrthographic(
+        vp.proj = matOrthographic(
             camera->orthographic.left,
             camera->orthographic.right,
             camera->orthographic.top,
@@ -4352,19 +4352,19 @@ void hgCameraUpdateEcs(HgEcs* ecs, HgEntity e)
             camera->orthographic.far);
     }
 
-    hgGpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
+    gpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
 }
 
 struct RenderState2D {
-    HgGpuPipeline* pipeline;
-    HgGpuPipeline* debugPipeline;
-    HgTexture defaultTex;
+    GpuPipeline* pipeline;
+    GpuPipeline* debugPipeline;
+    Texture defaultTex;
 };
 
 static RenderState2D render2D;
 
 struct RenderPush2D {
-    HgMat4 model;
+    Mat4 model;
     u32 vpIdx;
     u32 instIdx;
 };
@@ -4373,9 +4373,9 @@ struct RenderPush2D {
 #include "render2d.frag.spv.h"
 #include "debug2d.frag.spv.h"
 
-void hgRendererInit2D(HgFormat colorFormat)
+void rendererInit2D(Format colorFormat)
 {
-    HgCreateGpuGraphicsPipeline pipelineConfig{};
+    CreateGpuGraphicsPipeline pipelineConfig{};
     pipelineConfig.vertexShader = render2d_vert_spv;
     pipelineConfig.vertexShaderSize = sizeof(render2d_vert_spv);
     pipelineConfig.fragmentShader = render2d_frag_spv;
@@ -4386,13 +4386,13 @@ void hgRendererInit2D(HgFormat colorFormat)
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
-    render2D.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+    render2D.pipeline = gpuPipelineCreateGraphics(&pipelineConfig);
 
     pipelineConfig.fragmentShader = debug2d_frag_spv;
     pipelineConfig.fragmentShaderSize = sizeof(debug2d_frag_spv);
-    pipelineConfig.topology = HgGpuTopology_lineStrip;
+    pipelineConfig.topology = GpuTopology_lineStrip;
 
-    render2D.debugPipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+    render2D.debugPipeline = gpuPipelineCreateGraphics(&pipelineConfig);
 
     struct Color {
         u8 r, g, b, a;
@@ -4402,174 +4402,174 @@ void hgRendererInit2D(HgFormat colorFormat)
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    render2D.defaultTex.image = hgGpuImageCreate(2, 2, HgFormat_r8g8b8a8_srgb,
-        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
+    render2D.defaultTex.image = gpuImageCreate(2, 2, Format_r8g8b8a8_srgb,
+        GpuImageUsage_sampled | GpuImageUsage_transferDst);
 
-    render2D.defaultTex.view = hgGpuViewCreate(
-        render2D.defaultTex.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    render2D.defaultTex.view = gpuViewCreate(
+        render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
 
-    hgGpuImageWrite(render2D.defaultTex.view, defaultColors);
+    gpuImageWrite(render2D.defaultTex.view, defaultColors);
 }
 
-void hgRendererDeinit2D()
+void rendererDeinit2D()
 {
-    hgGpuViewDestroy(render2D.defaultTex.view);
-    hgGpuImageDestroy(render2D.defaultTex.image);
-    hgGpuPipelineDestroy(render2D.debugPipeline);
-    hgGpuPipelineDestroy(render2D.pipeline);
+    gpuViewDestroy(render2D.defaultTex.view);
+    gpuImageDestroy(render2D.defaultTex.image);
+    gpuPipelineDestroy(render2D.debugPipeline);
+    gpuPipelineDestroy(render2D.pipeline);
 }
 
-HgLayer2D hgLayerCreate2D()
+Layer2D layerCreate2D()
 {
-    HgLayer2D layer{};
+    Layer2D layer{};
 
-    layer.instances = hgArrayCreate<HgRender2DInstance>();
-    layer.instanceBuffer = hgGpuBufferCreate(layer.instances.capacity * sizeof(HgRender2DInstance),
-        HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
+    layer.instances = arrayCreate<Render2DInstance>();
+    layer.instanceBuffer = gpuBufferCreate(layer.instances.capacity * sizeof(Render2DInstance),
+        GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
     layer.instanceCapacity = layer.instances.capacity;
-    layer.transform = HgMat4{1.0f};
+    layer.transform = Mat4{1.0f};
     layer.changed = true;
 
     return layer;
 }
 
-void hgLayerDestroy2D(HgLayer2D* layer)
+void layerDestroy2D(Layer2D* layer)
 {
-    hgAssert(layer != nullptr);
+    HG_ASSERT(layer != nullptr);
 
-    hgGpuBufferDestroy(layer->instanceBuffer);
-    hgArrayDestroy(&layer->instances);
+    gpuBufferDestroy(layer->instanceBuffer);
+    arrayDestroy(&layer->instances);
 }
 
-void hgLayerClear2D(HgLayer2D* layer)
+void layerClear2D(Layer2D* layer)
 {
-    hgAssert(layer != nullptr);
+    HG_ASSERT(layer != nullptr);
 
     layer->instances.count = 0;
     layer->changed = true;
 }
 
-static void renderLayer2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer, HgGpuPipeline* pipeline)
+static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, GpuPipeline* pipeline)
 {
-    hgAssert(cmd != nullptr);
-    hgAssert(camera != nullptr);
-    hgAssert(layer != nullptr);
+    HG_ASSERT(cmd != nullptr);
+    HG_ASSERT(camera != nullptr);
+    HG_ASSERT(layer != nullptr);
 
     if (layer->changed)
     {
         if (layer->instances.capacity > layer->instanceCapacity)
         {
-            hgGpuWaitIdle();
-            hgGpuBufferDestroy(layer->instanceBuffer);
+            gpuWaitIdle();
+            gpuBufferDestroy(layer->instanceBuffer);
 
-            layer->instanceBuffer = hgGpuBufferCreate(layer->instances.capacity * sizeof(HgRender2DInstance),
-                HgGpuBufferUsage_transferDst | HgGpuBufferUsage_storageBuffer, HgGpuMemoryUsage_frequentUpdate);
+            layer->instanceBuffer = gpuBufferCreate(layer->instances.capacity * sizeof(Render2DInstance),
+                GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
             layer->instanceCapacity = layer->instances.capacity;
         }
 
-        hgGpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(HgRender2DInstance));
+        gpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(Render2DInstance));
 
         layer->changed = false;
     }
 
-    hgGpuBindPipeline(cmd, pipeline);
+    gpuBindPipeline(cmd, pipeline);
 
     RenderPush2D push{};
     push.model = layer->transform;
-    push.vpIdx = hgGpuBufferUniformDescriptor(camera->vpBuffer);
-    push.instIdx = hgGpuBufferStorageDescriptor(layer->instanceBuffer);
+    push.vpIdx = gpuBufferUniformDescriptor(camera->vpBuffer);
+    push.instIdx = gpuBufferStorageDescriptor(layer->instanceBuffer);
 
-    hgGpuPushConstants(cmd, pipeline, &push, sizeof(push));
+    gpuPushConstants(cmd, pipeline, &push, sizeof(push));
 
-    hgGpuDraw(cmd, 0, 6, 0, layer->instances.count);
+    gpuDraw(cmd, 0, 6, 0, layer->instances.count);
 }
 
-void hgRenderLayer2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
+void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer)
 {
     renderLayer2D(cmd, camera, layer, render2D.pipeline);
 }
 
-void hgRenderDebug2D(HgGpuCmd* cmd, HgCamera* camera, HgLayer2D* layer)
+void renderDebug2D(GpuCmd* cmd, Camera* camera, Layer2D* layer)
 {
     renderLayer2D(cmd, camera, layer, render2D.debugPipeline);
 }
 
-void hgDrawRect2D(HgLayer2D* layer, HgVec4 color, HgRect dst)
+void drawRect2D(Layer2D* layer, Vec4 color, Rect dst)
 {
-    hgAssert(layer != nullptr);
+    HG_ASSERT(layer != nullptr);
 
-    HgRender2DInstance instance{};
+    Render2DInstance instance{};
     instance.rect.pos = dst.pos;
     instance.rect.size = dst.size;
-    instance.rect.type = HgRender2DInstanceType_color;
+    instance.rect.type = Render2DInstanceType_color;
     instance.rect.color = color;
 
-    *hgArrayPush(&layer->instances) = instance;
+    *arrayPush(&layer->instances) = instance;
 
     layer->changed = true;
 }
 
-void hgDrawSprite2D(HgLayer2D* layer, HgSprite2D* sprite, HgRect dst)
+void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst)
 {
-    hgAssert(layer != nullptr);
-    hgAssert(sprite != nullptr);
+    HG_ASSERT(layer != nullptr);
+    HG_ASSERT(sprite != nullptr);
 
-    HgTexture* texture = sprite->texture == nullptr
+    Texture* texture = sprite->texture == nullptr
         ? &render2D.defaultTex
         : &sprite->texture->asset;
 
-    HgRender2DInstance instance{};
+    Render2DInstance instance{};
     instance.sprite.pos = dst.pos;
     instance.sprite.size = dst.size;
-    instance.sprite.type = HgRender2DInstanceType_sprite;
-    instance.sprite.tex = hgGpuImageSamplerDescriptor(texture->view);
+    instance.sprite.type = Render2DInstanceType_sprite;
+    instance.sprite.tex = gpuImageSamplerDescriptor(texture->view);
     instance.sprite.uvPos = sprite->uv.pos;
     instance.sprite.uvSize = sprite->uv.size;
 
-    *hgArrayPush(&layer->instances) = instance;
+    *arrayPush(&layer->instances) = instance;
 
     layer->changed = true;
 }
 
-HgAtlas2D hgAtlasCreate2D(HgTextureAsset* texture)
+Atlas2D atlasCreate2D(TextureAsset* texture)
 {
-    hgAssert(texture != nullptr);
+    HG_ASSERT(texture != nullptr);
 
-    HgAtlas2D atlas{};
+    Atlas2D atlas{};
     atlas.texture = texture;
-    atlas.sprites = hgArrayCreate<HgRect>();
+    atlas.sprites = arrayCreate<Rect>();
     return atlas;
 }
 
-void hgAtlasDestroy2D(HgAtlas2D* atlas)
+void atlasDestroy2D(Atlas2D* atlas)
 {
-    hgAssert(atlas != nullptr);
-    hgArrayDestroy(&atlas->sprites);
+    HG_ASSERT(atlas != nullptr);
+    arrayDestroy(&atlas->sprites);
 }
 
-u32 hgAtlasAdd2D(HgAtlas2D* atlas, HgRect sprite)
+u32 atlasAdd2D(Atlas2D* atlas, Rect sprite)
 {
-    hgAssert(atlas != nullptr);
+    HG_ASSERT(atlas != nullptr);
 
     u32 idx = atlas->sprites.count;
-    *hgArrayPush(&atlas->sprites) = sprite;
+    *arrayPush(&atlas->sprites) = sprite;
     return idx;
 }
 
-u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect grid, u32 width, u32 height)
+u32 atlasAddGrid2D(Atlas2D* atlas, Rect grid, u32 width, u32 height)
 {
-    hgAssert(atlas != nullptr);
+    HG_ASSERT(atlas != nullptr);
 
     u32 idx = atlas->sprites.count;
 
-    HgVec2 spriteSize = grid.size / HgVec2{(f32)width, (f32)height};
-    HgVec2 pos = grid.pos;
+    Vec2 spriteSize = grid.size / Vec2{(f32)width, (f32)height};
+    Vec2 pos = grid.pos;
     for (u32 y = 0; y < height; ++y)
     {
         pos.x = grid.pos.x;
         for (u32 x = 0; x < width; ++x)
         {
-            *hgArrayPush(&atlas->sprites) = {pos, spriteSize};
+            *arrayPush(&atlas->sprites) = {pos, spriteSize};
             pos.x += spriteSize.x;
         }
         pos.y += spriteSize.y;
@@ -4578,17 +4578,17 @@ u32 hgAtlasAddGrid2D(HgAtlas2D* atlas, HgRect grid, u32 width, u32 height)
     return idx;
 }
 
-HgSprite2D hgAtlasGet2D(HgAtlas2D* atlas, u32 idx)
+Sprite2D atlasGet2D(Atlas2D* atlas, u32 idx)
 {
-    hgAssert(atlas != nullptr);
+    HG_ASSERT(atlas != nullptr);
 
     return {atlas->texture, atlas->sprites[idx]};
 }
 
-HgTilemap2D hgTilemapCreate2D(u32 width, u32 height)
+Tilemap2D tilemapCreate2D(u32 width, u32 height)
 {
-    HgTilemap2D tilemap{};
-    tilemap.tiles = hgGpaAlloc<u32>(width * height);
+    Tilemap2D tilemap{};
+    tilemap.tiles = gpaAlloc<u32>(width * height);
     tilemap.width = width;
     tilemap.height = height;
     for (u32 i = 0; i < width * height; ++i)
@@ -4599,39 +4599,39 @@ HgTilemap2D hgTilemapCreate2D(u32 width, u32 height)
     return tilemap;
 }
 
-void hgTilemapDestroy2D(HgTilemap2D* tilemap)
+void tilemapDestroy2D(Tilemap2D* tilemap)
 {
-    hgAssert(tilemap != nullptr);
-    hgGpaFree(tilemap->tiles, tilemap->width * tilemap->height);
+    HG_ASSERT(tilemap != nullptr);
+    gpaFree(tilemap->tiles, tilemap->width * tilemap->height);
 }
 
-u32 hgTilemapGet2D(HgTilemap2D* tilemap, u32 x, u32 y)
+u32 tilemapGet2D(Tilemap2D* tilemap, u32 x, u32 y)
 {
-    hgAssert(tilemap != nullptr);
+    HG_ASSERT(tilemap != nullptr);
     return tilemap->tiles[y * tilemap->width + x];
 }
 
-void hgTilemapSet2D(HgTilemap2D* tilemap, u32 x, u32 y, u32 tile)
+void tilemapSet2D(Tilemap2D* tilemap, u32 x, u32 y, u32 tile)
 {
-    hgAssert(tilemap != nullptr);
+    HG_ASSERT(tilemap != nullptr);
     tilemap->tiles[y * tilemap->width + x] = tile;
 }
 
-void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, HgRect dst)
+void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst)
 {
-    hgAssert(layer != nullptr);
-    hgAssert(tilemap != nullptr);
+    HG_ASSERT(layer != nullptr);
+    HG_ASSERT(tilemap != nullptr);
 
-    HgVec2 pos = dst.pos;
-    HgVec2 size = dst.size / HgVec2{(f32)tilemap->width, (f32)tilemap->height};
+    Vec2 pos = dst.pos;
+    Vec2 size = dst.size / Vec2{(f32)tilemap->width, (f32)tilemap->height};
     for (u32 y = 0; y < tilemap->width; ++y)
     {
         pos.x = dst.pos.x;
         for (u32 x = 0; x < tilemap->height; ++x)
         {
-            u32 tile = hgTilemapGet2D(tilemap, x, y);
-            HgSprite2D sprite = hgAtlasGet2D(atlas, tile);
-            hgDrawSprite2D(layer, &sprite, {pos, size});
+            u32 tile = tilemapGet2D(tilemap, x, y);
+            Sprite2D sprite = atlasGet2D(atlas, tile);
+            drawSprite2D(layer, &sprite, {pos, size});
             pos.x += size.x;
         }
         pos.y += size.y;
@@ -4639,16 +4639,16 @@ void hgDrawTilemap2D(HgLayer2D* layer, HgAtlas2D* atlas, HgTilemap2D* tilemap, H
 }
 
 struct SpritePipelinePush {
-    HgMat4 model;
-    HgVec2 uvPos;
-    HgVec2 uvSize;
+    Mat4 model;
+    Vec2 uvPos;
+    Vec2 uvSize;
     u32 viewProj;
     u32 texture;
 };
 
 struct SpritePipelineState {
-    HgGpuPipeline* pipeline;
-    HgTexture defaultTex;
+    GpuPipeline* pipeline;
+    Texture defaultTex;
 };
 
 static SpritePipelineState spritePipeline{};
@@ -4656,14 +4656,14 @@ static SpritePipelineState spritePipeline{};
 #include "sprite.vert.spv.h"
 #include "sprite.frag.spv.h"
 
-void hgSpritesInit(
-    HgFormat colorFormat,
-    HgFormat depthFormat)
+void spritesInit(
+    Format colorFormat,
+    Format depthFormat)
 {
-    hgAssert(colorFormat != HgFormat_undefined);
-    hgAssert(depthFormat != HgFormat_undefined);
+    HG_ASSERT(colorFormat != Format_undefined);
+    HG_ASSERT(depthFormat != Format_undefined);
 
-    HgCreateGpuGraphicsPipeline pipelineConfig{};
+    CreateGpuGraphicsPipeline pipelineConfig{};
     pipelineConfig.vertexShader = sprite_vert_spv;
     pipelineConfig.vertexShaderSize = sizeof(sprite_vert_spv);
     pipelineConfig.fragmentShader = sprite_frag_spv;
@@ -4677,7 +4677,7 @@ void hgSpritesInit(
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
-    spritePipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+    spritePipeline.pipeline = gpuPipelineCreateGraphics(&pipelineConfig);
 
     struct Color {
         u8 r, g, b, a;
@@ -4687,38 +4687,38 @@ void hgSpritesInit(
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    spritePipeline.defaultTex.image = hgGpuImageCreate(2, 2, HgFormat_r8g8b8a8_srgb,
-        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
+    spritePipeline.defaultTex.image = gpuImageCreate(2, 2, Format_r8g8b8a8_srgb,
+        GpuImageUsage_sampled | GpuImageUsage_transferDst);
 
-    spritePipeline.defaultTex.view = hgGpuViewCreate(
-        spritePipeline.defaultTex.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    spritePipeline.defaultTex.view = gpuViewCreate(
+        spritePipeline.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
 
-    hgGpuImageWrite(spritePipeline.defaultTex.view, defaultColors);
+    gpuImageWrite(spritePipeline.defaultTex.view, defaultColors);
 }
 
-void hgSpritesDeinit()
+void spritesDeinit()
 {
-    hgGpuPipelineDestroy(spritePipeline.pipeline);
+    gpuPipelineDestroy(spritePipeline.pipeline);
 
-    hgGpuViewDestroy(spritePipeline.defaultTex.view);
-    hgGpuImageDestroy(spritePipeline.defaultTex.image);
+    gpuViewDestroy(spritePipeline.defaultTex.view);
+    gpuImageDestroy(spritePipeline.defaultTex.image);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgSprite* sprite)
+void serialize(Serializer* s, Sprite* sprite)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &sprite->texture,
         &sprite->uvPos,
         &sprite->uvSize);
 }
 
-HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgTextureAsset* texture, HgVec2 uvPos, HgVec2 uvSize)
+Sprite* spriteAdd(Ecs* ecs, Entity e, TextureAsset* texture, Vec2 uvPos, Vec2 uvSize)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgSprite* sprite = hgEcsAdd<HgSprite>(ecs, e);
+    Sprite* sprite = ecsAdd<Sprite>(ecs, e);
     *sprite = {};
     sprite->texture = texture;
     sprite->uvPos = uvPos;
@@ -4728,21 +4728,21 @@ HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgTextureAsset* texture, HgVec2 uv
 }
 
 template<>
-void hgEcsDtor(HgSprite* sprite)
+void ecsDtor(Sprite* sprite)
 {
-    hgAssetUnload(sprite->texture);
+    assetUnload(sprite->texture);
 }
 
-void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
+void spritesDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(cmd != nullptr);
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(cmd != nullptr);
 
-    hgGpuBindPipeline(cmd, spritePipeline.pipeline);
+    gpuBindPipeline(cmd, spritePipeline.pipeline);
 
-    hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* tf)
+    ecsForEach<Sprite, Transform>(ecs, [&](Entity, Sprite* sprite, Transform* tf)
     {
-        HgTexture* texture = sprite->texture == nullptr
+        Texture* texture = sprite->texture == nullptr
             ? &spritePipeline.defaultTex
             : &sprite->texture->asset;
 
@@ -4750,12 +4750,12 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
         push.model = tf->mat;
         push.uvPos = sprite->uvPos;
         push.uvSize = sprite->uvSize;
-        push.viewProj = hgGpuBufferUniformDescriptor(hgEcsGet<HgCamera>(ecs, camera)->vpBuffer);
-        push.texture = hgGpuImageSamplerDescriptor(texture->view);
+        push.viewProj = gpuBufferUniformDescriptor(ecsGet<Camera>(ecs, camera)->vpBuffer);
+        push.texture = gpuImageSamplerDescriptor(texture->view);
 
-        hgGpuPushConstants(cmd, spritePipeline.pipeline, &push, sizeof(push));
+        gpuPushConstants(cmd, spritePipeline.pipeline, &push, sizeof(push));
 
-        hgGpuDraw(cmd, 0, 6, 0, 1);
+        gpuDraw(cmd, 0, 6, 0, 1);
     });
 }
 
@@ -4765,8 +4765,8 @@ struct SkyboxPipelinePush {
 };
 
 struct SkyboxPipelineState {
-    HgGpuPipeline* pipeline;
-    HgTexture defaultTex;
+    GpuPipeline* pipeline;
+    Texture defaultTex;
 };
 
 static SkyboxPipelineState skyboxPipeline{};
@@ -4774,11 +4774,11 @@ static SkyboxPipelineState skyboxPipeline{};
 #include "skybox.vert.spv.h"
 #include "skybox.frag.spv.h"
 
-void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
+void skyboxInit(Format colorFormat, Format depthFormat)
 {
-    hgAssert(colorFormat != HgFormat_undefined);
+    HG_ASSERT(colorFormat != Format_undefined);
 
-    HgCreateGpuGraphicsPipeline pipelineConfig{};
+    CreateGpuGraphicsPipeline pipelineConfig{};
     pipelineConfig.vertexShader = skybox_vert_spv;
     pipelineConfig.vertexShaderSize = sizeof(skybox_vert_spv);
     pipelineConfig.fragmentShader = skybox_frag_spv;
@@ -4790,7 +4790,7 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
-    skyboxPipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+    skyboxPipeline.pipeline = gpuPipelineCreateGraphics(&pipelineConfig);
 
     struct Color {
         u8 r, g, b, a;
@@ -4805,134 +4805,134 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
         nul, bot, nul, nul,
     };
 
-    HgGpuImageCreateEx imageConfig{};
+    GpuImageCreateEx imageConfig{};
     imageConfig.width = 1;
     imageConfig.height = 1;
-    imageConfig.format = HgFormat_r8g8b8a8_srgb;
+    imageConfig.format = Format_r8g8b8a8_srgb;
     imageConfig.arrayLayers = 6;
-    imageConfig.usage = HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst;
-    imageConfig.flags = HgGpuImageConfig_cubeCompatible;
+    imageConfig.usage = GpuImageUsage_sampled | GpuImageUsage_transferDst;
+    imageConfig.flags = GpuImageConfig_cubeCompatible;
 
-    skyboxPipeline.defaultTex.image = hgGpuImageCreateEx(&imageConfig);
+    skyboxPipeline.defaultTex.image = gpuImageCreateEx(&imageConfig);
 
-    HgGpuViewCreateEx viewConfig{};
+    GpuViewCreateEx viewConfig{};
     viewConfig.image = skyboxPipeline.defaultTex.image;
     viewConfig.baseMipLevel = 0;
     viewConfig.levelCount = 1;
     viewConfig.baseArrayLayer = 0;
     viewConfig.layerCount = 6;
-    viewConfig.aspectFlags = HgGpuAspect_color;
-    viewConfig.type = HgGpuViewType_cube;
-    viewConfig.filter = HgGpuFilter_nearest;
-    viewConfig.edgeMode = HgGpuSamplerEdgeMode_repeat;
-    viewConfig.border = HgGpuSamplerBorder_floatTransparentBlack;
+    viewConfig.aspectFlags = GpuAspect_color;
+    viewConfig.type = GpuViewType_cube;
+    viewConfig.filter = GpuFilter_nearest;
+    viewConfig.edgeMode = GpuSamplerEdgeMode_repeat;
+    viewConfig.border = GpuSamplerBorder_floatTransparentBlack;
 
-    skyboxPipeline.defaultTex.view = hgGpuViewCreateEx(&viewConfig);
+    skyboxPipeline.defaultTex.view = gpuViewCreateEx(&viewConfig);
 
-    hgGpuImageWriteCubemap(skyboxPipeline.defaultTex.view, defaultColors);
+    gpuImageWriteCubemap(skyboxPipeline.defaultTex.view, defaultColors);
 }
 
-void hgSkyboxDeinit()
+void skyboxDeinit()
 {
-    hgGpuPipelineDestroy(skyboxPipeline.pipeline);
+    gpuPipelineDestroy(skyboxPipeline.pipeline);
 
-    hgGpuViewDestroy(skyboxPipeline.defaultTex.view);
-    hgGpuImageDestroy(skyboxPipeline.defaultTex.image);
+    gpuViewDestroy(skyboxPipeline.defaultTex.view);
+    gpuImageDestroy(skyboxPipeline.defaultTex.image);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgSkybox* skybox)
+void serialize(Serializer* s, Skybox* skybox)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &skybox->texture);
 }
 
-HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgTextureAsset* texture)
+Skybox* skyboxAdd(Ecs* ecs, Entity e, TextureAsset* texture)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgSkybox* skybox = hgEcsAdd<HgSkybox>(ecs, e);
+    Skybox* skybox = ecsAdd<Skybox>(ecs, e);
     *skybox = {texture};
 
     return skybox;
 }
 
 template<>
-void hgEcsDtor(HgSkybox* skybox)
+void ecsDtor(Skybox* skybox)
 {
-    hgAssetUnload(skybox->texture);
+    assetUnload(skybox->texture);
 }
 
-void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
+void skyboxDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
 {
-    hgGpuBindPipeline(cmd, skyboxPipeline.pipeline);
+    gpuBindPipeline(cmd, skyboxPipeline.pipeline);
 
-    hgEcsForEach<HgSkybox>(ecs, [&](HgEntity, HgSkybox* skybox)
+    ecsForEach<Skybox>(ecs, [&](Entity, Skybox* skybox)
     {
-        HgTexture* texture = skybox->texture == nullptr
+        Texture* texture = skybox->texture == nullptr
             ? &skyboxPipeline.defaultTex
             : &skybox->texture->asset;
 
         SkyboxPipelinePush push{};
-        push.viewProj = hgGpuBufferUniformDescriptor(hgEcsGet<HgCamera>(ecs, camera)->vpBuffer);
-        push.texture = hgGpuImageSamplerDescriptor(texture->view);
+        push.viewProj = gpuBufferUniformDescriptor(ecsGet<Camera>(ecs, camera)->vpBuffer);
+        push.texture = gpuImageSamplerDescriptor(texture->view);
 
-        hgGpuPushConstants(cmd, skyboxPipeline.pipeline, &push, sizeof(push));
+        gpuPushConstants(cmd, skyboxPipeline.pipeline, &push, sizeof(push));
 
-        hgGpuDraw(cmd, 0, 36, 0, 1);
+        gpuDraw(cmd, 0, 36, 0, 1);
     });
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgDirLight* light)
+void serialize(Serializer* s, DirLight* light)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &light->dir,
         &light->color);
 }
 
-HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color)
+DirLight* dirLightAdd(Ecs* ecs, Entity e, Vec3 dir, Vec4 color)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgDirLight* light = hgEcsAdd<HgDirLight>(ecs, e);
+    DirLight* light = ecsAdd<DirLight>(ecs, e);
     *light = {dir, color};
 
     return light;
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgPointLight* light)
+void serialize(Serializer* s, PointLight* light)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &light->color);
 }
 
-HgPointLight* hgPointLightAdd(HgEcs* ecs, HgEntity e, HgVec4 color)
+PointLight* pointLightAdd(Ecs* ecs, Entity e, Vec4 color)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgPointLight* light = hgEcsAdd<HgPointLight>(ecs, e);
+    PointLight* light = ecsAdd<PointLight>(ecs, e);
     *light = {color};
 
     return light;
 }
 
 struct ModelPipelineDirLightData {
-    HgVec4 dir;
-    HgVec4 color;
+    Vec4 dir;
+    Vec4 color;
 };
 
 struct ModelPipelinePointLightData {
-    HgVec4 pos;
-    HgVec4 color;
+    Vec4 pos;
+    Vec4 color;
 };
 
 struct ModelPipelinePush {
-    HgMat4 model;
+    Mat4 model;
     u32 indices;
     u32 vertices;
     u32 viewProj;
@@ -4945,17 +4945,17 @@ struct ModelPipelinePush {
 };
 
 struct ModelPipelineState {
-    HgGpuPipeline* pipeline;
+    GpuPipeline* pipeline;
 
-    HgGpuBuffer* dirLightBuffer;
+    GpuBuffer* dirLightBuffer;
     u32 dirLightCapacity;
 
-    HgGpuBuffer* pointLightBuffer;
+    GpuBuffer* pointLightBuffer;
     u32 pointLightCapacity;
 
-    HgMesh defaultModel;
-    HgTexture defaultColorMap;
-    HgTexture defaultNormalMap;
+    Mesh defaultModel;
+    Texture defaultColorMap;
+    Texture defaultNormalMap;
 };
 
 static ModelPipelineState modelPipeline{};
@@ -4963,14 +4963,14 @@ static ModelPipelineState modelPipeline{};
 #include "model.vert.spv.h"
 #include "model.frag.spv.h"
 
-void hgModelsInit(
-    HgFormat colorFormat,
-    HgFormat depthFormat)
+void modelsInit(
+    Format colorFormat,
+    Format depthFormat)
 {
-    hgAssert(colorFormat != HgFormat_undefined);
-    hgAssert(depthFormat != HgFormat_undefined);
+    HG_ASSERT(colorFormat != Format_undefined);
+    HG_ASSERT(depthFormat != Format_undefined);
 
-    HgCreateGpuGraphicsPipeline pipelineConfig{};
+    CreateGpuGraphicsPipeline pipelineConfig{};
     pipelineConfig.vertexShader = model_vert_spv;
     pipelineConfig.vertexShaderSize = sizeof(model_vert_spv);
     pipelineConfig.fragmentShader = model_frag_spv;
@@ -4979,25 +4979,25 @@ void hgModelsInit(
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    pipelineConfig.cullMode = HgGpuCull_back;
+    pipelineConfig.cullMode = GpuCull_back;
     pipelineConfig.enableDepthRead = true;
     pipelineConfig.enableDepthWrite = true;
 
-    modelPipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+    modelPipeline.pipeline = gpuPipelineCreateGraphics(&pipelineConfig);
 
     modelPipeline.dirLightCapacity = 16;
-    modelPipeline.dirLightBuffer = hgGpuBufferCreate(
+    modelPipeline.dirLightBuffer = gpuBufferCreate(
         sizeof(ModelPipelineDirLightData) * modelPipeline.dirLightCapacity,
-        HgGpuBufferUsage_storageBuffer,
-        HgGpuMemoryUsage_frequentUpdate);
+        GpuBufferUsage_storageBuffer,
+        GpuMemoryUsage_frequentUpdate);
 
     modelPipeline.pointLightCapacity = 64;
-    modelPipeline.pointLightBuffer = hgGpuBufferCreate(
+    modelPipeline.pointLightBuffer = gpuBufferCreate(
         sizeof(ModelPipelinePointLightData) * modelPipeline.dirLightCapacity,
-        HgGpuBufferUsage_storageBuffer,
-        HgGpuMemoryUsage_frequentUpdate);
+        GpuBufferUsage_storageBuffer,
+        GpuMemoryUsage_frequentUpdate);
 
-    HgMeshVertex cubeVertices[]{
+    MeshVertex cubeVertices[]{
         {{ 0.5f,-0.5f,-0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {0,0}},
         {{ 0.5f, 0.5f,-0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {1,0}},
         {{ 0.5f, 0.5f, 0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {1,1}},
@@ -5038,20 +5038,20 @@ void hgModelsInit(
         20, 21, 22, 20, 22, 23
     };
 
-    modelPipeline.defaultModel.vertexBuffer = hgGpuBufferCreate(
+    modelPipeline.defaultModel.vertexBuffer = gpuBufferCreate(
         sizeof(cubeVertices),
-        HgGpuBufferUsage_storageBuffer | HgGpuBufferUsage_transferDst);
+        GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
 
-    modelPipeline.defaultModel.indexBuffer = hgGpuBufferCreate(
+    modelPipeline.defaultModel.indexBuffer = gpuBufferCreate(
         sizeof(cubeIndices),
-        HgGpuBufferUsage_storageBuffer | HgGpuBufferUsage_transferDst);
+        GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
 
-    hgGpuBufferWrite(modelPipeline.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
-    hgGpuBufferWrite(modelPipeline.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
+    gpuBufferWrite(modelPipeline.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
+    gpuBufferWrite(modelPipeline.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
 
-    modelPipeline.defaultModel.vertexCount = (u32)hgArrayCount(cubeVertices);
-    modelPipeline.defaultModel.vertexWidth = (u32)sizeof(HgMeshVertex);
-    modelPipeline.defaultModel.indexCount = (u32)hgArrayCount(cubeIndices);
+    modelPipeline.defaultModel.vertexCount = (u32)arrayCount(cubeVertices);
+    modelPipeline.defaultModel.vertexWidth = (u32)sizeof(MeshVertex);
+    modelPipeline.defaultModel.indexCount = (u32)arrayCount(cubeIndices);
 
     struct Color {
         u8 r, g, b, a;
@@ -5062,59 +5062,59 @@ void hgModelsInit(
         {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    HgVec4 defaultNormal{0, 0, -1, 0};
+    Vec4 defaultNormal{0, 0, -1, 0};
 
-    modelPipeline.defaultColorMap.image = hgGpuImageCreate(3, 3, HgFormat_r8g8b8a8_srgb,
-        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
-    modelPipeline.defaultNormalMap.image = hgGpuImageCreate(1, 1, HgFormat_r32g32b32a32_sfloat,
-        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
+    modelPipeline.defaultColorMap.image = gpuImageCreate(3, 3, Format_r8g8b8a8_srgb,
+        GpuImageUsage_sampled | GpuImageUsage_transferDst);
+    modelPipeline.defaultNormalMap.image = gpuImageCreate(1, 1, Format_r32g32b32a32_sfloat,
+        GpuImageUsage_sampled | GpuImageUsage_transferDst);
 
-    modelPipeline.defaultColorMap.view = hgGpuViewCreate(
-        modelPipeline.defaultColorMap.image, HgGpuAspect_color, HgGpuFilter_nearest);
-    modelPipeline.defaultNormalMap.view = hgGpuViewCreate(
-        modelPipeline.defaultNormalMap.image, HgGpuAspect_color, HgGpuFilter_nearest);
+    modelPipeline.defaultColorMap.view = gpuViewCreate(
+        modelPipeline.defaultColorMap.image, GpuAspect_color, GpuFilter_nearest);
+    modelPipeline.defaultNormalMap.view = gpuViewCreate(
+        modelPipeline.defaultNormalMap.image, GpuAspect_color, GpuFilter_nearest);
 
-    hgGpuImageWrite(modelPipeline.defaultColorMap.view, defaultColors);
-    hgGpuImageWrite(modelPipeline.defaultNormalMap.view, &defaultNormal);
+    gpuImageWrite(modelPipeline.defaultColorMap.view, defaultColors);
+    gpuImageWrite(modelPipeline.defaultNormalMap.view, &defaultNormal);
 }
 
-void hgModelsDeinit()
+void modelsDeinit()
 {
-    hgGpuPipelineDestroy(modelPipeline.pipeline);
+    gpuPipelineDestroy(modelPipeline.pipeline);
 
-    hgGpuViewDestroy(modelPipeline.defaultNormalMap.view);
-    hgGpuImageDestroy(modelPipeline.defaultNormalMap.image);
+    gpuViewDestroy(modelPipeline.defaultNormalMap.view);
+    gpuImageDestroy(modelPipeline.defaultNormalMap.image);
 
-    hgGpuViewDestroy(modelPipeline.defaultColorMap.view);
-    hgGpuImageDestroy(modelPipeline.defaultColorMap.image);
+    gpuViewDestroy(modelPipeline.defaultColorMap.view);
+    gpuImageDestroy(modelPipeline.defaultColorMap.image);
 
-    hgGpuBufferDestroy(modelPipeline.defaultModel.indexBuffer);
-    hgGpuBufferDestroy(modelPipeline.defaultModel.vertexBuffer);
+    gpuBufferDestroy(modelPipeline.defaultModel.indexBuffer);
+    gpuBufferDestroy(modelPipeline.defaultModel.vertexBuffer);
 
-    hgGpuBufferDestroy(modelPipeline.pointLightBuffer);
-    hgGpuBufferDestroy(modelPipeline.dirLightBuffer);
+    gpuBufferDestroy(modelPipeline.pointLightBuffer);
+    gpuBufferDestroy(modelPipeline.dirLightBuffer);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgModel* model)
+void serialize(Serializer* s, Model* model)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &model->mesh,
         &model->colorMap,
         &model->normalMap);
 }
 
-HgModel* hgModelAdd(
-    HgEcs* ecs,
-    HgEntity e,
-    HgMeshAsset* mesh,
-    HgTextureAsset* colorMap,
-    HgTextureAsset* normalMap)
+Model* modelAdd(
+    Ecs* ecs,
+    Entity e,
+    MeshAsset* mesh,
+    TextureAsset* colorMap,
+    TextureAsset* normalMap)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgModel* model = hgEcsAdd<HgModel>(ecs, e);
+    Model* model = ecsAdd<Model>(ecs, e);
     *model = {};
     model->mesh = mesh;
     model->colorMap = colorMap;
@@ -5124,28 +5124,28 @@ HgModel* hgModelAdd(
 }
 
 template<>
-void hgEcsDtor(HgModel* model)
+void ecsDtor(Model* model)
 {
-    hgAssetUnload(model->normalMap);
-    hgAssetUnload(model->colorMap);
-    hgAssetUnload(model->mesh);
+    assetUnload(model->normalMap);
+    assetUnload(model->colorMap);
+    assetUnload(model->mesh);
 }
 
-void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
+void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(cmd != nullptr);
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(cmd != nullptr);
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
-    HgCamera* cameraC = hgEcsGet<HgCamera>(ecs, camera);
-    HgTransform* cameraTf = hgEcsGet<HgTransform>(ecs, camera);
+    Camera* cameraC = ecsGet<Camera>(ecs, camera);
+    Transform* cameraTf = ecsGet<Transform>(ecs, camera);
 
-    HgMat4 view = hgMatModelToView(cameraTf->mat);
+    Mat4 view = matModelToView(cameraTf->mat);
 
-    u32 dirLightCount = hgEcsCount<HgDirLight>(ecs);
-    u32 pointLightCount = hgEcsCount<HgPointLight>(ecs);
+    u32 dirLightCount = ecsCount<DirLight>(ecs);
+    u32 pointLightCount = ecsCount<PointLight>(ecs);
 
     if (dirLightCount > modelPipeline.dirLightCapacity)
     {
@@ -5156,13 +5156,13 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
             modelPipeline.dirLightCapacity *= 2;
         }
 
-        hgGpuWaitIdle();
+        gpuWaitIdle();
 
-        hgGpuBufferDestroy(modelPipeline.dirLightBuffer);
-        modelPipeline.dirLightBuffer = hgGpuBufferCreate(
+        gpuBufferDestroy(modelPipeline.dirLightBuffer);
+        modelPipeline.dirLightBuffer = gpuBufferCreate(
             sizeof(ModelPipelineDirLightData) * modelPipeline.dirLightCapacity,
-            HgGpuBufferUsage_storageBuffer,
-            HgGpuMemoryUsage_frequentUpdate);
+            GpuBufferUsage_storageBuffer,
+            GpuMemoryUsage_frequentUpdate);
     }
 
     if (pointLightCount > modelPipeline.pointLightCapacity)
@@ -5174,154 +5174,154 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
             modelPipeline.pointLightCapacity *= 2;
         }
 
-        hgGpuWaitIdle();
+        gpuWaitIdle();
 
-        hgGpuBufferDestroy(modelPipeline.pointLightBuffer);
-        modelPipeline.pointLightBuffer = hgGpuBufferCreate(
+        gpuBufferDestroy(modelPipeline.pointLightBuffer);
+        modelPipeline.pointLightBuffer = gpuBufferCreate(
             sizeof(ModelPipelinePointLightData) * modelPipeline.pointLightCapacity,
-            HgGpuBufferUsage_storageBuffer,
-            HgGpuMemoryUsage_frequentUpdate);
+            GpuBufferUsage_storageBuffer,
+            GpuMemoryUsage_frequentUpdate);
     }
 
-    ModelPipelineDirLightData* dirLights = hgArenaAlloc<ModelPipelineDirLightData>(scratch, dirLightCount);
-    ModelPipelinePointLightData* pointLights = hgArenaAlloc<ModelPipelinePointLightData>(scratch, pointLightCount);
+    ModelPipelineDirLightData* dirLights = arenaAlloc<ModelPipelineDirLightData>(sc, dirLightCount);
+    ModelPipelinePointLightData* pointLights = arenaAlloc<ModelPipelinePointLightData>(sc, pointLightCount);
 
     u32 i = 0;
-    hgEcsForEach<HgDirLight>(ecs, [&](HgEntity, HgDirLight* light)
+    ecsForEach<DirLight>(ecs, [&](Entity, DirLight* light)
     {
-        dirLights[i].dir = HgVec4{HgMat3{view} * light->dir, 0.0};
+        dirLights[i].dir = Vec4{Mat3{view} * light->dir, 0.0};
         dirLights[i].color = light->color;
         ++i;
     });
 
     i = 0;
-    hgEcsForEach<HgPointLight, HgTransform>(ecs, [&](HgEntity, HgPointLight* light, HgTransform* tf)
+    ecsForEach<PointLight, Transform>(ecs, [&](Entity, PointLight* light, Transform* tf)
     {
-        pointLights[i].pos = view * HgVec4{hgTransformWorldPos(*tf), 1.0};
+        pointLights[i].pos = view * Vec4{transformWorldPos(*tf), 1.0};
         pointLights[i].color = light->color;
         ++i;
     });
 
     if (dirLightCount > 0)
-        hgGpuBufferWrite(modelPipeline.dirLightBuffer, 0, dirLights, sizeof(*dirLights) * dirLightCount);
+        gpuBufferWrite(modelPipeline.dirLightBuffer, 0, dirLights, sizeof(*dirLights) * dirLightCount);
 
     if (pointLightCount > 0)
-        hgGpuBufferWrite(modelPipeline.pointLightBuffer, 0, pointLights, sizeof(*pointLights) * pointLightCount);
+        gpuBufferWrite(modelPipeline.pointLightBuffer, 0, pointLights, sizeof(*pointLights) * pointLightCount);
 
-    hgGpuBindPipeline(cmd, modelPipeline.pipeline);
+    gpuBindPipeline(cmd, modelPipeline.pipeline);
 
-    hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* tf)
+    ecsForEach<Model, Transform>(ecs, [&](Entity, Model* model, Transform* tf)
     {
-        HgTexture* colorMap = model->colorMap == nullptr
+        Texture* colorMap = model->colorMap == nullptr
             ? &modelPipeline.defaultColorMap
             : &model->colorMap->asset;
 
-        HgTexture* normalMap = model->normalMap == nullptr
+        Texture* normalMap = model->normalMap == nullptr
             ? &modelPipeline.defaultNormalMap
             : &model->normalMap->asset;
 
-        HgMesh* gpuModel = model->mesh == nullptr
+        Mesh* gpuModel = model->mesh == nullptr
             ? &modelPipeline.defaultModel
             : &model->mesh->asset;
 
         ModelPipelinePush push{};
         push.model = tf->mat;
-        push.vertices = hgGpuBufferStorageDescriptor(gpuModel->vertexBuffer);
-        push.indices = hgGpuBufferStorageDescriptor(gpuModel->indexBuffer);
-        push.viewProj = hgGpuBufferUniformDescriptor(cameraC->vpBuffer);
-        push.normalMap = hgGpuImageSamplerDescriptor(normalMap->view);
-        push.colorMap = hgGpuImageSamplerDescriptor(colorMap->view);
-        push.dirLights = hgGpuBufferStorageDescriptor(modelPipeline.dirLightBuffer);
+        push.vertices = gpuBufferStorageDescriptor(gpuModel->vertexBuffer);
+        push.indices = gpuBufferStorageDescriptor(gpuModel->indexBuffer);
+        push.viewProj = gpuBufferUniformDescriptor(cameraC->vpBuffer);
+        push.normalMap = gpuImageSamplerDescriptor(normalMap->view);
+        push.colorMap = gpuImageSamplerDescriptor(colorMap->view);
+        push.dirLights = gpuBufferStorageDescriptor(modelPipeline.dirLightBuffer);
         push.dirLightCount = dirLightCount;
-        push.pointLights = hgGpuBufferStorageDescriptor(modelPipeline.pointLightBuffer);
+        push.pointLights = gpuBufferStorageDescriptor(modelPipeline.pointLightBuffer);
         push.pointLightCount = pointLightCount;
 
-        hgGpuPushConstants(cmd, modelPipeline.pipeline, &push, sizeof(push));
+        gpuPushConstants(cmd, modelPipeline.pipeline, &push, sizeof(push));
 
-        hgGpuDraw(cmd, 0, gpuModel->indexCount, 0, 1);
+        gpuDraw(cmd, 0, gpuModel->indexCount, 0, 1);
     });
 }
 
 template<>
-void hgAssetLoadImpl(HgAsset<HgSound>* data)
+void assetLoadImpl(Asset<Sound>* data)
 {
     (void)data;
-    hgPanic("Load audio file impl : TODO\n");
+    HG_PANIC("Load audio file impl : TODO\n");
 }
 
 template<>
-void hgAssetUnloadImpl(HgAsset<HgSound>* data)
+void assetUnloadImpl(Asset<Sound>* data)
 {
     (void)data;
-    hgPanic("Unload audio file impl : TODO\n");
+    HG_PANIC("Unload audio file impl : TODO\n");
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgAudioSource* src)
+void serialize(Serializer* s, AudioSource* src)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &src->audio,
         &src->position,
         &src->repeat);
 }
 
-HgAudioPlayer hgAudioPlayerCreate()
+AudioPlayer audioPlayerCreate()
 {
-    HgAudioPlayer player{};
-    player.music = hgArrayCreate<HgAudioPlayerMusic>();
-    player.sounds = hgArrayCreate<HgAudioStream*>();
+    AudioPlayer player{};
+    player.music = arrayCreate<AudioPlayerMusic>();
+    player.sounds = arrayCreate<AudioStream*>();
     return player;
 }
 
-void hgAudioPlayerDestroy(HgAudioPlayer* player)
+void audioPlayerDestroy(AudioPlayer* player)
 {
-    hgAssert(player != nullptr);
+    HG_ASSERT(player != nullptr);
 
     for (u32 i = 0; i < player->sounds.count; ++i)
     {
-        hgAudioStreamDestroy(player->sounds[i]);
+        audioStreamDestroy(player->sounds[i]);
     }
 
     for (u32 i = 0; i < player->music.count; ++i)
     {
-        hgAudioStreamDestroy(player->music[i].stream);
+        audioStreamDestroy(player->music[i].stream);
     }
 
-    hgArrayDestroy(&player->sounds);
-    hgArrayDestroy(&player->music);
+    arrayDestroy(&player->sounds);
+    arrayDestroy(&player->music);
 }
 
-void hgAudioPlayerUpdate(HgAudioPlayer* player)
+void audioPlayerUpdate(AudioPlayer* player)
 {
     for (u32 i = player->sounds.count - 1; i < player->sounds.count; --i)
     {
-        if (hgAudioStreamQueuedSize(player->sounds[i]) == 0)
+        if (audioStreamQueuedSize(player->sounds[i]) == 0)
         {
-            HgAudioStream* stream = hgArrayRemove(&player->sounds, i);
-            hgAudioStreamDestroy(stream);
+            AudioStream* stream = arrayRemove(&player->sounds, i);
+            audioStreamDestroy(stream);
         }
     }
 
     for (u32 i = 0; i < player->music.count; ++i)
     {
-        HgAudioPlayerMusic* music = &player->music[i];
+        AudioPlayerMusic* music = &player->music[i];
         if (!music->playing)
             continue;
 
-        HgSound* sound = &music->sound->asset;
+        Sound* sound = &music->sound->asset;
 
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
+        Arena* sc = scratch();
+        HG_ARENA_SCOPE(sc);
 
         u32 width = sizeof(f32);
 
         u32 total = sound->frequency * width / 16;
-        u32 queued = hgAudioStreamQueuedSize(music->stream);
+        u32 queued = audioStreamQueuedSize(music->stream);
         if (queued >= total)
             continue;
         u32 sizeToPush = total - queued;
 
-        f32* queue = (f32*)hgArenaAlloc(scratch, sizeToPush, width);
+        f32* queue = (f32*)arenaAlloc(sc, sizeToPush, width);
         u32 queueSize = 0;
 
         while (queueSize < sizeToPush)
@@ -5329,18 +5329,18 @@ void hgAudioPlayerUpdate(HgAudioPlayer* player)
             if (music->pos == sound->size)
                 music->pos = 0;
 
-            u32 sizeToQueue = hgMin(sizeToPush - queueSize, (u32)(sound->size - music->pos));
-            hgMemCopy((u8*)queue + queueSize, (u8*)sound->data + music->pos, sizeToQueue);
+            u32 sizeToQueue = min(sizeToPush - queueSize, (u32)(sound->size - music->pos));
+            memCopy((u8*)queue + queueSize, (u8*)sound->data + music->pos, sizeToQueue);
             queueSize += sizeToQueue;
             music->pos += sizeToQueue;
         }
 
-        hgAssert(queueSize <= sizeToPush);
-        hgAudioStreamPush(music->stream, queue, queueSize);
+        HG_ASSERT(queueSize <= sizeToPush);
+        audioStreamPush(music->stream, queue, queueSize);
     }
 }
 
-void hgAudioPlayerMusic(HgAudioPlayer* player, HgSoundAsset* music)
+void audioPlayerMusic(AudioPlayer* player, SoundAsset* music)
 {
     for (u32 i = 0; i < player->music.count; ++i)
     {
@@ -5351,27 +5351,27 @@ void hgAudioPlayerMusic(HgAudioPlayer* player, HgSoundAsset* music)
         }
     }
 
-    HgAudioPlayerMusic* track = hgArrayPush(&player->music);
-    track->stream = hgAudioStreamCreate(music->asset.frequency, music->asset.channels);
+    AudioPlayerMusic* track = arrayPush(&player->music);
+    track->stream = audioStreamCreate(music->asset.frequency, music->asset.channels);
     track->sound = music;
     track->pos = 0;
     track->playing = true;
 }
 
-void hgAudioPlayerMusicKill(HgAudioPlayer* player, HgSoundAsset* music)
+void audioPlayerMusicKill(AudioPlayer* player, SoundAsset* music)
 {
     for (u32 i = 0; i < player->music.count; ++i)
     {
         if (player->music[i].sound == music)
         {
-            HgAudioPlayerMusic track = hgArrayRemove(&player->music, i);
-            hgAudioStreamDestroy(track.stream);
+            AudioPlayerMusic track = arrayRemove(&player->music, i);
+            audioStreamDestroy(track.stream);
             return;
         }
     }
 }
 
-void hgAudioPlayerMusicPause(HgAudioPlayer* player, HgSoundAsset* music)
+void audioPlayerMusicPause(AudioPlayer* player, SoundAsset* music)
 {
     for (u32 i = 0; i < player->music.count; ++i)
     {
@@ -5383,34 +5383,34 @@ void hgAudioPlayerMusicPause(HgAudioPlayer* player, HgSoundAsset* music)
     }
 }
 
-void hgAudioPlayerSetMusicGain(HgAudioPlayer* player, HgSoundAsset* music, f32 gain)
+void audioPlayerSetMusicGain(AudioPlayer* player, SoundAsset* music, f32 gain)
 {
     for (u32 i = 0; i < player->music.count; ++i)
     {
         if (player->music[i].sound == music)
         {
-            hgAudioStreamSetGain(player->music[i].stream, gain);
+            audioStreamSetGain(player->music[i].stream, gain);
             return;
         }
     }
 }
 
-void hgAudioPlayerSound(HgAudioPlayer* player, HgSoundAsset* sound, f32 gain)
+void audioPlayerSound(AudioPlayer* player, SoundAsset* sound, f32 gain)
 {
-    HgAudioStream** stream = hgArrayPush(&player->sounds);
-    *stream = hgAudioStreamCreate(sound->asset.frequency, sound->asset.channels);
-    hgAudioStreamSetGain(*stream, gain);
-    hgAudioStreamPush(*stream, sound->asset.data, sound->asset.size);
+    AudioStream** stream = arrayPush(&player->sounds);
+    *stream = audioStreamCreate(sound->asset.frequency, sound->asset.channels);
+    audioStreamSetGain(*stream, gain);
+    audioStreamPush(*stream, sound->asset.data, sound->asset.size);
 }
 
-HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgSoundAsset* audio, bool repeat)
+AudioSource* audioSourceAdd(Ecs* ecs, Entity e, SoundAsset* audio, bool repeat)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgAudioSource* src = hgEcsAdd<HgAudioSource>(ecs, e);
+    AudioSource* src = ecsAdd<AudioSource>(ecs, e);
     *src = {};
-    src->player = hgAudioStreamCreate(8000, 1);
+    src->player = audioStreamCreate(8000, 1);
     src->audio = audio;
     src->position = 0;
     src->repeat = repeat;
@@ -5419,32 +5419,32 @@ HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgSoundAsset* audio, boo
 }
 
 template<>
-void hgEcsDtor(HgAudioSource* src)
+void ecsDtor(AudioSource* src)
 {
-    hgAssetUnload(src->audio);
-    hgAudioStreamDestroy(src->player);
+    assetUnload(src->audio);
+    audioStreamDestroy(src->player);
 }
 
-void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
+void audioUpdate(Ecs* ecs, Entity listener)
 {
-    hgEcsForEach<HgAudioSource>(ecs, [&](HgEntity e, HgAudioSource* src)
+    ecsForEach<AudioSource>(ecs, [&](Entity e, AudioSource* src)
     {
-        HgSound* audio = &src->audio->asset;
+        Sound* audio = &src->audio->asset;
         if (src->position == audio->size && !src->repeat)
             return;
 
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
+        Arena* sc = scratch();
+        HG_ARENA_SCOPE(sc);
 
         u32 width = sizeof(f32);
 
         u32 total = audio->frequency * width / 8;
-        u32 queued = hgAudioStreamQueuedSize(src->player);
+        u32 queued = audioStreamQueuedSize(src->player);
         if (queued >= total)
             return;
         u32 sizeToPush = total - queued;
 
-        f32* queue = (f32*)hgArenaAlloc(scratch, sizeToPush, width);
+        f32* queue = (f32*)arenaAlloc(sc, sizeToPush, width);
         u32 queueSize = 0;
 
         if (src->repeat)
@@ -5454,26 +5454,26 @@ void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
                 if (src->position == audio->size)
                     src->position = 0;
 
-                u32 sizeToQueue = hgMin(sizeToPush - queueSize, (u32)(audio->size - src->position));
-                hgMemCopy((u8*)queue + queueSize, (u8*)audio->data + src->position, sizeToQueue);
+                u32 sizeToQueue = min(sizeToPush - queueSize, (u32)(audio->size - src->position));
+                memCopy((u8*)queue + queueSize, (u8*)audio->data + src->position, sizeToQueue);
                 queueSize += sizeToQueue;
                 src->position += sizeToQueue;
             }
         }
         else
         {
-            queueSize = hgMin(sizeToPush, (u32)(audio->size - src->position));
-            hgMemCopy(queue, (u8*)audio->data + src->position, queueSize);
+            queueSize = min(sizeToPush, (u32)(audio->size - src->position));
+            memCopy(queue, (u8*)audio->data + src->position, queueSize);
             src->position += queueSize;
         }
 
-        if (hgEcsHas<HgTransform>(ecs, e))
+        if (ecsHas<Transform>(ecs, e))
         {
-            hgAssert(hgEcsHas<HgTransform>(ecs, listener));
+            HG_ASSERT(ecsHas<Transform>(ecs, listener));
 
-            HgVec3 relPos = hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, listener))
-                          - hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, e));
-            f32 factor = 1.0f / hgVecDot3(relPos, relPos);
+            Vec3 relPos = transformWorldPos(*ecsGet<Transform>(ecs, listener))
+                          - transformWorldPos(*ecsGet<Transform>(ecs, e));
+            f32 factor = 1.0f / vecDot3(relPos, relPos);
 
             for (u64 i = 0; i < sizeToPush / sizeof(f32); ++i)
             {
@@ -5481,41 +5481,41 @@ void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
             }
         }
 
-        hgAssert(queueSize <= sizeToPush);
-        hgAudioStreamPush(src->player, queue, queueSize);
+        HG_ASSERT(queueSize <= sizeToPush);
+        audioStreamPush(src->player, queue, queueSize);
     });
 }
 
-HgEcs hgEcsCreate()
+Ecs ecsCreate()
 {
-    HgEcs ecs{};
-    ecs.entities = hgHandlePoolCreate();
-    ecs.components = hgMapCreate<u64, HgComponent>(128);
-    hgEcsReset(&ecs);
+    Ecs ecs{};
+    ecs.entities = handlePoolCreate();
+    ecs.components = mapCreate<u64, Component>(128);
+    ecsReset(&ecs);
     return ecs;
 }
 
-void hgEcsDestroy(HgEcs* ecs)
+void ecsDestroy(Ecs* ecs)
 {
-    hgEcsReset(ecs);
+    ecsReset(ecs);
 
-    hgMapForEach(&ecs->components, [&](u64*, HgComponent* system)
+    mapForEach(&ecs->components, [&](u64*, Component* system)
     {
-        hgArrayAnyDestroy(&system->components);
-        hgArrayDestroy(&system->entities);
-        hgArrayDestroy(&system->indices);
-        hgStringDestroy(&system->name);
+        arrayAnyDestroy(&system->components);
+        arrayDestroy(&system->entities);
+        arrayDestroy(&system->indices);
+        stringDestroy(&system->name);
     });
 
-    hgMapDestroy(&ecs->components);
-    hgHandlePoolDestroy(&ecs->entities);
+    mapDestroy(&ecs->components);
+    handlePoolDestroy(&ecs->entities);
 }
 
-void hgEcsReset(HgEcs* ecs)
+void ecsReset(Ecs* ecs)
 {
-    hgAssert(ecs != nullptr);
+    HG_ASSERT(ecs != nullptr);
 
-    hgMapForEach(&ecs->components, [&](u64*, HgComponent* system)
+    mapForEach(&ecs->components, [&](u64*, Component* system)
     {
         for (u32 c = 1; c < system->components.count; ++c)
         {
@@ -5523,204 +5523,204 @@ void hgEcsReset(HgEcs* ecs)
         }
         system->entities.count = 1;
         system->components.count = 1;
-        hgMemClear(system->indices.vals, system->indices.count * sizeof(*system->indices.vals));
+        memClear(system->indices.vals, system->indices.count * sizeof(*system->indices.vals));
     });
-    hgHandlePoolReset(&ecs->entities);
+    handlePoolReset(&ecs->entities);
 }
 
-void hgEcsRegisterComponent(HgEcs* ecs, HgEcsRegisterComponent* config)
+void ecsRegisterComponent(Ecs* ecs, EcsRegisterComponent* config)
 {
-    hgAssert(ecs != nullptr);
+    HG_ASSERT(ecs != nullptr);
 
-    u64 id = hgHash(config->name);
-    hgAssert(hgMapGet(&ecs->components, id) == nullptr);
+    u64 id = hash(config->name);
+    HG_ASSERT(mapGet(&ecs->components, id) == nullptr);
 
     if (ecs->components.count * 2 > ecs->components.capacity)
-        hgMapResize(&ecs->components, ecs->components.capacity * 2);
-    HgComponent* system = hgMapAdd(&ecs->components, id, {});
+        mapResize(&ecs->components, ecs->components.capacity * 2);
+    Component* system = mapAdd(&ecs->components, id, {});
 
-    system->name = hgStringCreate(config->name);
-    system->indices = hgArrayCreate<u32>();
-    system->entities = hgArrayCreate<HgEntity>();
-    system->components = hgArrayAnyCreate(config->width, config->align);
+    system->name = stringCreate(config->name);
+    system->indices = arrayCreate<u32>();
+    system->entities = arrayCreate<Entity>();
+    system->components = arrayAnyCreate(config->width, config->align);
     system->dtor = config->dtor;
     system->serialize = config->serialize;
 
-    hgArrayPush(&system->entities);
-    hgArrayAnyPush(&system->components);
+    arrayPush(&system->entities);
+    arrayAnyPush(&system->components);
 }
 
-void hgEcsUnregisterComponent(HgEcs* ecs, u64 componentId)
+void ecsUnregisterComponent(Ecs* ecs, u64 componentId)
 {
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    Component* system = mapGet(&ecs->components, componentId);
 
     for (u32 c = 1; c < system->components.count; ++c)
     {
         system->dtor(system->components[c]);
     }
-    hgArrayAnyDestroy(&system->components);
-    hgArrayDestroy(&system->entities);
-    hgArrayDestroy(&system->indices);
-    hgStringDestroy(&system->name);
+    arrayAnyDestroy(&system->components);
+    arrayDestroy(&system->entities);
+    arrayDestroy(&system->indices);
+    stringDestroy(&system->name);
 
-    hgMapRemove(&ecs->components, componentId);
+    mapRemove(&ecs->components, componentId);
 }
 
-HgString hgEcsComponentName(HgEcs* ecs, u64 componentId)
+String ecsComponentName(Ecs* ecs, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
+    HG_ASSERT(ecs != nullptr);
+    Component* system = mapGet(&ecs->components, componentId);
+    HG_ASSERT(system != nullptr);
     return system->name;
 }
 
-HgEntity hgEcsSpawn(HgEcs* ecs)
+Entity ecsSpawn(Ecs* ecs)
 {
-    hgAssert(ecs != nullptr);
-    return {hgHandlePoolAlloc(&ecs->entities)};
+    HG_ASSERT(ecs != nullptr);
+    return {handlePoolAlloc(&ecs->entities)};
 }
 
-void hgEcsDespawn(HgEcs* ecs, HgEntity e)
+void ecsDespawn(Ecs* ecs, Entity e)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    hgMapForEach(&ecs->components, [&](u64* id, HgComponent*)
+    mapForEach(&ecs->components, [&](u64* id, Component*)
     {
-        if (hgEcsHas(ecs, e, *id))
-            hgEcsRemove(ecs, e, *id);
+        if (ecsHas(ecs, e, *id))
+            ecsRemove(ecs, e, *id);
     });
-    hgHandlePoolFree(&ecs->entities, e.handle);
+    handlePoolFree(&ecs->entities, e.handle);
 }
 
-bool hgEcsAlive(HgEcs* ecs, HgEntity e)
+bool ecsAlive(Ecs* ecs, Entity e)
 {
-    hgAssert(ecs != nullptr);
-    return hgHandlePoolAlive(&ecs->entities, e.handle);
+    HG_ASSERT(ecs != nullptr);
+    return handlePoolAlive(&ecs->entities, e.handle);
 }
 
-void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)
+void* ecsAdd(Ecs* ecs, Entity e, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-    hgAssert(!hgEcsHas(ecs, e, componentId));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
+    HG_ASSERT(!ecsHas(ecs, e, componentId));
 
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
+    Component* system = mapGet(&ecs->components, componentId);
+    HG_ASSERT(system != nullptr);
 
-    u32 idx = hgHandleIdx(e.handle);
+    u32 idx = handleIdx(e.handle);
     if (idx >= system->indices.count)
     {
         u32 oldCount = system->indices.count;
         u32 newCount = idx * 2;
-        hgArrayResize(&system->indices, newCount);
+        arrayResize(&system->indices, newCount);
         for (u32 i = oldCount; i < newCount; ++i)
             system->indices[i] = 0;
     }
     system->indices[idx] = system->entities.count;
-    *hgArrayPush(&system->entities) = e;
-    return hgArrayAnyPush(&system->components);
+    *arrayPush(&system->entities) = e;
+    return arrayAnyPush(&system->components);
 }
 
-void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId)
+void ecsRemove(Ecs* ecs, Entity e, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-    hgAssert(hgEcsHas(ecs, e, componentId));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
+    HG_ASSERT(ecsHas(ecs, e, componentId));
 
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
+    Component* system = mapGet(&ecs->components, componentId);
+    HG_ASSERT(system != nullptr);
 
-    u32 idx = system->indices[hgHandleIdx(e.handle)];
+    u32 idx = system->indices[handleIdx(e.handle)];
     system->dtor(system->components[idx]);
 
-    HgEntity last = hgArrayPop(&system->entities);
+    Entity last = arrayPop(&system->entities);
     if (e != last)
     {
         system->entities[idx] = last;
-        system->indices[hgHandleIdx(last.handle)] = idx;
-        hgMemCopy(
+        system->indices[handleIdx(last.handle)] = idx;
+        memCopy(
             system->components[idx],
             system->components[system->components.count - 1],
             system->components.width);
     }
-    system->indices[hgHandleIdx(e.handle)] = 0;
+    system->indices[handleIdx(e.handle)] = 0;
     --system->components.count;
 }
 
-bool hgEcsHas(HgEcs* ecs, HgEntity e, u64 componentId)
+bool ecsHas(Ecs* ecs, Entity e, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    Component* system = mapGet(&ecs->components, componentId);
     if (system == nullptr)
         return false;
 
-    u32 idx = hgHandleIdx(e.handle);
+    u32 idx = handleIdx(e.handle);
     return idx < system->indices.count && system->indices[idx] != 0;
 }
 
-void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId)
+void* ecsGet(Ecs* ecs, Entity e, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-    hgAssert(system->indices[hgHandleIdx(e.handle)] != 0);
-    hgAssert(system->indices[hgHandleIdx(e.handle)] < system->entities.count);
+    Component* system = mapGet(&ecs->components, componentId);
+    HG_ASSERT(system != nullptr);
+    HG_ASSERT(system->indices[handleIdx(e.handle)] != 0);
+    HG_ASSERT(system->indices[handleIdx(e.handle)] < system->entities.count);
 
-    return system->components[system->indices[hgHandleIdx(e.handle)]];
+    return system->components[system->indices[handleIdx(e.handle)]];
 }
 
-HgEntity hgEcsGetEntity(HgEcs* ecs, const void* component, u64 componentId)
+Entity ecsGetEntity(Ecs* ecs, const void* component, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(component != nullptr);
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(component != nullptr);
 
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
+    Component* system = mapGet(&ecs->components, componentId);
+    HG_ASSERT(system != nullptr);
 
     return system->entities[(u32)((uptr)component - (uptr)system->components.vals) / system->components.width];
 }
 
-HgEntity* hgEcsEntities(HgEcs* ecs, u64 componentId)
+Entity* ecsEntities(Ecs* ecs, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId)->entities.count != 0);
-    return hgMapGet(&ecs->components, componentId)->entities.vals + 1;
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(mapGet(&ecs->components, componentId) != nullptr);
+    HG_ASSERT(mapGet(&ecs->components, componentId)->entities.count != 0);
+    return mapGet(&ecs->components, componentId)->entities.vals + 1;
 }
 
-void* hgEcsComponents(HgEcs* ecs, u64 componentId)
+void* ecsComponents(Ecs* ecs, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId)->components.count != 0);
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(mapGet(&ecs->components, componentId) != nullptr);
+    HG_ASSERT(mapGet(&ecs->components, componentId)->components.count != 0);
+    Component* system = mapGet(&ecs->components, componentId);
     return (u8*)system->components.vals + system->components.width;
 }
 
-u32 hgEcsCount(HgEcs* ecs, u64 componentId)
+u32 ecsCount(Ecs* ecs, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId)->entities.count != 0);
-    return hgMapGet(&ecs->components, componentId)->entities.count - 1;
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(mapGet(&ecs->components, componentId) != nullptr);
+    HG_ASSERT(mapGet(&ecs->components, componentId)->entities.count != 0);
+    return mapGet(&ecs->components, componentId)->entities.count - 1;
 }
 
-u64 hgEcsFindSmallest(HgEcs* ecs, u64* ids, u32 idCount)
+u64 ecsFindSmallest(Ecs* ecs, u64* ids, u32 idCount)
 {
-    hgAssert(ecs != nullptr);
+    HG_ASSERT(ecs != nullptr);
 
     u32 smallestCount = (u32)-1;
     u64 smallest = ids[0];
 
     for (u32 i = 1; i < idCount; ++i)
     {
-        HgComponent* system = hgMapGet(&ecs->components, ids[i]);
-        hgAssert(system != nullptr);
+        Component* system = mapGet(&ecs->components, ids[i]);
+        HG_ASSERT(system != nullptr);
 
         if (system->entities.count < smallestCount)
         {
@@ -5731,45 +5731,45 @@ u64 hgEcsFindSmallest(HgEcs* ecs, u64* ids, u32 idCount)
     return smallest;
 }
 
-static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u64 componentId)
+static void swapIdxLocation(Ecs* ecs, u32 lhs, u32 rhs, u64 componentId)
 {
-    hgAssert(ecs != nullptr);
+    HG_ASSERT(ecs != nullptr);
 
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
+    Component* system = mapGet(&ecs->components, componentId);
+    HG_ASSERT(system != nullptr);
 
-    hgAssert(lhs != 0 && lhs < system->entities.count);
-    hgAssert(rhs != 0 && rhs < system->entities.count);
+    HG_ASSERT(lhs != 0 && lhs < system->entities.count);
+    HG_ASSERT(rhs != 0 && rhs < system->entities.count);
 
-    HgEntity lhsEntity = system->entities[lhs];
-    HgEntity rhsEntity = system->entities[rhs];
+    Entity lhsEntity = system->entities[lhs];
+    Entity rhsEntity = system->entities[rhs];
 
-    hgAssert(hgEcsAlive(ecs, lhsEntity));
-    hgAssert(hgEcsAlive(ecs, rhsEntity));
-    hgAssert(hgEcsHas(ecs, lhsEntity, componentId));
-    hgAssert(hgEcsHas(ecs, rhsEntity, componentId));
+    HG_ASSERT(ecsAlive(ecs, lhsEntity));
+    HG_ASSERT(ecsAlive(ecs, rhsEntity));
+    HG_ASSERT(ecsHas(ecs, lhsEntity, componentId));
+    HG_ASSERT(ecsHas(ecs, rhsEntity, componentId));
 
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
+    Arena* sc = scratch();
+    HG_ARENA_SCOPE(sc);
 
     system->entities[lhs] = rhsEntity;
     system->entities[rhs] = lhsEntity;
-    system->indices[hgHandleIdx(lhsEntity.handle)] = rhs;
-    system->indices[hgHandleIdx(rhsEntity.handle)] = lhs;
+    system->indices[handleIdx(lhsEntity.handle)] = rhs;
+    system->indices[handleIdx(rhsEntity.handle)] = lhs;
 
-    void* temp = hgArenaAlloc(scratch, system->components.width, 1);
-    hgMemCopy(temp, system->components[lhs], system->components.width);
-    hgMemCopy(system->components[lhs], system->components[rhs], system->components.width);
-    hgMemCopy(system->components[rhs], temp, system->components.width);
+    void* temp = arenaAlloc(sc, system->components.width, 1);
+    memCopy(temp, system->components[lhs], system->components.width);
+    memCopy(system->components[lhs], system->components[rhs], system->components.width);
+    memCopy(system->components[rhs], temp, system->components.width);
 }
 
 namespace {
     struct QuicksortData {
-        HgEcs* ecs;
-        HgComponent* system;
+        Ecs* ecs;
+        Component* system;
         u64 comp;
         void* data;
-        bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs);
+        bool (*compare)(void*, Ecs* ecs, Entity lhs, Entity rhs);
 
         u32 quicksortInter(u32 pivot, u32 inc, u32 dec)
         {
@@ -5809,72 +5809,72 @@ namespace {
     };
 }
 
-void hgEcsSort(
-    HgEcs* ecs,
+void ecsSort(
+    Ecs* ecs,
     u64 componentId,
     void* data,
-    bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs))
+    bool (*compare)(void*, Ecs* ecs, Entity lhs, Entity rhs))
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(compare != nullptr);
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(compare != nullptr);
 
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
+    Component* system = mapGet(&ecs->components, componentId);
+    HG_ASSERT(system != nullptr);
 
     QuicksortData q{ecs, system, componentId, data, compare};
     q.quicksort(1, system->entities.count);
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgEcs* ecs)
+void serialize(Serializer* s, Ecs* ecs)
 {
-    hgAssert(s != nullptr);
-    hgAssert(ecs != nullptr);
+    HG_ASSERT(s != nullptr);
+    HG_ASSERT(ecs != nullptr);
 
-    HgArena* scratch = hgScratch(&s->arena, 1);
-    hgArenaScope(scratch);
+    Arena* sc = scratch(&s->arena, 1);
+    HG_ARENA_SCOPE(sc);
 
-    hgSerializeBegin(s);
-    hgDefer(hgSerializeEnd(s));
+    serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
 
-    HgEntitySerializer ecsSerial{};
+    EntitySerializer ecsSerial{};
     u32 entityCount = 0;
     if (s->writing)
     {
-        ecsSerial.entityToIdx = hgArenaAlloc<u32>(scratch, ecs->entities.handles.count);
+        ecsSerial.entityToIdx = arenaAlloc<u32>(sc, ecs->entities.handles.count);
         for (u32 i = 1; i < ecs->entities.handles.count; ++i)
         {
-            if (ecs->entities.handles[i] != hgHandleNull)
-                ecsSerial.entityToIdx[hgHandleIdx(ecs->entities.handles[i])] = entityCount++;
+            if (ecs->entities.handles[i] != handleNull)
+                ecsSerial.entityToIdx[handleIdx(ecs->entities.handles[i])] = entityCount++;
         }
 
-        hgSerialize(s, &entityCount);
+        serialize(s, &entityCount);
     }
     else
     {
-        hgSerialize(s, &entityCount);
+        serialize(s, &entityCount);
 
-        ecsSerial.idxToEntity = hgArenaAlloc<HgEntity>(scratch, entityCount);
+        ecsSerial.idxToEntity = arenaAlloc<Entity>(sc, entityCount);
         for (u32 i = 0; i < entityCount; ++i)
         {
-            ecsSerial.idxToEntity[i] = hgEcsSpawn(ecs);
+            ecsSerial.idxToEntity[i] = ecsSpawn(ecs);
         }
     }
 
     u32 systemCount;
     if (s->writing)
         systemCount = ecs->components.count;
-    hgSerializeBegin(s, &systemCount);
-    hgDefer(hgSerializeEnd(s));
+    serializeBegin(s, &systemCount);
+    HG_DEFER(serializeEnd(s));
 
     u32 systemIdx = (u32)-1;
     for (u32 i = 0; i < systemCount; ++i)
     {
-        hgSerializeBegin(s);
-        hgDefer(hgSerializeEnd(s));
+        serializeBegin(s);
+        HG_DEFER(serializeEnd(s));
 
         u64 systemId = (u64)-1;
-        HgComponent* system;
+        Component* system;
         if (s->writing)
         {
             ++systemIdx;
@@ -5884,165 +5884,165 @@ void hgSerialize(HgSerializer* s, HgEcs* ecs)
             }
             systemId = ecs->components.keys[systemIdx];
             system = &ecs->components.vals[systemIdx];
-            hgSerialize(s, &system->name);
+            serialize(s, &system->name);
         }
         else
         {
-            HgString compName;
-            hgSerialize(s, &compName);
-            systemId = hgHash(compName);
-            system = hgMapGet(&ecs->components, systemId);
+            String compName;
+            serialize(s, &compName);
+            systemId = hash(compName);
+            system = mapGet(&ecs->components, systemId);
         }
 
         u32 compCount;
         if (s->writing)
             compCount = system->entities.count - 1;
-        hgSerializeBegin(s, &compCount);
-        hgDefer(hgSerializeEnd(s));
+        serializeBegin(s, &compCount);
+        HG_DEFER(serializeEnd(s));
 
         for (u32 c = 0; c < compCount; ++c)
         {
-            hgSerializeBegin(s);
-            hgDefer(hgSerializeEnd(s));
+            serializeBegin(s);
+            HG_DEFER(serializeEnd(s));
 
             u32 entityIdx;
             if (s->writing)
-                entityIdx = ecsSerial.entityToIdx[hgHandleIdx(system->entities[c + 1].handle)];
-            hgSerialize(s, &entityIdx);
+                entityIdx = ecsSerial.entityToIdx[handleIdx(system->entities[c + 1].handle)];
+            serialize(s, &entityIdx);
 
             void* compData;
             if (s->writing)
                 compData = system->components[c + 1];
             else
-                compData = hgEcsAdd(ecs, ecsSerial.idxToEntity[entityIdx], systemId);
+                compData = ecsAdd(ecs, ecsSerial.idxToEntity[entityIdx], systemId);
             system->serialize(s, compData, &ecsSerial);
         }
     }
 }
 
-void hgEntitySerialize(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs)
+void entitySerialize(Serializer* s, Entity* val, EntitySerializer* ecs)
 {
     if (s->writing)
     {
-        u32 idx = *val != hgEntityNull ? ecs->entityToIdx[hgHandleIdx(val->handle)] : (u32)-1;
-        hgSerialize(s, (i32*)&idx);
+        u32 idx = *val != entityNull ? ecs->entityToIdx[handleIdx(val->handle)] : (u32)-1;
+        serialize(s, (i32*)&idx);
     }
     else
     {
         u32 idx = (u32)-1;
-        hgSerialize(s, (i32*)&idx);
-        *val = idx != (u32)-1 ? ecs->idxToEntity[idx] : hgEntityNull;
+        serialize(s, (i32*)&idx);
+        *val = idx != (u32)-1 ? ecs->idxToEntity[idx] : entityNull;
     }
 }
 
 template<>
-void hgEcsSerialize(HgSerializer* s, HgNode* node, HgEntitySerializer* ecs)
+void ecsSerialize(Serializer* s, Node* node, EntitySerializer* ecs)
 {
-    hgSerializeBegin(s);
-    hgEntitySerialize(s, &node->parent, ecs);
-    hgEntitySerialize(s, &node->nextSibling, ecs);
-    hgEntitySerialize(s, &node->prevSibling, ecs);
-    hgEntitySerialize(s, &node->firstChild, ecs);
-    hgSerializeEnd(s);
+    serializeBegin(s);
+    entitySerialize(s, &node->parent, ecs);
+    entitySerialize(s, &node->nextSibling, ecs);
+    entitySerialize(s, &node->prevSibling, ecs);
+    entitySerialize(s, &node->firstChild, ecs);
+    serializeEnd(s);
 }
 
-HgNode* hgNodeAdd(HgEcs* ecs, HgEntity e)
+Node* nodeAdd(Ecs* ecs, Entity e)
 {
-    HgNode* node = hgEcsAdd<HgNode>(ecs, e);
+    Node* node = ecsAdd<Node>(ecs, e);
     *node = {};
     return node;
 }
 
-void hgNodeDestroy(HgEcs* ecs, HgEntity e)
+void nodeDestroy(Ecs* ecs, Entity e)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (node->parent.handle != hgHandleNull)
+    Node* node = ecsGet<Node>(ecs, e);
+    if (node->parent.handle != handleNull)
     {
-        if (node->prevSibling.handle != hgHandleNull)
-            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
+        if (node->prevSibling.handle != handleNull)
+            ecsGet<Node>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
-            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
+            ecsGet<Node>(ecs, node->parent)->firstChild = node->nextSibling;
 
-        if (node->nextSibling.handle != hgHandleNull)
-            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
+        if (node->nextSibling.handle != handleNull)
+            ecsGet<Node>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
     }
 
-    HgEntity child = node->firstChild;
-    while (child.handle != hgHandleNull)
+    Entity child = node->firstChild;
+    while (child.handle != handleNull)
     {
-        HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-        HgEntity next = childNode->nextSibling;
-        hgNodeDestroy(ecs, child);
+        Node* childNode = ecsGet<Node>(ecs, child);
+        Entity next = childNode->nextSibling;
+        nodeDestroy(ecs, child);
         child = next;
     }
 
-    hgEcsDespawn(ecs, e);
+    ecsDespawn(ecs, e);
 }
 
-void hgNodeDetach(HgEcs* ecs, HgEntity e)
+void nodeDetach(Ecs* ecs, Entity e)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (node->parent.handle == hgHandleNull)
+    Node* node = ecsGet<Node>(ecs, e);
+    if (node->parent.handle == handleNull)
     {
-        hgAssert(node->prevSibling.handle == hgHandleNull);
-        hgAssert(node->nextSibling.handle == hgHandleNull);
+        HG_ASSERT(node->prevSibling.handle == handleNull);
+        HG_ASSERT(node->nextSibling.handle == handleNull);
 
-        HgEntity child = node->firstChild;
-        while (child.handle != hgHandleNull)
+        Entity child = node->firstChild;
+        while (child.handle != handleNull)
         {
-            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-            HgEntity next = childNode->nextSibling;
-            childNode->parent = HgEntity{};
-            childNode->nextSibling = HgEntity{};
-            childNode->prevSibling = HgEntity{};
+            Node* childNode = ecsGet<Node>(ecs, child);
+            Entity next = childNode->nextSibling;
+            childNode->parent = Entity{};
+            childNode->nextSibling = Entity{};
+            childNode->prevSibling = Entity{};
             child = next;
         }
     } else {
-        if (node->prevSibling.handle != hgHandleNull)
-            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
+        if (node->prevSibling.handle != handleNull)
+            ecsGet<Node>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
-            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
+            ecsGet<Node>(ecs, node->parent)->firstChild = node->nextSibling;
 
-        if (node->nextSibling.handle != hgHandleNull)
-            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
+        if (node->nextSibling.handle != handleNull)
+            ecsGet<Node>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
 
-        HgEntity child = node->firstChild;
-        while (child.handle != hgHandleNull)
+        Entity child = node->firstChild;
+        while (child.handle != handleNull)
         {
-            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-            HgEntity next = childNode->nextSibling;
-            childNode->parent = HgEntity{};
-            childNode->nextSibling = HgEntity{};
-            childNode->prevSibling = HgEntity{};
-            hgNodeAddChild(ecs, node->parent, child);
+            Node* childNode = ecsGet<Node>(ecs, child);
+            Entity next = childNode->nextSibling;
+            childNode->parent = Entity{};
+            childNode->nextSibling = Entity{};
+            childNode->prevSibling = Entity{};
+            nodeAddChild(ecs, node->parent, child);
             child = next;
         }
     }
     *node = {};
 }
 
-void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
+void nodeAddChild(Ecs* ecs, Entity parent, Entity child)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, parent));
-    hgAssert(hgEcsAlive(ecs, child));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, parent));
+    HG_ASSERT(ecsAlive(ecs, child));
 
-    HgNode* node = hgEcsGet<HgNode>(ecs, parent);
-    HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+    Node* node = ecsGet<Node>(ecs, parent);
+    Node* childNode = ecsGet<Node>(ecs, child);
 
-    hgAssert(childNode->parent.handle == hgHandleNull);
-    hgAssert(childNode->prevSibling.handle == hgHandleNull);
-    hgAssert(childNode->nextSibling.handle == hgHandleNull);
+    HG_ASSERT(childNode->parent.handle == handleNull);
+    HG_ASSERT(childNode->prevSibling.handle == handleNull);
+    HG_ASSERT(childNode->nextSibling.handle == handleNull);
 
-    if (node->firstChild.handle != hgHandleNull)
+    if (node->firstChild.handle != handleNull)
     {
-        hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
+        ecsGet<Node>(ecs, node->firstChild)->prevSibling = child;
         childNode->nextSibling = node->firstChild;
     }
     node->firstChild = child;
@@ -6050,78 +6050,78 @@ void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
 }
 
 template<>
-void hgSerialize(HgSerializer* s, HgTransform* node)
+void serialize(Serializer* s, Transform* node)
 {
-    hgSerializeObject(s,
+    serializeObject(s,
         &node->position,
         &node->scale,
         &node->rotation);
 }
 
-HgTransform* hgTransformAdd(HgEcs* ecs, HgEntity e, HgVec3 position, HgVec3 scale, HgQuat rotation)
+Transform* transformAdd(Ecs* ecs, Entity e, Vec3 position, Vec3 scale, Quat rotation)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
 
-    HgTransform* tf = hgEcsAdd<HgTransform>(ecs, e);
+    Transform* tf = ecsAdd<Transform>(ecs, e);
     *tf = {};
     tf->position = position;
     tf->scale = scale;
     tf->rotation = rotation;
-    hgTransformUpdate(ecs, e);
+    transformUpdate(ecs, e);
 
     return tf;
 }
 
-static void transformUpdateChild(HgEcs* ecs, HgEntity e)
+static void transformUpdateChild(Ecs* ecs, Entity e)
 {
-    hgAssert(hgEcsHas<HgTransform>(ecs, e));
+    HG_ASSERT(ecsHas<Transform>(ecs, e));
 
-    HgNode* node = hgEcsGet<HgNode>(ecs, e);
+    Node* node = ecsGet<Node>(ecs, e);
 
-    HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
+    Transform* tf = ecsGet<Transform>(ecs, e);
 
-    tf->mat = hgEcsGet<HgTransform>(ecs, node->parent)->mat
-            * hgMatModel3D(tf->position, tf->scale, tf->rotation);
+    tf->mat = ecsGet<Transform>(ecs, node->parent)->mat
+            * matModel3D(tf->position, tf->scale, tf->rotation);
 
-    HgEntity child = node->firstChild;
-    while (child.handle != hgHandleNull)
+    Entity child = node->firstChild;
+    while (child.handle != handleNull)
     {
-        hgTransformUpdate(ecs, child);
-        child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
+        transformUpdate(ecs, child);
+        child = ecsGet<Node>(ecs, child)->nextSibling;
     }
 }
 
-void hgTransformUpdate(HgEcs* ecs, HgEntity e)
+void transformUpdate(Ecs* ecs, Entity e)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-    hgAssert(hgEcsHas<HgTransform>(ecs, e));
+    HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(ecsAlive(ecs, e));
+    HG_ASSERT(ecsHas<Transform>(ecs, e));
 
-    if (hgEcsHas<HgNode>(ecs, e))
+    if (ecsHas<Node>(ecs, e))
     {
-        HgNode* node = hgEcsGet<HgNode>(ecs, e);
-        if (node->parent.handle != hgHandleNull && hgEcsHas<HgTransform>(ecs, node->parent))
+        Node* node = ecsGet<Node>(ecs, e);
+        if (node->parent.handle != handleNull && ecsHas<Transform>(ecs, node->parent))
         {
             transformUpdateChild(ecs, e);
         }
         else
         {
-            HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
-            tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
+            Transform* tf = ecsGet<Transform>(ecs, e);
+            tf->mat = matModel3D(tf->position, tf->scale, tf->rotation);
 
-            HgEntity child = node->firstChild;
-            while (child.handle != hgHandleNull)
+            Entity child = node->firstChild;
+            while (child.handle != handleNull)
             {
                 transformUpdateChild(ecs, child);
-                child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
+                child = ecsGet<Node>(ecs, child)->nextSibling;
             }
         }
     }
     else
     {
-        HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
-        tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
+        Transform* tf = ecsGet<Transform>(ecs, e);
+        tf->mat = matModel3D(tf->position, tf->scale, tf->rotation);
     }
 }
 

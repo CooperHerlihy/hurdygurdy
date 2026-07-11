@@ -2,41 +2,41 @@
 
 using namespace hg;
 
-#define IM_ASSERT hgAssert
+#define IM_ASSERT HG_ASSERT
 #include "imgui.h"
 
 #include <emmintrin.h>
 
 static volatile bool quit = false;
 
-static HgClock cpuClock{};
+static Clock cpuClock{};
 static f64 cpuTime = 0.0f;
 
 static bool renderDebug = false;
 
 int main()
 {
-    if (!hgInit())
-        hgPanic("Could not initialize Hurdy Gurdy\n");
-    hgDefer(hgDeinit());
+    if (!init())
+        HG_PANIC("Could not initialize Hurdy Gurdy\n");
+    HG_DEFER(deinit());
 
-    hgTest();
+    test();
 
-    HgWindow* window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
+    Window* window = windowCreate("Hg Minimal Example", 1200, 800, nullptr);
     if (window == nullptr)
-        hgPanic("Could not create window\n");
-    hgDefer(hgWindowDestroy(window));
+        HG_PANIC("Could not create window\n");
+    HG_DEFER(windowDestroy(window));
 
     f32 musicData[2000];
-    HgSoundAsset* music = hgAssetCreate<HgSound>();
+    SoundAsset* music = assetCreate<Sound>();
     music->asset.data = musicData;
     music->asset.size = sizeof(musicData);
     music->asset.frequency = 8000;
     music->asset.channels = 1;
 
-    for (u32 i = 0; i < hgArrayCount(musicData); ++i)
+    for (u32 i = 0; i < arrayCount(musicData); ++i)
     {
-        f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
+        f32 t = (f32)i * (f32)HG_PI * 2.0f / 8000.0f;
         musicData[i] = 0;
         for (u32 j = 1; j <= 64; ++j)
         {
@@ -46,59 +46,59 @@ int main()
     }
 
     f32 soundData[2000];
-    HgSoundAsset* sound = hgAssetCreate<HgSound>();
+    SoundAsset* sound = assetCreate<Sound>();
     sound->asset.data = soundData;
     sound->asset.size = sizeof(soundData);
     sound->asset.frequency = 8000;
     sound->asset.channels = 1;
 
-    for (u32 i = 0; i < hgArrayCount(soundData); ++i)
+    for (u32 i = 0; i < arrayCount(soundData); ++i)
     {
-        f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
-        soundData[i] = hgNoiseNorm(42.0f, t) / (t + 0.1f);
+        f32 t = (f32)i * (f32)HG_PI * 2.0f / 8000.0f;
+        soundData[i] = noiseNorm(42.0f, t) / (t + 0.1f);
     }
 
-    HgAudioPlayer audio = hgAudioPlayerCreate();
-    hgAudioPlayerMusic(&audio, music);
-    hgAudioPlayerSetMusicGain(&audio, music, 0.3f);
-    hgAudioPlayerMusicPause(&audio, music);
+    AudioPlayer audio = audioPlayerCreate();
+    audioPlayerMusic(&audio, music);
+    audioPlayerSetMusicGain(&audio, music, 0.3f);
+    audioPlayerMusicPause(&audio, music);
 
-    hgRendererInit2D(hgWindowImageFormat(window));
-    hgDefer(hgRendererDeinit2D());
+    rendererInit2D(windowImageFormat(window));
+    HG_DEFER(rendererDeinit2D());
 
-    u32 width = hgWindowWidth(window);
-    u32 height = hgWindowHeight(window);
+    u32 width = windowWidth(window);
+    u32 height = windowHeight(window);
 
-    HgCamera camera = hgCameraCreate();
-    hgDefer(hgCameraDestroy(&camera));
+    Camera camera = cameraCreate();
+    HG_DEFER(cameraDestroy(&camera));
 
-    HgLayer2D backgroundLayer = hgLayerCreate2D();
-    hgDefer(hgLayerDestroy2D(&backgroundLayer));
+    Layer2D backgroundLayer = layerCreate2D();
+    HG_DEFER(layerDestroy2D(&backgroundLayer));
 
-    hgLayerClear2D(&backgroundLayer);
-    hgDrawRect2D(&backgroundLayer,
+    layerClear2D(&backgroundLayer);
+    drawRect2D(&backgroundLayer,
         {.002f, 0, .012f, 1},
         {
-            HgVec2{
+            Vec2{
                 (f32)width / (f32)height - 0.5f,
                 0.5f,
             } / 2.0f,
-            HgVec2{
+            Vec2{
                 0.5f,
                 0.5f,
             }
         });
 
-    HgLayer2D spriteLayer = hgLayerCreate2D();
-    hgDefer(hgLayerDestroy2D(&spriteLayer));
+    Layer2D spriteLayer = layerCreate2D();
+    HG_DEFER(layerDestroy2D(&spriteLayer));
 
-    HgSprite2D sprite = {nullptr, {HgVec2{0}, HgVec2{1}}};
-    HgVec2 spriteSize{0.1f, 0.1f};
-    HgVec2 spritePos = (HgVec2{(f32)width / (f32)height, 1} - spriteSize) / 2.0f;
+    Sprite2D sprite = {nullptr, {Vec2{0}, Vec2{1}}};
+    Vec2 spriteSize{0.1f, 0.1f};
+    Vec2 spritePos = (Vec2{(f32)width / (f32)height, 1} - spriteSize) / 2.0f;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    hgDefer(ImGui::DestroyContext());
+    HG_DEFER(ImGui::DestroyContext());
 
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
@@ -106,11 +106,11 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    hgImGuiInit(window, hgWindowImageFormat(window));
-    hgDefer(hgImGuiDeinit());
+    imGuiInit(window, windowImageFormat(window));
+    HG_DEFER(imGuiDeinit());
 
     // temporary, trick the OS into thinking we're important
-    hgThreadsCall(nullptr, nullptr, [](void*)
+    threadsCall(nullptr, nullptr, [](void*)
     {
         while(!quit)
         {
@@ -118,70 +118,70 @@ int main()
         }
     });
 
-    HgClock gameClock;
-    hgClockTick(&gameClock);
-    hgClockTick(&cpuClock);
+    Clock gameClock;
+    clockTick(&gameClock);
+    clockTick(&cpuClock);
     for (;;)
     {
-        hgClockTick(&cpuClock);
-        f64 delta = hgClockTick(&gameClock);
+        clockTick(&cpuClock);
+        f64 delta = clockTick(&gameClock);
 
-        hgProcessEvents();
-        if (hgWasQuit() || hgWindowWasClosed(window))
+        processEvents();
+        if (wasQuit() || windowWasClosed(window))
             goto quit;
 
-        hgAudioPlayerUpdate(&audio);
+        audioPlayerUpdate(&audio);
 
-        hgImGuiNewFrame();
+        imGuiNewFrame();
         ImGui::NewFrame();
 
-        width = hgWindowWidth(window);
-        height = hgWindowHeight(window);
+        width = windowWidth(window);
+        height = windowHeight(window);
 
-        hgCameraSetOrthographic(&camera, (f32)width / (f32)height, 1.0f);
+        cameraSetOrthographic(&camera, (f32)width / (f32)height, 1.0f);
 
-        if (hgIsButtonDown(window, HgButton_lmouse))
+        if (isButtonDown(window, Button_lmouse))
         {
             f32 moveSpeed = 1.0f;
-            camera.position.x -= hgMouseDeltaX(window) * moveSpeed;
-            camera.position.y -= hgMouseDeltaY(window) * moveSpeed;
+            camera.position.x -= mouseDeltaX(window) * moveSpeed;
+            camera.position.y -= mouseDeltaY(window) * moveSpeed;
         }
 
-        hgCameraUpdate(&camera);
+        cameraUpdate(&camera);
 
-        HgVec2 spriteMove = {
-            (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a)),
-            (f32)(hgIsButtonDown(window, HgButton_s) - hgIsButtonDown(window, HgButton_w)),
+        Vec2 spriteMove = {
+            (f32)(isButtonDown(window, Button_d) - isButtonDown(window, Button_a)),
+            (f32)(isButtonDown(window, Button_s) - isButtonDown(window, Button_w)),
         };
-        if (spriteMove != HgVec2{0.0f})
+        if (spriteMove != Vec2{0.0f})
         {
             f32 moveSpeed = 0.4f;
-            spritePos += hgVecNorm2(spriteMove) * moveSpeed * (f32)delta;
+            spritePos += vecNorm2(spriteMove) * moveSpeed * (f32)delta;
         }
 
-        hgLayerClear2D(&spriteLayer);
+        layerClear2D(&spriteLayer);
 
-        hgDrawSprite2D(&spriteLayer, &sprite, {spritePos, spriteSize});
+        drawSprite2D(&spriteLayer, &sprite, {spritePos, spriteSize});
 
         u32 eventCount;
-        HgWindowEvent* event = hgWindowEvents(window, &eventCount);
+        WindowEvent* event = windowEvents(window, &eventCount);
         for (u32 i = 0; i < eventCount; ++i, ++event)
         {
-            if (event->type == HgWindowEventType_buttonPress &&
-                event->button.button == HgButton_space)
-                hgAudioPlayerSound(&audio, sound, 0.5f);
+            if (event->type == WindowEventType_buttonPress &&
+                event->button.button == Button_space)
+                audioPlayerSound(&audio, sound, 0.5f);
         }
 
-        if (hgIsButtonDown(window, HgButton_m))
-            hgAudioPlayerMusic(&audio, music);
+        if (isButtonDown(window, Button_m))
+            audioPlayerMusic(&audio, music);
         else
-            hgAudioPlayerMusicPause(&audio, music);
+            audioPlayerMusicPause(&audio, music);
 
         if (ImGui::Begin("Info"))
         {
             ImGui::Text("Total: %.3fms", delta * 1.0e3);
 
-            cpuTime += hgClockTick(&cpuClock);
+            cpuTime += clockTick(&cpuClock);
             ImGui::Text("Cpu: %.3fms", cpuTime * 1.0e3);
             cpuTime = 0.0f;
 
@@ -191,40 +191,40 @@ int main()
 
         ImGui::Render();
 
-        cpuTime += hgClockTick(&cpuClock);
-        HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
-        hgClockTick(&cpuClock);
-        if (hgWindowImageView(window) != nullptr)
+        cpuTime += clockTick(&cpuClock);
+        GpuCmd* cmd = gpuFrameBegin(&window, 1);
+        clockTick(&cpuClock);
+        if (windowImageView(window) != nullptr)
         {
-            HgGpuRenderAttachment colorAttachment{};
-            colorAttachment.image = hgWindowImageView(window);
+            GpuRenderAttachment colorAttachment{};
+            colorAttachment.image = windowImageView(window);
 
-            HgGpuRenderPass pass{};
+            GpuRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
 
-            hgGpuRenderPassBegin(cmd, &pass);
+            gpuRenderPassBegin(cmd, &pass);
 
-            hgRenderLayer2D(cmd, &camera, &backgroundLayer);
-            hgRenderLayer2D(cmd, &camera, &spriteLayer);
+            renderLayer2D(cmd, &camera, &backgroundLayer);
+            renderLayer2D(cmd, &camera, &spriteLayer);
 
             if (renderDebug)
             {
-                hgRenderDebug2D(cmd, &camera, &backgroundLayer);
-                hgRenderDebug2D(cmd, &camera, &spriteLayer);
+                renderDebug2D(cmd, &camera, &backgroundLayer);
+                renderDebug2D(cmd, &camera, &spriteLayer);
             }
 
-            hgImGuiDraw(cmd);
+            imGuiDraw(cmd);
 
-            hgGpuRenderPassEnd(cmd);
+            gpuRenderPassEnd(cmd);
         }
-        cpuTime += hgClockTick(&cpuClock);
+        cpuTime += clockTick(&cpuClock);
 
-        hgGpuFrameEnd(cmd);
+        gpuFrameEnd(cmd);
     }
 
 quit:
     quit = true;
-    hgGpuWaitIdle();
+    gpuWaitIdle();
 }
 

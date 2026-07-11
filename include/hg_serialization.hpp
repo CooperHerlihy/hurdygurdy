@@ -37,50 +37,50 @@ namespace hg {
 /**
  * The primitive serializable types
  */
-enum HgSerialType : u32 {
+enum SerialType : u32 {
     /**
      * An object with fields
      */
-    HgSerialType_object,
+    SerialType_object,
     /**
      * String data
      */
-    HgSerialType_string,
+    SerialType_string,
     /**
      * An integer value
      */
-    HgSerialType_integer,
+    SerialType_integer,
     /**
      * A floating point value
      */
-    HgSerialType_floating,
+    SerialType_floating,
     /**
      * A boolean value
      */
-    HgSerialType_boolean,
+    SerialType_boolean,
 };
 
 /**
- * Stringify HgSerialType
+ * Stringify SerialType
  */
-const char* hgSerialTypeToString(HgSerialType s);
+const char* serialTypeToString(SerialType s);
 
 /**
  * A serialized data node
  */
-struct HgSerialNode {
+struct SerialNode {
     /**
      * The parent object or array
      */
-    HgSerialNode* parent;
+    SerialNode* parent;
     /**
      * The next node in the object or array
      */
-    HgSerialNode* next;
+    SerialNode* next;
     /**
      * The type of data
      */
-    HgSerialType type;
+    SerialType type;
     /**
      * The number of fields, if an object
      */
@@ -92,11 +92,11 @@ struct HgSerialNode {
         /**
          * The fields of an object
          */
-        HgSerialNode* children;
+        SerialNode* children;
         /**
          * String data
          */
-        HgString string;
+        String string;
         /**
          * Integer value
          */
@@ -115,23 +115,23 @@ struct HgSerialNode {
 /**
  * The data for serialization
  */
-struct HgSerializer {
+struct Serializer {
     /**
      * The arena to allocate from
      */
-    HgArena* arena;
+    Arena* arena;
     /**
      * The root node
      */
-    HgSerialNode* root;
+    SerialNode* root;
     /**
      * The current object
      */
-    HgSerialNode* parent;
+    SerialNode* parent;
     /**
      * The current data node
      */
-    HgSerialNode* current;
+    SerialNode* current;
     /**
      * Whether the serializer is reading or writing
      */
@@ -141,304 +141,304 @@ struct HgSerializer {
 /**
  * Begin a serial writer
  */
-HgSerializer hgSerialWriter(HgArena* arena);
+Serializer serialWriter(Arena* arena);
 
 /**
  * Begin a serial reader
  */
-HgSerializer hgSerialReader(HgArena* arena, HgSerialNode* begin);
+Serializer serialReader(Arena* arena, SerialNode* begin);
 
 /**
  * The preamble to serializing a node, generally not needed
  */
-void hgSerializeNodeStart(HgSerializer* s);
+void serializeNodeStart(Serializer* s);
 
 /**
  * Begin serializing an object or array
  */
-void hgSerializeBegin(HgSerializer* s, u32* size = nullptr);
+void serializeBegin(Serializer* s, u32* size = nullptr);
 
 /**
  * Begin serializing an object or array
  */
-void hgSerializeEnd(HgSerializer* s);
+void serializeEnd(Serializer* s);
 
 /**
  * Serialize a value of unknown type
  */
-void hgSerializeVoid(HgSerializer* s, void* val, u32 size);
+void serializeVoid(Serializer* s, void* val, u32 size);
 
 /**
  * Serialize a value, should be overridden
  */
 template<typename T>
-void hgSerialize(HgSerializer* s, T* val);
+void serialize(Serializer* s, T* val);
 
 /**
  * Serialize an object conveniently
  */
 template<typename... Ts>
-void hgSerializeObject(HgSerializer* s, Ts*... vals);
+void serializeObject(Serializer* s, Ts*... vals);
 
 /**
  * Serialize an array of values
  */
 template<typename T, u64 N>
-void hgSerialize(HgSerializer* s, T (*arr)[N]);
+void serialize(Serializer* s, T (*arr)[N]);
 
 /**
- * HgBinary serialization
+ * Binary serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgBinary* val);
+void serialize(Serializer* s, Binary* val);
 
 /**
- * HgString serialization
+ * String serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgString* val);
+void serialize(Serializer* s, String* val);
 
 /**
- * HgStringBuilder serialization
+ * StringBuilder serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgStringBuilder* val);
+void serialize(Serializer* s, StringBuilder* val);
 
 /**
  * u8 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, u8* val);
+void serialize(Serializer* s, u8* val);
 
 /**
  * u16 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, u16* val);
+void serialize(Serializer* s, u16* val);
 
 /**
  * u32 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, u32* val);
+void serialize(Serializer* s, u32* val);
 
 /**
  * u64 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, u64* val);
+void serialize(Serializer* s, u64* val);
 
 /**
  * i8 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, i8* val);
+void serialize(Serializer* s, i8* val);
 
 /**
  * i16 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, i16* val);
+void serialize(Serializer* s, i16* val);
 
 /**
  * i32 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, i32* val);
+void serialize(Serializer* s, i32* val);
 
 /**
  * i64 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, i64* val);
+void serialize(Serializer* s, i64* val);
 
 /**
  * f32 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, f32* val);
+void serialize(Serializer* s, f32* val);
 
 /**
  * f64 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, f64* val);
+void serialize(Serializer* s, f64* val);
 
 /**
  * bool serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, bool* val);
+void serialize(Serializer* s, bool* val);
 
 /**
- * HgVec2 serialization
+ * Vec2 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgVec2* val);
+void serialize(Serializer* s, Vec2* val);
 
 /**
- * HgVec3 serialization
+ * Vec3 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgVec3* val);
+void serialize(Serializer* s, Vec3* val);
 
 /**
- * HgVec4 serialization
+ * Vec4 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgVec4* val);
+void serialize(Serializer* s, Vec4* val);
 
 /**
- * HgMat2 serialization
+ * Mat2 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgMat2* val);
+void serialize(Serializer* s, Mat2* val);
 
 /**
- * HgMat3 serialization
+ * Mat3 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgMat3* val);
+void serialize(Serializer* s, Mat3* val);
 
 /**
- * HgMat4 serialization
+ * Mat4 serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgMat4* val);
+void serialize(Serializer* s, Mat4* val);
 
 /**
- * HgComplex serialization
+ * Complex serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgComplex* val);
+void serialize(Serializer* s, Complex* val);
 
 /**
- * HgQuat serialization
+ * Quat serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgQuat* val);
+void serialize(Serializer* s, Quat* val);
 
 /**
  * Write serialized data in a binary format
  */
-HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer* data);
+Binary binaryWriteSerial(Arena* arena, Serializer* data);
 
 /**
  * Read binary data to be deserialized
  */
-HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin);
+Serializer binaryReadSerial(Arena* arena, Binary bin);
 
 /**
  * Write serialized data as json
  */
-HgString hgJsonWriteSerial(HgArena* arena, HgSerializer* data);
+String jsonWriteSerial(Arena* arena, Serializer* data);
 
 // /**
 //  * Read json data to be deserialized : TODO
 //  */
-// HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json);
+// Serializer jsonReadSerial(Arena* arena, StringView json);
 
 /**
  * An error contained in the json
  */
-struct HgJsonError {
+struct JsonError {
     /**
      * The next error
      */
-    HgJsonError* next;
+    JsonError* next;
     /**
      * The error message
      */
-    HgString msg;
+    String msg;
 };
 
 /**
  * A node in the json file
  */
-struct HgJsonNode;
+struct JsonNode;
 
 /**
  * The types contained in nodes
  */
-enum HgJsonType : u32 {
-    HgJsonType_none = 0,
-    HgJsonType_struct,
-    HgJsonType_field,
-    HgJsonType_array,
-    HgJsonType_string,
-    HgJsonType_float,
-    HgJsonType_integer,
-    HgJsonType_bool,
+enum JsonType : u32 {
+    JsonType_none = 0,
+    JsonType_struct,
+    JsonType_field,
+    JsonType_array,
+    JsonType_string,
+    JsonType_float,
+    JsonType_integer,
+    JsonType_bool,
 };
 
 /**
  * A field in a struct
  */
-struct HgJsonField {
+struct JsonField {
     /**
      * The next field
      */
-    HgJsonField* next;
+    JsonField* next;
     /**
      * The name of the field
      */
-    HgString name;
+    String name;
     /**
      * The value stored in the field
      */
-    HgJsonNode* value;
+    JsonNode* value;
 };
 
 /**
  * A struct contained in the json
  */
-struct HgJsonStruct {
+struct JsonStruct {
     /**
      * The first field
      */
-    HgJsonField* fields;
+    JsonField* fields;
 };
 
 /**
  * An element in an array
  */
-struct HgJsonElem {
+struct JsonElem {
     /**
      * The next element
      */
-    HgJsonElem* next;
+    JsonElem* next;
     /**
      * The value stored in the element
      */
-    HgJsonNode* value;
+    JsonNode* value;
 };
 
 /**
  * An array contained in the json
  */
-struct HgJsonArray {
+struct JsonArray {
     /**
      * The first element
      */
-    HgJsonElem* elems;
+    JsonElem* elems;
 };
 
 /**
  * A node in the json file
  */
-struct HgJsonNode {
+struct JsonNode {
     /**
      * The node's type
      */
-    HgJsonType type;
+    JsonType type;
     /**
      * The value in the node
      */
     union {
-        HgJsonStruct jstruct;
-        HgJsonField field;
-        HgJsonArray array;
-        HgString string;
+        JsonStruct jstruct;
+        JsonField field;
+        JsonArray array;
+        String string;
         f64 floating;
         i64 integer;
         bool boolean;
@@ -448,33 +448,33 @@ struct HgJsonNode {
 /**
  * A parsed Json file
  */
-struct HgJson {
+struct Json {
     /**
      * The successfully parsed nodes
      */
-    HgJsonNode* file;
+    JsonNode* file;
     /**
      * The errors found
      */
-    HgJsonError* errors;
+    JsonError* errors;
 };
 
 // /**
 //  * A binary file asset handle
 //  */
-// typedef HgAssetHandle<HgJson> HgJsonHandle;
+// typedef AssetHandle<Json> JsonHandle;
 //
 // /**
-//  * HgJson asset load implementation
+//  * Json asset load implementation
 //  */
 // template<>
-// void hgAssetLoadImpl(HgAssetData<HgJson>* data);
+// void assetLoadImpl(AssetData<Json>* data);
 //
 // /**
-//  * HgJson asset unload implementation
+//  * Json asset unload implementation
 //  */
 // template<>
-// void hgAssetUnloadImpl(HgAssetData<HgJson>* data);
+// void assetUnloadImpl(AssetData<Json>* data);
 
 /**
  * Parses json text into a tree
@@ -486,8 +486,8 @@ struct HgJson {
  * Returns
  * - The parsed json, errors contained inside
  */
-HgJson hgParseJson(HgArena* arena, HgString text);
+Json parseJson(Arena* arena, String text);
 
 } // namespace hg
 
-#endif // HG_SERIALIZATION_HPP
+#endif // SERIALIZATION_HPP

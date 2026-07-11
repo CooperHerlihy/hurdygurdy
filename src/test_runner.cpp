@@ -4,11 +4,11 @@ using namespace hg;
 
 int main()
 {
-    hgInit();
-    hgDefer(hgDeinit());
+    init();
+    HG_DEFER(deinit());
 
-    hgTest();
+    test();
 
-    hgLog("All tests passed\n");
+    HG_LOG("All tests passed\n");
     return 0;
 }

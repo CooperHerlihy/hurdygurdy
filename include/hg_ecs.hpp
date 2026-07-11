@@ -37,21 +37,21 @@ namespace hg {
 /**
  * An entity in the ecs
  */
-struct HgEntity {
+struct Entity {
     /**
      * The entity handle
      */
-    HgHandle handle;
+    Handle handle;
 };
 
 /**
  */
-static constexpr HgEntity hgEntityNull = HgEntity{};
+static constexpr Entity entityNull = Entity{};
 
 /**
  * Compare entities
  */
-constexpr bool operator==(HgEntity lhs, HgEntity rhs)
+constexpr bool operator==(Entity lhs, Entity rhs)
 {
     return lhs.handle.id == rhs.handle.id;
 }
@@ -59,7 +59,7 @@ constexpr bool operator==(HgEntity lhs, HgEntity rhs)
 /**
  * Compare entities
  */
-constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
+constexpr bool operator!=(Entity lhs, Entity rhs)
 {
     return lhs.handle.id != rhs.handle.id;
 }
@@ -68,22 +68,22 @@ constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
  * Hashing for entities
  */
 template<>
-constexpr u64 hgHash(HgEntity e)
+constexpr u64 hash(Entity e)
 {
-    return hgHash(e.handle.id);
+    return hash(e.handle.id);
 }
 
 /**
  * The unique component id for a type
  */
 template<typename T>
-inline u64 hgComponentId = (u64)-1;
+inline u64 componentId = (u64)-1;
 
 /**
  * The function called on removing the component, may be overridden
  */
 template<typename T>
-void hgEcsDtor(T* component)
+void ecsDtor(T* component)
 {
     (void)component;
 }
@@ -91,7 +91,7 @@ void hgEcsDtor(T* component)
 /**
  * The serializer for an ecs
  */
-union HgEntitySerializer {
+union EntitySerializer {
     /**
      * The indices of entities
      */
@@ -99,44 +99,44 @@ union HgEntitySerializer {
     /**
      * The entities by index
      */
-    HgEntity* idxToEntity;
+    Entity* idxToEntity;
 };
 
 /**
  * The default serialization for a component, should be overridden
  */
 template<typename T>
-void hgEcsSerialize(HgSerializer* s, T* val, HgEntitySerializer* entities)
+void ecsSerialize(Serializer* s, T* val, EntitySerializer* entities)
 {
-    hgSerialize(s, val);
+    serialize(s, val);
     (void)entities;
 }
 
 /**
- * HgEntity ecs serialization
+ * Entity ecs serialization
  */
-void hgEntitySerialize(HgSerializer* s, HgEntity* val, HgEntitySerializer* ecs);
+void entitySerialize(Serializer* s, Entity* val, EntitySerializer* ecs);
 
 /**
  * A system of components
  */
-struct HgComponent {
+struct Component {
     /**
      * The name of the component type
      */
-    HgString name;
+    String name;
     /**
      * The component lookup from entity index
      */
-    HgArray<u32> indices;
+    Array<u32> indices;
     /**
      * The entity lookup from component index
      */
-    HgArray<HgEntity> entities;
+    Array<Entity> entities;
     /**
      * The component data
      */
-    HgArrayAny components;
+    ArrayAny components;
     /**
      * The function called on removing the component
      */
@@ -149,54 +149,54 @@ struct HgComponent {
      * - The value to serialize
      * - ecs The ecs serializer data, if needed
      */
-    void (*serialize)(HgSerializer* s, void* val, HgEntitySerializer* ecs);
+    void (*serialize)(Serializer* s, void* val, EntitySerializer* ecs);
 };
 
 /**
  * An entity component system
  */
-struct HgEcs {
+struct Ecs {
     /**
      * The entity pool
      */
-    HgHandlePool entities;
+    HandlePool entities;
     /**
      * The component systems
      */
-    HgMap<u64, HgComponent> components;
+    Map<u64, Component> components;
 };
 
 /**
  * Create a new entity component system
  */
-HgEcs hgEcsCreate();
+Ecs ecsCreate();
 
 /**
  * Destroy an entity component system
  */
-void hgEcsDestroy(HgEcs* ecs);
+void ecsDestroy(Ecs* ecs);
 
 /**
  * Destroy all entities, leave components registered
  */
-void hgEcsReset(HgEcs* ecs);
+void ecsReset(Ecs* ecs);
 
 /**
- * HgEcs serialization
+ * Ecs serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgEcs* ecs);
+void serialize(Serializer* s, Ecs* ecs);
 
 /**
  * The config to register a component
  */
-struct HgEcsRegisterComponent {
+struct EcsRegisterComponent {
     /**
      * The name of the component to create
      *
      * Note, the componentId is derived from this name
      */
-    HgString name;
+    String name;
     /**
      * The width of the component data in bytes
      */
@@ -212,73 +212,73 @@ struct HgEcsRegisterComponent {
     /**
      * The function called on serializing the component
      */
-    void (*serialize)(HgSerializer* s, void* val, HgEntitySerializer* ecs);
+    void (*serialize)(Serializer* s, void* val, EntitySerializer* ecs);
 };
 
 /**
  * Register a new component type
  */
-void hgEcsRegisterComponent(HgEcs* ecs, HgEcsRegisterComponent* config);
+void ecsRegisterComponent(Ecs* ecs, EcsRegisterComponent* config);
 
 /**
  * Register a new component type, creating the name from the type
  */
-#define hgEcsRegisterType(ecs, T) \
+#define HG_ECS_REGISTER_TYPE(ecs, T) \
     do { \
-        hgComponentId<T> = hgHash(#T); \
-        HgEcsRegisterComponent registerComponent_##T{}; \
+        componentId<T> = hash(#T); \
+        EcsRegisterComponent registerComponent_##T{}; \
         registerComponent_##T.name = #T; \
         registerComponent_##T.width = sizeof(T); \
         registerComponent_##T.align = alignof(T); \
         registerComponent_##T.dtor = [](void* component) \
         { \
-            hgEcsDtor<T>((T*)component); \
+            ecsDtor<T>((T*)component); \
         }; \
         registerComponent_##T.serialize = []( \
-            HgSerializer* s, \
+            Serializer* s, \
             void* val, \
-            HgEntitySerializer* entities) \
+            EntitySerializer* entities) \
         { \
-            hgEcsSerialize<T>(s, (T*)val, entities); \
+            ecsSerialize<T>(s, (T*)val, entities); \
         }; \
-        hgEcsRegisterComponent(ecs, &registerComponent_##T); \
+        ecsRegisterComponent(ecs, &registerComponent_##T); \
     } while (0)
 
 /**
  * Unregister a component
  */
-void hgEcsUnregisterComponent(HgEcs* ecs, u64 componentId);
+void ecsUnregisterComponent(Ecs* ecs, u64 componentId);
 
 /**
  * Unregister a component
  */
 template<typename T>
-void hgEcsUnregisterComponent(HgEcs* ecs)
+void ecsUnregisterComponent(Ecs* ecs)
 {
-    hgEcsUnregisterComponent(ecs, hgComponentId<T>);
+    ecsUnregisterComponent(ecs, componentId<T>);
 }
 
 /**
  * Returns the name of the component type
  */
-HgString hgEcsComponentName(HgEcs* ecs, u64 componentId);
+String ecsComponentName(Ecs* ecs, u64 componentId);
 
 /**
  * Return a new entity
  */
-HgEntity hgEcsSpawn(HgEcs* ecs);
+Entity ecsSpawn(Ecs* ecs);
 
 /**
  * Destroy an entity
  *
  * Note, this function will invalidate iterators
  */
-void hgEcsDespawn(HgEcs* ecs, HgEntity e);
+void ecsDespawn(Ecs* ecs, Entity e);
 
 /**
  * Return whether an entity is alive
  */
-bool hgEcsAlive(HgEcs* ecs, HgEntity e);
+bool ecsAlive(Ecs* ecs, Entity e);
 
 /**
  * Add a component to an entity
@@ -288,7 +288,7 @@ bool hgEcsAlive(HgEcs* ecs, HgEntity e);
  * Returns
  * - A pointer to the created component
  */
-void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId);
+void* ecsAdd(Ecs* ecs, Entity e, u64 componentId);
 
 /**
  * Add a component to an entity
@@ -299,9 +299,9 @@ void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId);
  * - A pointer to the created component
  */
 template<typename T>
-T* hgEcsAdd(HgEcs* ecs, HgEntity e)
+T* ecsAdd(Ecs* ecs, Entity e)
 {
-    return (T*)hgEcsAdd(ecs, e, hgComponentId<T>);
+    return (T*)ecsAdd(ecs, e, componentId<T>);
 }
 
 /**
@@ -309,7 +309,7 @@ T* hgEcsAdd(HgEcs* ecs, HgEntity e)
  *
  * Note, this function will invalidate iterators
  */
-void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId);
+void ecsRemove(Ecs* ecs, Entity e, u64 componentId);
 
 /**
  * Remove a component from an entity
@@ -317,41 +317,41 @@ void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId);
  * Note, this function will invalidate iterators
  */
 template<typename T>
-void hgEcsRemove(HgEcs* ecs, HgEntity e)
+void ecsRemove(Ecs* ecs, Entity e)
 {
-    hgEcsRemove(ecs, e, hgComponentId<T>);
+    ecsRemove(ecs, e, componentId<T>);
 }
 
 /**
  * Check whether an entity has a component or not
  */
-bool hgEcsHas(HgEcs* ecs, HgEntity e, u64 componentId);
+bool ecsHas(Ecs* ecs, Entity e, u64 componentId);
 
 /**
  * Check whether an entity has a component or not
  */
 template<typename T>
-bool hgEcsHas(HgEcs* ecs, HgEntity e)
+bool ecsHas(Ecs* ecs, Entity e)
 {
-    return hgEcsHas(ecs, e, hgComponentId<T>);
+    return ecsHas(ecs, e, componentId<T>);
 }
 
 /**
  * Return whether the entity has all given components
  */
 template<typename... Ts>
-bool hgEcsHasAll(HgEcs* ecs, HgEntity e)
+bool ecsHasAll(Ecs* ecs, Entity e)
 {
-    return (hgEcsHas<Ts>(ecs, e) && ...);
+    return (ecsHas<Ts>(ecs, e) && ...);
 }
 
 /**
  * Return whether the entity has any of the given components
  */
 template<typename... Ts>
-bool hgEcsHasAny(HgEcs* ecs, HgEntity e)
+bool ecsHasAny(Ecs* ecs, Entity e)
 {
-    return (hgEcsHas<Ts>(ecs, e) || ...);
+    return (ecsHas<Ts>(ecs, e) || ...);
 }
 
 /**
@@ -362,7 +362,7 @@ bool hgEcsHasAny(HgEcs* ecs, HgEntity e)
  * Returns
  * - A pointer to the entity's component, will never be nullptr
  */
-void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId);
+void* ecsGet(Ecs* ecs, Entity e, u64 componentId);
 
 /**
  * Get a reference to the entity's component
@@ -373,9 +373,9 @@ void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId);
  * - A reference to the entity's component
  */
 template<typename T>
-T* hgEcsGet(HgEcs* ecs, HgEntity e)
+T* ecsGet(Ecs* ecs, Entity e)
 {
-    return (T*)hgEcsGet(ecs, e, hgComponentId<T>);
+    return (T*)ecsGet(ecs, e, componentId<T>);
 }
 
 /**
@@ -385,7 +385,7 @@ T* hgEcsGet(HgEcs* ecs, HgEntity e)
  * - c The component to lookup, must be a valid component
  * - componentId The id of the component
  */
-HgEntity hgEcsGetEntity(HgEcs* ecs, const void* c, u64 componentId);
+Entity ecsGetEntity(Ecs* ecs, const void* c, u64 componentId);
 
 /**
  * Get the entity from it's component
@@ -394,68 +394,68 @@ HgEntity hgEcsGetEntity(HgEcs* ecs, const void* c, u64 componentId);
  * - c The component to lookup, must be a valid component
  */
 template<typename T>
-HgEntity hgEcsGetEntity(HgEcs* ecs, const T* c)
+Entity ecsGetEntity(Ecs* ecs, const T* c)
 {
-    return hgEcsGetEntity(ecs, (void*)c, hgComponentId<T>);
+    return ecsGetEntity(ecs, (void*)c, componentId<T>);
 }
 
 /**
  * Return a pointer to all entities of type
  */
-HgEntity* hgEcsEntities(HgEcs* ecs, u64 componentId);
+Entity* ecsEntities(Ecs* ecs, u64 componentId);
 
 /**
  * Return a pointer to all entities of type
  */
 template<typename T>
-HgEntity* hgEcsEntities(HgEcs* ecs)
+Entity* ecsEntities(Ecs* ecs)
 {
-    return hgEcsEntities(ecs, hgComponentId<T>);
+    return ecsEntities(ecs, componentId<T>);
 }
 
 /**
  * Return a pointer to all components of type
  */
-void* hgEcsComponents(HgEcs* ecs, u64 componentId);
+void* ecsComponents(Ecs* ecs, u64 componentId);
 
 /**
  * Return a pointer to all components of type
  */
 template<typename T>
-T* hgEcsComponents(HgEcs* ecs)
+T* ecsComponents(Ecs* ecs)
 {
-    return (T*)hgEcsComponents(ecs, hgComponentId<T>);
+    return (T*)ecsComponents(ecs, componentId<T>);
 }
 
 /**
  * Return the number of active components of a type
  */
-u32 hgEcsCount(HgEcs* ecs, u64 componentId);
+u32 ecsCount(Ecs* ecs, u64 componentId);
 
 /**
  * Return the number of active components of a type
  */
 template<typename T>
-u32 hgEcsCount(HgEcs* ecs)
+u32 ecsCount(Ecs* ecs)
 {
-    return hgEcsCount(ecs, hgComponentId<T>);
+    return ecsCount(ecs, componentId<T>);
 }
 
 /**
  * Find the id of the system with the fewest elements
  */
-u64 hgEcsFindSmallest(HgEcs* ecs, u64* ids, u32 idCount);
+u64 ecsFindSmallest(Ecs* ecs, u64* ids, u32 idCount);
 
 /**
  * Find the id of the system with the fewest elements
  */
 template<typename... Ts>
-u64 hgEcsFindSmallest(HgEcs* ecs)
+u64 ecsFindSmallest(Ecs* ecs)
 {
     u32 index = 0;
     u64 ids[sizeof...(Ts)];
-    ((ids[index++] = hgComponentId<Ts>), ...);
-    return hgEcsFindSmallest(ecs, ids, sizeof...(Ts));
+    ((ids[index++] = componentId<Ts>), ...);
+    return ecsFindSmallest(ecs, ids, sizeof...(Ts));
 }
 
 /**
@@ -467,7 +467,7 @@ u64 hgEcsFindSmallest(HgEcs* ecs)
  * - function The function to call
  */
 template<typename... Ts, typename Fn>
-void hgEcsForEach(HgEcs* ecs, Fn fn);
+void ecsForEach(Ecs* ecs, Fn fn);
 
 /**
  * Iterate over all entities with the given components
@@ -483,7 +483,7 @@ void hgEcsForEach(HgEcs* ecs, Fn fn);
  * - fn The function to call
  */
 template<typename... Ts, typename Fn>
-void hgEcsForPar(HgEcs* ecs, Fn fn);
+void ecsForPar(Ecs* ecs, Fn fn);
 
 /**
  * Sort components
@@ -493,7 +493,7 @@ void hgEcsForPar(HgEcs* ecs, Fn fn);
  * - data The data passed to compare
  * - compare The comparison function
  */
-void hgEcsSort(HgEcs* ecs, u64 componentId, void* data, bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs));
+void ecsSort(Ecs* ecs, u64 componentId, void* data, bool (*compare)(void*, Ecs* ecs, Entity lhs, Entity rhs));
 
 /**
  * Sort components
@@ -503,43 +503,43 @@ void hgEcsSort(HgEcs* ecs, u64 componentId, void* data, bool (*compare)(void*, H
  * - compare The comparison function
  */
 template<typename T>
-void hgEcsSort(HgEcs* ecs, void* data, bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs))
+void ecsSort(Ecs* ecs, void* data, bool (*compare)(void*, Ecs* ecs, Entity lhs, Entity rhs))
 {
-    hgEcsSort(ecs, hgComponentId<T>, data, compare);
+    ecsSort(ecs, componentId<T>, data, compare);
 }
 
 /**
  * A node component for entities in a hierarchy
  */
-struct HgNode {
+struct Node {
     /**
      * The entity's parent, if any
      */
-    HgEntity parent{};
+    Entity parent{};
     /**
      * The next child of this entity's parent
      */
-    HgEntity nextSibling{};
+    Entity nextSibling{};
     /**
      * The previous child of this entity's parent
      */
-    HgEntity prevSibling{};
+    Entity prevSibling{};
     /**
      * The first of this entity's children, forming a linked list
      */
-    HgEntity firstChild{};
+    Entity firstChild{};
 };
 
 /**
- * HgNode serialization implementation
+ * Node serialization implementation
  */
 template<>
-void hgEcsSerialize(HgSerializer* s, HgNode* node, HgEntitySerializer* ecs);
+void ecsSerialize(Serializer* s, Node* node, EntitySerializer* ecs);
 
 /**
  * Add an empty node to an entity
  */
-HgNode* hgNodeAdd(HgEcs* ecs, HgEntity e);
+Node* nodeAdd(Ecs* ecs, Entity e);
 
 /**
  * Remove the entity from its hierarchy
@@ -548,7 +548,7 @@ HgNode* hgNodeAdd(HgEcs* ecs, HgEntity e);
  * - ecs The ecs
  * - e The entity to detach, must be alive
  */
-void hgNodeDetach(HgEcs* ecs, HgEntity e);
+void nodeDetach(Ecs* ecs, Entity e);
 
 /**
  * Destroy the entity and all its children in a hierarchy
@@ -557,7 +557,7 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e);
  * - ecs The ecs
  * - e The entity to destroy to, must be alive
  */
-void hgNodeDestroy(HgEcs* ecs, HgEntity e);
+void nodeDestroy(Ecs* ecs, Entity e);
 
 /**
  * Add a new child to an entity in a hierarchy
@@ -567,64 +567,64 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e);
  * - parent The parent to add to, must be alive
  * - child The child to add, must be alive
  */
-void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child);
+void nodeAddChild(Ecs* ecs, Entity parent, Entity child);
 
 /**
  * The transform component for entities in absolute space
  */
-struct HgTransform {
+struct Transform {
     /**
      * The entity's transform model matrix in world space
      */
-    HgMat4 mat{1.0f};
+    Mat4 mat{1.0f};
     /**
      * The entity's position relative to its parent
      * - x: -left, +right
      * - y: -up, +down
      * - z: -backward, +forward
      */
-    HgVec3 position{0.0f, 0.0f, 0.0f};
+    Vec3 position{0.0f, 0.0f, 0.0f};
     /**
      * The entity's scaling relative to its parent
      * - x: horizonatal
      * - y: vertical
      * - z: depth
      */
-    HgVec3 scale{1.0f, 1.0f, 1.0f};
+    Vec3 scale{1.0f, 1.0f, 1.0f};
     /**
      * The entity's rotation relative to its parent
      */
-    HgQuat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    Quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 /**
- * HgTransform serialization impl
+ * Transform serialization impl
  */
 template<>
-void hgSerialize(HgSerializer* s, HgTransform* node);
+void serialize(Serializer* s, Transform* node);
 
 /**
  * Add an identity transform to an entity
  */
-HgTransform* hgTransformAdd(
-    HgEcs* ecs,
-    HgEntity e,
-    HgVec3 position = HgVec3{0.0f},
-    HgVec3 scale = HgVec3{1.0f},
-    HgQuat rotation = HgQuat{1.0f});
+Transform* transformAdd(
+    Ecs* ecs,
+    Entity e,
+    Vec3 position = Vec3{0.0f},
+    Vec3 scale = Vec3{1.0f},
+    Quat rotation = Quat{1.0f});
 
 /**
- * Get the position from HgTransform mat
+ * Get the position from Transform mat
  */
-constexpr HgVec3 hgTransformWorldPos(HgTransform& tf)
+constexpr Vec3 transformWorldPos(Transform& tf)
 {
-    return HgVec3{tf.mat.w};
+    return Vec3{tf.mat.w};
 }
 
 /**
- * Update HgTransform for the entity and its children to the HgTransformLocal
+ * Update Transform for the entity and its children to the TransformLocal
  */
-void hgTransformUpdate(HgEcs* ecs, HgEntity e);
+void transformUpdate(Ecs* ecs, Entity e);
 } // namespace hg
 
-#endif // HG_ECS_HPP
+#endif // ECS_HPP

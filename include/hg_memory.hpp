@@ -41,7 +41,7 @@ namespace hg {
  * Returns
  * - The allocation, never nullptr
  */
-void* hgGpaAlloc(u64 size, u64 alignment);
+void* gpaAlloc(u64 size, u64 alignment);
 
 /**
  * A convenience to allocate an array of a type
@@ -55,9 +55,9 @@ void* hgGpaAlloc(u64 size, u64 alignment);
  * - The allocated array, never nullptr
  */
 template<typename T>
-T* hgGpaAlloc(u64 count)
+T* gpaAlloc(u64 count)
 {
-    return (T*)hgGpaAlloc(count * sizeof(T), alignof(T));
+    return (T*)gpaAlloc(count * sizeof(T), alignof(T));
 }
 
 /**
@@ -72,7 +72,7 @@ T* hgGpaAlloc(u64 count)
  * Returns
  * - The allocation, never nullptr
  */
-void* hgGpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment);
+void* gpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment);
 
 /**
  * A convenience to reallocate an array of a type
@@ -88,9 +88,9 @@ void* hgGpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment);
  * - The reallocated array, never nullptr
  */
 template<typename T>
-T* hgGpaRealloc(T* allocation, u64 oldCount, u64 newCount)
+T* gpaRealloc(T* allocation, u64 oldCount, u64 newCount)
 {
-    return (T*)hgGpaRealloc(allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
+    return (T*)gpaRealloc(allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
 }
 
 /**
@@ -101,9 +101,9 @@ T* hgGpaRealloc(T* allocation, u64 oldCount, u64 newCount)
  * - count The number of T allocated
  */
 template<typename T>
-void hgGpaFree(T* allocation, u64 count)
+void gpaFree(T* allocation, u64 count)
 {
-    hgGpaFree((void*)allocation, count * sizeof(T));
+    gpaFree((void*)allocation, count * sizeof(T));
 }
 
 /**
@@ -115,12 +115,12 @@ void hgGpaFree(T* allocation, u64 count)
  * - alignment The alignment of the allocation in bytes
  */
 template<>
-void hgGpaFree(void* allocation, u64 size);
+void gpaFree(void* allocation, u64 size);
 
 /**
  * An arena allocator
  */
-struct HgArena {
+struct Arena {
     /**
      * A pointer to the memory being allocated
      */
@@ -138,9 +138,9 @@ struct HgArena {
 /**
  * Create a guard which restores an arena's head at the end of the scope
  */
-#define hgArenaScope(arena) \
-    [[maybe_unused]] u64 hgArenaScopeHead = arena->head; \
-    hgDefer(arena->head = hgArenaScopeHead);
+#define HG_ARENA_SCOPE(arena) \
+    [[maybe_unused]] u64 arenaScopeHead = arena->head; \
+    HG_DEFER(arena->head = arenaScopeHead);
 
 /**
  * Allocates memory from an arena
@@ -153,7 +153,7 @@ struct HgArena {
  * Returns
  * - The allocation, or nullptr if out of memory
  */
-void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment);
+void* arenaAlloc(Arena* arena, u64 size, u64 alignment);
 
 /**
  * A convenience to allocate an array of a type
@@ -168,9 +168,9 @@ void* hgArenaAlloc(HgArena* arena, u64 size, u64 alignment);
  * - The allocated array, or nullptr if out of memory
  */
 template<typename T>
-T* hgArenaAlloc(HgArena* arena, u64 count)
+T* arenaAlloc(Arena* arena, u64 count)
 {
-    return (T*)hgArenaAlloc(arena, count * sizeof(T), alignof(T));
+    return (T*)arenaAlloc(arena, count * sizeof(T), alignof(T));
 }
 
 /**
@@ -188,7 +188,7 @@ T* hgArenaAlloc(HgArena* arena, u64 count)
  * Returns
  * - The allocation, never or if out of memory
  */
-void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment);
+void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment);
 
 /**
  * A convenience to reallocate an array of a type
@@ -206,9 +206,9 @@ void* hgArenaRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize,
  * - The reallocated array, or nullptr if out of memory
  */
 template<typename T>
-T* hgArenaRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount)
+T* arenaRealloc(Arena* arena, T* allocation, u64 oldCount, u64 newCount)
 {
-    return (T*)hgArenaRealloc(arena, allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
+    return (T*)arenaRealloc(arena, allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
 }
 
 /**
@@ -218,12 +218,12 @@ T* hgArenaRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount)
  * - count The number of arenas to allocate
  * - size The size of each arena in bytes
  */
-void hgScratchInit(u32 count, u64 size);
+void scratchInit(u32 count, u64 size);
 
 /**
  * Deinitializes scratch arenas
  */
-void hgScratchDeinit();
+void scratchDeinit();
 
 /**
  * Get a scratch arena for temporary allocations, accounting for conflicts
@@ -235,8 +235,8 @@ void hgScratchDeinit();
  * Returns
  * - A scratch arena, never nullptr
  */
-HgArena* hgScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
+Arena* scratch(Arena const* const* conflicts = nullptr, u32 count = 0);
 
 } // namespace hg
 
-#endif // HG_MEMORY_HPP
+#endif // MEMORY_HPP

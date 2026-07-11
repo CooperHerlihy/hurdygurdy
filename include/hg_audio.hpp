@@ -40,17 +40,17 @@ namespace hg {
  * Returns
  * - Whether init succeeded
  */
-bool hgAudioInit();
+bool audioInit();
 
 /**
  * Deinitialize the audio subsystem
  */
-void hgAudioDeinit();
+void audioDeinit();
 
 /**
  * An audio stream
  */
-struct HgAudioStream;
+struct AudioStream;
 
 /**
  * Create a new audio stream
@@ -62,12 +62,12 @@ struct HgAudioStream;
  * Returns
  * - The created audio stream, or nullptr on failure
  */
-HgAudioStream* hgAudioStreamCreate(u32 frequency, u32 channels);
+AudioStream* audioStreamCreate(u32 frequency, u32 channels);
 
 /**
  * Destroy an audio stream
  */
-void hgAudioStreamDestroy(HgAudioStream* player);
+void audioStreamDestroy(AudioStream* player);
 
 /**
  * Push data to the audio stream
@@ -77,27 +77,27 @@ void hgAudioStreamDestroy(HgAudioStream* player);
  * - data The raw audio data in 32 bit float format
  * - size The size of the pushed data in bytes
  */
-void hgAudioStreamPush(HgAudioStream* player, const f32* data, u64 size);
+void audioStreamPush(AudioStream* player, const f32* data, u64 size);
 
 /**
  * Returns the amount of audio still queued in bytes
  */
-u32 hgAudioStreamQueuedSize(HgAudioStream* player);
+u32 audioStreamQueuedSize(AudioStream* player);
 
 /**
  * Clear data from the audio player
  */
-void hgAudioStreamClear(HgAudioStream* player);
+void audioStreamClear(AudioStream* player);
 
 /**
  * The the gain for the stream
  */
-void hgAudioStreamSetGain(HgAudioStream* stream, f32 gain);
+void audioStreamSetGain(AudioStream* stream, f32 gain);
 
 /**
  * Audio data asset
  */
-struct HgSound {
+struct Sound {
     /**
      * The sound data
      */
@@ -119,32 +119,32 @@ struct HgSound {
 /**
  * A handle to an audio asset
  */
-typedef HgAsset<HgSound> HgSoundAsset;
+typedef Asset<Sound> SoundAsset;
 
 /**
- * HgAudioData asset load implementation
+ * AudioData asset load implementation
  */
 template<>
-void hgAssetLoadImpl(HgAsset<HgSound>* data);
+void assetLoadImpl(Asset<Sound>* data);
 
 /**
- * HgAudioData asset unload implementation
+ * AudioData asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl(HgAsset<HgSound>* data);
+void assetUnloadImpl(Asset<Sound>* data);
 
 /**
  * A music track in the audio player
  */
-struct HgAudioPlayerMusic {
+struct AudioPlayerMusic {
     /**
      * The music's stream
      */
-    HgAudioStream* stream;
+    AudioStream* stream;
     /**
      * The music sound to play
      */
-    HgSoundAsset* sound;
+    SoundAsset* sound;
     /**
      * The current position in the sound
      */
@@ -158,69 +158,69 @@ struct HgAudioPlayerMusic {
 /**
  * An audio player system
  */
-struct HgAudioPlayer {
+struct AudioPlayer {
     /**
      * The repeating music
      */
-    HgArray<HgAudioPlayerMusic> music;
+    Array<AudioPlayerMusic> music;
     /**
      * The temporary sounds
      */
-    HgArray<HgAudioStream*> sounds;
+    Array<AudioStream*> sounds;
 };
 
 /**
  * Create a new audio player
  */
-HgAudioPlayer hgAudioPlayerCreate();
+AudioPlayer audioPlayerCreate();
 
 /**
  * Destroy an audio player
  */
-void hgAudioPlayerDestroy(HgAudioPlayer* player);
+void audioPlayerDestroy(AudioPlayer* player);
 
 /**
  * Update the audio player
  */
-void hgAudioPlayerUpdate(HgAudioPlayer* player);
+void audioPlayerUpdate(AudioPlayer* player);
 
 /**
  * Start a new music track, or resume an existing one
  */
-void hgAudioPlayerMusic(HgAudioPlayer* player, HgSoundAsset* music);
+void audioPlayerMusic(AudioPlayer* player, SoundAsset* music);
 
 /**
  * Remove a music track from the player
  */
-void hgAudioPlayerMusicKill(HgAudioPlayer* player, HgSoundAsset* music);
+void audioPlayerMusicKill(AudioPlayer* player, SoundAsset* music);
 
 /**
  * Pause a music track
  */
-void hgAudioPlayerMusicPause(HgAudioPlayer* player, HgSoundAsset* music);
+void audioPlayerMusicPause(AudioPlayer* player, SoundAsset* music);
 
 /**
  * Set the volume for a music track
  */
-void hgAudioPlayerSetMusicGain(HgAudioPlayer* player, HgSoundAsset* music, f32 gain = 1.0f);
+void audioPlayerSetMusicGain(AudioPlayer* player, SoundAsset* music, f32 gain = 1.0f);
 
 /**
  * Play a sound once
  */
-void hgAudioPlayerSound(HgAudioPlayer* player, HgSoundAsset* sound, f32 gain);
+void audioPlayerSound(AudioPlayer* player, SoundAsset* sound, f32 gain);
 
 /**
  * An audio source component
  */
-struct HgAudioSource {
+struct AudioSource {
     /**
      * The audio player for this source, should not be modified
      */
-    HgAudioStream* player;
+    AudioStream* player;
     /**
      * The audio to play from
      */
-    HgSoundAsset* audio;
+    SoundAsset* audio;
     /**
      * The current position in the audio data
      */
@@ -232,27 +232,27 @@ struct HgAudioSource {
 };
 
 /**
- * HgAudioSource serialization
+ * AudioSource serialization
  */
 template<>
-void hgSerialize(HgSerializer* s, HgAudioSource* src);
+void serialize(Serializer* s, AudioSource* src);
 
 /**
  * Add an audio source to an entity
  */
-HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgSoundAsset* audio, bool repeat);
+AudioSource* audioSourceAdd(Ecs* ecs, Entity e, SoundAsset* audio, bool repeat);
 
 /**
- * HgAudioSource ecs destructor
+ * AudioSource ecs destructor
  */
 template<>
-void hgEcsDtor(HgAudioSource* src);
+void ecsDtor(AudioSource* src);
 
 /**
  * Update all audio sources, playing sound if needed
  */
-void hgAudioUpdate(HgEcs* ecs, HgEntity listener);
+void audioUpdate(Ecs* ecs, Entity listener);
 
 } // namespace hg
 
-#endif // HG_AUDIO_HPP
+#endif // AUDIO_HPP

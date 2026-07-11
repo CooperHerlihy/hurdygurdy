@@ -24,8 +24,8 @@
  * =============================================================================
  */
 
-#ifndef HURDYGURDY_HPP
-#define HURDYGURDY_HPP
+#ifndef HG_HURDYGURDY_HPP
+#define HG_HURDYGURDY_HPP
 
 #include "hg_assets.hpp"
 #include "hg_audio.hpp"

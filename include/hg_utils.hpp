@@ -35,7 +35,7 @@ namespace hg {
  * Returns the size of a stack array
  */
 template<typename T, u64 N>
-constexpr u64 hgArrayCount(T (&)[N])
+constexpr u64 arrayCount(T (&)[N])
 {
     return N;
 }
@@ -43,13 +43,13 @@ constexpr u64 hgArrayCount(T (&)[N])
 /**
  * Swap to regions of memory
  */
-void hgSwap(void* a, void* b, u64 size);
+void swap(void* a, void* b, u64 size);
 
 /**
  * Swap the values of two objects
  */
 template<typename T>
-constexpr void hgSwap(T* a, T* b)
+constexpr void swap(T* a, T* b)
 {
     T tmp = *a;
     *a = *b;
@@ -60,7 +60,7 @@ constexpr void hgSwap(T* a, T* b)
  * Return the lesser of the two
  */
 template<typename T, typename... Ts>
-constexpr T hgMin(T x, Ts... xs)
+constexpr T min(T x, Ts... xs)
 {
     ((x = x < xs ? x : xs), ...);
     return x;
@@ -70,7 +70,7 @@ constexpr T hgMin(T x, Ts... xs)
  * Return the greater of the two
  */
 template<typename T, typename... Ts>
-constexpr T hgMax(T x, Ts... xs)
+constexpr T max(T x, Ts... xs)
 {
     ((x = x > xs ? x : xs), ...);
     return x;
@@ -80,7 +80,7 @@ constexpr T hgMax(T x, Ts... xs)
  * Clamps a value between two other
  */
 template<typename T>
-constexpr T hgClamp(T x, T min, T max)
+constexpr T clamp(T x, T min, T max)
 {
     return x >= max ? max : x <= min ? min : x;
 }
@@ -88,7 +88,7 @@ constexpr T hgClamp(T x, T min, T max)
 /**
  * Returns whether a value is a power of 2
  */
-constexpr bool hgIsPowerOf2(u64 val)
+constexpr bool isPowerOf2(u64 val)
 {
     return val > 0 && (val & (val - 1)) == 0;
 }
@@ -103,16 +103,16 @@ constexpr bool hgIsPowerOf2(u64 val)
  * Returns
  * - The aligned value
  */
-constexpr uptr hgAlign(uptr val, uptr align)
+constexpr uptr align(uptr val, uptr align)
 {
-    hgAssert(hgIsPowerOf2(align));
+    HG_ASSERT(isPowerOf2(align));
     return (val + align - 1) & ~(align - 1);
 }
 
 /**
  * Reverse the endianness of a 16 bit value
  */
-constexpr u16 hgEndianReverse16(u16 val)
+constexpr u16 endianReverse16(u16 val)
 {
     return (u16)(val >> 8) | (u16)(val << 8);
 }
@@ -120,7 +120,7 @@ constexpr u16 hgEndianReverse16(u16 val)
 /**
  * Reverse the endianness of a 32 bit value
  */
-constexpr u32 hgEndianReverse32(u32 val)
+constexpr u32 endianReverse32(u32 val)
 {
     return (val >> 24) | ((val >> 8) & 0xff00) | ((val & 0xff00) << 8) | (val << 24);
 }
@@ -128,7 +128,7 @@ constexpr u32 hgEndianReverse32(u32 val)
 /**
  * Reverse the endianness of a 64 bit value
  */
-constexpr u64 hgEndianReverse64(u64 val)
+constexpr u64 endianReverse64(u64 val)
 {
     u64 swapped = ((val << 8) & 0xFF00FF00FF00FF00ULL) | ((val >> 8) & 0x00FF00FF00FF00FFULL);
     swapped = ((swapped << 16) & 0xFFFF0000FFFF0000ULL) | ((swapped >> 16) & 0x0000FFFF0000FFFFULL);
@@ -138,23 +138,23 @@ constexpr u64 hgEndianReverse64(u64 val)
 /**
  * Clear a section of memory
  */
-void hgMemClear(void* dst, u64 size, u8 val = 0);
+void memClear(void* dst, u64 size, u8 val = 0);
 
 /**
  * Copy memory from src to dst, may not overlap
  */
-void hgMemCopy(void* __restrict dst, const void* __restrict src, u64 size);
+void memCopy(void* __restrict dst, const void* __restrict src, u64 size);
 
 /**
  * Copy memory from src to dst, may overlap
  */
-void hgMemMove(void* dst, const void* src, u64 size);
+void memMove(void* dst, const void* src, u64 size);
 
 /**
  * Check if two regions of memory are identical
  */
-bool hgMemEqual(const void* dst, const void* src, u64 size);
+bool memEqual(const void* dst, const void* src, u64 size);
 
 } // namespace hg
 
-#endif // HG_UTILS_HPP
+#endif // UTILS_HPP
