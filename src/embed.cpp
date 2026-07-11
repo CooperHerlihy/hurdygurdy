@@ -7,12 +7,16 @@
  *
  * The first argument is the file to read and embed
  * The second argument is the name of the symbol to write in the C output
- *
- * The output is to stdout so can be redirected into a file
+ * The third argument (optional) is the output file path; if omitted, stdout is used
  */
 int main(int argc, char** argv) {
     if (argc < 3) {
-        fprintf(stderr, "Usage: %s <file> <symbol name>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <file> <symbol name> [output file]\n", argv[0]);
+        return -1;
+    }
+
+    if (argc >= 4 && freopen(argv[3], "wb", stdout) == nullptr) {
+        fprintf(stderr, "Failed to open output file: %s\n", argv[3]);
         return -1;
     }
 

@@ -1,9 +1,3 @@
-[submodule "vendor/SDL"]
-	path = vendor/SDL
-	url = https://github.com/libsdl-org/SDL
-[submodule "vendor/Vulkan-Headers"]
-	path = vendor/Vulkan-Headers
-	url = https://github.com/KhronosGroup/Vulkan-Headers
 [submodule "vendor/imgui"]
 	path = vendor/imgui
 	url = https://github.com/ocornut/imgui

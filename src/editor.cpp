@@ -5,6 +5,7 @@
 #define IM_ASSERT hgAssert
 #include "imgui.h"
 
+#include <cstdio>
 #include <emmintrin.h>
 
 static HgWindow* window = nullptr;
@@ -597,7 +598,7 @@ void drawUI(HgArena* frame)
 
 int main()
 {
-    hgDefer(hgLog("Exited successfully\n"));
+    hgDefer(printf("Exited successfully\n"));
 
     if (!hgInit())
         hgPanic("Could not initialize Hurdy Gurdy\n");

@@ -4,56 +4,55 @@
 
 Hurdy Gurdy is a game engine written in C++ for fun.
 
-## Usage
+## Build
 
-### Linux
+### Dependencies
 
-Dependencies:
-- Make
-- C++ compiler (GCC or Clang)
+#### Linux
+
+- C++17 compiler (GCC or Clang)
+- CMake (3.16+)
+- SDL3 (found on system, or downloaded automatically)
+- Vulkan Validation Layers (only required in debug mode)
 - GLSL compiler (glslc)
-- SDL3
-- Vulkan Validation Layers (debug mode)
 
-To build, run make:
+On Nix, use `nix develop` to create a shell with all dependencies
 
-```bash
-make
-```
+#### Windows
 
-To build in release mode, add `release` when running make:
+- C++17 compiler (MSVC)
+- CMake (3.16+)
+- SDL3 (downloaded automatically)
+- LunarG Vulkan SDK
 
-```bash
-make release
-```
-
-The library `libhurdygurdy.a` can be found in the build directory. To use,
-provide the compiler with `-Ipath/to/hurdygurdy/include`, and the linker with
-`-Lpath/to/lib` and `-lhurdygurdy -lsdl3`
-
-### Windows
-
-Dependencies:
-- C++ compiler (MSVC)
-- CMake (to compile SDL3)
-- Vulkan SDK
-
-To build, run in the Visual Studio x64 developer command
-prompt:
-
-```bat
-.\build
-```
-
-To build in release mode, add `release` when running the build script:
+### Compilation
 
 ```bash
-.\build release
+cmake -B build -S .
+cmake --build build -j8
 ```
 
-The `hurdygurdy.lib` library, along with `sdl3.lib` can be found in the build
-directory. To use, provide the compiler with `/Ipath/to/hurdygurdy/include`, and
-the linker with `path/to/lib/hurdygurdy.lib path/to/lib/sdl3.lib`, as well as
-`User32.lib`. If using Visual studio, the include and library paths can be set
-manually in project properties, and User32.lib is automatically linked.
+Release mode:
+
+```bash
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j8
+```
+
+On Nix, also use `nix build` to compile a standalone release build
+
+### Integration
+
+Add to CMakeLists.txt:
+
+```cmake
+add_subdirectory(path/to/hurdygurdy)
+target_link_libraries(your_target hurdygurdy)
+```
+
+Or link manually:
+
+```bash
+c++ -Ipath/to/hurdygurdy/include -Lpath/to/lib -lhurdygurdy -lSDL3 your_program.cpp
+```
 
