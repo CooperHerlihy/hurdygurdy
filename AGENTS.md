@@ -1,25 +1,31 @@
 # AGENTS.md -- Hurdy Gurdy Game Engine
 
+## Agent Rules
+
+1. Never make changes without consulting the user first.
+2. Never make changes without also writing and running tests.
+3. Everything should be as simple as possible. If it gets too complex, ask the user.
+
 ## Identity
 
-This is **Hurdy Gurdy**, a game engine written in C++17 by Cooper Herlihy.
-MIT license, for fun, no big corporate nonsense.
+**Hurdy Gurdy**, a game engine written in C++23 using Vulkan.
 
 ## Project Structure
 
 ```
 hurdygurdy/
-  include/           -- All public headers (.hpp + .glsl)
+  include/           -- Public headers (.hpp + .glsl)
   src/               -- Source files + shaders (.vert/.frag/.comp)
-  vendor/            -- Third party (stb_image, stb_image_write, vk_mem_alloc, imgui/)
+  vendor/            -- stb_image, stb_image_write, vk_mem_alloc, imgui
   build/             -- CMake build output (generated, ignored)
-  CMakeLists.txt     -- CMake 3.16+, C++17
+  CMakeLists.txt     -- CMake 3.16+, C++23
   flake.nix          -- Nix flake for dev shell + build
+  CODING_GUIDELINES.md -- Full coding conventions
 ```
 
-## Build (MUST USE nix develop)
+## Build
 
-**IMPORTANT: All build & run commands MUST be run inside `nix develop` or they will crash (Vulkan libraries unavailable outside the shell).**
+**All build & run commands MUST be inside `nix develop` (Vulkan unavailable otherwise).**
 
 ```
 nix develop
@@ -27,96 +33,91 @@ cmake -B build -S .
 cmake --build build -j$(nproc)
 ```
 
-Targets: `editor`, `noise`, `minimal` (executables), `hurdygurdy` (static lib).
-Also available: `nix build` for release build.
+Targets: `editor`, `noise`, `minimal` (exes), `hurdygurdy` (static lib). Also `nix build` for release.
 
 ## Dependencies
 
-- C++17 compiler (GCC/Clang/MSVC), CMake 3.16+
-- SDL3 (auto-downloaded if missing), Vulkan SDK, shaderc (glslc)
-- No exceptions (`-fno-exceptions`), no RTTI (`-fno-rtti`)
-- Strict warnings: `-Wall -Wextra -Wconversion -Wsign-conversion -pedantic -Werror`
+- C++23 compiler (GCC 14+/Clang 18+), CMake 3.16+
+- SDL3 (auto-downloaded), Vulkan SDK, shaderc (glslc)
+- No exceptions, no RTTI, no STL containers
+- `-Wall -Wextra -Wconversion -Wsign-conversion -pedantic -Werror`
 
-## Code Conventions
+## Coding Conventions
 
-- **Prefix:** `hg` for functions/types, `Hg` for structs, `HG_` for defines
-- **No exceptions, no RTTI, no std:: containers** -- custom containers only
-- **Memory:** arena allocator for temp, GPA (malloc wrapper) for persistent
-- **No RAII** -- `hgDefer()` macro for cleanup, manual destroy calls
-- **Thread-local error messages** via `hgErrorGet()/hgErrorSet()`
-- **Serialization:** template specialization of `hgSerialize()` for each type
-- **ECS:** component type registration via `hgEcsRegisterType(ecs, T)` macro
-- **Naming:** enums use `HgXxx_name` pattern; flags are `typedef u32 HgXxxFlags`
+See `CODING_GUIDELINES.md` for full rules. Quick summary:
 
-## Architecture (subsystems in init order)
+- All public code in `hg` namespace
+- `hg::PascalCase` for types, `hg::camelCase()` for functions, `HG_SCREAMING_SNAKE` for macros
+- `hg_` prefix on filenames (`hg_memory.hpp`); umbrella header `hg.hpp`
+- No `enum class` — C-style enums in `hg` namespace: `hg::RenderPassType_Color`
+- No `class` — everything `struct`
+- RAII for resource types: default ctor, move, destructor, delete copy
+- Move-only for owning types, `clone()` where copies make sense
+- Custom containers: `hg::Array`, `hg::ArrayTemp`, `hg::ArrayView` and friends
+- No constructors except default + move on RAII types. Free create functions preferred.
+- Thread-local error strings, no exceptions, no `Expected`/`Result`
+- C++23 concepts for interface constraints
+- `constexpr` on small pure functions
+- `HG_ASSERT()`, `HG_DEFER()`, no C-style casts
+
+## Architecture (init order)
 
 | Subsystem | Header | Init flag | Note |
-|-----------|--------|-----------|------|
-| Memory    | hg_memory.hpp | HgSubsystem_memory | Scratch arenas (2 x 16MB per thread), GPA |
-| Concurrency | hg_concurrency.hpp | HgSubsystem_concurrency | Thread pool, mutex, fence |
-| GPU       | hg_gpu.hpp | HgSubsystem_gpu | Vulkan wrapper: buffers, images, pipelines, cmd buffers |
-| Assets    | hg_assets.hpp | HgSubsystem_assets | Ref-counted asset manager, hot reload |
-| Windowing | hg_window.hpp | HgSubsystem_windowing | SDL3-based windows, input, swapchain |
-| Audio     | hg_audio.hpp | HgSubsystem_audio | Audio streams, player, ECS source |
-| Platform  | hg_platform.hpp | (internal) | SDL3 vulkan extensions, platform init |
+|---|---|---|---|
+| Memory | hg_memory.hpp | Subsystem_Memory | Scratch arenas (2 x 16MB per thread), GPA |
+| Concurrency | hg_concurrency.hpp | Subsystem_Concurrency | Thread pool, mutex, fence |
+| GPU | hg_gpu.hpp | Subsystem_Gpu | Vulkan wrapper: buffers, images, pipelines, cmds |
+| Assets | hg_assets.hpp | Subsystem_Assets | Ref-counted asset manager, hot reload |
+| Windowing | hg_window.hpp | Subsystem_Windowing | SDL3 windows, input, swapchain |
+| Audio | hg_audio.hpp | Subsystem_Audio | Streams, player, ECS source component |
+| Platform | hg_platform.hpp | (internal) | SDL3 vulkan extensions, platform init |
 
-Call `hgInit()` with flag combinations or `HgSubsystem_all` (default).
+Call `hg::init(flags)` with flag combinations or `Subsystem_All` (default).
 
-## Key Headers Overview
+## Key Headers
 
-- **hg_core.hpp** -- Core typedefs (u8/u32/f32 etc.), HgBinary, HgString, logging, init/deinit
-- **hg_gpu.hpp** -- Full Vulkan wrapper (1267 lines). Buffers, images, views, pipelines, render passes, barriers, descriptors
-- **hg_math.hpp** -- Vec2/3/4, Mat2/3/4, Quat, Complex, collision (circle/rect/sphere/box/ray/line/tri/plane), noise, RNG
-- **hg_window.hpp** -- Window create/destroy, input (keyboard/mouse enum), swapchain frame begin/end
-- **hg_rendering.hpp** -- Camera (persp/ortho), 2D layers (rects/sprites/atlas/tilemap), skybox, 3D models, lights, ImGui integration
-- **hg_ecs.hpp** -- ECS with hierarchy (HgNode parent/child/sibling), transforms, component registration, iteration
-- **hg_assets.hpp** -- Asset system: HgAsset<T> with ref counting, pool, path-based cache, load/unload/reload
-- **hg_audio.hpp** -- Audio streams, HgAudioPlayer (music + sound effects), ECS audio source component
-- **hg_concurrency.hpp** -- Thread pool (hgThreadsCall/For), spinlock mutex, fence
-- **hg_containers.hpp** -- HgArray<T>, HgArrayAny (type-erased), HgQueue<T> (ring buffer), HgSet<K,V>, HgMap<K,V>, HgPool, HgHandlePool
-- **hg_memory.hpp** -- hgGpaAlloc/Free (malloc wrapper), HgArena (bump allocator), scratch arenas
-- **hg_serialization.hpp** -- Tree-based serializer (HgSerializer), binary + JSON I/O
-- **hg_strings.hpp** -- HgStringBuilder (arena-backed), formatting, number parsing, binary I/O
-- **hg_templates.hpp** -- Template implementations for containers, assets, ECS iteration (forEach/forPar)
-- **hg_utils.hpp** -- min/max/clamp, align, endian swap, memcpy/memset/memcmp
-- **hg_time.hpp** -- HgClock (high-res), hgSleep, HgPerf measurement
-- **hg_library.hpp** -- Dynamic library loading (dlopen/LoadLibrary)
-
-## Examples (source apps)
-
-- **editor** -- Full editor with ImGui docking, ECS hierarchy editor, 3D viewport, camera controls, component inspector
-- **minimal** -- Minimal 2D example with sprite, audio player, basic movement
-- **noise** -- GPU compute shader noise generation with live slider controls
-- **embed** -- CLI tool to embed binary files as C headers (used in build for shaders)
+- **hg_core.hpp** — Typedefs (u8/u32/f32 etc.), String, StringView, logging, init/deinit
+- **hg_memory.hpp** — Arena, gpaAlloc/gpaFree (malloc wrapper), scratch arenas
+- **hg_containers.hpp** — Array, ArrayTemp, String, StringTemp, Map, Set, Queue, Pool
+- **hg_math.hpp** — Vec2/3/4, Mat2/3/4, Quat, Complex, collision, noise, RNG
+- **hg_gpu.hpp** — Full Vulkan wrapper: buffers, images, pipelines, render passes, barriers, descriptors
+- **hg_window.hpp** — Window, input enums, swapchain frame begin/end
+- **hg_rendering.hpp** — Camera, 2D layers, sprites/tilemaps, skybox, 3D models, lights, ImGui
+- **hg_ecs.hpp** — ECS with hierarchy nodes, transforms, component registration, iteration
+- **hg_assets.hpp** — Asset<T> with ref counting, pool, path cache, load/unload/reload
+- **hg_audio.hpp** — Audio streams, AudioPlayer (music+SFX), ECS audio source
+- **hg_concurrency.hpp** — Thread pool, spinlock mutex, fence
+- **hg_serialization.hpp** — Tree serializer (Serialiser), binary + JSON I/O
+- **hg_strings.hpp** — Formatting, number parsing, binary I/O helpers
+- **hg_time.hpp** — Clock (high-res), sleep, perf measurement
+- **hg_library.hpp** — Dynamic library loading (dlopen/LoadLibrary)
 
 ## Key Patterns
 
-- **Shaders:** written as .vert/.frag/.comp in src/, compiled via glslc to SPIR-V, embedded as C headers via `embed` tool, included as `#include "name.spv.h"`
-- **Arenas:** use `hgArenaScope(arena)` for temp allocations that auto-free at scope end
-- **Scratch arenas:** `hgScratch()` returns a thread-local arena; pass conflict arenas to avoid overlap
-- **Defer:** `hgDefer(code)` runs code at scope exit via destructor trick
-- **Serialization:** `hgSerialize(s, &val)` reads or writes based on s->writing flag
-- **ECS iteration:** `hgEcsForEach<ComponentType>(ecs, [](HgEntity e, ComponentType* c) { ... })`
-- **Asset system:** `hgAssetLoad<T>(path)` returns ref-counted `HgAsset<T>*`; `hgAssetUnload()` decrements
+- **Shaders:** .vert/.frag/.comp in src/, compiled via glslc to SPIR-V, embedded as C headers via `embed` tool, `#include "name.spv.h"`
+- **Arenas:** `HG_ARENA_SCOPE(arena)` for temp allocs auto-freed at scope end
+- **Scratch:** `hg::scratch(conflicts, count)` returns thread-local arena
+- **Defer:** `HG_DEFER(code)` runs at scope exit
+- **Serialization:** `hg::serialise(s, &val)` reads or writes based on s->writing
+- **ECS iteration:** `hg::ecsForEach<Component>(ecs, [](Entity e, Component* c) { ... })`
+- **Assets:** `hg::assetLoad<T>(path)` returns `Asset<T>*`; `assetUnload()` decrements ref
 
 ## Testing
 
-`hgTest()` runs from `src/test.cpp` -- ~5000 lines of tests covering arenas, strings, containers, threading, serialization, JSON parsing.
-Run with `./build/test_runner` (must be inside `nix develop`).
+`hg::test()` runs from `src/test.cpp` — covers arenas, strings, containers, threading, serialisation, JSON parsing. Run with `./build/test_runner` (inside `nix develop`, no GPU needed).
 
 ## CMake Targets
 
-- `hurdygurdy` -- Static library (core + vendor)
-- `test_runner` -- Runs hgTest() and exits (fast, no GPU/window needed, but still needs `nix develop` for Vulkan libs)
-- `editor` -- Editor example
-- `noise` -- Noise compute shader example
-- `minimal` -- Minimal 2D example
-- `shaders` -- Custom target to compile all GLSL shaders
-- `embed` -- Helper tool for shader embedding
+- `hurdygurdy` — Static library (core + vendor)
+- `test_runner` — Runs tests, exits
+- `editor` — Editor example with ImGui docking, ECS hierarchy, 3D viewport
+- `noise` — GPU compute noise with live controls
+- `minimal` — Minimal 2D sprite + audio example
+- `shaders` — Compile all GLSL shaders
+- `embed` — Binary-to-C-header embedding tool
 
 ## Vendor
 
-- imgui (ocornut/imgui@2af6dd9) -- SDL3 + Vulkan backends
-- stb_image.h, stb_image_write.h -- Image loading/saving
-- vk_mem_alloc.h -- Vulkan memory allocator
-
+- imgui (ocornut/imgui@2af6dd9) — SDL3 + Vulkan backends
+- stb_image.h, stb_image_write.h — Image load/save
+- vk_mem_alloc.h — Vulkan memory allocator
