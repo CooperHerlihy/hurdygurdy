@@ -1,6 +1,12 @@
 # C++23 + Move Semantics Migration Plan
 
-## Golden Rule
+## Golden Rule Zero
+
+**No code change goes unchecked.** grug asks before every edit. Every
+struct, every function rename, every destructor — you review before
+grug writes it. This plan is the map, not the territory.
+
+## Golden Rule One
 
 **Tests pass after every phase.** Not "mostly pass." Not "pass after the
 next phase too." Every single commit must compile warning-clean and pass
