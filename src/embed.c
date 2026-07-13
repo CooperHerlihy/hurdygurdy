@@ -1,5 +1,5 @@
-#include <cstdint>
-#include <cstdio>
+#include <stdint.h>
+#include <stdio.h>
 
 /**
  * A small script which takes a file and turns its data into a C file which can
@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    if (argc >= 4 && freopen(argv[3], "wb", stdout) == nullptr) {
+    if (argc >= 4 && freopen(argv[3], "wb", stdout) == NULL) {
         fprintf(stderr, "Failed to open output file: %s\n", argv[3]);
         return -1;
     }
@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
     }
 
     FILE *file = fopen(argv[1], "rb");
-    if (file == nullptr) {
+    if (file == NULL) {
         fprintf(stderr, "Failed to open file: %s\n", argv[1]);
         return -1;
     }
@@ -56,3 +56,4 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+

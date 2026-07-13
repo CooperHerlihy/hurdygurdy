@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(hurdygurdy VERSION 0.1.0 LANGUAGES C CXX)
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -46,10 +48,9 @@ set(INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/vendor/imgui/backends
 )
 
-add_executable(embed src/embed.cpp)
+add_executable(embed src/embed.c)
 
 set(SHADERS
-    noise.comp
     render2d.vert
     render2d.frag
     debug2d.frag
@@ -120,13 +121,7 @@ set_property(SOURCE ${CORE_SOURCES}
     APPEND PROPERTY COMPILE_OPTIONS ${STRICT_FLAGS}
 )
 
-add_executable(test src/test.cpp)
-target_link_libraries(test hurdygurdy)
-set_property(SOURCE src/test.cpp
-    APPEND PROPERTY COMPILE_OPTIONS ${STRICT_FLAGS}
-)
-
-foreach(tgt editor noise minimal)
+foreach(tgt test editor minimal)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
     set_property(SOURCE src/${tgt}.cpp
@@ -138,7 +133,7 @@ install(TARGETS hurdygurdy
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS test editor noise minimal
+install(TARGETS test editor minimal
     RUNTIME DESTINATION bin
 )
 
