@@ -34,11 +34,11 @@ int main()
 
     for (u32 i = 0; i < arrayCount(musicData); ++i)
     {
-        f32 t = (f32)i * (f32)HG_PI * 2.0f / 8000.0f;
+        f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
         musicData[i] = 0;
         for (u32 j = 1; j <= 64; ++j)
         {
-            f32 x = (f32)j;
+            f32 x = static_cast<f32>(j);
             musicData[i] += 1.0f / x * std::sin(100.f * t * x);
         }
     }
@@ -52,7 +52,7 @@ int main()
 
     for (u32 i = 0; i < arrayCount(soundData); ++i)
     {
-        f32 t = (f32)i * (f32)HG_PI * 2.0f / 8000.0f;
+        f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
         soundData[i] = noiseNorm(42.0f, t) / (t + 0.1f);
     }
 
@@ -78,7 +78,7 @@ int main()
         {.002f, 0, .012f, 1},
         {
             Vec2{
-                (f32)width / (f32)height - 0.5f,
+                static_cast<f32>(width) / static_cast<f32>(height) - 0.5f,
                 0.5f,
             } / 2.0f,
             Vec2{
@@ -92,7 +92,7 @@ int main()
 
     Sprite2D sprite = {nullptr, {Vec2{0}, Vec2{1}}};
     Vec2 spriteSize{0.1f, 0.1f};
-    Vec2 spritePos = (Vec2{(f32)width / (f32)height, 1} - spriteSize) / 2.0f;
+    Vec2 spritePos = (Vec2{static_cast<f32>(width) / static_cast<f32>(height), 1} - spriteSize) / 2.0f;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -136,7 +136,7 @@ int main()
         width = windowWidth(window);
         height = windowHeight(window);
 
-        cameraSetOrthographic(&camera, (f32)width / (f32)height, 1.0f);
+        cameraSetOrthographic(&camera, static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
 
         if (isButtonDown(window, Button_lmouse))
         {
@@ -148,13 +148,13 @@ int main()
         cameraUpdate(&camera);
 
         Vec2 spriteMove = {
-            (f32)(isButtonDown(window, Button_d) - isButtonDown(window, Button_a)),
-            (f32)(isButtonDown(window, Button_s) - isButtonDown(window, Button_w)),
+            static_cast<f32>(isButtonDown(window, Button_d) - isButtonDown(window, Button_a)),
+            static_cast<f32>(isButtonDown(window, Button_s) - isButtonDown(window, Button_w)),
         };
         if (spriteMove != Vec2{0.0f})
         {
             f32 moveSpeed = 0.4f;
-            spritePos += vecNorm2(spriteMove) * moveSpeed * (f32)delta;
+            spritePos += vecNorm2(spriteMove) * moveSpeed * static_cast<f32>(delta);
         }
 
         layerClear2D(&spriteLayer);

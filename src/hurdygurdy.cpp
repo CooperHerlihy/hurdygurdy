@@ -104,7 +104,7 @@ void panicInternal(String format, ...)
 
     StringBuilder begin = stringCopy(scratch, "HurdyGurdy Panic: ");
     stringAppend(scratch, &begin, format);
-    begin.length += stringFormat(scratch, "\tLast error: \"%.*s\"\n", (int)getError().length, getError().chars).length;
+    begin.length += stringFormat(scratch, "\tLast error: \"%.*s\"\n", static_cast<int>(getError().length), getError().chars).length;
     printStderr(stringFormatVar(scratch, begin, args));
 
     va_end(args);
@@ -115,7 +115,7 @@ void panicInternal(String format, ...)
 void binaryRead(Binary bin, u64 idx, void* dst, u64 len)
 {
     HG_ASSERT(idx + len <= bin.size);
-    memCopy(dst, (u8*)bin.data + idx, len);
+    memCopy(dst, static_cast<const u8*>(bin.data) + idx, len);
 }
 
 static SubsystemFlags initialized = 0;
@@ -124,7 +124,7 @@ bool init(SubsystemFlags init)
 {
     if (init & Subsystem_memory)
     {
-        initScratch(2, (u64)1 << 24);
+        initScratch(2, static_cast<u64>(1) << 24);
         initialized |= Subsystem_memory;
     }
 
@@ -242,7 +242,7 @@ bool memEqual(const void* dst, const void* src, u64 size)
 
 void* heapAlloc(u64 size, u64 alignment)
 {
-    (void)alignment;
+    static_cast<void>(alignment);
     void* alloc = malloc(size);
     if (alloc == nullptr)
         HG_PANIC("malloc out of memory");
@@ -251,8 +251,8 @@ void* heapAlloc(u64 size, u64 alignment)
 
 void* heapRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 {
-    (void)oldSize;
-    (void)alignment;
+    static_cast<void>(oldSize);
+    static_cast<void>(alignment);
     void* alloc = realloc(allocation, newSize);
     if (alloc == nullptr)
         HG_PANIC("malloc out of memory");
@@ -262,7 +262,7 @@ void* heapRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 template<>
 void heapFree(void* allocation, u64 size)
 {
-    (void)size;
+    static_cast<void>(size);
     free(allocation);
 }
 
@@ -270,7 +270,7 @@ void* arenaAlloc(Arena* arena, u64 size, u64 alignment)
 {
     HG_ASSERT(arena != nullptr);
 
-    u64 newHead = align((u64)arena->head, alignment) + size;
+    u64 newHead = align(static_cast<u64>(arena->head), alignment) + size;
     if (newHead > arena->capacity)
     {
         setError("Arena out of memory");
@@ -278,7 +278,7 @@ void* arenaAlloc(Arena* arena, u64 size, u64 alignment)
     }
 
     arena->head = newHead;
-    return (void*)((uptr)arena->memory + arena->head - size);
+    return reinterpret_cast<void*>(reinterpret_cast<uptr>(arena->memory) + arena->head - size);
 }
 
 void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment)
@@ -287,7 +287,7 @@ void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64
 
     if (arenaCanExtend(arena, allocation, oldSize, alignment))
     {
-        u64 newHead = (uptr)allocation + newSize - (uptr)arena->memory;
+        u64 newHead = reinterpret_cast<uptr>(allocation) + newSize - reinterpret_cast<uptr>(arena->memory);
         if (newHead > arena->capacity)
         {
             setError("Arena out of memory");
@@ -309,8 +309,8 @@ void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64
 
 bool arenaCanExtend(Arena* arena, void* allocation, u64 size, u64 align)
 {
-    (void)align;
-    return (uptr)allocation + size - (uptr)arena->memory == (uptr)arena->head;
+    static_cast<void>(align);
+    return reinterpret_cast<uptr>(allocation) + size - reinterpret_cast<uptr>(arena->memory) == static_cast<uptr>(arena->head);
 }
 
 static thread_local Arena* scratchArenas{};
@@ -329,7 +329,7 @@ void initScratch(u32 count, u64 size)
     scratchArenas[0] = base;
     for (u32 i = 1; i < scratchArenaCount; ++i)
     {
-        scratchArenas[i] = {(u8*)block + i * size, size, 0};
+        scratchArenas[i] = {static_cast<u8*>(block) + i * size, size, 0};
     }
 }
 
@@ -363,21 +363,21 @@ next:
 }
 
 struct Spinlock {
-    std::atomic_bool acquired;
+    std::atomic_bool acquired{false};
 };
 
 static Pool mutices{};
 
 struct Fence {
-    std::atomic<u32> counter;
+    std::atomic<u32> counter{0};
 };
 
 static Pool fences{};
 
 struct ThreadWork {
-    Fence* fence;
-    void* data;
-    void (*fn)(void*);
+    Fence* fence = nullptr;
+    void* data = nullptr;
+    void (*fn)(void*) = nullptr;
 };
 
 struct ThreadPoolState {
@@ -645,7 +645,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
     Arena* scratch = getScratch();
     HG_ARENA_SCOPE(scratch);
 
-    u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)threadPool.threadCount));
+    u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f32>(end - begin) / (8.0f * static_cast<f32>(threadPool.threadCount))));
 
     Fence* fence = fenceCreate();
     HG_DEFER(fenceDestroy(fence));
@@ -654,10 +654,10 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
     {
         struct Capture
         {
-            void* data;
-            void (*fn)(void* data, u64 idx);
-            u64 begin;
-            u64 end;
+            void* data = nullptr;
+            void (*fn)(void* data, u64 idx) = nullptr;
+            u64 begin = 0;
+            u64 end = 0;
         };
 
         Capture* capture = arenaAlloc<Capture>(scratch, 1);
@@ -668,7 +668,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
 
         callPar(fence, capture, [](void* pcapture)
         {
-            Capture* capture = (Capture*)pcapture;
+            Capture* capture = static_cast<Capture*>(pcapture);
             for (u64 i = capture->begin; i < capture->end; ++i)
             {
                 (capture->fn)(capture->data, i);
@@ -1126,7 +1126,7 @@ void matMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32*
     HG_ASSERT(dst != nullptr);
     HG_ASSERT(lhs != nullptr);
     HG_ASSERT(rhs != nullptr);
-    (void)hr;
+    static_cast<void>(hr);
     for (u32 i = 0; i < wl; ++i)
     {
         for (u32 j = 0; j < wr; ++j)
@@ -1369,7 +1369,7 @@ Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far)
 {
     HG_ASSERT(near > 0.0f);
     HG_ASSERT(far > near);
-    f32 scale = 1.0f / (f32)tan(fov * 0.5f);
+    f32 scale = 1.0f / static_cast<f32>(tan(fov * 0.5f));
     return Mat4{
         {scale / aspect, 0.0f, 0.0f, 0.0f},
         {0.0f, scale, 0.0f, 0.0f},
@@ -2162,7 +2162,7 @@ f32 noiseNorm(u32 seed, f32 pos)
         f32 asF32;
         u32 asU32;
     };
-    return (f32)noise(seed, Convert{pos}.asU32) / (f32)UINT32_MAX;
+    return static_cast<f32>(noise(seed, Convert{pos}.asU32)) / static_cast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm2D(u32 seed, Vec2 pos)
@@ -2171,7 +2171,7 @@ f32 noiseNorm2D(u32 seed, Vec2 pos)
         f32 asF32;
         u32 asU32;
     };
-    return (f32)noise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32) / (f32)UINT32_MAX;
+    return static_cast<f32>(noise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32)) / static_cast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm3D(u32 seed, Vec3 pos)
@@ -2180,7 +2180,7 @@ f32 noiseNorm3D(u32 seed, Vec3 pos)
         f32 asF32;
         u32 asU32;
     };
-    return (f32)noise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32) / (f32)UINT32_MAX;
+    return static_cast<f32>(noise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32)) / static_cast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm4D(u32 seed, Vec4 pos)
@@ -2189,12 +2189,12 @@ f32 noiseNorm4D(u32 seed, Vec4 pos)
         f32 asF32;
         u32 asU32;
     };
-    return (f32)noise4D(
+    return static_cast<f32>(noise4D(
         seed,
         Convert{pos.x}.asU32,
         Convert{pos.y}.asU32,
         Convert{pos.z}.asU32,
-        Convert{pos.w}.asU32) / (f32)UINT32_MAX;
+        Convert{pos.w}.asU32)) / static_cast<f32>(UINT32_MAX);
 }
 
 f32 noiseVec1D(u32 seed, f32 pos)
@@ -2204,7 +2204,7 @@ f32 noiseVec1D(u32 seed, f32 pos)
 
 Vec2 noiseVec2D(u32 seed, Vec2 pos)
 {
-    f32 rot = 2.0f * (f32)HG_PI * noiseNorm2D(seed, pos);
+    f32 rot = 2.0f * static_cast<f32>(HG_PI) * noiseNorm2D(seed, pos);
     return Vec2(cosf(rot), sinf(rot));
 }
 
@@ -2226,14 +2226,14 @@ u32 rngNext(Rng* rng)
 
 u64 rngNext64(Rng* rng)
 {
-    return ((u64)rngNext(rng) << 32) | (u64)rngNext(rng);
+    return (static_cast<u64>(rngNext(rng)) << 32) | static_cast<u64>(rngNext(rng));
 }
 
 u32 getMaxMipmaps(u32 width, u32 height, u32 depth)
 {
     u32 max = width > height ? width : height;
     max = max > depth ? max : depth;
-    return max == 0 ? 0 : (u32)log2((f32)max) + 1;
+    return max == 0 ? 0 : static_cast<u32>(log2(static_cast<f32>(max))) + 1;
 }
 
 void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize)
@@ -2245,7 +2245,7 @@ void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize)
 void binaryOverwrite(BinaryBuilder* bin, u64 idx, const void* src, u64 len)
 {
     HG_ASSERT(idx + len <= bin->size);
-    memCopy((u8*)bin->data + idx, src, len);
+    memCopy(static_cast<u8*>(bin->data) + idx, src, len);
 }
 
 char* cString(Arena* arena, String str)
@@ -2266,7 +2266,7 @@ String stringCreate(String data)
     if (data != "")
     {
         str.chars = heapAlloc<char>(data.length);
-        memCopy((char*)str.chars, data.chars, data.length);
+        memCopy(const_cast<char*>(str.chars), data.chars, data.length);
         str.length = data.length;
     }
     return str;
@@ -2274,7 +2274,7 @@ String stringCreate(String data)
 
 void stringDestroy(String* str)
 {
-    heapFree((char*)str->chars, str->length);
+    heapFree(const_cast<char*>(str->chars), str->length);
 }
 
 StringBuilder stringCopy(Arena* arena, String str)
@@ -2302,12 +2302,12 @@ StringBuilder stringFormatVar(Arena* arena, String fmt, va_list args)
     Arena* scratch = getScratch(&arena, 1);
     HG_ARENA_SCOPE(scratch);
 
-    int len = vsnprintf((char*)arena->memory + arena->head, arena->capacity - arena->head, cString(scratch, fmt), args);
+    int len = vsnprintf(static_cast<char*>(arena->memory) + arena->head, arena->capacity - arena->head, cString(scratch, fmt), args);
     if (len < 0)
         HG_PANIC("snprintf returned an error");
 
-    StringBuilder ret{(char*)arena->memory + arena->head, (u64)len};
-    arena->head += (u64)len;
+    StringBuilder ret{static_cast<char*>(arena->memory) + arena->head, static_cast<u64>(len)};
+    arena->head += static_cast<u64>(len);
 
     return ret;
 }
@@ -2423,7 +2423,7 @@ i64 stringToInteger(String str)
     u64 head = str.length - 1;
     while (head > 0)
     {
-        ret += (i64)(str[head] - '0') * power;
+            ret += static_cast<i64>(str[head] - '0') * power;
         power *= 10;
         --head;
     }
@@ -2433,7 +2433,7 @@ i64 stringToInteger(String str)
         if (str[head] == '-')
             ret *= -1;
         else
-            ret += (i64)(str[head] - '0') * power;
+        ret += static_cast<i64>(str[head] - '0') * power;
     }
 
     return ret;
@@ -2457,7 +2457,7 @@ f64 stringToFloat(String str)
         {
             ++head;
         }
-        ret += (f64)stringToInteger({&str[intPartBegin], &str[head]});
+        ret += static_cast<f64>(stringToInteger({&str[intPartBegin], &str[head]}));
     }
 
     if (head < str.length && str[head] == '.')
@@ -2467,7 +2467,7 @@ f64 stringToFloat(String str)
         f64 power = 0.1;
         while (head < str.length && isNumeral(str[head]))
         {
-            ret += (f64)(str[head] - '0') * power;
+            ret += static_cast<f64>(str[head] - '0') * power;
             power *= 0.1;
             ++head;
         }
@@ -2524,14 +2524,14 @@ StringBuilder integerToString(Arena* arena, i64 num)
         return stringCopy(arena, "0");
 
     bool isNegative = num < 0;
-    u64 unum = (u64)std::abs(num);
+    u64 unum = static_cast<u64>(std::abs(num));
 
     StringBuilder reverse{};
     while (unum != 0)
     {
         u64 digit = unum % 10;
-        unum = (u64)((f64)unum / 10.0);
-        stringAppendC(scratch, &reverse, '0' + (char)digit);
+        unum = static_cast<u64>(static_cast<f64>(unum) / 10.0);
+        stringAppendC(scratch, &reverse, '0' + static_cast<char>(digit));
     }
 
     StringBuilder ret{};
@@ -2554,7 +2554,7 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
     if (num == 0.0)
         return stringCopy(arena, "0.0");
 
-    StringBuilder intStr = integerToString(scratch, (i64)std::abs(num));
+    StringBuilder intStr = integerToString(scratch, static_cast<i64>(std::abs(num)));
 
     StringBuilder decStr{};
     stringAppendC(scratch, &decStr, '.');
@@ -2563,7 +2563,7 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
     for (u64 i = 0; i < decimalCount; ++i)
     {
         decPart *= 10.0;
-        stringAppendC(scratch, &decStr, '0' + (char)((u64)decPart % 10));
+        stringAppendC(scratch, &decStr, '0' + static_cast<char>(static_cast<u64>(decPart) % 10));
     }
 
     StringBuilder ret{};
@@ -2705,7 +2705,7 @@ void serializeVoid(Serializer* s, void* val, u32 size)
     if (s->writing)
     {
         s->current->type = SerialType_string;
-        s->current->string = stringCopy(s->arena, {(char*)val, size});
+        s->current->string = stringCopy(s->arena, {static_cast<char*>(val), size});
     }
     else
     {
@@ -2718,7 +2718,7 @@ void serializeVoid(Serializer* s, void* val, u32 size)
 template<>
 void serialize(Serializer* s, Binary* val)
 {
-    serialize(s, (String*)val);
+    serialize(s, reinterpret_cast<String*>(val));
 }
 
 template<>
@@ -2763,12 +2763,12 @@ static void serializeInt(Serializer* s, T* val)
     if (s->writing)
     {
         s->current->type = SerialType_integer;
-        s->current->integer = (i64)*val;
+        s->current->integer = static_cast<i64>(*val);
     }
     else
     {
         HG_ASSERT(s->current->type == SerialType_integer);
-        *val = (T)s->current->integer;
+        *val = static_cast<T>(s->current->integer);
     }
 }
 
@@ -2828,12 +2828,12 @@ static void serializeFloat(Serializer* s, T* val)
     if (s->writing)
     {
         s->current->type = SerialType_floating;
-        s->current->floating = (f64)*val;
+        s->current->floating = static_cast<f64>(*val);
     }
     else
     {
         HG_ASSERT(s->current->type == SerialType_floating);
-        *val = (T)s->current->floating;
+        *val = static_cast<T>(s->current->floating);
     }
 }
 
@@ -2944,12 +2944,12 @@ static constexpr u32 serialBinVersionMinor = 0;
 static constexpr u32 serialBinVersionPatch = 0;
 
 struct SerialBinHeader {
-    char tag[sizeof(serialBinTag)];
-    u32 versionMajor;
-    u32 versionMinor;
-    u32 versionPatch;
+    char tag[sizeof(serialBinTag)] = {};
+    u32 versionMajor = 0;
+    u32 versionMinor = 0;
+    u32 versionPatch = 0;
 
-    u32 nodeBegin;
+    u32 nodeBegin = 0;
 };
 
 struct SerialBinObject {
@@ -2963,7 +2963,7 @@ struct SerialBinString {
 };
 
 struct SerialBinNode {
-    SerialType type;
+    SerialType type = {};
     union {
         SerialBinObject object;
         SerialBinString string;
@@ -2979,9 +2979,9 @@ static void serialBinWriteString(Arena* arena, BinaryBuilder* bin, u32 idx, Stri
 {
     SerialBinNode node{};
     node.type = SerialType_string;
-    node.string.length = (u32)string.length;
+    node.string.length = static_cast<u32>(string.length);
 
-    node.string.begin = (u32)bin->size;
+    node.string.begin = static_cast<u32>(bin->size);
     binaryResize(arena, bin, bin->size + string.length);
 
     binaryOverwrite(bin, idx, node);
@@ -3019,7 +3019,7 @@ static void serialBinWriteObject(Arena* arena, BinaryBuilder* bin, u32 idx, Seri
     node.type = SerialType_object;
     node.object.fieldCount = object->count;
 
-    node.object.fieldsBegin = (u32)bin->size;
+    node.object.fieldsBegin = static_cast<u32>(bin->size);
     binaryResize(arena, bin, bin->size + object->count * sizeof(SerialBinNode));
 
     binaryOverwrite(bin, idx, node);
@@ -3027,7 +3027,7 @@ static void serialBinWriteObject(Arena* arena, BinaryBuilder* bin, u32 idx, Seri
     SerialNode* data = object->children;
     for (u32 i = 0; i < object->count; ++i)
     {
-        serialBinWriteNode(arena, bin, node.object.fieldsBegin + i * (u32)sizeof(SerialBinNode), data);
+        serialBinWriteNode(arena, bin, node.object.fieldsBegin + i * static_cast<u32>(sizeof(SerialBinNode)), data);
         data = data->next;
     }
 }
@@ -3068,7 +3068,7 @@ Binary binaryWriteSerial(Arena* arena, Serializer* serial)
     header.versionMinor = serialBinVersionMinor;
     header.versionPatch = serialBinVersionPatch;
 
-    header.nodeBegin = (u32)bin.size;
+    header.nodeBegin = static_cast<u32>(bin.size);
     binaryResize(arena, &bin, bin.size + sizeof(SerialBinNode));
 
     binaryOverwrite(&bin, 0, header);
@@ -3085,14 +3085,14 @@ static void serialBinReadObject(Binary bin, SerialBinObject object, Serializer* 
     serializeBegin(s);
     for (u32 i = 0; i < object.fieldCount; ++i)
     {
-        serialBinReadNode(bin, object.fieldsBegin + i * (u32)sizeof(SerialBinNode), s);
+        serialBinReadNode(bin, object.fieldsBegin + i * static_cast<u32>(sizeof(SerialBinNode)), s);
     }
     serializeEnd(s);
 }
 
 static void serialBinReadString(Binary bin, SerialBinString string, Serializer* s)
 {
-    String val = {(char*)bin.data + string.begin, string.length};
+    String val = {static_cast<const char*>(bin.data) + string.begin, string.length};
     serialize(s, &val);
 }
 
@@ -3309,9 +3309,9 @@ String jsonWriteSerial(Arena* arena, Serializer* serial)
 // }
 
 struct JsonParseState {
-    String text;
-    u64 head;
-    u64 line;
+    String text = {};
+    u64 head = 0;
+    u64 line = 0;
 };
 
 static Json jsonParseNext(Arena* arena, JsonParseState* state);
@@ -3356,7 +3356,7 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
             stringAppend(arena, &msg, ", found unexpected token \"}\"\n");
             error->msg = msg;
             return {nullptr, error};
@@ -3366,7 +3366,7 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
             stringAppend(arena, &msg, ", found unexpected token \"]\"\n");
             error->msg = msg;
             return {nullptr, error};
@@ -3389,7 +3389,7 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
     }
     StringBuilder msg{};
     stringAppend(arena, &msg, "on line ");
-    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
     stringAppend(arena, &msg, ", found unexpected token \"");
     stringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
     stringAppend(arena, &msg, "\"\n");
@@ -3422,7 +3422,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
             stringAppend(arena, &msg, ", expected struct to terminate\n");
             error->msg = msg;
             if (lastError == nullptr)
@@ -3438,7 +3438,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
             stringAppend(arena, &msg, ", struct ends with \"]\" instead of \"}\"\n");
             error->msg = msg;
             if (lastError == nullptr)
@@ -3481,7 +3481,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
                 error->next = nullptr;
                 StringBuilder msg{};
                 stringAppend(arena, &msg, "on line ");
-                stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+                stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
                 stringAppend(arena, &msg, ", struct has a literal instead of a field\n");
                 error->msg = msg;
                 if (lastError == nullptr)
@@ -3495,7 +3495,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
                 error->next = nullptr;
                 StringBuilder msg{};
                 stringAppend(arena, &msg, "on line ");
-                stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+                stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
                 stringAppend(arena, &msg, ", struct has a field named \"");
                 stringAppend(arena, &msg, value.file->field.name);
                 stringAppend(arena, &msg, "\" which has no value\n");
@@ -3550,7 +3550,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
             stringAppend(arena, &msg, ", expected struct to terminate\n");
             error->msg = msg;
             if (lastError == nullptr)
@@ -3566,7 +3566,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
             stringAppend(arena, &msg, ", array ends with \"}\" instead of \"]\"\n");
             error->msg = msg;
             if (lastError == nullptr)
@@ -3617,7 +3617,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
                     error->next = nullptr;
                     StringBuilder msg{};
                     stringAppend(arena, &msg, "on line ");
-                    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+                    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
                     stringAppend(arena, &msg, ", array has a field as an element\n");
                     error->msg = msg;
                     if (lastError == nullptr)
@@ -3633,7 +3633,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
                 error->next = nullptr;
                 StringBuilder msg{};
                 stringAppend(arena, &msg, "on line ");
-                stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+                stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
                 stringAppend(arena, &msg, ", array has element which is not the same type as the first valid element\n");
                 error->msg = msg;
                 if (lastError == nullptr)
@@ -3722,7 +3722,7 @@ static Json jsonParseString(Arena* arena, JsonParseState* state)
     JsonError* error = arenaAlloc<JsonError>(arena, 1);
     StringBuilder msg{};
     stringAppend(arena, &msg, "on line ");
-    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
     stringAppend(arena, &msg, ", expected string to terminate\n");
     error->msg = msg;
     return {nullptr, error};
@@ -3777,7 +3777,7 @@ static Json jsonParseNumber(Arena* arena, JsonParseState* state)
 
     StringBuilder msg{};
     stringAppend(arena, &msg, "on line ");
-    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
     stringAppend(arena, &msg, ", expected numeral value, found \"");
     stringAppend(arena, &msg, num);
     stringAppend(arena, &msg, "\"\n");
@@ -3851,7 +3851,7 @@ static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
     }
     StringBuilder msg{};
     stringAppend(arena, &msg, "on line ");
-    stringAppend(arena, &msg, integerToString(arena, (i64)state->line));
+    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
     stringAppend(arena, &msg, ", expected boolean value, found \"");
     stringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
     stringAppend(arena, &msg, "\"\n");
@@ -3983,7 +3983,7 @@ void* arrayAnyPush(ArrayAny* arr)
             arr->align);
         arr->capacity = newCapacity;
     }
-    return (u8*)arr->vals + arr->count++ * arr->width;
+    return static_cast<u8*>(arr->vals) + arr->count++ * arr->width;
 }
 
 void* arrayAnyPushTemp(Arena* arena, ArrayAny* arr)
@@ -3999,7 +3999,7 @@ void* arrayAnyPushTemp(Arena* arena, ArrayAny* arr)
             arr->align);
         arr->capacity = newCapacity;
     }
-    return (u8*)arr->vals + arr->count++ * arr->width;
+    return static_cast<u8*>(arr->vals) + arr->count++ * arr->width;
 }
 
 void arrayAnyRemove(ArrayAny* arr, u32 idx, void* dst)
@@ -4037,7 +4037,7 @@ void arrayAnyPop(ArrayAny* arr, void* dst)
     HG_ASSERT(arr->count > 0);
     --arr->count;
     if (dst != nullptr)
-        memCopy(dst, (u8*)arr->vals + arr->count * arr->width, arr->width);
+        memCopy(dst, static_cast<u8*>(arr->vals) + arr->count * arr->width, arr->width);
 }
 
 static constexpr u32 poolStockSize = 1024;
@@ -4049,7 +4049,7 @@ static void poolRestock(Pool* pool)
     void* store = heapAlloc(poolStockSize * pool->width, pool->align);
     for (u32 i = 0; i < poolStockSize; ++i)
     {
-        queuePushBack(&pool->freeList, (u8*)store + i * pool->width);
+        queuePushBack(&pool->freeList, static_cast<u8*>(store) + i * pool->width);
     }
     *arrayPush(&pool->itemStores) = store;
 }
@@ -4201,13 +4201,13 @@ void assetLoadImpl(Asset<Binary>* data)
         return;
     }
 
-    data->asset.size = (u64)ftell(fileHandle);
+    data->asset.size = static_cast<u64>(ftell(fileHandle));
     data->asset.data = heapAlloc(data->asset.size, 1);
 
     rewind(fileHandle);
-    if (fread((void*)data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
+    if (fread(const_cast<void*>(data->asset.data), 1, data->asset.size, fileHandle) != data->asset.size)
     {
-        heapFree((void*)data->asset.data, data->asset.size);
+        heapFree(const_cast<void*>(data->asset.data), data->asset.size);
         formatError("Failed to read binary from file: %s", cpath);
         data->asset = {};
         return;
@@ -4217,7 +4217,7 @@ void assetLoadImpl(Asset<Binary>* data)
 template<>
 void assetUnloadImpl(Asset<Binary>* data)
 {
-    heapFree((void*)data->asset.data, data->asset.size);
+    heapFree(const_cast<void*>(data->asset.data), data->asset.size);
 }
 
 bool binaryStore(Binary bin, String path)
@@ -4251,7 +4251,7 @@ f64 clockTick(Clock* clock)
     f64 prev = clock->time;
     timespec ts;
     timespec_get(&ts, TIME_UTC);
-    clock->time = (f64)ts.tv_sec + (f64)ts.tv_nsec * 1e-9;
+    clock->time = static_cast<f64>(ts.tv_sec) + static_cast<f64>(ts.tv_nsec) * 1e-9;
     return clock->time - prev;
 }
 
@@ -4305,7 +4305,7 @@ PerfStats perfAnalyze(const Perf* perf)
             stats.worst = perf->times[i];
         stats.avg += perf->times[i];
     }
-    stats.avg /= (f64)perf->current;
+    stats.avg /= static_cast<f64>(perf->current);
 
     return stats;
 }
@@ -4320,19 +4320,19 @@ void perfLog(String title, const PerfStats* stats, PerfScale scale)
     {
         case PerfScale_seconds:
             printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
-                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
+                static_cast<int>(title.length), title.chars, stats->avg, stats->best, stats->worst);
             break;
         case PerfScale_milli:
             printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
-                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
+                static_cast<int>(title.length), title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
             break;
         case PerfScale_micro:
             printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
-                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
+                static_cast<int>(title.length), title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
             break;
         case PerfScale_nano:
             printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
-                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
+                static_cast<int>(title.length), title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
             break;
     }
 }
@@ -4340,14 +4340,14 @@ void perfLog(String title, const PerfStats* stats, PerfScale scale)
 template<>
 void assetLoadImpl(Asset<Sound>* data)
 {
-    (void)data;
+    static_cast<void>(data);
     HG_PANIC("Load audio file impl : TODO\n");
 }
 
 template<>
 void assetUnloadImpl(Asset<Sound>* data)
 {
-    (void)data;
+    static_cast<void>(data);
     HG_PANIC("Unload audio file impl : TODO\n");
 }
 
@@ -4407,7 +4407,7 @@ void audioPlayerUpdate(AudioPlayer* player)
             continue;
         u32 sizeToPush = total - queued;
 
-        f32* queue = (f32*)arenaAlloc(scratch, sizeToPush, width);
+        f32* queue = static_cast<f32*>(arenaAlloc(scratch, sizeToPush, width));
         u32 queueSize = 0;
 
         while (queueSize < sizeToPush)
@@ -4415,8 +4415,8 @@ void audioPlayerUpdate(AudioPlayer* player)
             if (music->pos == sound->size)
                 music->pos = 0;
 
-            u32 sizeToQueue = min(sizeToPush - queueSize, (u32)(sound->size - music->pos));
-            memCopy((u8*)queue + queueSize, (u8*)sound->data + music->pos, sizeToQueue);
+            u32 sizeToQueue = min(sizeToPush - queueSize, static_cast<u32>(sound->size - music->pos));
+            memCopy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(sound->data) + music->pos, sizeToQueue);
             queueSize += sizeToQueue;
             music->pos += sizeToQueue;
         }
@@ -4518,8 +4518,8 @@ void assetLoadImpl(Asset<TextureData>* data)
         formatError("Could not load image: %s", cpath);
         return;
     }
-    data->asset.width = (u32)x;
-    data->asset.height = (u32)y;
+    data->asset.width = static_cast<u32>(x);
+    data->asset.height = static_cast<u32>(y);
     data->asset.depth = 1;
     data->asset.format = Format_r8g8b8a8_srgb;
 }
@@ -4539,11 +4539,11 @@ bool textureStorePng(TextureData* texture, String path)
 
     if (!stbi_write_png(
          cpath,
-         (int)texture->width,
-         (int)texture->height,
+         static_cast<int>(texture->width),
+         static_cast<int>(texture->height),
          4,
          texture->pixels,
-         (int)(texture->width * sizeof(u32))))
+         static_cast<int>(texture->width * sizeof(u32))))
     {
         formatError("Could not store image: %s", cpath);
         return false;
@@ -4582,7 +4582,7 @@ void assetUnloadImpl(Asset<Texture>* data)
 template<>
 void assetLoadImpl(Asset<MeshData>* data)
 {
-    (void)data;
+    static_cast<void>(data);
     HG_PANIC("load gltf file : TODO\n");
 }
 
@@ -4595,9 +4595,9 @@ void assetUnloadImpl(Asset<MeshData>* data)
 
 void meshStoreGltf(MeshData* data, String path, Fence* fence)
 {
-    (void)data;
-    (void)path;
-    (void)fence;
+    static_cast<void>(data);
+    static_cast<void>(path);
+    static_cast<void>(fence);
     HG_PANIC("store gltf file : TODO\n");
 }
 
@@ -4671,8 +4671,8 @@ void serialize(Serializer* s, Camera* camera)
 }
 
 struct VPUniform {
-    Mat4 proj;
-    Mat4 view;
+    Mat4 proj = {};
+    Mat4 view = {};
 };
 
 Camera cameraCreate()
@@ -4716,15 +4716,15 @@ void cameraSetOrthographic(Camera* camera, f32 width, f32 height, f32 actualAspe
 
     if (actualAspect != 0.0)
     {
-        if (actualAspect > (f32)width / (f32)height)
+        if (actualAspect > static_cast<f32>(width) / static_cast<f32>(height))
         {
-            f32 margin = actualAspect - (f32)width / (f32)height;
+            f32 margin = actualAspect - static_cast<f32>(width) / static_cast<f32>(height);
             camera->orthographic.left -= margin * width / 2.0f;
             camera->orthographic.right += margin * width / 2.0f;
         }
         else
         {
-            f32 margin = 1.0f / actualAspect - (f32)height / (f32)width;
+            f32 margin = 1.0f / actualAspect - static_cast<f32>(height) / static_cast<f32>(width);
             camera->orthographic.top -= margin * height / 2.0f;
             camera->orthographic.bottom += margin * height / 2.0f;
         }
@@ -4805,17 +4805,17 @@ void cameraUpdateEcs(Ecs* ecs, Entity e)
 }
 
 struct RenderState2D {
-    GpuPipeline* pipeline;
-    GpuPipeline* debugPipeline;
-    Texture defaultTex;
+    GpuPipeline* pipeline = nullptr;
+    GpuPipeline* debugPipeline = nullptr;
+    Texture defaultTex = {};
 };
 
 static RenderState2D render2D;
 
 struct RenderPush2D {
-    Mat4 model;
-    u32 vpIdx;
-    u32 instIdx;
+    Mat4 model = {};
+    u32 vpIdx = 0;
+    u32 instIdx = 0;
 };
 
 #include "render2d.vert.spv.h"
@@ -5011,7 +5011,7 @@ u32 atlasAddGrid2D(Atlas2D* atlas, Rect grid, u32 width, u32 height)
 
     u32 idx = atlas->sprites.count;
 
-    Vec2 spriteSize = grid.size / Vec2{(f32)width, (f32)height};
+    Vec2 spriteSize = grid.size / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
     Vec2 pos = grid.pos;
     for (u32 y = 0; y < height; ++y)
     {
@@ -5042,7 +5042,7 @@ Tilemap2D tilemapCreate2D(u32 width, u32 height)
     tilemap.height = height;
     for (u32 i = 0; i < width * height; ++i)
     {
-        tilemap.tiles[i] = (u32)-1;
+        tilemap.tiles[i] = static_cast<u32>(-1);
     }
 
     return tilemap;
@@ -5072,7 +5072,7 @@ void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst)
     HG_ASSERT(tilemap != nullptr);
 
     Vec2 pos = dst.pos;
-    Vec2 size = dst.size / Vec2{(f32)tilemap->width, (f32)tilemap->height};
+    Vec2 size = dst.size / Vec2{static_cast<f32>(tilemap->width), static_cast<f32>(tilemap->height)};
     for (u32 y = 0; y < tilemap->width; ++y)
     {
         pos.x = dst.pos.x;
@@ -5283,7 +5283,7 @@ Entity ecsGetEntity(Ecs* ecs, const void* component, u64 componentId)
     Component* system = mapGet(&ecs->components, componentId);
     HG_ASSERT(system != nullptr);
 
-    return system->entities[(u32)((uptr)component - (uptr)system->components.vals) / system->components.width];
+    return system->entities[static_cast<u32>(reinterpret_cast<uptr>(component) - reinterpret_cast<uptr>(system->components.vals)) / system->components.width];
 }
 
 Entity* ecsEntities(Ecs* ecs, u64 componentId)
@@ -5300,7 +5300,7 @@ void* ecsComponents(Ecs* ecs, u64 componentId)
     HG_ASSERT(mapGet(&ecs->components, componentId) != nullptr);
     HG_ASSERT(mapGet(&ecs->components, componentId)->components.count != 0);
     Component* system = mapGet(&ecs->components, componentId);
-    return (u8*)system->components.vals + system->components.width;
+    return static_cast<u8*>(system->components.vals) + system->components.width;
 }
 
 u32 ecsCount(Ecs* ecs, u64 componentId)
@@ -5315,7 +5315,7 @@ u64 ecsFindSmallest(Ecs* ecs, u64* ids, u32 idCount)
 {
     HG_ASSERT(ecs != nullptr);
 
-    u32 smallestCount = (u32)-1;
+    u32 smallestCount = static_cast<u32>(-1);
     u64 smallest = ids[0];
 
     for (u32 i = 1; i < idCount; ++i)
@@ -5366,11 +5366,11 @@ static void swapIdxLocation(Ecs* ecs, u32 lhs, u32 rhs, u64 componentId)
 
 namespace {
     struct QuicksortData {
-        Ecs* ecs;
-        Component* system;
-        u64 comp;
-        void* data;
-        bool (*compare)(void*, Ecs* ecs, Entity lhs, Entity rhs);
+        Ecs* ecs = nullptr;
+        Component* system = nullptr;
+        u64 comp = 0;
+        void* data = nullptr;
+        bool (*compare)(void*, Ecs* ecs, Entity lhs, Entity rhs) = nullptr;
 
         u32 quicksortInter(u32 pivot, u32 inc, u32 dec)
         {
@@ -5468,13 +5468,13 @@ void serialize(Serializer* s, Ecs* ecs)
     serializeBegin(s, &systemCount);
     HG_DEFER(serializeEnd(s));
 
-    u32 systemIdx = (u32)-1;
+    u32 systemIdx = static_cast<u32>(-1);
     for (u32 i = 0; i < systemCount; ++i)
     {
         serializeBegin(s);
         HG_DEFER(serializeEnd(s));
 
-        u64 systemId = (u64)-1;
+        u64 systemId = static_cast<u64>(-1);
         Component* system;
         if (s->writing)
         {
@@ -5525,14 +5525,14 @@ void entitySerialize(Serializer* s, Entity* val, EntitySerializer* ecs)
 {
     if (s->writing)
     {
-        u32 idx = *val != entityNull ? ecs->entityToIdx[handleIdx(val->handle)] : (u32)-1;
-        serialize(s, (i32*)&idx);
+        u32 idx = *val != entityNull ? ecs->entityToIdx[handleIdx(val->handle)] : static_cast<u32>(-1);
+        serialize(s, reinterpret_cast<i32*>(&idx));
     }
     else
     {
-        u32 idx = (u32)-1;
-        serialize(s, (i32*)&idx);
-        *val = idx != (u32)-1 ? ecs->idxToEntity[idx] : entityNull;
+        u32 idx = static_cast<u32>(-1);
+        serialize(s, reinterpret_cast<i32*>(&idx));
+        *val = idx != static_cast<u32>(-1) ? ecs->idxToEntity[idx] : entityNull;
     }
 }
 
@@ -5752,7 +5752,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
             return;
         u32 sizeToPush = total - queued;
 
-        f32* queue = (f32*)arenaAlloc(scratch, sizeToPush, width);
+        f32* queue = static_cast<f32*>(arenaAlloc(scratch, sizeToPush, width));
         u32 queueSize = 0;
 
         if (src->repeat)
@@ -5762,16 +5762,16 @@ void audioUpdate(Ecs* ecs, Entity listener)
                 if (src->position == audio->size)
                     src->position = 0;
 
-                u32 sizeToQueue = min(sizeToPush - queueSize, (u32)(audio->size - src->position));
-                memCopy((u8*)queue + queueSize, (u8*)audio->data + src->position, sizeToQueue);
+                u32 sizeToQueue = min(sizeToPush - queueSize, static_cast<u32>(audio->size - src->position));
+                memCopy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(audio->data) + src->position, sizeToQueue);
                 queueSize += sizeToQueue;
                 src->position += sizeToQueue;
             }
         }
         else
         {
-            queueSize = min(sizeToPush, (u32)(audio->size - src->position));
-            memCopy(queue, (u8*)audio->data + src->position, queueSize);
+            queueSize = min(sizeToPush, static_cast<u32>(audio->size - src->position));
+            memCopy(queue, reinterpret_cast<u8*>(audio->data) + src->position, queueSize);
             src->position += queueSize;
         }
 
@@ -5785,7 +5785,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
 
             for (u64 i = 0; i < sizeToPush / sizeof(f32); ++i)
             {
-                ((f32*)queue)[i] *= factor;
+                queue[i] *= factor;
             }
         }
 
@@ -5795,16 +5795,16 @@ void audioUpdate(Ecs* ecs, Entity listener)
 }
 
 struct SpritePipelinePush {
-    Mat4 model;
-    Vec2 uvPos;
-    Vec2 uvSize;
-    u32 viewProj;
-    u32 texture;
+    Mat4 model = {};
+    Vec2 uvPos = {};
+    Vec2 uvSize = {};
+    u32 viewProj = 0;
+    u32 texture = 0;
 };
 
 struct SpritePipelineState {
-    GpuPipeline* pipeline;
-    Texture defaultTex;
+    GpuPipeline* pipeline = nullptr;
+    Texture defaultTex = {};
 };
 
 static SpritePipelineState spritePipeline{};
@@ -5916,13 +5916,13 @@ void spritesDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
 }
 
 struct SkyboxPipelinePush {
-    u32 viewProj;
-    u32 texture;
+    u32 viewProj = 0;
+    u32 texture = 0;
 };
 
 struct SkyboxPipelineState {
-    GpuPipeline* pipeline;
-    Texture defaultTex;
+    GpuPipeline* pipeline = nullptr;
+    Texture defaultTex = {};
 };
 
 static SkyboxPipelineState skyboxPipeline{};
@@ -6078,40 +6078,40 @@ PointLight* pointLightAdd(Ecs* ecs, Entity e, Vec4 color)
 }
 
 struct ModelPipelineDirLightData {
-    Vec4 dir;
-    Vec4 color;
+    Vec4 dir = {};
+    Vec4 color = {};
 };
 
 struct ModelPipelinePointLightData {
-    Vec4 pos;
-    Vec4 color;
+    Vec4 pos = {};
+    Vec4 color = {};
 };
 
 struct ModelPipelinePush {
-    Mat4 model;
-    u32 indices;
-    u32 vertices;
-    u32 viewProj;
-    u32 normalMap;
-    u32 colorMap;
-    u32 dirLights;
-    u32 dirLightCount;
-    u32 pointLights;
-    u32 pointLightCount;
+    Mat4 model = {};
+    u32 indices = 0;
+    u32 vertices = 0;
+    u32 viewProj = 0;
+    u32 normalMap = 0;
+    u32 colorMap = 0;
+    u32 dirLights = 0;
+    u32 dirLightCount = 0;
+    u32 pointLights = 0;
+    u32 pointLightCount = 0;
 };
 
 struct ModelPipelineState {
-    GpuPipeline* pipeline;
+    GpuPipeline* pipeline = nullptr;
 
-    GpuBuffer* dirLightBuffer;
-    u32 dirLightCapacity;
+    GpuBuffer* dirLightBuffer = nullptr;
+    u32 dirLightCapacity = 0;
 
-    GpuBuffer* pointLightBuffer;
-    u32 pointLightCapacity;
+    GpuBuffer* pointLightBuffer = nullptr;
+    u32 pointLightCapacity = 0;
 
-    Mesh defaultModel;
-    Texture defaultColorMap;
-    Texture defaultNormalMap;
+    Mesh defaultModel = {};
+    Texture defaultColorMap = {};
+    Texture defaultNormalMap = {};
 };
 
 static ModelPipelineState modelPipeline{};
@@ -6205,9 +6205,9 @@ void modelsInit(
     gpuBufferWrite(modelPipeline.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
     gpuBufferWrite(modelPipeline.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
 
-    modelPipeline.defaultModel.vertexCount = (u32)arrayCount(cubeVertices);
-    modelPipeline.defaultModel.vertexWidth = (u32)sizeof(MeshVertex);
-    modelPipeline.defaultModel.indexCount = (u32)arrayCount(cubeIndices);
+    modelPipeline.defaultModel.vertexCount = static_cast<u32>(arrayCount(cubeVertices));
+    modelPipeline.defaultModel.vertexWidth = static_cast<u32>(sizeof(MeshVertex));
+    modelPipeline.defaultModel.indexCount = static_cast<u32>(arrayCount(cubeIndices));
 
     struct Color {
         u8 r, g, b, a;

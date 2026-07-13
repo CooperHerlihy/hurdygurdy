@@ -551,18 +551,3 @@ u32 x{};                // zero-initialized
 
 ---
 
-## Summary Checklist
-
-When touching a file, apply these migrations:
-
-1. `typedef` → `using`
-2. `#ifndef` guard → `#pragma once`
-3. C-style casts → named C++ casts
-4. Manual `Create`/`Destroy` pairs → constructor/destructor
-5. Arena-only containers → owning or temp variant
-6. `enable_if`/SFINAE → `requires`/concepts
-7. C-style for → range-for where cleaner
-8. Add `= delete`/move semantics to resource types
-9. Add `noexcept` to moves and swaps
-10. `constexpr`/`consteval` where appropriate
-

@@ -37,16 +37,16 @@ void test()
             HG_ASSERT(allocU32 == arena.memory);
 
             u64* allocU64 = arenaAlloc<u64>(&arena, 2);
-            HG_ASSERT((u8*)allocU64 == (u8*)allocU32 + 8);
+            HG_ASSERT(reinterpret_cast<u8*>(allocU64) == reinterpret_cast<u8*>(allocU32) + 8);
 
             u8* allocU8 = arenaAlloc<u8>(&arena, 1);
-            HG_ASSERT(allocU8 == (u8*)allocU32 + 24);
+            HG_ASSERT(allocU8 == reinterpret_cast<u8*>(allocU32) + 24);
 
             struct Big {
                 u8 data[32];
             };
             Big* allocBig = arenaAlloc<Big>(&arena, 1);
-            HG_ASSERT((u8*)allocBig == (u8*)allocU32 + 25);
+            HG_ASSERT(reinterpret_cast<u8*>(allocBig) == reinterpret_cast<u8*>(allocU32) + 25);
 
             Big* reallocBig = arenaRealloc(&arena, allocBig, 1, 2);
             HG_ASSERT(reallocBig == allocBig);
@@ -56,7 +56,7 @@ void test()
 
             memClear(reallocBig, 2 * sizeof(*reallocBig), 2);
             u8* allocInterrupt = arenaAlloc<u8>(&arena, 1);
-            (void)allocInterrupt;
+            static_cast<void>(allocInterrupt);
 
             Big* reallocBig2 = arenaRealloc(&arena, reallocBig, 2, 4);
             HG_ASSERT(reallocBig2 != reallocBig);
@@ -375,11 +375,11 @@ void test()
 
             callPar(fence, &a, [](void *pa)
             {
-                *(bool*)pa = true;
+                *static_cast<bool*>(pa) = true;
             });
             callPar(fence, &b, [](void *pb)
             {
-                *(bool*)pb = true;
+                *static_cast<bool*>(pb) = true;
             });
 
             fenceWait(fence, 2.0);
@@ -399,7 +399,7 @@ void test()
             {
                 callPar(fence, &val, [](void* data)
                 {
-                    *(bool*)data = true;
+                    *static_cast<bool*>(data) = true;
                 });
             }
 
@@ -416,7 +416,7 @@ void test()
 
             auto fn = [](void* pvals, u64 idx)
             {
-                ((bool*)pvals)[idx] = true;
+                (static_cast<bool*>(pvals))[idx] = true;
             };
             forPar(0, arrayCount(vals), vals, fn);
 
@@ -439,7 +439,7 @@ void test()
 
                 auto fn = [](void* pval)
                 {
-                    *((bool*)pval) = !*((bool*)pval);
+                    *static_cast<bool*>(pval) = !*static_cast<bool*>(pval);
                 };
 
                 auto prodFn = [&](u32 idx)
@@ -489,7 +489,7 @@ void test()
         c.count = 0;
         forPar(0, 100, &c, [](void* pc, u64)
         {
-            Capture* c = (Capture*)pc;
+            Capture* c = static_cast<Capture*>(pc);
             mutexAcquire(c->mtx);
             HG_DEFER(mutexRelease(c->mtx));
             for (u32 i = 0; i < 10000; ++i)
@@ -1431,22 +1431,22 @@ void test()
         HG_ASSERT(arr.width == sizeof(u32));
         HG_ASSERT(arr.align == alignof(u32));
 
-        *(u32*)arrayAnyPush(&arr) = 10;
-        *(u32*)arrayAnyPush(&arr) = 20;
+        *static_cast<u32*>(arrayAnyPush(&arr)) = 10;
+        *static_cast<u32*>(arrayAnyPush(&arr)) = 20;
 
         HG_ASSERT(arr.count == 2);
-        HG_ASSERT(*(u32*)arr[0] == 10);
-        HG_ASSERT(*(u32*)arr[1] == 20);
+        HG_ASSERT(*static_cast<u32*>(arr[0]) == 10);
+        HG_ASSERT(*static_cast<u32*>(arr[1]) == 20);
 
         arrayAnyResize(&arr, 4);
 
         HG_ASSERT(arr.count == 4);
 
-        *(u32*)arr[2] = 30;
-        *(u32*)arr[3] = 40;
+        *static_cast<u32*>(arr[2]) = 30;
+        *static_cast<u32*>(arr[3]) = 40;
 
-        HG_ASSERT(*(u32*)arr[2] == 30);
-        HG_ASSERT(*(u32*)arr[3] == 40);
+        HG_ASSERT(*static_cast<u32*>(arr[2]) == 30);
+        HG_ASSERT(*static_cast<u32*>(arr[3]) == 40);
 
         u32 popped = 0;
         arrayAnyPop(&arr, &popped);
@@ -1457,19 +1457,19 @@ void test()
         arrayAnyResize(&arr, 1);
 
         HG_ASSERT(arr.count == 1);
-        HG_ASSERT(*(u32*)arr[0] == 10);
+        HG_ASSERT(*static_cast<u32*>(arr[0]) == 10);
 
         Arena* arena = getScratch();
         HG_ARENA_SCOPE(arena);
 
         ArrayAny temp = arrayAnyTemp(arena, sizeof(u32), alignof(u32), 0, 2);
 
-        *(u32*)arrayAnyPushTemp(arena, &temp) = 123;
-        *(u32*)arrayAnyPushTemp(arena, &temp) = 456;
+        *static_cast<u32*>(arrayAnyPushTemp(arena, &temp)) = 123;
+        *static_cast<u32*>(arrayAnyPushTemp(arena, &temp)) = 456;
 
         HG_ASSERT(temp.count == 2);
-        HG_ASSERT(*(u32*)temp[0] == 123);
-        HG_ASSERT(*(u32*)temp[1] == 456);
+        HG_ASSERT(*static_cast<u32*>(temp[0]) == 123);
+        HG_ASSERT(*static_cast<u32*>(temp[1]) == 456);
 
         arrayAnyPushTemp(arena, &temp);
 
@@ -1988,9 +1988,9 @@ void test()
         Pool pool = poolCreate<u32>();
         HG_DEFER(poolDestroy(&pool));
 
-        u32* a = (u32*)poolAlloc(&pool);
-        u32* b = (u32*)poolAlloc(&pool);
-        u32* c = (u32*)poolAlloc(&pool);
+        u32* a = static_cast<u32*>(poolAlloc(&pool));
+        u32* b = static_cast<u32*>(poolAlloc(&pool));
+        u32* c = static_cast<u32*>(poolAlloc(&pool));
 
         HG_ASSERT(a != nullptr);
         HG_ASSERT(b != nullptr);
@@ -2007,8 +2007,8 @@ void test()
         poolFree(&pool, b);
         poolFree(&pool, c);
 
-        u32* d = (u32*)poolAlloc(&pool);
-        u32* e = (u32*)poolAlloc(&pool);
+        u32* d = static_cast<u32*>(poolAlloc(&pool));
+        u32* e = static_cast<u32*>(poolAlloc(&pool));
 
         HG_ASSERT(d == c);
         HG_ASSERT(e == b);
@@ -2028,7 +2028,7 @@ void test()
 
         for (u32 i = 0; i < n; ++i)
         {
-            u32* p = (u32*)poolAlloc(&pool);
+            u32* p = static_cast<u32*>(poolAlloc(&pool));
             *arrayPushTemp(arena, &ptrs) = p;
             HG_ASSERT(p != nullptr);
         }
@@ -2115,7 +2115,7 @@ void test()
     {
         Mat3 identityMat = Mat3{1.0f};
         Vec3 upVec{0.0f, -1.0f, 0.0f};
-        Quat rotation = quatAxisAngle({0.0f, 0.0f, -1.0f}, -(f32)HG_PI * 0.5f);
+        Quat rotation = quatAxisAngle({0.0f, 0.0f, -1.0f}, -static_cast<f32>(HG_PI) * 0.5f);
 
         Vec3 rotatedVec = vecRot3(rotation, upVec);
         Mat3 rotatedMat = matRot3(rotation, identityMat);
@@ -3612,7 +3612,7 @@ void test()
         struct color {
             u8 r, g, b, a;
 
-            operator u32() { return *(u32*)this; }
+            operator u32() { return *reinterpret_cast<u32*>(this); }
         };
 
         u32 red =    color{0xff, 0x00, 0x00, 0xff};

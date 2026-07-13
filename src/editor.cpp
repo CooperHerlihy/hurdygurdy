@@ -48,11 +48,11 @@ volatile static bool quit = false;
 static bool renderHovered = false;
 
 struct Name {
-    String name;
+    String name{};
 };
 
 struct Spin {
-    f32 speed;
+    f32 speed = 0.0f;
 };
 
 void init(Arena* arena)
@@ -113,7 +113,7 @@ void init(Arena* arena)
     camera = cameraAdd(ecs, player);
 
     camera->type = CameraType_perspective;
-    camera->perspective.fov = (f32)HG_PI * 0.5f;
+    camera->perspective.fov = static_cast<f32>(HG_PI) * 0.5f;
     camera->perspective.near = 0.01f;
     camera->perspective.far = 1000.0f;
 
@@ -226,11 +226,11 @@ void drawMenu()
                 gpuImageRead(pixels, renderView);
                 stbi_write_png(
                     "screenshot.png",
-                    (int)width,
-                    (int)height,
+                    static_cast<int>(width),
+                    static_cast<int>(height),
                     4,
                     pixels,
-                    (int)(width * sizeof(u32)));
+                    static_cast<int>(width * sizeof(u32)));
             }
 
             ImGui::EndMenu();
@@ -294,7 +294,7 @@ void drawEditorEntity(Arena* frame, Entity e)
     else
     {
         StringBuilder nameStr = stringCopy(frame, "ID ");
-        stringAppend(frame, &nameStr, integerToString(frame, (i64)handleIdx(e.handle)));
+        stringAppend(frame, &nameStr, integerToString(frame, static_cast<i64>(handleIdx(e.handle))));
         name = cString(frame, nameStr);
     }
 
@@ -368,7 +368,7 @@ void drawEditorEntity(Arena* frame, Entity e)
                 if (ImGui::Button("Perspective"))
                 {
                     c->type = CameraType_orthographic;
-                    cameraSetOrthographic(c, (f32)width / (f32)height, 1.0f);
+                    cameraSetOrthographic(c, static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
                 }
                 ImGui::DragFloat("FoV", &c->perspective.fov, 0.01f);
                 ImGui::DragFloat("Aspect", &c->perspective.aspect, 0.01f);
@@ -380,7 +380,7 @@ void drawEditorEntity(Arena* frame, Entity e)
                 if (ImGui::Button("Orthographic"))
                 {
                     c->type = CameraType_perspective;
-                    cameraSetPerspective(c, (f32)width / (f32)height);
+                    cameraSetPerspective(c, static_cast<f32>(width) / static_cast<f32>(height));
                 }
                 ImGui::DragFloat2("Left, Right", &c->orthographic.left);
                 ImGui::DragFloat2("Top, Bottom", &c->orthographic.top);
@@ -477,8 +477,8 @@ void drawRender()
     {
         ImVec2 size = ImGui::GetContentRegionAvail();
 
-        u32 viewHeight = max((u32)1, fixedAspect ? (u32)min(size.y, size.x / aspectRatio) : (u32)size.y);
-        u32 viewWidth = max((u32)1, fixedAspect ? (u32)((f32)viewHeight * aspectRatio) : (u32)size.x);
+        u32 viewHeight = max(static_cast<u32>(1), fixedAspect ? static_cast<u32>(min(size.y, size.x / aspectRatio)) : static_cast<u32>(size.y));
+        u32 viewWidth = max(static_cast<u32>(1), fixedAspect ? static_cast<u32>(static_cast<f32>(viewHeight) * aspectRatio) : static_cast<u32>(size.x));
         if (width != viewWidth || height != viewHeight)
         {
             width = viewWidth;
@@ -513,10 +513,10 @@ void drawRender()
 
             renderImGuiTex = createImGuiTexture(renderView, GpuLayout_shaderReadOnly);
 
-            camera->perspective.aspect = (f32)width / (f32)height;
+            camera->perspective.aspect = static_cast<f32>(width) / static_cast<f32>(height);
         }
 
-        ImGui::Image((ImTextureID)renderImGuiTex, {(f32)width, (f32)height});
+        ImGui::Image(reinterpret_cast<ImTextureID>(renderImGuiTex), {static_cast<f32>(width), static_cast<f32>(height)});
 
         renderHovered = ImGui::IsWindowFocused();
     }
@@ -613,11 +613,11 @@ int main()
     {
 
         // saw harmonics
-        f32 t = (f32)i * (f32)HG_PI * 2.0f / 8000.0f;
+        f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
         audioData[i] = 0;
         for (u32 j = 1; j <= 64; ++j)
         {
-            f32 x = (f32)j;
+            f32 x = static_cast<f32>(j);
             audioData[i] += 1.0f / x * std::sin(100.f * t * x);
         }
 
@@ -700,7 +700,7 @@ int main()
 
         ecsForEach<Spin, Transform>(ecs, [&](Entity e, Spin* spin, Transform* tf)
         {
-            tf->rotation = quatAxisAngle({0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
+            tf->rotation = quatAxisAngle({0, -1, 0}, static_cast<f32>(delta) * spin->speed) * tf->rotation;
             transformUpdate(ecs, e);
         });
 
@@ -717,17 +717,17 @@ int main()
             Vec3 movement = Vec3{0.0f};
             if (move3D)
             {
-                movement.y += (f32)(isButtonDown(window, Button_lshift) - isButtonDown(window, Button_space));
-                movement.x += (f32)(isButtonDown(window, Button_d) - isButtonDown(window, Button_a));
-                movement.z += (f32)(isButtonDown(window, Button_w) - isButtonDown(window, Button_s));
+                movement.y += static_cast<f32>(isButtonDown(window, Button_lshift) - isButtonDown(window, Button_space));
+                movement.x += static_cast<f32>(isButtonDown(window, Button_d) - isButtonDown(window, Button_a));
+                movement.z += static_cast<f32>(isButtonDown(window, Button_w) - isButtonDown(window, Button_s));
             } else {
-                movement.y += (f32)(isButtonDown(window, Button_s) - isButtonDown(window, Button_w));
-                movement.x += (f32)(isButtonDown(window, Button_d) - isButtonDown(window, Button_a));
+                movement.y += static_cast<f32>(isButtonDown(window, Button_s) - isButtonDown(window, Button_w));
+                movement.x += static_cast<f32>(isButtonDown(window, Button_d) - isButtonDown(window, Button_a));
             }
 
             if (movement != Vec3{0.0f})
             {
-                f32 moveSpeed = 1.5f * (f32)delta;
+                f32 moveSpeed = 1.5f * static_cast<f32>(delta);
                 Vec3 rotated = vecRot3(transform->rotation, {movement.x, 0.0f, movement.z});
                 transform->position += vecNorm3({rotated.x, movement.y, rotated.z}) * moveSpeed;
             }

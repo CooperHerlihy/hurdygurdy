@@ -24,8 +24,7 @@
  * =============================================================================
  */
 
-#ifndef HG_HURDYGURDY_HPP
-#define HG_HURDYGURDY_HPP
+#pragma once
 
 #include <cfloat>
 #include <cmath>
@@ -100,54 +99,54 @@ namespace hg {
 /**
  * An 8 bit, 1 byte unsigned integer
  */
-typedef uint8_t u8;
+using u8 = uint8_t;
 /**
  * A 16 bit, 2 byte unsigned integer
  */
-typedef uint16_t u16;
+using u16 = uint16_t;
 /**
  * A 32 bit, 4 byte unsigned integer
  */
-typedef uint32_t u32;
+using u32 = uint32_t;
 /**
  * A 64 bit, 8 byte unsigned integer
  */
-typedef uint64_t u64;
+using u64 = uint64_t;
 
 /**
  * An 8 bit, 1 byte signed integer
  */
-typedef int8_t i8;
+using i8 = int8_t;
 /**
  * A 16 bit, 2 byte signed integer
  */
-typedef int16_t i16;
+using i16 = int16_t;
 /**
  * A 32 bit, 4 byte signed integer
  */
-typedef int32_t i32;
+using i32 = int32_t;
 /**
  * A 64 bit, 8 byte signed integer
  */
-typedef int64_t i64;
+using i64 = int64_t;
 
 /**
  * An unsigned integer representing a pointer
  */
-typedef uintptr_t uptr;
+using uptr = uintptr_t;
 /**
  * A signed integer representing a pointer
  */
-typedef intptr_t iptr;
+using iptr = intptr_t;
 
 /**
  * A 32 bit, 4 byte floating point value
  */
-typedef float f32;
+using f32 = float;
 /**
  * A 64 bit, 8 byte floating point value
  */
-typedef double f64;
+using f64 = double;
 
 /**
  * A block of binary data
@@ -280,11 +279,11 @@ struct Binary {
     /**
      * The data
      */
-    const void* data;
+    const void* data = nullptr;
     /**
      * The size of data in bytes
      */
-    u64 size;
+    u64 size = 0;
 };
 
 /**
@@ -318,11 +317,11 @@ struct String {
     /**
      * The characters
      */
-    const char* chars;
+    const char* chars = nullptr;
     /**
      * The number of characters;
      */
-    u64 length;
+    u64 length = 0;
 
     /**
      * Construct uninitialized
@@ -339,7 +338,7 @@ struct String {
      * Create a string view from begin and end pointers
      */
     constexpr String(const char* charsBegin, const char* charsEnd)
-        : chars{charsBegin}, length{(uptr)(charsEnd - charsBegin)}
+        : chars{charsBegin}, length{static_cast<uptr>(charsEnd - charsBegin)}
     {
         HG_ASSERT(charsBegin <= charsEnd);
     }
@@ -382,9 +381,9 @@ enum Subsystem : u32 {
     Subsystem_assets = 0x8,
     Subsystem_windowing = 0x10,
     Subsystem_audio = 0x20,
-    Subsystem_all = (u32)-1,
+    Subsystem_all = static_cast<u32>(-1),
 };
-typedef u32 SubsystemFlags;
+using SubsystemFlags = u32;
 
 /**
  * Initialize the Hurdy Gurdy library
@@ -482,7 +481,7 @@ constexpr uptr align(uptr val, uptr align)
  */
 constexpr u16 endianReverse16(u16 val)
 {
-    return (u16)(val >> 8) | (u16)(val << 8);
+    return static_cast<u16>(val >> 8) | static_cast<u16>(val << 8);
 }
 
 /**
@@ -549,7 +548,7 @@ void* heapAlloc(u64 size, u64 alignment);
 template<typename T>
 T* heapAlloc(u64 count)
 {
-    return (T*)heapAlloc(count * sizeof(T), alignof(T));
+    return static_cast<T*>(heapAlloc(count * sizeof(T), alignof(T)));
 }
 
 /**
@@ -582,7 +581,7 @@ void* heapRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment);
 template<typename T>
 T* heapRealloc(T* allocation, u64 oldCount, u64 newCount)
 {
-    return (T*)heapRealloc(allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
+    return static_cast<T*>(heapRealloc(allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T)));
 }
 
 /**
@@ -595,7 +594,7 @@ T* heapRealloc(T* allocation, u64 oldCount, u64 newCount)
 template<typename T>
 void heapFree(T* allocation, u64 count)
 {
-    heapFree((void*)allocation, count * sizeof(T));
+    heapFree(static_cast<void*>(allocation), count * sizeof(T));
 }
 
 /**
@@ -616,15 +615,15 @@ struct Arena {
     /**
      * A pointer to the memory being allocated
      */
-    void* memory;
+    void* memory = nullptr;
     /**
      * The capacity of the memory being allocated
      */
-    u64 capacity;
+    u64 capacity = 0;
     /**
      * The next allocation to be given out
      */
-    u64 head;
+    u64 head = 0;
 };
 
 /**
@@ -662,7 +661,7 @@ void* arenaAlloc(Arena* arena, u64 size, u64 alignment);
 template<typename T>
 T* arenaAlloc(Arena* arena, u64 count)
 {
-    return (T*)arenaAlloc(arena, count * sizeof(T), alignof(T));
+    return static_cast<T*>(arenaAlloc(arena, count * sizeof(T), alignof(T)));
 }
 
 /**
@@ -700,7 +699,7 @@ void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64
 template<typename T>
 T* arenaRealloc(Arena* arena, T* allocation, u64 oldCount, u64 newCount)
 {
-    return (T*)arenaRealloc(arena, allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
+    return static_cast<T*>(arenaRealloc(arena, allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T)));
 }
 
 /**
@@ -714,7 +713,7 @@ bool arenaCanExtend(Arena* arena, void* allocation, u64 size, u64 align);
 template<typename T>
 bool arenaCanExtend(Arena* arena, T* allocation, u64 count)
 {
-    return arenaCanExtend(arena, (void*)allocation, count * sizeof(T), alignof(T));
+    return arenaCanExtend(arena, static_cast<void*>(allocation), count * sizeof(T), alignof(T));
 }
 
 /**
@@ -1228,7 +1227,7 @@ enum GpuStage : u32 {
     GpuStage_allGraphics = 0x00008000,
     GpuStage_allCommands = 0x00010000,
 };
-typedef u32 GpuStageFlags;
+using GpuStageFlags = u32;
 
 /**
  * How a resource can be accessed
@@ -1253,7 +1252,7 @@ enum GpuAccess : u32 {
     GpuAccess_memoryRead = 0x00008000,
     GpuAccess_memoryWrite = 0x00010000,
 };
-typedef u32 GpuAccessFlags;
+using GpuAccessFlags = u32;
 
 /**
  * A gpu buffer
@@ -1272,7 +1271,7 @@ enum GpuBufferUsage : u32 {
     GpuBufferUsage_storageBuffer = 0x00000020,
     GpuBufferUsage_indirectBuffer = 0x00000100,
 };
-typedef u32 GpuBufferUsageFlags;
+using GpuBufferUsageFlags = u32;
 
 /**
  * How a gpu buffer will be accessed
@@ -1383,7 +1382,7 @@ enum GpuImageUsage : u32 {
     GpuImageUsage_inputAttachment = 0x00000080,
     GpuImageUsage_hostTransfer = 0x00400000,
 };
-typedef u32 GpuImageUsageFlags;
+using GpuImageUsageFlags = u32;
 
 /**
  * The layout of an image
@@ -1407,7 +1406,7 @@ enum GpuLayout : u32 {
 enum GpuImageConfig : u32 {
     GpuImageConfig_cubeCompatible = 0x00000010,
 };
-typedef u32 GpuImageConfigFlags;
+using GpuImageConfigFlags = u32;
 
 /**
  * Create a gpu image assuming most defaults
@@ -1511,7 +1510,7 @@ enum GpuAspect : u32 {
     GpuAspect_plane1 = 0x00000020,
     GpuAspect_plane2 = 0x00000040,
 };
-typedef u32 GpuAspectFlags;
+using GpuAspectFlags = u32;
 
 /**
  * How a sampler interpolates between pixels
@@ -1559,16 +1558,16 @@ GpuView* gpuViewCreate(
  * Config for gpuViewCreateEx
  */
 struct GpuViewCreateEx {
-    GpuImage* image;
-    u32 baseMipLevel;
-    u32 levelCount;
-    u32 baseArrayLayer;
-    u32 layerCount;
-    GpuAspectFlags aspectFlags;
-    GpuViewType type;
-    GpuFilter filter;
-    GpuSamplerEdgeMode edgeMode;
-    GpuSamplerBorder border;
+    GpuImage* image = nullptr;
+    u32 baseMipLevel = 0;
+    u32 levelCount = 0;
+    u32 baseArrayLayer = 0;
+    u32 layerCount = 0;
+    GpuAspectFlags aspectFlags = 0;
+    GpuViewType type = {};
+    GpuFilter filter = {};
+    GpuSamplerEdgeMode edgeMode = {};
+    GpuSamplerBorder border = {};
 };
 
 /**
@@ -1704,7 +1703,7 @@ enum GpuCull : u32 {
     GpuCull_back = 0x00000002,
     GpuCull_both = 0x00000003,
 };
-typedef u32 GpuCullFlags;
+using GpuCullFlags = u32;
 
 /**
  * Config for createGraphicsPipeline
@@ -1871,19 +1870,19 @@ struct GpuImageBarrier {
     /**
      * The image to sychronize
      */
-    GpuView* image;
+    GpuView* image = nullptr;
     /**
      * Where the image will be used next
      */
-    GpuStageFlags nextStage;
+    GpuStageFlags nextStage = 0;
     /**
      * How the image will be accessed next
      */
-    GpuAccessFlags nextAccess;
+    GpuAccessFlags nextAccess = 0;
     /**
      * The next layout the image needs to be in
      */
-    GpuLayout nextLayout;
+    GpuLayout nextLayout = GpuLayout_undefined;
 };
 
 /**
@@ -1893,15 +1892,15 @@ struct GpuBufferBarrier {
     /**
      * The buffer to sychronize
      */
-    GpuBuffer* buffer;
+    GpuBuffer* buffer = nullptr;
     /**
      * Where the image will be used next
      */
-    GpuStageFlags nextStage;
+    GpuStageFlags nextStage = 0;
     /**
      * How the image will be accessed next
      */
-    GpuAccessFlags nextAccess;
+    GpuAccessFlags nextAccess = 0;
 };
 
 /**
@@ -2010,11 +2009,11 @@ struct GpuClearValueDepthStencil {
     /**
      * The depth value
      */
-    f32 depth;
+    f32 depth = 0.0f;
     /**
      * The stencil value
      */
-    u32 stencil;
+    u32 stencil = 0;
 };
 
 /**
@@ -4047,11 +4046,11 @@ struct BinaryBuilder {
     /**
      * The data
      */
-    void* data;
+    void* data = nullptr;
     /**
      * The size of data in bytes
      */
-    u64 size;
+    u64 size = 0;
 
     /**
      * Implicitly convert to Binary
@@ -4136,11 +4135,11 @@ struct StringBuilder {
     /**
      * The string data
      */
-    char* chars;
+    char* chars = nullptr;
     /**
      * The number of characters currently in the string
      */
-    u64 length;
+    u64 length = 0;
 
     /**
      * Access using the index operator
@@ -4363,19 +4362,19 @@ struct SerialNode {
     /**
      * The parent object or array
      */
-    SerialNode* parent;
+    SerialNode* parent = nullptr;
     /**
      * The next node in the object or array
      */
-    SerialNode* next;
+    SerialNode* next = nullptr;
     /**
      * The type of data
      */
-    SerialType type;
+    SerialType type = {};
     /**
      * The number of fields, if an object
      */
-    u32 count;
+    u32 count = 0;
     /**
      * The data
      */
@@ -4410,23 +4409,23 @@ struct Serializer {
     /**
      * The arena to allocate from
      */
-    Arena* arena;
+    Arena* arena = nullptr;
     /**
      * The root node
      */
-    SerialNode* root;
+    SerialNode* root = nullptr;
     /**
      * The current object
      */
-    SerialNode* parent;
+    SerialNode* parent = nullptr;
     /**
      * The current data node
      */
-    SerialNode* current;
+    SerialNode* current = nullptr;
     /**
      * Whether the serializer is reading or writing
      */
-    bool writing;
+    bool writing = false;
 };
 
 /**
@@ -4636,11 +4635,11 @@ struct JsonError {
     /**
      * The next error
      */
-    JsonError* next;
+    JsonError* next = nullptr;
     /**
      * The error message
      */
-    String msg;
+    String msg = {};
 };
 
 /**
@@ -4669,15 +4668,15 @@ struct JsonField {
     /**
      * The next field
      */
-    JsonField* next;
+    JsonField* next = nullptr;
     /**
      * The name of the field
      */
-    String name;
+    String name = {};
     /**
      * The value stored in the field
      */
-    JsonNode* value;
+    JsonNode* value = nullptr;
 };
 
 /**
@@ -4687,7 +4686,7 @@ struct JsonStruct {
     /**
      * The first field
      */
-    JsonField* fields;
+    JsonField* fields = nullptr;
 };
 
 /**
@@ -4697,11 +4696,11 @@ struct JsonElem {
     /**
      * The next element
      */
-    JsonElem* next;
+    JsonElem* next = nullptr;
     /**
      * The value stored in the element
      */
-    JsonNode* value;
+    JsonNode* value = nullptr;
 };
 
 /**
@@ -4711,7 +4710,7 @@ struct JsonArray {
     /**
      * The first element
      */
-    JsonElem* elems;
+    JsonElem* elems = nullptr;
 };
 
 /**
@@ -4721,7 +4720,7 @@ struct JsonNode {
     /**
      * The node's type
      */
-    JsonType type;
+    JsonType type = {};
     /**
      * The value in the node
      */
@@ -4743,11 +4742,11 @@ struct Json {
     /**
      * The successfully parsed nodes
      */
-    JsonNode* file;
+    JsonNode* file = nullptr;
     /**
      * The errors found
      */
-    JsonError* errors;
+    JsonError* errors = nullptr;
 };
 
 // /**
@@ -4881,23 +4880,23 @@ struct ArrayAny {
     /**
      * The values stored
      */
-    void* vals;
+    void* vals = nullptr;
     /**
      * The number of vals
      */
-    u32 count;
+    u32 count = 0;
     /**
      * The current max number of vals
      */
-    u32 capacity;
+    u32 capacity = 0;
     /**
      * The width of each val in bytes
      */
-    u32 width;
+    u32 width = 0;
     /**
      * The alignment of each val in bytes
      */
-    u32 align;
+    u32 align = 0;
 
     /**
      * Convenience to index into the array with debug bounds checking
@@ -4906,7 +4905,7 @@ struct ArrayAny {
     {
         HG_ASSERT(vals != nullptr);
         HG_ASSERT(idx < count);
-        return (u8*)vals + idx * width;
+        return static_cast<u8*>(vals) + idx * width;
     }
 };
 
@@ -5230,7 +5229,7 @@ void mapForEach(Map<K, V>* map, F fn);
 template<>
 constexpr u64 hash(u8 val)
 {
-    return (u64)val;
+    return static_cast<u64>(val);
 }
 
 /**
@@ -5239,7 +5238,7 @@ constexpr u64 hash(u8 val)
 template<>
 constexpr u64 hash(u16 val)
 {
-    return (u64)val;
+    return static_cast<u64>(val);
 }
 
 /**
@@ -5248,7 +5247,7 @@ constexpr u64 hash(u16 val)
 template<>
 constexpr u64 hash(u32 val)
 {
-    return (u64)val;
+    return static_cast<u64>(val);
 }
 
 /**
@@ -5257,7 +5256,7 @@ constexpr u64 hash(u32 val)
 template<>
 constexpr u64 hash(u64 val)
 {
-    return (u64)val;
+    return static_cast<u64>(val);
 }
 
 /**
@@ -5266,7 +5265,7 @@ constexpr u64 hash(u64 val)
 template<>
 constexpr u64 hash(i8 val)
 {
-    return (u64)val;
+    return static_cast<u64>(val);
 }
 
 /**
@@ -5275,7 +5274,7 @@ constexpr u64 hash(i8 val)
 template<>
 constexpr u64 hash(i16 val)
 {
-    return (u64)val;
+    return static_cast<u64>(val);
 }
 
 /**
@@ -5284,7 +5283,7 @@ constexpr u64 hash(i16 val)
 template<>
 constexpr u64 hash(i32 val)
 {
-    return (u64)val;
+    return static_cast<u64>(val);
 }
 
 /**
@@ -5293,7 +5292,7 @@ constexpr u64 hash(i32 val)
 template<>
 constexpr u64 hash(i64 val)
 {
-    return (u64)val;
+    return static_cast<u64>(val);
 }
 
 /**
@@ -5307,7 +5306,7 @@ constexpr u64 hash(f32 val)
         u32 asHash;
     } u{};
     u.asFloat = val;
-    return (u64)u.asHash;
+    return static_cast<u64>(u.asHash);
 }
 
 /**
@@ -5335,7 +5334,7 @@ constexpr u64 hashPtr(T* val)
         uptr asUptr;
     } u{};
     u.asPtr = val;
-    return (u64)u.asUptr;
+    return static_cast<u64>(u.asUptr);
 };
 
 /**
@@ -5357,7 +5356,7 @@ constexpr u64 hash(String str)
     u64 mult = 1;
     for (u32 i = 0; i < str.length; ++i)
     {
-        ret += (u64)str[i] * mult;
+        ret += static_cast<u64>(str[i]) * mult;
         mult *= 257;
     }
     return ret;
@@ -5388,19 +5387,19 @@ struct Pool {
     /**
      * The free list
      */
-    Queue<void*> freeList;
+    Queue<void*> freeList = {};
     /**
      * The items in the pool
      */
-    Array<void*> itemStores;
+    Array<void*> itemStores = {};
     /**
      * The size of each item in bytes
      */
-    u32 width;
+    u32 width = 0;
     /**
      * The alignment of each item in bytes
      */
-    u32 align;
+    u32 align = 0;
 };
 
 /**
@@ -5439,7 +5438,7 @@ struct Handle {
     /**
      * The handle id
      */
-    u32 id;
+    u32 id = 0;
 };
 
 /**
@@ -5508,11 +5507,11 @@ struct HandlePool {
     /**
      * The currently active handles, or null in vacant slots
      */
-    Array<Handle> handles;
+    Array<Handle> handles = {};
     /**
      * The freed handles
      */
-    Array<Handle> freed;
+    Array<Handle> freed = {};
 };
 
 /**
@@ -5608,8 +5607,8 @@ u32 trueRandom();
  * A pseudo random number generator
  */
 struct Rng {
-    u32 seed;
-    u32 pos;
+    u32 seed = 0;
+    u32 pos = 0;
 };
 
 /**
@@ -5762,7 +5761,7 @@ void serialize(Serializer* s, Asset<T>** asset);
 /**
  * A binary file asset handle
  */
-typedef Asset<Binary> BinaryAsset;
+using BinaryAsset = Asset<Binary>;
 
 /**
  * Binary asset load implementation
@@ -5791,7 +5790,7 @@ struct Clock {
     /**
      * The begin time
      */
-    f64 time;
+    f64 time = 0.0;
 };
 
 /**
@@ -5817,19 +5816,19 @@ struct Perf {
     /**
      * The clock to keep track of each time
      */
-    Clock clock;
+    Clock clock = {};
     /**
      * The measured time for each iteration
      */
-    f64* times;
+    f64* times = nullptr;
     /**
      * The max number of measurements
      */
-    u32 count;
+    u32 count = 0;
     /**
      * The current measurement
      */
-    u32 current;
+    u32 current = 0;
 };
 
 /**
@@ -5857,15 +5856,15 @@ struct PerfStats {
     /**
      * The average time of all measurements
      */
-    f64 avg;
+    f64 avg = 0.0;
     /**
      * The best case (the shortest time)
      */
-    f64 best;
+    f64 best = 0.0;
     /**
      * The worst case (the longest time)
      */
-    f64 worst;
+    f64 worst = 0.0;
 };
 
 /**
@@ -6150,11 +6149,11 @@ struct WindowButtonEvent {
     /**
      * The type of event
      */
-    WindowEventType type;
+    WindowEventType type = {};
     /**
      * The button which was pressed or released
      */
-    Button button;
+    Button button = {};
 };
 
 /**
@@ -6293,25 +6292,25 @@ struct Sound {
     /**
      * The sound data
      */
-    f32* data;
+    f32* data = nullptr;
     /**
      * The size of the data in bytes
      */
-    u64 size;
+    u64 size = 0;
     /**
      * The floats per second
      */
-    u32 frequency;
+    u32 frequency = 0;
     /**
      * The number of channels (mono, stereo, etc.)
      */
-    u32 channels;
+    u32 channels = 0;
 };
 
 /**
  * A handle to an audio asset
  */
-typedef Asset<Sound> SoundAsset;
+using SoundAsset = Asset<Sound>;
 
 /**
  * AudioData asset load implementation
@@ -6332,19 +6331,19 @@ struct AudioPlayerMusic {
     /**
      * The music's stream
      */
-    AudioStream* stream;
+    AudioStream* stream = nullptr;
     /**
      * The music sound to play
      */
-    SoundAsset* sound;
+    SoundAsset* sound = nullptr;
     /**
      * The current position in the sound
      */
-    u32 pos;
+    u32 pos = 0;
     /**
      * Whether the music is currently playing or paused
      */
-    bool playing;
+    bool playing = false;
 };
 
 /**
@@ -6354,11 +6353,11 @@ struct AudioPlayer {
     /**
      * The repeating music
      */
-    Array<AudioPlayerMusic> music;
+    Array<AudioPlayerMusic> music = {};
     /**
      * The temporary sounds
      */
-    Array<AudioStream*> sounds;
+    Array<AudioStream*> sounds = {};
 };
 
 /**
@@ -6416,19 +6415,19 @@ struct CameraPerspective {
     /**
      * The aspect ratio
      */
-    f32 aspect;
+    f32 aspect = 0.0f;
     /**
      * The field of view
      */
-    f32 fov;
+    f32 fov = 0.0f;
     /**
      * The near clipping plane
      */
-    f32 near;
+    f32 near = 0.0f;
     /**
      * The far clipping plane
      */
-    f32 far;
+    f32 far = 0.0f;
 };
 
 /**
@@ -6438,7 +6437,7 @@ struct CameraOrthographic {
     /**
      * The clipping planes in each direction
      */
-    f32 left, right, top, bottom, near, far;
+    f32 left = 0, right = 0, top = 0, bottom = 0, near = 0, far = 0;
 };
 
 /**
@@ -6448,19 +6447,19 @@ struct Camera {
     /**
      * The gpu view projection data
      */
-    GpuBuffer* vpBuffer;
+    GpuBuffer* vpBuffer = nullptr;
     /**
      * The current rotation
      */
-    Quat rotation;
+    Quat rotation = {};
     /**
      * The current position
      */
-    Vec3 position;
+    Vec3 position = {};
     /**
      * The type of projection
      */
-    CameraType type;
+    CameraType type = {};
     /**
      * The projection data
      */
@@ -6498,7 +6497,7 @@ void cameraDestroy(Camera* camera);
 void cameraSetPerspective(
     Camera* camera,
     f32 aspect,
-    f32 fov = (f32)HG_PI / 2.0f,
+    f32 fov = static_cast<f32>(HG_PI) / 2.0f,
     f32 near = 0.01f,
     f32 far = 1000.0f);
 
@@ -6525,29 +6524,29 @@ struct TextureData {
     /**
      * The width of the texture in pixels
      */
-    u32 width;
+    u32 width = 0;
     /**
      * The height of the texture in pixels
      */
-    u32 height;
+    u32 height = 0;
     /**
      * The depth of the texture in pixels
      */
-    u32 depth;
+    u32 depth = 0;
     /**
      * The format of each pixel
      */
-    Format format;
+    Format format = {};
     /**
      * The pixel data, aligned to 16 bytes
      */
-    void* pixels;
+    void* pixels = nullptr;
 };
 
 /**
  * A handle to a texture
  */
-typedef Asset<TextureData> TextureDataAsset;
+using TextureDataAsset = Asset<TextureData>;
 
 /**
  * Texture asset load implementation
@@ -6576,17 +6575,17 @@ struct Texture {
     /**
      * The image
      */
-    GpuImage* image;
+    GpuImage* image = nullptr;
     /**
      * The image view
      */
-    GpuView* view;
+    GpuView* view = nullptr;
 };
 
 /**
  * A handle to a texture asset
  */
-typedef Asset<Texture> TextureAsset;
+using TextureAsset = Asset<Texture>;
 
 /**
  * GpuTexture asset load implementation
@@ -6631,23 +6630,23 @@ struct Rect2DInstance {
     /**
      * The instance position
      */
-    Vec2 pos;
+    Vec2 pos = {};
     /**
      * The instance size
      */
-    Vec2 size;
+    Vec2 size = {};
     /**
      * The instance type
      */
-    u32 type;
+    u32 type = 0;
     /**
      * Padding for 16 byte alignment
      */
-    u32 pad[3];
+    u32 pad[3] = {};
     /**
      * The rectangle fill color
      */
-    Vec4 color;
+    Vec4 color = {};
 };
 
 /**
@@ -6657,31 +6656,31 @@ struct Sprite2DInstance {
     /**
      * The instance position
      */
-    Vec2 pos;
+    Vec2 pos = {};
     /**
      * The instance size
      */
-    Vec2 size;
+    Vec2 size = {};
     /**
      * The instance type
      */
-    u32 type;
+    u32 type = 0;
     /**
      * Padding for 16 byte alignment
      */
-    u32 pad[2];
+    u32 pad[2] = {};
     /**
      * The texture index
      */
-    u32 tex;
+    u32 tex = 0;
     /**
      * The texture uv coordinates
      */
-    Vec2 uvPos;
+    Vec2 uvPos = {};
     /**
      * The texture uv coordinates
      */
-    Vec2 uvSize;
+    Vec2 uvSize = {};
 };
 
 /**
@@ -6705,23 +6704,23 @@ struct Layer2D {
     /**
      * The transform, does not affect changed
      */
-    Mat4 transform;
+    Mat4 transform = {};
     /**
      * The instance data
      */
-    Array<Render2DInstance> instances;
+    Array<Render2DInstance> instances = {};
     /**
      * The gpu side instance buffer
      */
-    GpuBuffer* instanceBuffer;
+    GpuBuffer* instanceBuffer = nullptr;
     /**
      * The capacity of the instance buffer
      */
-    u32 instanceCapacity;
+    u32 instanceCapacity = 0;
     /**
      * Whether the gpu data needs to be updated
      */
-    bool changed;
+    bool changed = false;
 };
 
 /**
@@ -6761,11 +6760,11 @@ struct Sprite2D {
     /**
      * The sprite's texture
      */
-    TextureAsset* texture;
+    TextureAsset* texture = nullptr;
     /**
      * The uv coords in the texture
      */
-    Rect uv;
+    Rect uv = {};
 };
 
 /**
@@ -6780,11 +6779,11 @@ struct Atlas2D {
     /**
      * The texture
      */
-    TextureAsset* texture;
+    TextureAsset* texture = nullptr;
     /**
      * The sprites
      */
-    Array<Rect> sprites;
+    Array<Rect> sprites = {};
 };
 
 /**
@@ -6828,15 +6827,15 @@ struct Tilemap2D {
     /**
      * The tilemap data
      */
-    u32* tiles;
+    u32* tiles = nullptr;
     /**
      * The width of the tilemap in tiles
      */
-    u32 width;
+    u32 width = 0;
     /**
      * The height of the tilemap in tiles
      */
-    u32 height;
+    u32 height = 0;
 };
 
 /**
@@ -6903,33 +6902,33 @@ struct MeshData {
     /**
      * The file index of the first vertex
      */
-    MeshVertex* vertices;
+    MeshVertex* vertices = nullptr;
     /**
      * The file index of the first geometry index
      */
-    u32* indices;
+    u32* indices = nullptr;
     /**
      * The number of vertices
      */
-    u32 vertexCount;
+    u32 vertexCount = 0;
     /**
      * The size of each vertex in bytes
      */
-    u32 vertexWidth;
+    u32 vertexWidth = 0;
     /**
      * The number of indices (4 bytes each)
      */
-    u32 indexCount;
+    u32 indexCount = 0;
     /**
      * How the vertices should be interpreted in sequence
      */
-    GpuTopology topology;
+    GpuTopology topology = {};
 };
 
 /**
  * A handle to a 3d mesh asset
  */
-typedef Asset<MeshData> MeshDataAsset;
+using MeshDataAsset = Asset<MeshData>;
 
 /**
  * Mesh asset load implementation
@@ -6955,29 +6954,29 @@ struct Mesh {
     /**
      * The vertex buffer
      */
-    GpuBuffer* vertexBuffer;
+    GpuBuffer* vertexBuffer = nullptr;
     /**
      * The index buffer
      **/
-    GpuBuffer* indexBuffer;
+    GpuBuffer* indexBuffer = nullptr;
     /**
      * The number of vertices
      */
-    u32 vertexCount;
+    u32 vertexCount = 0;
     /**
      * The size of each vertex in bytes
      */
-    u32 vertexWidth;
+    u32 vertexWidth = 0;
     /**
      * The number of indices (4 bytes each)
      */
-    u32 indexCount;
+    u32 indexCount = 0;
 };
 
 /**
  * A gpu mesh asset handle
  */
-typedef Asset<Mesh> MeshAsset;
+using MeshAsset = Asset<Mesh>;
 
 /**
  * GpuMesh asset load implementation
@@ -7041,7 +7040,7 @@ struct Entity {
     /**
      * The entity handle
      */
-    Handle handle;
+    Handle handle = {};
 };
 
 /**
@@ -7085,7 +7084,7 @@ inline u64 componentId = (u64)-1;
 template<typename T>
 void ecsDtor(T* component)
 {
-    (void)component;
+    static_cast<void>(component);
 }
 
 /**
@@ -7109,7 +7108,7 @@ template<typename T>
 void ecsSerialize(Serializer* s, T* val, EntitySerializer* entities)
 {
     serialize(s, val);
-    (void)entities;
+    static_cast<void>(entities);
 }
 
 /**
@@ -7124,23 +7123,23 @@ struct Component {
     /**
      * The name of the component type
      */
-    String name;
+    String name = {};
     /**
      * The component lookup from entity index
      */
-    Array<u32> indices;
+    Array<u32> indices = {};
     /**
      * The entity lookup from component index
      */
-    Array<Entity> entities;
+    Array<Entity> entities = {};
     /**
      * The component data
      */
-    ArrayAny components;
+    ArrayAny components = {};
     /**
      * The function called on removing the component
      */
-    void (*dtor)(void* component);
+    void (*dtor)(void* component) = nullptr;
     /**
      * The function called on serializing the component
      *
@@ -7149,7 +7148,7 @@ struct Component {
      * - The value to serialize
      * - ecs The ecs serializer data, if needed
      */
-    void (*serialize)(Serializer* s, void* val, EntitySerializer* ecs);
+    void (*serialize)(Serializer* s, void* val, EntitySerializer* ecs) = nullptr;
 };
 
 /**
@@ -7159,11 +7158,11 @@ struct Ecs {
     /**
      * The entity pool
      */
-    HandlePool entities;
+    HandlePool entities = {};
     /**
      * The component systems
      */
-    Map<u64, Component> components;
+    Map<u64, Component> components = {};
 };
 
 /**
@@ -7196,23 +7195,23 @@ struct EcsRegisterComponent {
      *
      * Note, the componentId is derived from this name
      */
-    String name;
+    String name = {};
     /**
      * The width of the component data in bytes
      */
-    u32 width;
+    u32 width = 0;
     /**
      * The alignment of the component data in bytes
      */
-    u32 align;
+    u32 align = 0;
     /**
      * The function called on removing the component
      */
-    void (*dtor)(void* component);
+    void (*dtor)(void* component) = nullptr;
     /**
      * The function called on serializing the component
      */
-    void (*serialize)(Serializer* s, void* val, EntitySerializer* ecs);
+    void (*serialize)(Serializer* s, void* val, EntitySerializer* ecs) = nullptr;
 };
 
 /**
@@ -7232,14 +7231,14 @@ void ecsRegisterComponent(Ecs* ecs, EcsRegisterComponent* config);
         registerComponent_##T.align = alignof(T); \
         registerComponent_##T.dtor = [](void* component) \
         { \
-            ecsDtor<T>((T*)component); \
+            ecsDtor<T>(static_cast<T*>(component)); \
         }; \
         registerComponent_##T.serialize = []( \
             Serializer* s, \
             void* val, \
             EntitySerializer* entities) \
         { \
-            ecsSerialize<T>(s, (T*)val, entities); \
+            ecsSerialize<T>(s, static_cast<T*>(val), entities); \
         }; \
         ecsRegisterComponent(ecs, &registerComponent_##T); \
     } while (0)
@@ -7301,7 +7300,7 @@ void* ecsAdd(Ecs* ecs, Entity e, u64 componentId);
 template<typename T>
 T* ecsAdd(Ecs* ecs, Entity e)
 {
-    return (T*)ecsAdd(ecs, e, componentId<T>);
+    return static_cast<T*>(ecsAdd(ecs, e, componentId<T>));
 }
 
 /**
@@ -7375,7 +7374,7 @@ void* ecsGet(Ecs* ecs, Entity e, u64 componentId);
 template<typename T>
 T* ecsGet(Ecs* ecs, Entity e)
 {
-    return (T*)ecsGet(ecs, e, componentId<T>);
+    return static_cast<T*>(ecsGet(ecs, e, componentId<T>));
 }
 
 /**
@@ -7396,7 +7395,7 @@ Entity ecsGetEntity(Ecs* ecs, const void* c, u64 componentId);
 template<typename T>
 Entity ecsGetEntity(Ecs* ecs, const T* c)
 {
-    return ecsGetEntity(ecs, (void*)c, componentId<T>);
+    return ecsGetEntity(ecs, static_cast<const void*>(c), componentId<T>);
 }
 
 /**
@@ -7424,7 +7423,7 @@ void* ecsComponents(Ecs* ecs, u64 componentId);
 template<typename T>
 T* ecsComponents(Ecs* ecs)
 {
-    return (T*)ecsComponents(ecs, componentId<T>);
+    return static_cast<T*>(ecsComponents(ecs, componentId<T>));
 }
 
 /**
@@ -7633,19 +7632,19 @@ struct AudioSource {
     /**
      * The audio player for this source, should not be modified
      */
-    AudioStream* player;
+    AudioStream* player = nullptr;
     /**
      * The audio to play from
      */
-    SoundAsset* audio;
+    SoundAsset* audio = nullptr;
     /**
      * The current position in the audio data
      */
-    u64 position;
+    u64 position = 0;
     /**
      * Whether the source should repeat playing
      */
-    bool repeat;
+    bool repeat = false;
 };
 
 /**
@@ -7776,7 +7775,7 @@ struct Skybox {
     /**
      * The cubemap texture
      */
-    TextureAsset* texture;
+    TextureAsset* texture = nullptr;
 };
 
 /**
@@ -7818,11 +7817,11 @@ struct DirLight {
     /**
      * The direction of the light
      */
-    Vec3 dir;
+    Vec3 dir = {};
     /**
      * The color of the light
      */
-    Vec4 color;
+    Vec4 color = {};
 };
 
 /**
@@ -7843,7 +7842,7 @@ struct PointLight {
     /**
      * The color of the light
      */
-    Vec4 color;
+    Vec4 color = {};
 };
 
 /**
@@ -7878,15 +7877,15 @@ struct Model {
     /**
      * The model to render
      */
-    MeshAsset* mesh;
+    MeshAsset* mesh = nullptr;
     /**
      * The model's color map
      */
-    TextureAsset* colorMap;
+    TextureAsset* colorMap = nullptr;
     /**
      * The model's normal map
      */
-    TextureAsset* normalMap;
+    TextureAsset* normalMap = nullptr;
 };
 
 /**
@@ -7932,7 +7931,7 @@ void forPar(u64 begin, u64 end, F fn)
 
     forPar(begin, end, &fn, [](void* pfn, u64 idx)
     {
-        (*(F*)pfn)(idx);
+        (*static_cast<F*>(pfn))(idx);
     });
 }
 
@@ -8139,7 +8138,7 @@ void queuePushFront(Queue<T>* queue, U val)
     }
 
     queue->front = (queue->front == 0 ? queue->capacity : queue->front) - 1;
-    queue->vals[queue->front] = (T)val;
+    queue->vals[queue->front] = static_cast<T>(val);
 }
 
 template<typename T, typename U>
@@ -8163,7 +8162,7 @@ void queuePushBack(Queue<T>* queue, U val)
         queue->capacity = newCapacity;
     }
 
-    queue->vals[queue->back] = (T)val;
+    queue->vals[queue->back] = static_cast<T>(val);
     queue->back = (queue->back + 1) % queue->capacity;
 }
 
@@ -8293,12 +8292,12 @@ void setAdd(Set<V>* set, const T& val)
     HG_ASSERT(set->count < set->capacity - 1);
 
     static_assert(std::is_convertible_v<T, V>);
-    V v = (V)val;
+    V v = static_cast<V>(val);
 
-    u32 idx = (u32)(hash(v) % set->capacity);
+    u32 idx = static_cast<u32>(hash(v) % set->capacity);
     for (u32 dist = 0; set->hasVal[idx] && !(set->vals[idx] == v); ++dist)
     {
-        u32 otherDist = (u32)(hash(set->vals[idx]) % set->capacity) - idx;
+        u32 otherDist = static_cast<u32>(hash(set->vals[idx]) % set->capacity) - idx;
         if (otherDist > set->capacity)
             otherDist += set->capacity;
 
@@ -8322,9 +8321,9 @@ void setRemove(Set<V>* set, const T& val)
     HG_ASSERT(set != nullptr);
 
     static_assert(std::is_convertible_v<T, V>);
-    V v = (V)val;
+    V v = static_cast<V>(val);
 
-    u32 idx = (u32)(hash(v) % set->capacity);
+    u32 idx = static_cast<u32>(hash(v) % set->capacity);
     while (set->hasVal[idx])
     {
         if (set->vals[idx] == v)
@@ -8354,9 +8353,9 @@ bool setHas(const Set<V>* set, const T& val)
     HG_ASSERT(set != nullptr);
 
     static_assert(std::is_convertible_v<T, V>);
-    V v = (V)val;
+    V v = static_cast<V>(val);
 
-    for (u32 idx = (u32)(hash(v) % set->capacity); set->hasVal[idx]; idx = (idx + 1) % set->capacity)
+    for (u32 idx = static_cast<u32>(hash(v) % set->capacity); set->hasVal[idx]; idx = (idx + 1) % set->capacity)
     {
         if (set->vals[idx] == v)
             return true;
@@ -8489,13 +8488,13 @@ V* mapAdd(Map<K, V>* map, const T& key, const U& val)
     HG_ASSERT(map->count < map->capacity - 1);
 
     static_assert(std::is_convertible_v<T, K> && std::is_convertible_v<U, V>);
-    K k = (K)key;
-    V v = (V)val;
+    K k = static_cast<K>(key);
+    V v = static_cast<V>(val);
 
-    u32 idx = (u32)(hash(k) % map->capacity);
+    u32 idx = static_cast<u32>(hash(k) % map->capacity);
     for (u32 dist = 0; map->hasVal[idx] && !(map->keys[idx] == k); ++dist)
     {
-        u32 otherDist = (u32)(hash(map->keys[idx]) % map->capacity) - idx;
+        u32 otherDist = static_cast<u32>(hash(map->keys[idx]) % map->capacity) - idx;
         if (otherDist > map->capacity)
             otherDist += map->capacity;
 
@@ -8523,9 +8522,9 @@ bool mapRemove(Map<K, V>* map, const T& key, V* val)
     HG_ASSERT(map != nullptr);
 
     static_assert(std::is_convertible_v<T, K>);
-    K k = (K)key;
+    K k = static_cast<K>(key);
 
-    u32 idx = (u32)(hash(k) % map->capacity);
+    u32 idx = static_cast<u32>(hash(k) % map->capacity);
     while (map->hasVal[idx])
     {
         if (map->keys[idx] == k)
@@ -8561,9 +8560,9 @@ V* mapGet(const Map<K, V>* map, const T& key)
     HG_ASSERT(map != nullptr);
 
     static_assert(std::is_convertible_v<T, K>);
-    K k = (K)key;
+    K k = static_cast<K>(key);
 
-    for (u32 idx = (u32)(hash(k) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    for (u32 idx = static_cast<u32>(hash(k) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
     {
         if (map->keys[idx] == k)
             return map->vals + idx;
@@ -8601,21 +8600,21 @@ void assetDeinit()
 template<typename T>
 void assetLoadImpl(Asset<T>* data)
 {
-    (void)data;
+    static_cast<void>(data);
     static_assert(false, "Asset type cannot be loaded without implementation");
 }
 
 template<typename T>
 void assetUnloadImpl(Asset<T>* data)
 {
-    (void)data;
+    static_cast<void>(data);
     static_assert(false, "Asset type cannot be unloaded without implementation");
 }
 
 template<typename T>
 Asset<T>* assetCreate()
 {
-    Asset<T>* data = (Asset<T>*)poolAlloc(&assets<T>.pool);
+    Asset<T>* data = static_cast<Asset<T>*>(poolAlloc(&assets<T>.pool));
     data->asset = {};
     data->refCount = 1;
     data->path = {};
@@ -8633,7 +8632,7 @@ Asset<T>* assetLoad(String path)
         return *asset;
     }
 
-    Asset<T>* data = (Asset<T>*)poolAlloc(&assets<T>.pool);
+    Asset<T>* data = static_cast<Asset<T>*>(poolAlloc(&assets<T>.pool));
     data->asset = {};
     data->refCount = 1;
     data->path = stringCreate(path);
@@ -8757,7 +8756,7 @@ void ecsForParSingle(Ecs* ecs, Fn& fn)
 
     forPar(0, ecsCount<T>(ecs), &capture, [](void* pcapture, u64 idx)
     {
-        Capture* capture = (Capture*)pcapture;
+        Capture* capture = static_cast<Capture*>(pcapture);
         (*capture->fn)(
             ecsEntities<T>(capture->ecs)[idx],
             &ecsComponents<T>(capture->ecs)[idx]);
@@ -8781,7 +8780,7 @@ void ecsForParMulti(Ecs* ecs, Fn& fn)
 
     forPar(1, system->entities.count, &capture, [](void* pcapture, u64 idx)
     {
-        Capture* capture = (Capture*)pcapture;
+        Capture* capture = static_cast<Capture*>(pcapture);
         Entity e = capture->system->entities[idx];
         if (ecsHasAll<Ts...>(capture->ecs, e))
             (*capture->fn)(e, ecsGet<Ts>(capture->ecs, e)...);
@@ -8802,5 +8801,3 @@ void ecsForPar(Ecs* ecs, Fn fn)
 }
 
 } // namespace hg
-
-#endif // HG_HURDYGURDY_HPP

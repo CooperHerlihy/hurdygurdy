@@ -22,7 +22,7 @@ bool platformInit()
         SDL_INIT_GAMEPAD |
         SDL_INIT_EVENTS))
     {
-        setError((String)SDL_GetError());
+        setError(static_cast<String>(SDL_GetError()));
         return false;
     }
     return true;
@@ -457,7 +457,7 @@ static u32 vkFormatToSize(VkFormat format)
 
 static VkFormat formatToVk(Format format)
 {
-    return (VkFormat)format;
+    return static_cast<VkFormat>(format);
 }
 
 u32 formatToSize(Format format)
@@ -467,15 +467,15 @@ u32 formatToSize(Format format)
 
 static VkPipelineStageFlags gpuStageToVk(GpuStageFlags stage)
 {
-    return (VkPipelineStageFlags)stage;
+    return static_cast<VkPipelineStageFlags>(stage);
 }
 
 static VkAccessFlags gpuAccessToVk(GpuAccessFlags access)
 {
-    return (VkAccessFlags)access;
+    return static_cast<VkAccessFlags>(access);
 }
 
-typedef Handle Descriptor;
+using Descriptor = Handle;
 
 enum DescriptorType : u32 {
     DescriptorType_combinedImageSampler = 0,
@@ -503,19 +503,19 @@ static VkDescriptorType descriptorTypeToVk(DescriptorType type)
 }
 
 struct GpuBuffer {
-    VkBuffer buffer;
-    VmaAllocation alloc;
-    u64 size;
-    Descriptor uniformDesc;
-    Descriptor storageDesc;
-    GpuMemoryHostAccess access;
-    GpuStageFlags lastStage;
-    GpuAccessFlags lastAccess;
+    VkBuffer buffer = nullptr;
+    VmaAllocation alloc = nullptr;
+    u64 size = 0;
+    Descriptor uniformDesc = {};
+    Descriptor storageDesc = {};
+    GpuMemoryHostAccess access = GpuMemoryHostAccess_none;
+    GpuStageFlags lastStage = 0;
+    GpuAccessFlags lastAccess = 0;
 };
 
 static VkBufferUsageFlags gpuBufferUsageToVk(GpuBufferUsageFlags usage)
 {
-    return (VkBufferUsageFlags)usage;
+    return static_cast<VkBufferUsageFlags>(usage);
 }
 
 static VmaAllocationCreateFlags gpuMemoryUsageToVma(GpuMemoryUsage usage)
@@ -554,17 +554,17 @@ static GpuMemoryHostAccess gpuMemoryUsageToHostAccess(GpuMemoryUsage usage)
 }
 
 struct GpuImage {
-    VkImage image;
-    VmaAllocation alloc;
-    GpuImageUsageFlags usage;
-    Format format;
-    u32 width;
-    u32 height;
-    u32 depth;
-    u8 dimensions;
-    u8 mipLevels;
-    u8 arrayLayers;
-    u8 msaaSamples;
+    VkImage image = nullptr;
+    VmaAllocation alloc = nullptr;
+    GpuImageUsageFlags usage = 0;
+    Format format = Format_undefined;
+    u32 width = 0;
+    u32 height = 0;
+    u32 depth = 0;
+    u8 dimensions = 0;
+    u8 mipLevels = 0;
+    u8 arrayLayers = 0;
+    u8 msaaSamples = 0;
 };
 
 static VkImageType imageDimensionsToVkImage(u32 dimensions)
@@ -584,17 +584,17 @@ static VkImageType imageDimensionsToVkImage(u32 dimensions)
 
 static VkImageUsageFlags gpuImageUsageToVk(GpuImageUsageFlags usage)
 {
-    return (VkImageUsageFlags)usage;
+    return static_cast<VkImageUsageFlags>(usage);
 }
 
 static VkImageLayout gpuLayoutToVk(GpuLayout layout)
 {
-    return (VkImageLayout)layout;
+    return static_cast<VkImageLayout>(layout);
 }
 
 static VkImageCreateFlags gpuImageConfigFlagsToVk(GpuImageConfigFlags flags)
 {
-    return (VkImageCreateFlags)flags;
+    return static_cast<VkImageCreateFlags>(flags);
 }
 
 static VkSampleCountFlagBits countToMsaaSampleBits(u32 count)
@@ -621,9 +621,9 @@ static VkSampleCountFlagBits countToMsaaSampleBits(u32 count)
 }
 
 struct SamplerInfo {
-    GpuFilter filter;
-    GpuSamplerEdgeMode mode;
-    GpuSamplerBorder border;
+    GpuFilter filter = GpuFilter_nearest;
+    GpuSamplerEdgeMode mode = GpuSamplerEdgeMode_repeat;
+    GpuSamplerBorder border = GpuSamplerBorder_floatTransparentBlack;
 };
 
 template<>
@@ -640,20 +640,20 @@ constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
 }
 
 struct GpuView {
-    GpuImage* image;
-    VkImageView view;
-    VkSampler sampler;
-    Descriptor samplerDesc;
-    Descriptor storageDesc;
-    GpuViewType type;
-    GpuAspectFlags aspectFlags;
-    u8 baseMipLevel;
-    u8 levelCount;
-    u8 baseArrayLayer;
-    u8 layerCount;
-    GpuStageFlags lastStage;
-    GpuAccessFlags lastAccess;
-    GpuLayout lastLayout;
+    GpuImage* image = nullptr;
+    VkImageView view = nullptr;
+    VkSampler sampler = nullptr;
+    Descriptor samplerDesc = {};
+    Descriptor storageDesc = {};
+    GpuViewType type = GpuViewType_1D;
+    GpuAspectFlags aspectFlags = 0;
+    u8 baseMipLevel = 0;
+    u8 levelCount = 0;
+    u8 baseArrayLayer = 0;
+    u8 layerCount = 0;
+    GpuStageFlags lastStage = 0;
+    GpuAccessFlags lastAccess = 0;
+    GpuLayout lastLayout = GpuLayout_undefined;
 };
 
 static GpuViewType imageDimensionsToHgView(u32 dimensions)
@@ -673,54 +673,54 @@ static GpuViewType imageDimensionsToHgView(u32 dimensions)
 
 static VkImageViewType gpuViewTypeToVk(GpuViewType type)
 {
-    return (VkImageViewType)type;
+    return static_cast<VkImageViewType>(type);
 }
 
 static VkImageAspectFlags gpuAspectToVk(GpuAspectFlags aspect)
 {
-    return (VkImageAspectFlags)aspect;
+    return static_cast<VkImageAspectFlags>(aspect);
 }
 
 static VkFilter gpuFilterToVk(GpuFilter filter)
 {
-    return (VkFilter)filter;
+    return static_cast<VkFilter>(filter);
 }
 
 static VkSamplerAddressMode gpuSamplerAddressModeToVk(GpuSamplerEdgeMode mode)
 {
-    return (VkSamplerAddressMode)mode;
+    return static_cast<VkSamplerAddressMode>(mode);
 }
 
 static VkBorderColor gpuSamplerBorderToVk(GpuSamplerBorder color)
 {
-    return (VkBorderColor)color;
+    return static_cast<VkBorderColor>(color);
 }
 
 struct GpuPipeline {
-    VkPipeline pipeline;
-    VkPipelineLayout layout;
-    VkPipelineBindPoint bindPoint;
+    VkPipeline pipeline = nullptr;
+    VkPipelineLayout layout = nullptr;
+    VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 };
 
 static VkPrimitiveTopology gpuTopologyToVk(GpuTopology topology)
 {
-    return (VkPrimitiveTopology)topology;
+    return static_cast<VkPrimitiveTopology>(topology);
 }
 
 static VkPolygonMode gpuPolygonModeToVk(GpuPolygonMode mode)
 {
-    return (VkPolygonMode)mode;
+    return static_cast<VkPolygonMode>(mode);
 }
 
 static VkCullModeFlags gpuCullModeToVk(GpuCullFlags mode)
 {
-    return (VkCullModeFlags)mode;
+    return static_cast<VkCullModeFlags>(mode);
 }
 
 struct Frame {
-    Array<Window*> windows;
-    VkCommandPool cmdPool;
-    VkFence fence;
+    Array<Window*> windows = {};
+    VkCommandPool cmdPool = nullptr;
+    VkFence fence = nullptr;
 };
 
 struct VulkanState {
@@ -770,24 +770,24 @@ static VkBool32 debugCallback(
     const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
     void* userData)
 {
-    (void)type;
-    (void)userData;
+    static_cast<void>(type);
+    static_cast<void>(userData);
 
     if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
     {
-        (void)fprintf(stderr, "Vulkan Error: %s\n", callbackData->pMessage);
+        static_cast<void>(fprintf(stderr, "Vulkan Error: %s\n", callbackData->pMessage));
         abort();
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
-        (void)fprintf(stderr, "Vulkan Warning: %s\n", callbackData->pMessage);
+        static_cast<void>(fprintf(stderr, "Vulkan Warning: %s\n", callbackData->pMessage));
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
     {
-        (void)fprintf(stderr, "Vulkan Info: %s\n", callbackData->pMessage);
+        static_cast<void>(fprintf(stderr, "Vulkan Info: %s\n", callbackData->pMessage));
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
     {
-        (void)fprintf(stderr, "Vulkan Verbose: %s\n", callbackData->pMessage);
+        static_cast<void>(fprintf(stderr, "Vulkan Verbose: %s\n", callbackData->pMessage));
     } else {
-        (void)fprintf(stderr, "Vulkan Unknown: %s\n", callbackData->pMessage);
+        static_cast<void>(fprintf(stderr, "Vulkan Unknown: %s\n", callbackData->pMessage));
     }
     return VK_FALSE;
 }
@@ -836,7 +836,7 @@ static VkInstance createInstance(String* extensions, u32 extensionCount)
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
-    instanceInfo.enabledLayerCount = (u32)arrayCount(layers);
+    instanceInfo.enabledLayerCount = static_cast<u32>(arrayCount(layers));
     instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
@@ -934,7 +934,7 @@ static VkPhysicalDevice findPhysicalDevice()
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, extProps);
 
-        for (u32 j = 0; j < (u32)arrayCount(deviceExtensions); j++)
+        for (u32 j = 0; j < static_cast<u32>(arrayCount(deviceExtensions)); j++)
         {
             for (u32 k = 0; k < newPropCount; k++)
             {
@@ -1013,7 +1013,7 @@ static VkDevice createDevice()
     deviceInfo.pNext = &synchronization2Feature;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueInfo;
-    deviceInfo.enabledExtensionCount = (u32)arrayCount(deviceExtensions);
+    deviceInfo.enabledExtensionCount = static_cast<u32>(arrayCount(deviceExtensions));
     deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     deviceInfo.pEnabledFeatures = &features;
 
@@ -1058,7 +1058,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     info.maxSets = 1;
-    info.poolSizeCount = (u32)arrayCount(sizes);
+    info.poolSizeCount = static_cast<u32>(arrayCount(sizes));
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
@@ -1076,7 +1076,7 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
         bindings[i].binding = i;
-        bindings[i].descriptorType = descriptorTypeToVk((DescriptorType)i);
+        bindings[i].descriptorType = descriptorTypeToVk(static_cast<DescriptorType>(i));
         bindings[i].descriptorCount = UINT16_MAX;
         bindings[i].stageFlags = VK_SHADER_STAGE_ALL;
         flags[i] = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
@@ -1084,14 +1084,14 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    flagsInfo.bindingCount = (u32)arrayCount(bindings);
+    flagsInfo.bindingCount = static_cast<u32>(arrayCount(bindings));
     flagsInfo.pBindingFlags = flags;
 
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &flagsInfo;
     info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    info.bindingCount = (u32)arrayCount(bindings);
+    info.bindingCount = static_cast<u32>(arrayCount(bindings));
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
@@ -1337,14 +1337,14 @@ void gpuWaitIdle()
 // }
 
 struct DescriptorBufferInfo {
-    GpuBuffer* buffer;
-    u64 offset;
-    u64 range;
+    GpuBuffer* buffer = nullptr;
+    u64 offset = 0;
+    u64 range = 0;
 };
 
 struct DescriptorImageInfo {
-    GpuView* imageView;
-    GpuLayout imageLayout;
+    GpuView* imageView = nullptr;
+    GpuLayout imageLayout = GpuLayout_undefined;
 };
 
 static Descriptor descriptorCreate(
@@ -1403,7 +1403,7 @@ GpuBuffer* gpuBufferCreate(
     HG_ASSERT(size > 0);
     HG_ASSERT(usageFlags != 0);
 
-    GpuBuffer* buffer = (GpuBuffer*)poolAlloc(&vk.buffers);
+    GpuBuffer* buffer = static_cast<GpuBuffer*>(poolAlloc(&vk.buffers));
     *buffer = {};
 
     VkBufferCreateInfo bufferInfo{};
@@ -1505,7 +1505,7 @@ void gpuBufferWrite(GpuBuffer* dst, u64 offset, const void* src, u64 size)
     region.dstOffset = offset;
     region.size = size;
 
-    vkCmdCopyBuffer((VkCommandBuffer)cmd, stage->buffer, dst->buffer, 1, &region);
+    vkCmdCopyBuffer(reinterpret_cast<VkCommandBuffer>(cmd), stage->buffer, dst->buffer, 1, &region);
 
     gpuCmdEnd(cmd);
 
@@ -1538,7 +1538,7 @@ void gpuBufferRead(void* dst, GpuBuffer* src, u64 offset, u64 size)
     region.srcOffset = offset;
     region.size = size;
 
-    vkCmdCopyBuffer((VkCommandBuffer)cmd, src->buffer, stage->buffer, 1, &region);
+    vkCmdCopyBuffer(reinterpret_cast<VkCommandBuffer>(cmd), src->buffer, stage->buffer, 1, &region);
 
     gpuCmdEnd(cmd);
 
@@ -1563,7 +1563,7 @@ GpuImage* gpuImageCreateEx(const GpuImageCreateEx* create)
     HG_ASSERT(create->format != Format_undefined);
     HG_ASSERT(create->usage != 0);
 
-    GpuImage* image = (GpuImage*)poolAlloc(&vk.images);
+    GpuImage* image = static_cast<GpuImage*>(poolAlloc(&vk.images));
     *image = {};
 
     VkImageCreateInfo imageInfo{};
@@ -1596,10 +1596,10 @@ GpuImage* gpuImageCreateEx(const GpuImageCreateEx* create)
     image->width = create->width;
     image->height = create->height;
     image->depth = create->depth;
-    image->dimensions = (u8)create->dimensions;
-    image->mipLevels = (u8)create->mipLevels;
-    image->arrayLayers = (u8)create->arrayLayers;
-    image->msaaSamples = (u8)countToMsaaSampleBits(create->msaaSamples);
+    image->dimensions = static_cast<u8>(create->dimensions);
+    image->mipLevels = static_cast<u8>(create->mipLevels);
+    image->arrayLayers = static_cast<u8>(create->arrayLayers);
+    image->msaaSamples = static_cast<u8>(countToMsaaSampleBits(create->msaaSamples));
 
     return image;
 }
@@ -1685,7 +1685,7 @@ GpuView* gpuViewCreateEx(const GpuViewCreateEx* config)
 {
     HG_ASSERT(config->aspectFlags != 0);
 
-    GpuView* view = (GpuView*)poolAlloc(&vk.views);
+    GpuView* view = static_cast<GpuView*>(poolAlloc(&vk.views));
     *view = {};
 
     VkImageViewCreateInfo info{};
@@ -1720,10 +1720,10 @@ GpuView* gpuViewCreateEx(const GpuViewCreateEx* config)
     view->image = config->image;
     view->type = config->type;
     view->aspectFlags = config->aspectFlags;
-    view->baseMipLevel = (u8)config->baseMipLevel;
-    view->levelCount = (u8)config->levelCount;
-    view->baseArrayLayer = (u8)config->baseArrayLayer;
-    view->layerCount = (u8)config->layerCount;
+    view->baseMipLevel = static_cast<u8>(config->baseMipLevel);
+    view->levelCount = static_cast<u8>(config->levelCount);
+    view->baseArrayLayer = static_cast<u8>(config->baseArrayLayer);
+    view->layerCount = static_cast<u8>(config->layerCount);
 
     return view;
 }
@@ -1796,7 +1796,7 @@ void gpuImageWrite(GpuView* dst, const void* src)
     transferDep.imageMemoryBarrierCount = 1;
     transferDep.pImageMemoryBarriers = &transferBarrier;
 
-    vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &transferDep);
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &transferDep);
 
     VkBufferImageCopy region{};
     region.imageSubresource.aspectMask = gpuAspectToVk(dst->aspectFlags);
@@ -1806,7 +1806,7 @@ void gpuImageWrite(GpuView* dst, const void* src)
     region.imageExtent = {dst->image->width, dst->image->height, dst->image->depth};
 
     vkCmdCopyBufferToImage(
-        (VkCommandBuffer)cmd,
+        reinterpret_cast<VkCommandBuffer>(cmd),
         stage->buffer,
         dst->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -1861,14 +1861,14 @@ void gpuImageWriteCubemap(GpuView* dst, const void* src)
     stageDep.imageMemoryBarrierCount = 1;
     stageDep.pImageMemoryBarriers = &stageBarrier;
 
-    vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &stageDep);
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &stageDep);
 
     VkBufferImageCopy stageRegion{};
     stageRegion.imageSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
     stageRegion.imageExtent = {dst->image->width * 4, dst->image->height * 3, 1};
 
     vkCmdCopyBufferToImage(
-        (VkCommandBuffer)cmd,
+        reinterpret_cast<VkCommandBuffer>(cmd),
         buffer->buffer,
         stage->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -1904,56 +1904,56 @@ void gpuImageWriteCubemap(GpuView* dst, const void* src)
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = (u32)arrayCount(transferBarriers);
+    transferDep.imageMemoryBarrierCount = static_cast<u32>(arrayCount(transferBarriers));
     transferDep.pImageMemoryBarriers = transferBarriers;
 
-    vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &transferDep);
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &transferDep);
 
     VkImageCopy regions[6]{};
 
     regions[0].srcSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    regions[0].srcOffset = {(int)dst->image->width * 2, (int)dst->image->height * 1, 0};
+    regions[0].srcOffset = {static_cast<int>(dst->image->width) * 2, static_cast<int>(dst->image->height) * 1, 0};
     regions[0].dstSubresource = {gpuAspectToVk(dst->aspectFlags), dst->baseMipLevel, 0, 1};
     regions[0].dstOffset = {};
     regions[0].extent = {dst->image->width, dst->image->height, 1};
 
     regions[1].srcSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    regions[1].srcOffset = {(int)dst->image->width * 0, (int)dst->image->height * 1, 0};
+    regions[1].srcOffset = {static_cast<int>(dst->image->width) * 0, static_cast<int>(dst->image->height) * 1, 0};
     regions[1].dstSubresource = {gpuAspectToVk(dst->aspectFlags), dst->baseMipLevel, 1, 1};
     regions[1].dstOffset = {};
     regions[1].extent = {dst->image->width, dst->image->height, 1};
 
     regions[2].srcSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    regions[2].srcOffset = {(int)dst->image->width * 1, (int)dst->image->height * 2, 0};
+    regions[2].srcOffset = {static_cast<int>(dst->image->width) * 1, static_cast<int>(dst->image->height) * 2, 0};
     regions[2].dstSubresource = {gpuAspectToVk(dst->aspectFlags), dst->baseMipLevel, 2, 1};
     regions[2].dstOffset = {};
     regions[2].extent = {dst->image->width, dst->image->height, 1};
 
     regions[3].srcSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    regions[3].srcOffset = {(int)dst->image->width * 1, (int)dst->image->height * 0, 0};
+    regions[3].srcOffset = {static_cast<int>(dst->image->width) * 1, static_cast<int>(dst->image->height) * 0, 0};
     regions[3].dstSubresource = {gpuAspectToVk(dst->aspectFlags), dst->baseMipLevel, 3, 1};
     regions[3].dstOffset = {};
     regions[3].extent = {dst->image->width, dst->image->height, 1};
 
     regions[4].srcSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    regions[4].srcOffset = {(int)dst->image->width * 1, (int)dst->image->height * 1, 0};
+    regions[4].srcOffset = {static_cast<int>(dst->image->width) * 1, static_cast<int>(dst->image->height) * 1, 0};
     regions[4].dstSubresource = {gpuAspectToVk(dst->aspectFlags), dst->baseMipLevel, 4, 1};
     regions[4].dstOffset = {};
     regions[4].extent = {dst->image->width, dst->image->height, 1};
 
     regions[5].srcSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    regions[5].srcOffset = {(int)dst->image->width * 3, (int)dst->image->height * 1, 0};
+    regions[5].srcOffset = {static_cast<int>(dst->image->width) * 3, static_cast<int>(dst->image->height) * 1, 0};
     regions[5].dstSubresource = {gpuAspectToVk(dst->aspectFlags), dst->baseMipLevel, 5, 1};
     regions[5].dstOffset = {};
     regions[5].extent = {dst->image->width, dst->image->height, 1};
 
     vkCmdCopyImage(
-        (VkCommandBuffer)cmd,
+        reinterpret_cast<VkCommandBuffer>(cmd),
         stage->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         dst->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        (u32)arrayCount(regions),
+        static_cast<u32>(arrayCount(regions)),
         regions);
 
     gpuCmdEnd(cmd);
@@ -1999,7 +1999,7 @@ void gpuImageRead(void* dst, GpuView* src)
     transferDep.imageMemoryBarrierCount = 1;
     transferDep.pImageMemoryBarriers = &transferBarrier;
 
-    vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &transferDep);
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &transferDep);
 
     VkBufferImageCopy region{};
     region.imageSubresource.aspectMask = gpuAspectToVk(src->aspectFlags);
@@ -2009,7 +2009,7 @@ void gpuImageRead(void* dst, GpuView* src)
     region.imageExtent = {src->image->width, src->image->height, src->image->depth};
 
     vkCmdCopyImageToBuffer(
-        (VkCommandBuffer)cmd,
+        reinterpret_cast<VkCommandBuffer>(cmd),
         src->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         stage->buffer,
@@ -2035,9 +2035,9 @@ void gpuImageGenMipmaps(GpuView* dst)
     GpuCmd* cmd = gpuCmdBegin();
 
     VkOffset3D mipOffset{};
-    mipOffset.x = (i32)dst->image->width;
-    mipOffset.y = (i32)dst->image->height;
-    mipOffset.z = (i32)dst->image->depth;
+    mipOffset.x = static_cast<i32>(dst->image->width);
+    mipOffset.y = static_cast<i32>(dst->image->height);
+    mipOffset.z = static_cast<i32>(dst->image->depth);
 
     VkImageMemoryBarrier2 barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -2057,9 +2057,9 @@ void gpuImageGenMipmaps(GpuView* dst)
     dep.imageMemoryBarrierCount = 1;
     dep.pImageMemoryBarriers = &barrier;
 
-    vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 
-    for (u32 level = 0; level < (u32)dst->levelCount - 1; ++level)
+    for (u32 level = 0; level < static_cast<u32>(dst->levelCount) - 1; ++level)
     {
         barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
         barrier.srcAccessMask = VK_ACCESS_NONE;
@@ -2070,7 +2070,7 @@ void gpuImageGenMipmaps(GpuView* dst)
         barrier.subresourceRange.aspectMask = gpuAspectToVk(dst->aspectFlags);
         barrier.subresourceRange.baseMipLevel = level + 1;
 
-        vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
+        vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 
         VkImageBlit blit{};
         blit.srcSubresource.aspectMask = gpuAspectToVk(dst->aspectFlags);
@@ -2089,7 +2089,7 @@ void gpuImageGenMipmaps(GpuView* dst)
         blit.dstOffsets[1] = mipOffset;
 
         vkCmdBlitImage(
-            (VkCommandBuffer)cmd,
+            reinterpret_cast<VkCommandBuffer>(cmd),
             dst->image->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             dst->image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &blit,
@@ -2104,7 +2104,7 @@ void gpuImageGenMipmaps(GpuView* dst)
         barrier.subresourceRange.aspectMask = gpuAspectToVk(dst->aspectFlags);
         barrier.subresourceRange.baseMipLevel = level + 1;
 
-        vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
+        vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
     }
 
     gpuCmdEnd(cmd);
@@ -2136,7 +2136,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     if (config->colorAttachmentCount > 0)
         HG_ASSERT(config->colorAttachmentFormats != nullptr);
 
-    GpuPipeline* pipeline = (GpuPipeline*)poolAlloc(&vk.pipelines);
+    GpuPipeline* pipeline = static_cast<GpuPipeline*>(poolAlloc(&vk.pipelines));
     *pipeline = {};
 
     Arena* scratch = getScratch();
@@ -2258,7 +2258,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = (u32)arrayCount(dynamicStates);
+    dynamicState.dynamicStateCount = static_cast<u32>(arrayCount(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
     VkFormat* colorFormats = arenaAlloc<VkFormat>(scratch, config->colorAttachmentCount);
@@ -2271,7 +2271,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
 
     VkPipelineRenderingCreateInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    renderingInfo.colorAttachmentCount = (u32)config->colorAttachmentCount;
+    renderingInfo.colorAttachmentCount = static_cast<u32>(config->colorAttachmentCount);
     renderingInfo.pColorAttachmentFormats = colorFormats;
     renderingInfo.depthAttachmentFormat = depthFormat;
     renderingInfo.stencilAttachmentFormat = stencilFormat;
@@ -2279,7 +2279,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = (u32)arrayCount(shaderStages);
+    pipelineInfo.stageCount = static_cast<u32>(arrayCount(shaderStages));
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputState;
     pipelineInfo.pInputAssemblyState = &inputAssemblyState;
@@ -2309,7 +2309,7 @@ GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 sh
     HG_ASSERT(shaderCode != nullptr);
     HG_ASSERT(shaderCodeSize > 0);
 
-    GpuPipeline* pipeline = (GpuPipeline*)poolAlloc(&vk.pipelines);
+    GpuPipeline* pipeline = static_cast<GpuPipeline*>(poolAlloc(&vk.pipelines));
     *pipeline = {};
 
     VkPipelineLayoutCreateInfo layoutInfo{};
@@ -2374,13 +2374,13 @@ GpuCmd* gpuCmdBegin()
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(cmd, &beginInfo);
-    return (GpuCmd*)cmd;
+    return reinterpret_cast<GpuCmd*>(cmd);
 }
 
 void gpuCmdEnd(GpuCmd* cmd)
 {
     HG_ASSERT(cmd != nullptr);
-    vkEndCommandBuffer((VkCommandBuffer)cmd);
+    vkEndCommandBuffer(reinterpret_cast<VkCommandBuffer>(cmd));
 
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -2392,23 +2392,23 @@ void gpuCmdEnd(GpuCmd* cmd)
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.commandBufferCount = 1;
-    submit.pCommandBuffers = (VkCommandBuffer*)&cmd;
+    submit.pCommandBuffers = reinterpret_cast<VkCommandBuffer*>(&cmd);
 
     vkQueueSubmit(vk.queue, 1, &submit, fence);
     vkWaitForFences(vk.device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vkFreeCommandBuffers(vk.device, vk.cmdPool, 1, (VkCommandBuffer*)&cmd);
+    vkFreeCommandBuffers(vk.device, vk.cmdPool, 1, reinterpret_cast<VkCommandBuffer*>(&cmd));
 }
 
 void gpuBindPipeline(GpuCmd* cmd, GpuPipeline* pipeline)
 {
     vkCmdBindPipeline(
-        (VkCommandBuffer)cmd,
+        reinterpret_cast<VkCommandBuffer>(cmd),
         pipeline->bindPoint,
         pipeline->pipeline);
 
     vkCmdBindDescriptorSets(
-        (VkCommandBuffer)cmd,
+        reinterpret_cast<VkCommandBuffer>(cmd),
         pipeline->bindPoint,
         pipeline->layout,
         0,
@@ -2421,7 +2421,7 @@ void gpuBindPipeline(GpuCmd* cmd, GpuPipeline* pipeline)
 void gpuPushConstants(GpuCmd* cmd, GpuPipeline* pipeline, void* push, u32 size)
 {
     vkCmdPushConstants(
-        (VkCommandBuffer)cmd,
+        reinterpret_cast<VkCommandBuffer>(cmd),
         pipeline->layout,
         pipeline->bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE
             ? VK_SHADER_STAGE_COMPUTE_BIT
@@ -2433,12 +2433,12 @@ void gpuPushConstants(GpuCmd* cmd, GpuPipeline* pipeline, void* push, u32 size)
 
 void gpuDraw(GpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount)
 {
-    vkCmdDraw((VkCommandBuffer)cmd, vertexCount, instanceCount, vertexBegin, instanceBegin);
+    vkCmdDraw(reinterpret_cast<VkCommandBuffer>(cmd), vertexCount, instanceCount, vertexBegin, instanceBegin);
 }
 
 void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
 {
-    vkCmdDispatch((VkCommandBuffer)cmd, groupCountX, groupCountY, groupCountZ);
+    vkCmdDispatch(reinterpret_cast<VkCommandBuffer>(cmd), groupCountX, groupCountY, groupCountZ);
 }
 
 void gpuMemoryBarrier(
@@ -2504,17 +2504,17 @@ void gpuMemoryBarrier(
     dep.imageMemoryBarrierCount = imageBarrierCount;
     dep.pImageMemoryBarriers = vkImageBarriers;
 
-    vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 }
 
 static VkAttachmentLoadOp gpuLoadOpToVk(GpuLoadOp op)
 {
-    return (VkAttachmentLoadOp)op;
+    return static_cast<VkAttachmentLoadOp>(op);
 }
 
 static VkAttachmentStoreOp gpuStoreOpToVk(GpuStoreOp op)
 {
-    return (VkAttachmentStoreOp)op;
+    return static_cast<VkAttachmentStoreOp>(op);
 }
 
 void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
@@ -2640,7 +2640,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
     dep.imageMemoryBarrierCount = imageBarrierCount;
     dep.pImageMemoryBarriers = imageBarriers;
 
-    vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 }
 
 void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
@@ -2868,7 +2868,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
     dep.imageMemoryBarrierCount = imageBarrierCount;
     dep.pImageMemoryBarriers = imageBarriers;
 
-    vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 
     VkRenderingAttachmentInfo* colorAttachments
         = arenaAlloc<VkRenderingAttachmentInfo>(scratch, pass->colorAttachmentCount);
@@ -2922,32 +2922,32 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
         ? &stencilAttachment
         : nullptr;
 
-    vkCmdBeginRendering((VkCommandBuffer)cmd, &renderingInfo);
+    vkCmdBeginRendering(reinterpret_cast<VkCommandBuffer>(cmd), &renderingInfo);
 
-    gpuSetViewport(cmd, 0, 0, (f32)width, (f32)height);
+    gpuSetViewport(cmd, 0, 0, static_cast<f32>(width), static_cast<f32>(height));
     gpuSetScissor(cmd, 0, 0, width, height);
 }
 
 static VkPresentModeKHR presentModeToVk(GpuPresentMode mode)
 {
-    return (VkPresentModeKHR)mode;
+    return static_cast<VkPresentModeKHR>(mode);
 }
 
 void gpuRenderPassEnd(GpuCmd* cmd)
 {
-    vkCmdEndRendering((VkCommandBuffer)cmd);
+    vkCmdEndRendering(reinterpret_cast<VkCommandBuffer>(cmd));
 }
 
 void gpuSetViewport(GpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near, f32 far)
 {
     VkViewport viewport{x, y, width, height, near, far};
-    vkCmdSetViewport((VkCommandBuffer)cmd, 0, 1, &viewport);
+    vkCmdSetViewport(reinterpret_cast<VkCommandBuffer>(cmd), 0, 1, &viewport);
 }
 
 void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
 {
     VkRect2D scissor{{x, y}, {width, height}};
-    vkCmdSetScissor((VkCommandBuffer)cmd, 0, 1, &scissor);
+    vkCmdSetScissor(reinterpret_cast<VkCommandBuffer>(cmd), 0, 1, &scissor);
 }
 
 struct Window {
@@ -3151,7 +3151,7 @@ GpuCmd* gpuFrameBegin(Window** windows, u32 windowCount)
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(cmd, &beginInfo);
-    return (GpuCmd*)cmd;
+    return reinterpret_cast<GpuCmd*>(cmd);
 }
 
 void gpuFrameEnd(GpuCmd* cmd)
@@ -3173,7 +3173,7 @@ void gpuFrameEnd(GpuCmd* cmd)
     }
     gpuMemoryBarrier(cmd, nullptr, 0, presentBarriers.vals, presentBarriers.count);
 
-    vkEndCommandBuffer((VkCommandBuffer)cmd);
+    vkEndCommandBuffer(reinterpret_cast<VkCommandBuffer>(cmd));
 
     VkPipelineStageFlags* waitStages = arenaAlloc<VkPipelineStageFlags>(scratch, frame->windows.count);
     VkSemaphore* imageAvailableSemaphores = arenaAlloc<VkSemaphore>(scratch, frame->windows.count);
@@ -3199,7 +3199,7 @@ void gpuFrameEnd(GpuCmd* cmd)
     submit.pWaitSemaphores = imageAvailableSemaphores;
     submit.pWaitDstStageMask = waitStages;
     submit.commandBufferCount = 1;
-    submit.pCommandBuffers = (VkCommandBuffer*)&cmd;
+    submit.pCommandBuffers = reinterpret_cast<VkCommandBuffer*>(&cmd);
     submit.signalSemaphoreCount = frame->windows.count;
     submit.pSignalSemaphores = readyToPresentSemaphores;
 
@@ -3299,7 +3299,7 @@ Window* windowCreate(String title, u32 width, u32 height, const WindowConfig* co
     if (config == nullptr)
         config = &defaultConfig;
 
-    Window* window = (Window*)poolAlloc(&windowState.pool);
+    Window* window = static_cast<Window*>(poolAlloc(&windowState.pool));
     *window = {};
 
     if (title == "")
@@ -3315,15 +3315,15 @@ Window* windowCreate(String title, u32 width, u32 height, const WindowConfig* co
         SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &modeCount);
         HG_DEFER(SDL_free(modes));
 
-        width = (u32)modes[0]->w;
-        height = (u32)modes[0]->h;
+        width = static_cast<u32>(modes[0]->w);
+        height = static_cast<u32>(modes[0]->h);
         flags |= SDL_WINDOW_FULLSCREEN;
     }
 
     Arena* scratch = getScratch();
     HG_ARENA_SCOPE(scratch);
 
-    window->sdlWindow = SDL_CreateWindow(cString(scratch, title), (int)width, (int)height, flags);
+    window->sdlWindow = SDL_CreateWindow(cString(scratch, title), static_cast<int>(width), static_cast<int>(height), flags);
     if (window->sdlWindow == nullptr)
     {
         setError(SDL_GetError());
@@ -3338,7 +3338,7 @@ Window* windowCreate(String title, u32 width, u32 height, const WindowConfig* co
 
     mapAdd(&windowState.ids, SDL_GetWindowID(window->sdlWindow), window);
 
-    SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
+    SDL_GetWindowSize(window->sdlWindow, reinterpret_cast<int*>(&window->width), reinterpret_cast<int*>(&window->height));
 
     window->format = findSwapchainFormat(window->surface);
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
@@ -3675,7 +3675,7 @@ void processEvents()
                 Window** window = mapGet(&windowState.ids, event.window.windowID);
                 if (window != nullptr)
                 {
-                    SDL_GetWindowSize((*window)->sdlWindow, (int*)&(*window)->width, (int*)&(*window)->height);
+                    SDL_GetWindowSize((*window)->sdlWindow, reinterpret_cast<int*>(&(*window)->width), reinterpret_cast<int*>(&(*window)->height));
                     resizeWindowSwapchain(*window);
                 }
             } break;
@@ -3794,13 +3794,13 @@ f32 mouseY(Window* window)
 f32 mouseDeltaX(Window* window)
 {
     HG_ASSERT(window != nullptr);
-    return windowState.mouseDX / (f32)window->height;
+    return windowState.mouseDX / static_cast<f32>(window->height);
 }
 
 f32 mouseDeltaY(Window* window)
 {
     HG_ASSERT(window != nullptr);
-    return windowState.mouseDY / (f32)window->height;
+    return windowState.mouseDY / static_cast<f32>(window->height);
 }
 
 bool isButtonDown(Window* window, Button key)
@@ -3874,7 +3874,7 @@ void* createImGuiTexture(GpuView* view, GpuLayout layout)
 
 void destroyImGuiTexture(void* texture)
 {
-    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)texture);
+    ImGui_ImplVulkan_RemoveTexture(static_cast<VkDescriptorSet>(texture));
 }
 
 void beginImGuiFrame()
@@ -3885,12 +3885,12 @@ void beginImGuiFrame()
 
 void renderImGui(GpuCmd* cmd)
 {
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), (VkCommandBuffer)cmd);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), reinterpret_cast<VkCommandBuffer>(cmd));
 }
 
 struct AudioState {
-    SDL_AudioDeviceID device;
-    Array<SDL_AudioStream*> streams;
+    SDL_AudioDeviceID device = 0;
+    Array<SDL_AudioStream*> streams = {};
 };
 
 static AudioState audio{};
@@ -3924,8 +3924,8 @@ AudioStream* audioStreamCreate(u32 frequency, u32 channels)
 {
     SDL_AudioSpec audioSpec{};
     audioSpec.format = SDL_AUDIO_F32;
-    audioSpec.freq = (int)frequency;
-    audioSpec.channels = (int)channels;
+    audioSpec.freq = static_cast<int>(frequency);
+    audioSpec.channels = static_cast<int>(channels);
 
     SDL_AudioStream* stream;
     if (audio.streams.count == 0)
@@ -3951,14 +3951,14 @@ AudioStream* audioStreamCreate(u32 frequency, u32 channels)
             HG_PANIC("SDL could not set audio stream format: %s\n", SDL_GetError());
     }
 
-    return (AudioStream*)stream;
+    return reinterpret_cast<AudioStream*>(stream);
 }
 
 void audioStreamDestroy(AudioStream* stream)
 {
     if (stream != nullptr)
     {
-        SDL_AudioStream* sdlStream = (SDL_AudioStream*)stream;
+        SDL_AudioStream* sdlStream = reinterpret_cast<SDL_AudioStream*>(stream);
 
         if (!SDL_ClearAudioStream(sdlStream))
             HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
@@ -3969,29 +3969,29 @@ void audioStreamDestroy(AudioStream* stream)
 
 void audioStreamPush(AudioStream* player, const f32* data, u64 size)
 {
-    SDL_AudioStream* stream = (SDL_AudioStream*)player;
-    if (!SDL_PutAudioStreamData(stream, data, (int)size))
+    SDL_AudioStream* stream = reinterpret_cast<SDL_AudioStream*>(player);
+    if (!SDL_PutAudioStreamData(stream, data, static_cast<int>(size)))
         HG_PANIC("SDL could not push audio data: %s\n", SDL_GetError());
 }
 
 u32 audioStreamQueuedSize(AudioStream* stream)
 {
-    int size = SDL_GetAudioStreamQueued((SDL_AudioStream*)stream);
+    int size = SDL_GetAudioStreamQueued(reinterpret_cast<SDL_AudioStream*>(stream));
     if (size == -1)
         HG_PANIC("SDL could not read audio data: %s\n", SDL_GetError());
 
-    return (u32)size;
+    return static_cast<u32>(size);
 }
 
 void audioStreamClear(AudioStream* stream)
 {
-    if (!SDL_ClearAudioStream((SDL_AudioStream*)stream))
+    if (!SDL_ClearAudioStream(reinterpret_cast<SDL_AudioStream*>(stream)))
         HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 
 void audioStreamSetGain(AudioStream* stream, f32 gain)
 {
-    if (!SDL_SetAudioStreamGain((SDL_AudioStream*)stream, gain))
+    if (!SDL_SetAudioStreamGain(reinterpret_cast<SDL_AudioStream*>(stream), gain))
         HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 
@@ -4010,7 +4010,7 @@ void serialize(Serializer* s, AudioSource* src)
 #include <windows.h>
 #endif
 
-#define HG_MAKE_VULKAN_FUNC(name) PFN_##name name
+#define HG_MAKE_VULKAN_FUNC(name) PFN_##name name = nullptr
 
 struct VulkanFuncs {
     HG_MAKE_VULKAN_FUNC(vkGetInstanceProcAddr);
@@ -5649,7 +5649,7 @@ Library* libraryLoad(String path)
 {
     char* cstr = cString(getScratch(), path);
 
-    Library* lib = (Library*)dlopen(cstr, RTLD_LAZY);
+    Library* lib = static_cast<Library*>(dlopen(cstr, RTLD_LAZY));
     if (lib == nullptr)
         formatError("Could not load dynamic library \"%s\": %s", cstr, dlerror());
 
@@ -5682,7 +5682,7 @@ Library* libraryLoad(StringView path)
 {
     char* cstr = cString(scratch(), path);
 
-    Library* lib = (Library*)LoadLibraryA(cstr);
+    Library* lib = static_cast<Library*>(LoadLibraryA(cstr));
     if (lib == nullptr)
     {
         errorSet("Could not load dynamic library \"");
@@ -5696,14 +5696,14 @@ Library* libraryLoad(StringView path)
 void libraryUnload(Library* lib)
 {
     if (lib != nullptr)
-        FreeLibrary((HMODULE)lib);
+        FreeLibrary(reinterpret_cast<HMODULE>(lib));
 }
 
 void* libraryFindFunction(Library* lib, StringView symbol)
 {
     char* cstr = cString(scratch(), symbol);
 
-    void* fn = GetProcAddress((HMODULE)lib, cstr);
+    void* fn = GetProcAddress(reinterpret_cast<HMODULE>(lib), cstr);
     if (fn == nullptr)
     {
         errorSet("Could not load function symbol \"");

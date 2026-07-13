@@ -2,8 +2,6 @@
 
 C++23. No STL containers, no exceptions, no RTTI.
 
----
-
 ## RAII & Move Semantics
 
 Every resource-holding type uses RAII: destructor releases.
@@ -36,12 +34,12 @@ should signal failure via return type, not throw.
 
 ## Containers: Owning vs Temp
 
-| Owning (heap) | Temp (arena) | RAII |
-|--------------|-------------|------|
-| `Array<T>`   | `TempArray<T>` | Yes |
-| `Queue<T>`   | `TempQueue<T>` | Yes |
-| `Set<T>`     | `TempSet<T>`   | Yes |
-| `Map<K,V>`   | `TempMap<K,V>` | Yes |
+| Owning (heap) | Temp (arena)   |
+|---------------|----------------|
+| `Array<T>`    | `ArrayTemp<T>` |
+| `Queue<T>`    | `QueueTemp<T>` |
+| `Set<T>`      | `SetTemp<T>`   |
+| `Map<K,V>`    | `MapTemp<K,V>` |
 
 Owning variants manage heap memory and support move semantics. Temp variants borrow from an arena with no ownership.
 
@@ -88,11 +86,26 @@ enum Subsystem : u32 {
 
 ## Comments
 
-`/** */` Doxygen.
+```cpp
+/**
+ * Short punchy description
+ *
+ * Parameters
+ * - param1 The parameter description
+ *
+ * Returns
+ * - What the function returns
+ */
+ ```
 
 ## `auto`
 
 Spell types explicitly. `auto` only in lambdas and unnameable types.
+
+```cpp
+u32 x = foo();      // good
+auto x = foo();     // bad
+```
 
 ## Range-For
 
@@ -108,7 +121,7 @@ On move operations, `swap`, and trivial accessors only. Not everywhere.
 
 ## Custom `string_view`/`span`
 
-Own implementations (`String`, `Span<T>`). Not `std::string_view` or `std::span`.
+Own implementations (`StringView`, `Span<T>`). Not `std::string_view` or `std::span`.
 
 ## Concepts
 
