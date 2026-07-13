@@ -20,8 +20,6 @@ int main()
         HG_PANIC("Could not initialize Hurdy Gurdy\n");
     HG_DEFER(deinit());
 
-    test();
-
     Window* window = windowCreate("Hg Minimal Example", 1200, 800, nullptr);
     if (window == nullptr)
         HG_PANIC("Could not create window\n");
@@ -106,8 +104,8 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    imGuiInit(window, windowImageFormat(window));
-    HG_DEFER(imGuiDeinit());
+    initImGui(window, windowImageFormat(window));
+    HG_DEFER(deinitImGui());
 
     // temporary, trick the OS into thinking we're important
     callPar(nullptr, nullptr, [](void*)
@@ -132,7 +130,7 @@ int main()
 
         audioPlayerUpdate(&audio);
 
-        imGuiNewFrame();
+        beginImGuiFrame();
         ImGui::NewFrame();
 
         width = windowWidth(window);
@@ -214,7 +212,7 @@ int main()
                 renderDebug2D(cmd, &camera, &spriteLayer);
             }
 
-            imGuiDraw(cmd);
+            renderImGui(cmd);
 
             gpuRenderPassEnd(cmd);
         }

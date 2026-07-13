@@ -27,11 +27,7 @@
 #ifndef HG_TEMPLATES_HPP
 #define HG_TEMPLATES_HPP
 
-#include "hg_assets.hpp"
-#include "hg_concurrency.hpp"
-#include "hg_containers.hpp"
-#include "hg_core.hpp"
-#include "hg_ecs.hpp"
+#include "hurdygurdy.hpp"
 
 namespace hg {
 
@@ -78,7 +74,7 @@ void serialize(Serializer* s, Array<T>* arr)
     serialize(s, &arr->count);
     serialize(s, &arr->capacity);
     if (!s->writing)
-        arr->vals = allocGpa<T>(arr->capacity);
+        arr->vals = heapAlloc<T>(arr->capacity);
     for (u32 i = 0; i < arr->count; ++i)
     {
         serialize(s, &(*arr)[i]);
@@ -93,7 +89,7 @@ Array<T> arrayCreate(u32 count, u32 capacity)
         capacity = count;
 
     Array<T> arr{};
-    arr.vals = allocGpa<T>(capacity);
+    arr.vals = heapAlloc<T>(capacity);
     arr.count = count;
     arr.capacity = capacity;
 
@@ -104,7 +100,7 @@ template<typename T>
 void arrayDestroy(Array<T>* arr)
 {
     HG_ASSERT(arr != nullptr);
-    freeGpa(arr->vals, arr->capacity);
+    heapFree(arr->vals, arr->capacity);
 }
 
 template<typename T>
@@ -126,7 +122,7 @@ void arrayResize(Array<T>* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = reallocGpa(arr->vals, arr->capacity, newCount * 2);
+        arr->vals = heapRealloc(arr->vals, arr->capacity, newCount * 2);
         arr->capacity = newCount * 2;
     }
     arr->count = newCount;
@@ -149,7 +145,7 @@ T* arrayPush(Array<T>* arr)
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = reallocGpa(arr->vals, arr->capacity, newCapacity);
+        arr->vals = heapRealloc(arr->vals, arr->capacity, newCapacity);
         arr->capacity = newCapacity;
     }
     return &arr->vals[arr->count++];
@@ -210,7 +206,7 @@ template<typename T>
 Queue<T> queueCreate(u32 capacity)
 {
     Queue<T> queue{};
-    queue.vals = allocGpa<T>(capacity);
+    queue.vals = heapAlloc<T>(capacity);
     queue.front = 0;
     queue.back = 0;
     queue.count = 0;
@@ -223,7 +219,7 @@ void queueDestroy(Queue<T>* queue)
 {
     if (queue != nullptr)
     {
-        freeGpa(queue->vals, queue->capacity);
+        heapFree(queue->vals, queue->capacity);
     }
 }
 
@@ -237,7 +233,7 @@ void queuePushFront(Queue<T>* queue, U val)
     if (queue->count == queue->capacity)
     {
         u32 newCapacity = queue->capacity * 2;
-        queue->vals = reallocGpa(queue->vals, queue->capacity, newCapacity);
+        queue->vals = heapRealloc(queue->vals, queue->capacity, newCapacity);
 
         if (queue->back < queue->front)
         {
@@ -262,7 +258,7 @@ void queuePushBack(Queue<T>* queue, U val)
     if (queue->count == queue->capacity)
     {
         u32 newCapacity = queue->capacity * 2;
-        queue->vals = reallocGpa(queue->vals, queue->capacity, newCapacity);
+        queue->vals = heapRealloc(queue->vals, queue->capacity, newCapacity);
 
         if (queue->back < queue->front)
         {
@@ -335,8 +331,8 @@ Set<V> setCreate(u32 slotCount)
     HG_ASSERT(slotCount > 0);
 
     Set<V> set;
-    set.hasVal = allocGpa<bool>(slotCount);
-    set.vals = allocGpa<V>(slotCount);
+    set.hasVal = heapAlloc<bool>(slotCount);
+    set.vals = heapAlloc<V>(slotCount);
     set.capacity = slotCount;
     setReset(&set);
     return set;
@@ -347,8 +343,8 @@ void setDestroy(Set<V>* set)
 {
     HG_ASSERT(set != nullptr);
 
-    freeGpa(set->hasVal);
-    freeGpa(set->vals);
+    heapFree(set->hasVal);
+    heapFree(set->vals);
 }
 
 template<typename V>
@@ -414,7 +410,7 @@ void setAdd(Set<V>* set, const T& val)
 
         if (otherDist < dist)
         {
-            swap(&v, &set->vals[idx]);
+            std::swap(v, set->vals[idx]);
             dist = otherDist;
         }
 
@@ -525,9 +521,9 @@ Map<K, V> mapCreate(u32 slotCount)
     HG_ASSERT(slotCount > 0);
 
     Map<K, V> map;
-    map.hasVal = allocGpa<bool>(slotCount);
-    map.keys = allocGpa<K>(slotCount);
-    map.vals = allocGpa<V>(slotCount);
+    map.hasVal = heapAlloc<bool>(slotCount);
+    map.keys = heapAlloc<K>(slotCount);
+    map.vals = heapAlloc<V>(slotCount);
     map.capacity = slotCount;
     mapReset(&map);
 
@@ -539,9 +535,9 @@ void mapDestroy(Map<K, V>* map)
 {
     HG_ASSERT(map != nullptr);
 
-    freeGpa(map->hasVal, map->capacity);
-    freeGpa(map->keys, map->capacity);
-    freeGpa(map->vals, map->capacity);
+    heapFree(map->hasVal, map->capacity);
+    heapFree(map->keys, map->capacity);
+    heapFree(map->vals, map->capacity);
 }
 
 template<typename K, typename V>
@@ -611,8 +607,8 @@ V* mapAdd(Map<K, V>* map, const T& key, const U& val)
 
         if (otherDist < dist)
         {
-            swap(&k, &map->keys[idx]);
-            swap(&v, &map->vals[idx]);
+            std::swap(k, map->keys[idx]);
+            std::swap(v, map->vals[idx]);
             dist = otherDist;
         }
 

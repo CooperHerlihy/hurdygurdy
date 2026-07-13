@@ -74,7 +74,7 @@ void init(Arena* arena)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    imGuiInit(window, windowImageFormat(window));
+    initImGui(window, windowImageFormat(window));
 
     audio = assetCreate<Sound>();
     audio->asset.data = audioData;
@@ -171,9 +171,9 @@ void deinit()
 
     gpuImageDestroy(renderImage);
     gpuViewDestroy(renderView);
-    imGuiTextureDestroy(renderImGuiTex);
+    destroyImGuiTexture(renderImGuiTex);
 
-    imGuiDeinit();
+    deinitImGui();
     ImGui::DestroyContext();
 
     windowDestroy(window);
@@ -486,7 +486,7 @@ void drawRender()
 
             gpuWaitIdle();
 
-            imGuiTextureDestroy(renderImGuiTex);
+            destroyImGuiTexture(renderImGuiTex);
 
             gpuViewDestroy(depthView);
             gpuViewDestroy(renderView);
@@ -511,7 +511,7 @@ void drawRender()
             renderView = gpuViewCreate(renderImage, GpuAspect_color, GpuFilter_nearest);
             depthView = gpuViewCreate(depthImage, GpuAspect_depth, GpuFilter_nearest);
 
-            renderImGuiTex = imGuiTextureCreate(renderView, GpuLayout_shaderReadOnly);
+            renderImGuiTex = createImGuiTexture(renderView, GpuLayout_shaderReadOnly);
 
             camera->perspective.aspect = (f32)width / (f32)height;
         }
@@ -566,7 +566,7 @@ void render()
 
         gpuRenderPassBegin(cmd, &guiPass);
 
-        imGuiDraw(cmd);
+        renderImGui(cmd);
 
         gpuRenderPassEnd(cmd);
     }
@@ -577,7 +577,7 @@ void render()
 
 void drawUI(Arena* frame)
 {
-    imGuiNewFrame();
+    beginImGuiFrame();
     ImGui::NewFrame();
 
     setupDockspace();
@@ -605,8 +605,6 @@ int main()
     if (!hg::init())
         HG_PANIC("Could not initialize Hurdy Gurdy\n");
     HG_DEFER(hg::deinit());
-
-    test();
 
     Arena* arena = getScratch();
     HG_ARENA_SCOPE(arena);

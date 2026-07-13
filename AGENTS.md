@@ -14,7 +14,7 @@
 
 ```
 hurdygurdy/
-  include/           -- Public headers (.hpp + .glsl)
+  include/           -- Public headers (hurdygurdy.hpp umbrella + .glsl)
   src/               -- Source files + shaders (.vert/.frag/.comp)
   vendor/            -- stb_image, stb_image_write, vk_mem_alloc, imgui
   build/             -- CMake build output (generated, ignored)
@@ -48,7 +48,7 @@ See `CODING_GUIDELINES.md` for full rules. Quick summary:
 
 - All public code in `hg` namespace
 - `hg::PascalCase` for types, `hg::camelCase()` for functions, `HG_SCREAMING_SNAKE` for macros
-- `hg_` prefix on filenames (`hg_memory.hpp`); umbrella header `hg.hpp`
+- `hg_` prefix on filenames (`hurdygurdy.hpp` umbrella); all public API in `hurdygurdy.hpp` except `hg_templates.hpp` (template definitions)
 - No `enum class` — C-style enums in `hg` namespace: `hg::RenderPassType_Color`
 - No `class` — everything `struct`
 - RAII for resource types: default ctor, move, destructor, delete copy
@@ -62,35 +62,38 @@ See `CODING_GUIDELINES.md` for full rules. Quick summary:
 
 ## Architecture (init order)
 
-| Subsystem | Header | Init flag | Note |
-|---|---|---|---|
-| Memory | hg_memory.hpp | Subsystem_Memory | Scratch arenas (2 x 16MB per thread), GPA |
-| Concurrency | hg_concurrency.hpp | Subsystem_Concurrency | Thread pool, mutex, fence |
-| GPU | hg_gpu.hpp | Subsystem_Gpu | Vulkan wrapper: buffers, images, pipelines, cmds |
-| Assets | hg_assets.hpp | Subsystem_Assets | Ref-counted asset manager, hot reload |
-| Windowing | hg_window.hpp | Subsystem_Windowing | SDL3 windows, input, swapchain |
-| Audio | hg_audio.hpp | Subsystem_Audio | Streams, player, ECS source component |
-| Platform | hg_platform.hpp | (internal) | SDL3 vulkan extensions, platform init |
+| Subsystem | Init flag | Note |
+|---|---|---|
+| Memory | Subsystem_Memory | Scratch arenas (2 x 16MB per thread), GPA |
+| Concurrency | Subsystem_Concurrency | Thread pool, mutex, fence |
+| GPU | Subsystem_Gpu | Vulkan wrapper: buffers, images, pipelines, cmds |
+| Assets | Subsystem_Assets | Ref-counted asset manager, hot reload |
+| Windowing | Subsystem_Windowing | SDL3 windows, input, swapchain |
+| Audio | Subsystem_Audio | Streams, player, ECS source component |
+| Platform | (internal) | SDL3 vulkan extensions, platform init |
 
 Call `hg::init(flags)` with flag combinations or `Subsystem_All` (default).
 
 ## Key Headers
 
-- **hg_core.hpp** — Typedefs (u8/u32/f32 etc.), String, StringView, logging, init/deinit
-- **hg_memory.hpp** — Arena, gpaAlloc/gpaFree (malloc wrapper), scratch arenas
-- **hg_containers.hpp** — Array, ArrayTemp, String, StringTemp, Map, Set, Queue, Pool
-- **hg_math.hpp** — Vec2/3/4, Mat2/3/4, Quat, Complex, collision, noise, RNG
-- **hg_gpu.hpp** — Full Vulkan wrapper: buffers, images, pipelines, render passes, barriers, descriptors
-- **hg_window.hpp** — Window, input enums, swapchain frame begin/end
-- **hg_rendering.hpp** — Camera, 2D layers, sprites/tilemaps, skybox, 3D models, lights, ImGui
-- **hg_ecs.hpp** — ECS with hierarchy nodes, transforms, component registration, iteration
-- **hg_assets.hpp** — Asset<T> with ref counting, pool, path cache, load/unload/reload
-- **hg_audio.hpp** — Audio streams, AudioPlayer (music+SFX), ECS audio source
-- **hg_concurrency.hpp** — Thread pool, spinlock mutex, fence
-- **hg_serialization.hpp** — Tree serializer (Serialiser), binary + JSON I/O
-- **hg_strings.hpp** — Formatting, number parsing, binary I/O helpers
-- **hg_time.hpp** — Clock (high-res), sleep, perf measurement
-- **hg_library.hpp** — Dynamic library loading (dlopen/LoadLibrary)
+All public API is in **hurdygurdy.hpp** (except template implementations in hg_templates.hpp). The umbrella provides (in order):
+
+- **Core** — Typedefs (u8/u32/f32 etc.), String, StringView, logging, init/deinit
+- **Utils** — min/max/clamp, align, endian, mem ops
+- **Memory** — Arena, gpaAlloc/gpaFree (malloc wrapper), scratch arenas
+- **Concurrency** — Thread pool, spinlock mutex, fence
+- **GPU** — Full Vulkan wrapper: buffers, images, pipelines, render passes, barriers, descriptors
+- **Strings** — Formatting, number parsing, binary I/O helpers
+- **Serialization** — Tree serializer (Serialiser), binary + JSON I/O
+- **Containers** — Array, ArrayTemp, String, StringTemp, Map, Set, Queue, Pool
+- **Math** — Vec2/3/4, Mat2/3/4, Quat, Complex, collision, noise, RNG
+- **Assets** — Asset<T> with ref counting, pool, path cache, load/unload/reload
+- **Time** — Clock (high-res), sleep, perf measurement
+- **Library** — Dynamic library loading (dlopen/LoadLibrary)
+- **Windowing** — Window, input enums, swapchain frame begin/end
+- **Audio** — Audio streams, AudioPlayer (music+SFX), ECS audio source
+- **Rendering** — Camera, 2D layers, sprites/tilemaps, skybox, 3D models, lights, ImGui
+- **ECS** — ECS with hierarchy nodes, transforms, component registration, iteration
 
 ## Key Patterns
 

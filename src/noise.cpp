@@ -15,8 +15,6 @@ int main()
         HG_PANIC("Could not initialize Hurdy Gurdy\n");
     HG_DEFER(deinit());
 
-    test();
-
     Arena* arena = getScratch();
     HG_ARENA_SCOPE(arena);
 
@@ -46,8 +44,8 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    imGuiInit(window, windowImageFormat(window), Format_d32_sfloat);
-    HG_DEFER(imGuiDeinit());
+    initImGui(window, windowImageFormat(window), Format_d32_sfloat);
+    HG_DEFER(deinitImGui());
 
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
@@ -151,7 +149,7 @@ int main()
             transformUpdate(&ecs, camera);
         }
 
-        imGuiNewFrame();
+        beginImGuiFrame();
         ImGui::NewFrame();
 
         if (ImGui::Begin("Options"))
@@ -212,7 +210,7 @@ int main()
             cameraUpdateEcs(&ecs, camera);
             spritesDraw(&ecs, camera, cmd);
 
-            imGuiDraw(cmd);
+            renderImGui(cmd);
 
             gpuRenderPassEnd(cmd);
         }
