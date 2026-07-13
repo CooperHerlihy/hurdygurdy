@@ -1,126 +1,75 @@
-# AGENTS.md -- Hurdy Gurdy Game Engine
+# Hurdy Gurdy
 
-## Agent Rules
+C++23 game engine. Vulkan 1.3, SDL3, Dear ImGui.
+No STL containers, no exceptions, no RTTI.
 
-1. Never make changes without consulting the user first.
-2. Never make changes without also writing and running tests.
-3. Everything should be as simple as possible. If it gets too complex, ask the user.
-
-## Identity
-
-**Hurdy Gurdy**, a game engine written in C++23 using Vulkan.
-
-## Project Structure
+## Structure
 
 ```
-hurdygurdy/
-  include/           -- Public headers (hurdygurdy.hpp umbrella + .glsl)
-  src/               -- Source files + shaders (.vert/.frag/.comp)
-  vendor/            -- stb_image, stb_image_write, vk_mem_alloc, imgui
-  build/             -- CMake build output (generated, ignored)
-  CMakeLists.txt     -- CMake 3.16+, C++23
-  flake.nix          -- Nix flake for dev shell + build
-  CODING_GUIDELINES.md -- Full coding conventions
+include/hurdygurdy.hpp    — public API + templates (all declarations)
+include/hurdygurdy.glsl   — shared GLSL header
+src/hurdygurdy.cpp        — core engine impl
+src/platform.cpp          — Vulkan/SDL/platform impl
+src/test.cpp              — all tests (monolithic)
+src/editor.cpp            — example editor app
+src/minimal.cpp           — example minimal app
+build/                    — CMake build output
 ```
 
-## Build
-
-**All build & run commands MUST be inside `nix develop` (Vulkan unavailable otherwise).**
+## Build & Verify
 
 ```
-nix develop
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j$(nproc)
+build: cmake --build build -j$(nproc)
+test:  ./build/test
 ```
 
-Targets: `editor`, `noise`, `minimal` (exes), `hurdygurdy` (static lib). Also `nix build` for release.
+Fix all warnings (`-Werror` is on). Run both after every change.
 
-## Dependencies
+## Conventions
 
-- C++23 compiler (GCC 14+/Clang 18+), CMake 3.16+
-- SDL3 (auto-downloaded), Vulkan SDK, shaderc (glslc)
-- No exceptions, no RTTI, no STL containers
-- `-Wall -Wextra -Wconversion -Wsign-conversion -pedantic -Werror`
+### Names
 
-## Coding Conventions
+- Types: PascalCase. Functions: camelCase. Macros: `HG_UPPER_SNAKE_CASE`.
+- Integer types: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`, `f32`, `f64`.
+- Never use: `int`, `unsigned`, `size_t`, `uint32_t`, `float`, `double`, `std::*` containers.
 
-See `CODING_GUIDELINES.md` for full rules. Quick summary:
+### Error Handling
 
-- All public code in `hg` namespace
-- `hg::PascalCase` for types, `hg::camelCase()` for functions, `HG_SCREAMING_SNAKE` for macros
-- `hg_` prefix on filenames (`hurdygurdy.hpp` umbrella); all public API in `hurdygurdy.hpp` except `hg_templates.hpp` (template definitions)
-- No `enum class` — C-style enums in `hg` namespace: `hg::RenderPassType_Color`
-- No `class` — everything `struct`
-- RAII for resource types: default ctor, move, destructor, delete copy
-- Move-only for owning types, `clone()` where copies make sense
-- Custom containers: `hg::Array`, `hg::ArrayTemp`, `hg::ArrayView` and friends
-- No constructors except default + move on RAII types. Free create functions preferred.
-- Thread-local error strings, no exceptions, no `Expected`/`Result`
-- C++23 concepts for interface constraints
-- `constexpr` on small pure functions
-- `HG_ASSERT()`, `HG_DEFER()`, no C-style casts
+- No exceptions. Return `bool` for fallible functions.
+- Set error: `formatError("...")`. Fatal: `HG_PANIC("...")`. Assert: `HG_ASSERT(cond)`.
 
-## Architecture (init order)
+### Memory
 
-| Subsystem | Init flag | Note |
-|---|---|---|
-| Memory | Subsystem_Memory | Scratch arenas (2 x 16MB per thread), GPA |
-| Concurrency | Subsystem_Concurrency | Thread pool, mutex, fence |
-| GPU | Subsystem_Gpu | Vulkan wrapper: buffers, images, pipelines, cmds |
-| Assets | Subsystem_Assets | Ref-counted asset manager, hot reload |
-| Windowing | Subsystem_Windowing | SDL3 windows, input, swapchain |
-| Audio | Subsystem_Audio | Streams, player, ECS source component |
-| Platform | (internal) | SDL3 vulkan extensions, platform init |
+- No `malloc`/`new`/STL. Use `heapAlloc`/`heapRealloc`/`heapFree`.
+- Prefer scratch: `getScratch`, `HG_ARENA_SCOPE`, `arenaAlloc`.
+- Scope cleanup: `HG_DEFER(...)`. Custom containers: `Array<T>`, `Queue<T>`, `Set<T>`, `Map<K,V>`.
 
-Call `hg::init(flags)` with flag combinations or `Subsystem_All` (default).
+### Style
 
-## Key Headers
+- 4-space indent, no tabs. Braces on next line.
+- Pointer: `Type* name` (star on type). C-casts for numeric conversions.
+- Header guards: `HG_HURDYGURDY_HPP` style. No `#pragma once`.
+- `#include "hurdygurdy.hpp"` first in .cpp files. `using namespace hg;` in executables.
 
-All public API is in **hurdygurdy.hpp** (except template implementations in hg_templates.hpp). The umbrella provides (in order):
+## Reading the Codebase
 
-- **Core** — Typedefs (u8/u32/f32 etc.), String, StringView, logging, init/deinit
-- **Utils** — min/max/clamp, align, endian, mem ops
-- **Memory** — Arena, gpaAlloc/gpaFree (malloc wrapper), scratch arenas
-- **Concurrency** — Thread pool, spinlock mutex, fence
-- **GPU** — Full Vulkan wrapper: buffers, images, pipelines, render passes, barriers, descriptors
-- **Strings** — Formatting, number parsing, binary I/O helpers
-- **Serialization** — Tree serializer (Serialiser), binary + JSON I/O
-- **Containers** — Array, ArrayTemp, String, StringTemp, Map, Set, Queue, Pool
-- **Math** — Vec2/3/4, Mat2/3/4, Quat, Complex, collision, noise, RNG
-- **Assets** — Asset<T> with ref counting, pool, path cache, load/unload/reload
-- **Time** — Clock (high-res), sleep, perf measurement
-- **Library** — Dynamic library loading (dlopen/LoadLibrary)
-- **Windowing** — Window, input enums, swapchain frame begin/end
-- **Audio** — Audio streams, AudioPlayer (music+SFX), ECS audio source
-- **Rendering** — Camera, 2D layers, sprites/tilemaps, skybox, 3D models, lights, ImGui
-- **ECS** — ECS with hierarchy nodes, transforms, component registration, iteration
+- grep before reading big files (hurdygurdy.hpp is large).
+- Read `test.cpp` for test patterns, `minimal.cpp` for a simple usage example.
 
-## Key Patterns
+## Git Workflow
 
-- **Shaders:** .vert/.frag/.comp in src/, compiled via glslc to SPIR-V, embedded as C headers via `embed` tool, `#include "name.spv.h"`
-- **Arenas:** `HG_ARENA_SCOPE(arena)` for temp allocs auto-freed at scope end
-- **Scratch:** `hg::scratch(conflicts, count)` returns thread-local arena
-- **Defer:** `HG_DEFER(code)` runs at scope exit
-- **Serialization:** `hg::serialise(s, &val)` reads or writes based on s->writing
-- **ECS iteration:** `hg::ecsForEach<Component>(ecs, [](Entity e, Component* c) { ... })`
-- **Assets:** `hg::assetLoad<T>(path)` returns `Asset<T>*`; `assetUnload()` decrements ref
+```
+1. git switch main && git pull --rebase
+2. git switch -c hg/<short-description>
+3. Make atomic commits as you work
+4. git switch main && git merge --squash <branch>
+5. git branch -D <branch>
+```
 
-## Testing
+## Hard Rules
 
-`hg::test()` runs from `src/test.cpp` — covers arenas, strings, containers, threading, serialisation, JSON parsing. Run with `./build/test_runner` (inside `nix develop`, no GPU needed).
+**I make all decisions. Never act without approval.**
 
-## CMake Targets
+- Ask before structural changes, destructive ops, or anything ambiguous.
+- No STL, exceptions, RTTI, third-party code, or reformatting without instruction.
 
-- `hurdygurdy` — Static library (core + vendor)
-- `test_runner` — Runs tests, exits
-- `editor` — Editor example with ImGui docking, ECS hierarchy, 3D viewport
-- `noise` — GPU compute noise with live controls
-- `minimal` — Minimal 2D sprite + audio example
-- `shaders` — Compile all GLSL shaders
-- `embed` — Binary-to-C-header embedding tool
-
-## Vendor
-
-- imgui (ocornut/imgui@2af6dd9) — SDL3 + Vulkan backends
-- stb_image.h, stb_image_write.h — Image load/save
-- vk_mem_alloc.h — Vulkan memory allocator

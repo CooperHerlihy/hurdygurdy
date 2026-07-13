@@ -10,33 +10,33 @@ Hurdy Gurdy is a game engine written in C++ for fun.
 
 #### Linux
 
-- C++17 compiler (GCC or Clang)
-- CMake (3.16+)
-- SDL3 (found on system, or downloaded automatically)
-- Vulkan Validation Layers (only required in debug mode)
+- C++23 compiler (GCC or Clang)
 - GLSL compiler (glslc)
+- CMake (3.16+)
+- Vulkan Validation Layers (only required in debug mode)
+- SDL3 (found on system, or downloaded automatically)
 
 On Nix, use `nix develop` to create a shell with all dependencies
 
 #### Windows
 
-- C++17 compiler (MSVC)
+- C++23 compiler (MSVC)
 - CMake (3.16+)
-- SDL3 (downloaded automatically)
 - LunarG Vulkan SDK
+- SDL3 (downloaded automatically)
 
 ### Compilation
 
 ```bash
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j8
+cmake --build build -j$(nproc)
 ```
 
 Release mode:
 
 ```bash
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j8
+cmake --build build -j$(nproc)
 ```
 
 On Nix, also use `nix build` to compile a standalone release build

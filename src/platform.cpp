@@ -1,5 +1,4 @@
 #include "hurdygurdy.hpp"
-#include "hg_templates.hpp"
 
 #include <cstdio>
 
