@@ -32,7 +32,7 @@ bool platformInit()
         SDL_INIT_GAMEPAD |
         SDL_INIT_EVENTS))
     {
-        errorSet((String)SDL_GetError());
+        setError((String)SDL_GetError());
         return false;
     }
     return true;
@@ -832,8 +832,8 @@ static VkInstance createInstance(String* extensions, u32 extensionCount)
     if (extensionCount > 0)
         HG_ASSERT(extensions != nullptr);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -859,10 +859,10 @@ static VkInstance createInstance(String* extensions, u32 extensionCount)
     instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
-    const char** extCStrs = arenaAlloc<const char*>(sc, extensionCount);
+    const char** extCStrs = arenaAlloc<const char*>(scratch, extensionCount);
     for (u32 i = 0; i < extensionCount; ++i)
     {
-        extCStrs[i] = cString(sc, extensions[i]);
+        extCStrs[i] = cString(scratch, extensions[i]);
     }
     instanceInfo.enabledExtensionCount = extensionCount;
     instanceInfo.ppEnabledExtensionNames = extCStrs;
@@ -871,7 +871,7 @@ static VkInstance createInstance(String* extensions, u32 extensionCount)
     VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
     if (instance == nullptr)
     {
-        errorFormat("Failed to create Vulkan instance: %s", vkResultToStr(result));
+        formatError("Failed to create Vulkan instance: %s", vkResultToStr(result));
     }
 
     return instance;
@@ -886,7 +886,7 @@ static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
     VkResult result = vkCreateDebugUtilsMessengerEXT(vk.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
     {
-        errorFormat("Failed to create Vulkan debug messenger: %s", vkResultToStr(result));
+        formatError("Failed to create Vulkan debug messenger: %s", vkResultToStr(result));
     }
 
     return messenger;
@@ -898,12 +898,12 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
     HG_ASSERT(gpu != nullptr);
     HG_ASSERT(queueFamily != nullptr);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     u32 familyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, nullptr);
-    VkQueueFamilyProperties* families = arenaAlloc<VkQueueFamilyProperties>(sc, familyCount);
+    VkQueueFamilyProperties* families = arenaAlloc<VkQueueFamilyProperties>(scratch, familyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families);
 
     for (u32 i = 0; i < familyCount; ++i)
@@ -915,7 +915,7 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
         }
     }
 
-    errorSet("Could not find Vulkan queue family");
+    setError("Could not find Vulkan queue family");
     *queueFamily = (u32)-1;
     return false;
 }
@@ -928,12 +928,12 @@ static VkPhysicalDevice findPhysicalDevice()
 {
     HG_ASSERT(vk.instance != nullptr);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     u32 gpuCount;
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, nullptr);
-    VkPhysicalDevice* gpus = arenaAlloc<VkPhysicalDevice>(sc, gpuCount);
+    VkPhysicalDevice* gpus = arenaAlloc<VkPhysicalDevice>(scratch, gpuCount);
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, gpus);
 
     VkExtensionProperties* extProps = nullptr;
@@ -948,7 +948,7 @@ static VkPhysicalDevice findPhysicalDevice()
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, nullptr);
         if (newPropCount > extPropCount)
         {
-            extProps = arenaRealloc(sc, extProps, extPropCount, newPropCount);
+            extProps = arenaRealloc(scratch, extProps, extPropCount, newPropCount);
             extPropCount = newPropCount;
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, extProps);
@@ -975,7 +975,7 @@ nextGpu:
         continue;
     }
 
-    errorSet("Could not find suitable gpu");
+    setError("Could not find suitable gpu");
     return nullptr;
 }
 
@@ -1040,7 +1040,7 @@ static VkDevice createDevice()
     VkResult result = vkCreateDevice(vk.physicalDevice, &deviceInfo, nullptr, &device);
     if (device == nullptr)
     {
-        errorFormat("Could not create VkDevice: %s", vkResultToStr(result));
+        formatError("Could not create VkDevice: %s", vkResultToStr(result));
     }
 
     return device;
@@ -1058,7 +1058,7 @@ static VmaAllocator createVma()
     VkResult result = vmaCreateAllocator(&allocatorInfo, &vma);
     if (vma == nullptr)
     {
-        errorFormat("Could not create Vulkan memory allocator: %s", vkResultToStr(result));
+        formatError("Could not create Vulkan memory allocator: %s", vkResultToStr(result));
     }
 
     return vma;
@@ -1147,19 +1147,19 @@ static Frame createFrame()
     return frame;
 }
 
-bool gpuInit()
+bool initGpu()
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     if (!loadVulkan())
         goto loadFailed;
 
     {
         String* exts;
-        u32 extCount = platformGetVulkanExtensions(sc, &exts);
+        u32 extCount = platformGetVulkanExtensions(scratch, &exts);
 #ifdef HG_VK_DEBUG_MESSENGER
-        exts = arenaRealloc(sc, exts, extCount, extCount + 1);
+        exts = arenaRealloc(scratch, exts, extCount, extCount + 1);
         exts[extCount++] = "VK_EXT_debug_utils";
 #endif
         vk.instance = createInstance(exts, extCount);
@@ -1241,7 +1241,7 @@ bool gpuInit()
 
     vk.frameCount = 2;
     vk.currentFrame = 0;
-    vk.frames = gpaAlloc<Frame>(vk.frameCount);
+    vk.frames = allocGpa<Frame>(vk.frameCount);
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
         vk.frames[i] = createFrame();
@@ -1267,7 +1267,7 @@ loadFailed:
     return false;
 }
 
-void gpuDeinit()
+void deinitGpu()
 {
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
@@ -1275,7 +1275,7 @@ void gpuDeinit()
         vkDestroyCommandPool(vk.device, vk.frames[i].cmdPool, nullptr);
         arrayDestroy(&vk.frames[i].windows);
     }
-    gpaFree(vk.frames, vk.frameCount);
+    freeGpa(vk.frames, vk.frameCount);
 
     mapForEach(&vk.samplers, [](SamplerInfo*, VkSampler* sampler)
     {
@@ -1373,8 +1373,8 @@ static Descriptor descriptorCreate(
 {
     HG_ASSERT(type < DescriptorType_count);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     Descriptor desc = handlePoolAlloc(&vk.descriptorPools[type]);
 
@@ -2158,8 +2158,8 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     GpuPipeline* pipeline = (GpuPipeline*)poolAlloc(&vk.pipelines);
     *pipeline = {};
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2243,7 +2243,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     depthStencilState.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState* colorBlendAttachments
-        = arenaAlloc<VkPipelineColorBlendAttachmentState>(sc, config->colorAttachmentCount);
+        = arenaAlloc<VkPipelineColorBlendAttachmentState>(scratch, config->colorAttachmentCount);
 
     for (u32 i = 0; i < config->colorAttachmentCount; ++i)
     {
@@ -2280,7 +2280,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     dynamicState.dynamicStateCount = (u32)arrayCount(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
 
-    VkFormat* colorFormats = arenaAlloc<VkFormat>(sc, config->colorAttachmentCount);
+    VkFormat* colorFormats = arenaAlloc<VkFormat>(scratch, config->colorAttachmentCount);
     for (u32 i = 0; i < config->colorAttachmentCount; ++i)
     {
         colorFormats[i] = formatToVk(config->colorAttachmentFormats[i]);
@@ -2467,11 +2467,11 @@ void gpuMemoryBarrier(
     const GpuImageBarrier* imageBarriers,
     u32 imageBarrierCount)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
-    VkBufferMemoryBarrier2* vkBufferBarriers = arenaAlloc<VkBufferMemoryBarrier2>(sc, imageBarrierCount);
-    VkImageMemoryBarrier2* vkImageBarriers = arenaAlloc<VkImageMemoryBarrier2>(sc, imageBarrierCount);
+    VkBufferMemoryBarrier2* vkBufferBarriers = arenaAlloc<VkBufferMemoryBarrier2>(scratch, imageBarrierCount);
+    VkImageMemoryBarrier2* vkImageBarriers = arenaAlloc<VkImageMemoryBarrier2>(scratch, imageBarrierCount);
 
     for (u32 i = 0; i < bufferBarrierCount; ++i)
     {
@@ -2538,15 +2538,15 @@ static VkAttachmentStoreOp gpuStoreOpToVk(GpuStoreOp op)
 
 void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     VkBufferMemoryBarrier2* bufferBarriers = nullptr;
     u32 bufferBarrierCount = 0;
     VkImageMemoryBarrier2* imageBarriers = nullptr;
     u32 imageBarrierCount = 0;
 
-    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(sc,
+    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
@@ -2568,7 +2568,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
 
     bufferBarrierCount += pass->uniformBufferCount;
 
-    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(sc,
+    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
@@ -2590,7 +2590,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
 
     bufferBarrierCount += pass->storageBufferCount;
 
-    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(sc,
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
@@ -2621,7 +2621,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
 
     imageBarrierCount += pass->sampledImageCount;
 
-    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(sc,
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
@@ -2664,15 +2664,15 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
 
 void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     VkBufferMemoryBarrier2* bufferBarriers = nullptr;
     u32 bufferBarrierCount = 0;
     VkImageMemoryBarrier2* imageBarriers = nullptr;
     u32 imageBarrierCount = 0;
 
-    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(sc,
+    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
@@ -2694,7 +2694,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
 
     bufferBarrierCount += pass->uniformBufferCount;
 
-    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(sc,
+    bufferBarriers = arenaRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
@@ -2716,7 +2716,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
 
     bufferBarrierCount += pass->storageBufferCount;
 
-    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(sc,
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
@@ -2747,7 +2747,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
 
     imageBarrierCount += pass->sampledImageCount;
 
-    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(sc,
+    imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
@@ -2779,7 +2779,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
     imageBarrierCount += pass->storageImageCount;
 
     imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(
-        sc, imageBarriers, imageBarrierCount, imageBarrierCount + pass->colorAttachmentCount);
+        scratch, imageBarriers, imageBarrierCount, imageBarrierCount + pass->colorAttachmentCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->colorAttachmentCount; ++i)
     {
@@ -2813,7 +2813,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
     if (pass->depthAttachment != nullptr)
     {
         imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(
-            sc, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
+            scratch, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
         GpuView* image = pass->depthAttachment->image;
 
@@ -2848,7 +2848,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
     if (pass->stencilAttachment != nullptr)
     {
         imageBarriers = arenaRealloc<VkImageMemoryBarrier2>(
-            sc, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
+            scratch, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
         GpuView* image = pass->stencilAttachment->image;
 
@@ -2890,7 +2890,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass)
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 
     VkRenderingAttachmentInfo* colorAttachments
-        = arenaAlloc<VkRenderingAttachmentInfo>(sc, pass->colorAttachmentCount);
+        = arenaAlloc<VkRenderingAttachmentInfo>(scratch, pass->colorAttachmentCount);
 
     for (u32 i = 0; i < pass->colorAttachmentCount; ++i)
     {
@@ -2971,8 +2971,8 @@ void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
 
 static void resizeWindowSwapchain(Window* window)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     vkQueueWaitIdle(vk.queue);
 
@@ -3030,7 +3030,7 @@ static void resizeWindowSwapchain(Window* window)
             arrayResize(&window->readyToPresent, swapImageCount);
         }
 
-        VkImage* swapImages = arenaAlloc<VkImage>(sc, swapImageCount);
+        VkImage* swapImages = arenaAlloc<VkImage>(scratch, swapImageCount);
         vkGetSwapchainImagesKHR(vk.device, window->swapchain, &swapImageCount, swapImages);
 
         for (u32 i = 0; i < window->images.count; ++i)
@@ -3154,15 +3154,15 @@ void gpuFrameEnd(GpuCmd* cmd)
 {
     HG_ASSERT(cmd != nullptr);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     Frame* frame = &vk.frames[vk.currentFrame];
 
-    Array<GpuImageBarrier> presentBarriers = arrayTemp<GpuImageBarrier>(sc, 0, frame->windows.count);
+    Array<GpuImageBarrier> presentBarriers = arrayTemp<GpuImageBarrier>(scratch, 0, frame->windows.count);
     for (u32 i = 0; i < frame->windows.count; ++i)
     {
-        GpuImageBarrier* barrier = arrayPushTemp(sc, &presentBarriers);
+        GpuImageBarrier* barrier = arrayPushTemp(scratch, &presentBarriers);
         *barrier = {};
         barrier->image = windowImageView(frame->windows[i]);
         barrier->nextLayout = GpuLayout_presentSrc;
@@ -3171,12 +3171,12 @@ void gpuFrameEnd(GpuCmd* cmd)
 
     vkEndCommandBuffer((VkCommandBuffer)cmd);
 
-    VkPipelineStageFlags* waitStages = arenaAlloc<VkPipelineStageFlags>(sc, frame->windows.count);
-    VkSemaphore* imageAvailableSemaphores = arenaAlloc<VkSemaphore>(sc, frame->windows.count);
-    VkSemaphore* readyToPresentSemaphores = arenaAlloc<VkSemaphore>(sc, frame->windows.count);
+    VkPipelineStageFlags* waitStages = arenaAlloc<VkPipelineStageFlags>(scratch, frame->windows.count);
+    VkSemaphore* imageAvailableSemaphores = arenaAlloc<VkSemaphore>(scratch, frame->windows.count);
+    VkSemaphore* readyToPresentSemaphores = arenaAlloc<VkSemaphore>(scratch, frame->windows.count);
 
-    VkSwapchainKHR* swapchains = arenaAlloc<VkSwapchainKHR>(sc, frame->windows.count);
-    u32* imageIndices = arenaAlloc<u32>(sc, frame->windows.count);
+    VkSwapchainKHR* swapchains = arenaAlloc<VkSwapchainKHR>(scratch, frame->windows.count);
+    u32* imageIndices = arenaAlloc<u32>(scratch, frame->windows.count);
 
     for (u32 i = 0; i < frame->windows.count; ++i)
     {
@@ -3260,12 +3260,12 @@ static Format findSwapchainFormat(VkSurfaceKHR surface)
 {
     HG_ASSERT(surface != nullptr);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     u32 formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physicalDevice, surface, &formatCount, nullptr);
-    VkSurfaceFormatKHR* formats = arenaAlloc<VkSurfaceFormatKHR>(sc, formatCount);
+    VkSurfaceFormatKHR* formats = arenaAlloc<VkSurfaceFormatKHR>(scratch, formatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physicalDevice, surface, &formatCount, formats);
 
     for (u32 i = 0; i < formatCount; ++i)
@@ -3284,15 +3284,15 @@ static GpuPresentMode findSwapchainPresentMode(
 {
     HG_ASSERT(surface != nullptr);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     if (desiredMode == GpuPresentMode_fifo)
         return desiredMode;
 
     u32 modeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physicalDevice, surface, &modeCount, nullptr);
-    VkPresentModeKHR* presentModes = arenaAlloc<VkPresentModeKHR>(sc, modeCount);
+    VkPresentModeKHR* presentModes = arenaAlloc<VkPresentModeKHR>(scratch, modeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physicalDevice, surface, &modeCount, presentModes);
 
     for (u32 i = 0; i < modeCount; ++i)
@@ -3330,19 +3330,19 @@ Window* windowCreate(String title, u32 width, u32 height, const WindowConfig* co
         flags |= SDL_WINDOW_FULLSCREEN;
     }
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
-    window->sdlWindow = SDL_CreateWindow(cString(sc, title), (int)width, (int)height, flags);
+    window->sdlWindow = SDL_CreateWindow(cString(scratch, title), (int)width, (int)height, flags);
     if (window->sdlWindow == nullptr)
     {
-        errorSet(SDL_GetError());
+        setError(SDL_GetError());
         goto windowFailed;
     }
 
     if (!SDL_Vulkan_CreateSurface(window->sdlWindow, vk.instance, nullptr, &window->surface))
     {
-        errorSet(SDL_GetError());
+        setError(SDL_GetError());
         goto surfaceFailed;
     }
 
@@ -3836,8 +3836,8 @@ void imGuiInit(
     HG_ASSERT(window != nullptr);
     HG_ASSERT(colorFormat != Format_undefined);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     ImGui_ImplSDL3_InitForVulkan(window->sdlWindow);
 
@@ -4036,7 +4036,7 @@ static Library* libvulkan = nullptr;
 #define HG_LOAD_VULKAN_FUNC(name) \
     hg::vulkanFuncs. name = (PFN_##name)hg::vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
     if (hg::vulkanFuncs. name == nullptr) { \
-        errorSet("Could not load " #name); \
+        setError("Could not load " #name); \
         return false; \
     }
 
@@ -4052,14 +4052,14 @@ static bool loadVulkan()
 
     if (libvulkan == nullptr)
     {
-        errorSet("Could not load vulkan");
+        setError("Could not load vulkan");
         return false;
     }
 
     *(void**)&hg::vulkanFuncs.vkGetInstanceProcAddr = libraryFindFunction(libvulkan, "vkGetInstanceProcAddr");
     if (hg::vulkanFuncs.vkGetInstanceProcAddr == nullptr)
     {
-        errorSet("Could not load vkGetInstanceProcAddr\n");
+        setError("Could not load vkGetInstanceProcAddr\n");
         return false;
     }
 
@@ -4082,7 +4082,7 @@ static void unloadVulkan()
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
     hg::vulkanFuncs. name = (PFN_##name)hg::vulkanFuncs.vkGetInstanceProcAddr(instance, #name); \
     if (hg::vulkanFuncs. name == nullptr) { \
-        errorSet("Could not load " #name); \
+        setError("Could not load " #name); \
         return false; \
     }
 
@@ -4118,7 +4118,7 @@ static bool loadVulkanInstanceFuncs(VkInstance instance)
 #define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
     hg::vulkanFuncs. name = (PFN_##name)hg::vulkanFuncs.vkGetDeviceProcAddr(device, #name); \
     if (hg::vulkanFuncs. name == nullptr) { \
-        errorSet("Could not load " #name); \
+        setError("Could not load " #name); \
         return false; \
     }
 
@@ -5534,11 +5534,11 @@ namespace hg {
 
 Library* libraryLoad(String path)
 {
-    char* cstr = cString(scratch(), path);
+    char* cstr = cString(getScratch(), path);
 
     Library* lib = (Library*)dlopen(cstr, RTLD_LAZY);
     if (lib == nullptr)
-        errorFormat("Could not load dynamic library \"%s\": %s", cstr, dlerror());
+        formatError("Could not load dynamic library \"%s\": %s", cstr, dlerror());
 
     return lib;
 }
@@ -5551,11 +5551,11 @@ void libraryUnload(Library* lib)
 
 void* libraryFindFunction(Library* lib, String symbol)
 {
-    char* cstr = cString(scratch(), symbol);
+    char* cstr = cString(getScratch(), symbol);
 
     void* fn = dlsym(lib, cstr);
     if (fn == nullptr)
-        errorFormat("Could not load function symbol \"%s\": %s", cstr, dlerror());
+        formatError("Could not load function symbol \"%s\": %s", cstr, dlerror());
 
     return fn;
 }

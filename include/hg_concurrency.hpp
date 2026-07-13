@@ -34,32 +34,32 @@ namespace hg {
 /**
  * Initialize synchronization and threads
  */
-void concurrencyInit();
+void initConcurrency();
 
 /**
  * Deinitialize synchronization and threads
  */
-void concurrencyDeinit();
+void deinitConcurrency();
 
 /**
  * A spinlock mutex for basic thread synchronization
  */
-struct Mutex;
+struct Spinlock;
 
 /**
  * Create a new mutex
  */
-Mutex* mutexCreate();
+Spinlock* mutexCreate();
 
 /**
  * Destroy a mutex
  */
-void mutexDestroy(Mutex* mtx);
+void mutexDestroy(Spinlock* mtx);
 
 /**
  * Wait until the mutex is acquired
  */
-void mutexAcquire(Mutex* mtx);
+void mutexAcquire(Spinlock* mtx);
 
 /**
  * Try to acquire the mutex
@@ -68,12 +68,12 @@ void mutexAcquire(Mutex* mtx);
  * - true if acquisition succeeded
  * - false if the mutex was already in use
  */
-bool mutexTryAcquire(Mutex* mtx);
+bool mutexTryAcquire(Spinlock* mtx);
 
 /**
  * Release the mutex lock
  */
-void mutexRelease(Mutex* mtx);
+void mutexRelease(Spinlock* mtx);
 
 /**
  * A spinlock fence for basic thread synchronization
@@ -131,16 +131,6 @@ bool fenceWait(Fence* fence, f64 timeout);
 void fenceWaitIndefinite(Fence* fence);
 
 /**
- * Pushes work to the thread pool queue to be executed
- *
- * Parameters
- * - fence The fences to signal upon completion
- * - data The data passed to the function
- * - work The function to be executed
- */
-void threadsCall(Fence* fence, void* data, void (*fn)(void* data));
-
-/**
  * Wait on a fence, and help complete work in the meantime
  *
  * Parameters
@@ -151,7 +141,17 @@ void threadsCall(Fence* fence, void* data, void (*fn)(void* data));
  * - true if the fence was completed
  * - false if the timeout was reached
  */
-bool threadsHelp(Fence* fence, f64 timeout);
+bool helpThreads(Fence* fence, f64 timeout);
+
+/**
+ * Pushes work to the thread pool queue to be executed
+ *
+ * Parameters
+ * - fence The fences to signal upon completion
+ * - data The data passed to the function
+ * - work The function to be executed
+ */
+void callPar(Fence* fence, void* data, void (*fn)(void* data));
 
 /**
  * Iterates in parallel over a function n times using the thread pool
@@ -164,7 +164,7 @@ bool threadsHelp(Fence* fence, f64 timeout);
  * - data The data pointer passed to fn
  * - fn The function to use to iterate, takes the index
  */
-void threadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
+void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
 
 /**
  * Iterates in parallel over a function n times using the thread pool
@@ -177,8 +177,8 @@ void threadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
  * - fn The function to use to iterate, takes the index
  */
 template<typename F>
-void threadsFor(u64 begin, u64 end, F fn);
+void forPar(u64 begin, u64 end, F fn);
 
 } // namespace hg
 
-#endif // CONCURRENCY_HPP
+#endif // HG_CONCURRENCY_HPP

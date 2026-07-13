@@ -110,7 +110,7 @@ int main()
     HG_DEFER(imGuiDeinit());
 
     // temporary, trick the OS into thinking we're important
-    threadsCall(nullptr, nullptr, [](void*)
+    callPar(nullptr, nullptr, [](void*)
     {
         while(!quit)
         {

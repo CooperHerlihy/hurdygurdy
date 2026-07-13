@@ -29,7 +29,6 @@
 
 #include "hg_containers.hpp"
 #include "hg_core.hpp"
-#include "hg_serialization.hpp"
 
 namespace hg {
 
@@ -180,4 +179,4 @@ bool binaryStore(Binary bin, String path);
 
 } // namespace hg
 
-#endif // ASSETS_HPP
+#endif // HG_ASSETS_HPP

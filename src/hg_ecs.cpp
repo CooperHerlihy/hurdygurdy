@@ -267,15 +267,15 @@ static void swapIdxLocation(Ecs* ecs, u32 lhs, u32 rhs, u64 componentId)
     HG_ASSERT(ecsHas(ecs, lhsEntity, componentId));
     HG_ASSERT(ecsHas(ecs, rhsEntity, componentId));
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     system->entities[lhs] = rhsEntity;
     system->entities[rhs] = lhsEntity;
     system->indices[handleIdx(lhsEntity.handle)] = rhs;
     system->indices[handleIdx(rhsEntity.handle)] = lhs;
 
-    void* temp = arenaAlloc(sc, system->components.width, 1);
+    void* temp = arenaAlloc(scratch, system->components.width, 1);
     memCopy(temp, system->components[lhs], system->components.width);
     memCopy(system->components[lhs], system->components[rhs], system->components.width);
     memCopy(system->components[rhs], temp, system->components.width);
@@ -349,8 +349,8 @@ void serialize(Serializer* s, Ecs* ecs)
     HG_ASSERT(s != nullptr);
     HG_ASSERT(ecs != nullptr);
 
-    Arena* sc = scratch(&s->arena, 1);
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch(&s->arena, 1);
+    HG_ARENA_SCOPE(scratch);
 
     serializeBegin(s);
     HG_DEFER(serializeEnd(s));
@@ -359,7 +359,7 @@ void serialize(Serializer* s, Ecs* ecs)
     u32 entityCount = 0;
     if (s->writing)
     {
-        ecsSerial.entityToIdx = arenaAlloc<u32>(sc, ecs->entities.handles.count);
+        ecsSerial.entityToIdx = arenaAlloc<u32>(scratch, ecs->entities.handles.count);
         for (u32 i = 1; i < ecs->entities.handles.count; ++i)
         {
             if (ecs->entities.handles[i] != handleNull)
@@ -372,7 +372,7 @@ void serialize(Serializer* s, Ecs* ecs)
     {
         serialize(s, &entityCount);
 
-        ecsSerial.idxToEntity = arenaAlloc<Entity>(sc, entityCount);
+        ecsSerial.idxToEntity = arenaAlloc<Entity>(scratch, entityCount);
         for (u32 i = 0; i < entityCount; ++i)
         {
             ecsSerial.idxToEntity[i] = ecsSpawn(ecs);

@@ -221,7 +221,7 @@ void drawMenu()
 
             if (ImGui::MenuItem("Save Screenshot"))
             {
-                void* pixels = arenaAlloc(scratch(), width * height * 4, 4);
+                void* pixels = arenaAlloc(getScratch(), width * height * 4, 4);
 
                 gpuImageRead(pixels, renderView);
                 stbi_write_png(
@@ -608,7 +608,7 @@ int main()
 
     test();
 
-    Arena* arena = scratch();
+    Arena* arena = getScratch();
     HG_ARENA_SCOPE(arena);
 
     for (u32 i = 0; i < arrayCount(audioData); ++i)
@@ -677,7 +677,7 @@ int main()
     // }
 
     // temporary, trick the OS into thinking we're important
-    threadsCall(nullptr, nullptr, [](void*)
+    callPar(nullptr, nullptr, [](void*)
     {
         while(!quit)
         {
@@ -691,7 +691,7 @@ int main()
     {
         delta = clockTick(&gameClock);
 
-        Arena* frame = scratch(&arena, 1);
+        Arena* frame = getScratch(&arena, 1);
         HG_ARENA_SCOPE(frame);
 
         processEvents();

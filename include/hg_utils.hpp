@@ -51,9 +51,9 @@ void swap(void* a, void* b, u64 size);
 template<typename T>
 constexpr void swap(T* a, T* b)
 {
-    T tmp = *a;
-    *a = *b;
-    *b = tmp;
+    T tmp = std::move(*a);
+    *a = std::move(*b);
+    *b = std::move(tmp);
 }
 
 /**
@@ -157,4 +157,4 @@ bool memEqual(const void* dst, const void* src, u64 size);
 
 } // namespace hg
 
-#endif // UTILS_HPP
+#endif // HG_UTILS_HPP

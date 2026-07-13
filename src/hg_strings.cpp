@@ -5,12 +5,6 @@
 
 namespace hg {
 
-void binaryRead(Binary bin, u64 idx, void* dst, u64 len)
-{
-    HG_ASSERT(idx + len <= bin.size);
-    memCopy(dst, (u8*)bin.data + idx, len);
-}
-
 void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize)
 {
     bin->data = arenaRealloc(arena, bin->data, bin->size, newSize, 1);
@@ -40,7 +34,7 @@ String stringCreate(String data)
     String str{};
     if (data != "")
     {
-        str.chars = gpaAlloc<char>(data.length);
+        str.chars = allocGpa<char>(data.length);
         memCopy((char*)str.chars, data.chars, data.length);
         str.length = data.length;
     }
@@ -49,7 +43,7 @@ String stringCreate(String data)
 
 void stringDestroy(String* str)
 {
-    gpaFree((char*)str->chars, str->length);
+    freeGpa((char*)str->chars, str->length);
 }
 
 StringBuilder stringCopy(Arena* arena, String str)
@@ -74,10 +68,10 @@ StringBuilder stringFormat(Arena* arena, String format, ...)
 
 StringBuilder stringFormatVar(Arena* arena, String fmt, va_list args)
 {
-    Arena* sc = scratch(&arena, 1);
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch(&arena, 1);
+    HG_ARENA_SCOPE(scratch);
 
-    int len = vsnprintf((char*)arena->memory + arena->head, arena->capacity - arena->head, cString(sc, fmt), args);
+    int len = vsnprintf((char*)arena->memory + arena->head, arena->capacity - arena->head, cString(scratch, fmt), args);
     if (len < 0)
         HG_PANIC("snprintf returned an error");
 
@@ -292,8 +286,8 @@ StringBuilder integerToString(Arena* arena, i64 num)
 {
     HG_ASSERT(arena != nullptr);
 
-    Arena* sc = scratch(&arena, 1);
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch(&arena, 1);
+    HG_ARENA_SCOPE(scratch);
 
     if (num == 0)
         return stringCopy(arena, "0");
@@ -306,7 +300,7 @@ StringBuilder integerToString(Arena* arena, i64 num)
     {
         u64 digit = unum % 10;
         unum = (u64)((f64)unum / 10.0);
-        stringAppendC(sc, &reverse, '0' + (char)digit);
+        stringAppendC(scratch, &reverse, '0' + (char)digit);
     }
 
     StringBuilder ret{};
@@ -323,22 +317,22 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
 {
     HG_ASSERT(arena != nullptr);
 
-    Arena* sc = scratch(&arena, 1);
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch(&arena, 1);
+    HG_ARENA_SCOPE(scratch);
 
     if (num == 0.0)
         return stringCopy(arena, "0.0");
 
-    StringBuilder intStr = integerToString(sc, (i64)std::abs(num));
+    StringBuilder intStr = integerToString(scratch, (i64)std::abs(num));
 
     StringBuilder decStr{};
-    stringAppendC(sc, &decStr, '.');
+    stringAppendC(scratch, &decStr, '.');
 
     f64 decPart = std::abs(num);
     for (u64 i = 0; i < decimalCount; ++i)
     {
         decPart *= 10.0;
-        stringAppendC(sc, &decStr, '0' + (char)((u64)decPart % 10));
+        stringAppendC(scratch, &decStr, '0' + (char)((u64)decPart % 10));
     }
 
     StringBuilder ret{};

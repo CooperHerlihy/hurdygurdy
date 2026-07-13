@@ -34,30 +34,6 @@
 namespace hg {
 
 /**
- * Read data at index into a buffer
- *
- * Parameters
- * - idx The index into the file in bytes to read from
- * - dst A pointer to store the read data
- * - size The size in bytes to read
- */
-void binaryRead(Binary bin, u64 idx, void* dst, u64 len);
-
-/**
- * Read data of arbitrary type from the file
- *
- * Parameters
- * - idx The index into the file in bytes to read from
- */
-template<typename T>
-T binaryRead(Binary bin, u64 idx)
-{
-    T ret;
-    binaryRead(bin, idx, &ret, sizeof(T));
-    return ret;
-}
-
-/**
  * A binary builder
  */
 struct BinaryBuilder {
@@ -114,7 +90,7 @@ void binaryOverwrite(BinaryBuilder* bin, u64 idx, const T& src)
 /**
  * Compare strings
  */
-constexpr bool operator==(String lhs, String rhs)
+inline bool operator==(String lhs, String rhs)
 {
     return lhs.length == rhs.length && memEqual(lhs.chars, rhs.chars, lhs.length);
 }
@@ -122,7 +98,7 @@ constexpr bool operator==(String lhs, String rhs)
 /**
  * Compare strings
  */
-constexpr bool operator!=(String lhs, String rhs)
+inline bool operator!=(String lhs, String rhs)
 {
     return !(lhs == rhs);
 }
@@ -202,27 +178,26 @@ inline bool operator!=(const StringBuilder& lhs, const StringBuilder& rhs)
  */
 StringBuilder stringCopy(Arena* arena, String str);
 
-// /**
-//  * Create a formatted string : TODO
-//  *
-//  * Format specifiers
-//  * - int (i64): "{i}"
-//  * - unsigned int (u64): "{u}"
-//  * - hexadecimal (i64): "{x}"
-//  * - float with 6 decimals (f64): "{f}"
-//  * - float with N decimals (f64): "{fN}"
-//  * - char (char): "{c}"
-//  * - string (StringView): "{s}"
-//  * - c string (char*): "{cstr}"
-//  *
-//  * Use {{ and }} to escape the format specifier
-//  *
-//  * Parameters
-//  * - arena The arena to allocate from
-//  * - fmt The format string
-//  * - ... The format parameters
-//  */
-// StringBuilder stringFormat(Arena* arena, String fmt, ...);
+/**
+ * Create a formatted string : TODO
+ *
+ * Format specifiers
+ * - int (i64): "{i}"
+ * - unsigned int (u64): "{u}"
+ * - hexadecimal (i64): "{x}"
+ * - float with 6 decimals (f64): "{f}"
+ * - float with N decimals (f64): "{fN}"
+ * - char (char): "{c}"
+ * - string (StringView): "{s}"
+ * - c string (char*): "{cstr}"
+ *
+ * Use {{ and }} to escape the format specifier
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - fmt The format string
+ * - ... The format parameters
+ */
 
 /**
  * Create a formatted string, interally using snprintf
@@ -345,4 +320,4 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount);
 
 } // namespace hg
 
-#endif // STRINGS_HPP
+#endif // HG_STRINGS_HPP

@@ -138,4 +138,4 @@ void perfLog(String title, const PerfStats* stats, PerfScale scale);
 
 } // namespace hg
 
-#endif // TIME_HPP
+#endif // HG_TIME_HPP

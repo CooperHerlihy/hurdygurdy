@@ -15,36 +15,64 @@
 
 namespace hg {
 
-thread_local static char errorMessageData[4096];
-thread_local static u64 errorMessageLength = 0;
+thread_local static char errorData[4096];
+thread_local static u64 errorLength = 0;
+
+String getError()
+{
+    return {errorData, errorLength};
+}
+
+void setError(String error)
+{
+    u64 newLength = min(error.length, sizeof(errorData));
+    memCopy(errorData, error.chars, newLength);
+    errorLength = newLength;
+}
+
+void formatError(String errorFmt, ...)
+{
+    va_list args;
+    va_start(args, errorFmt);
+    formatErrorVar(errorFmt, args);
+    va_end(args);
+}
+
+void formatErrorVar(String errorFmt, va_list args)
+{
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
+
+    setError(stringFormatVar(scratch, errorFmt, args));
+}
 
 void printStdout(String str)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
-    fputs(cString(sc, str), stdout);
+    fputs(cString(scratch, str), stdout);
 }
 
 void printStderr(String str)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
-    fputs(cString(sc, str), stderr);
+    fputs(cString(scratch, str), stderr);
 }
 
 void logInternal(String format, ...)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     va_list args;
     va_start(args, format);
 
-    StringBuilder begin = stringCopy(sc, "HurdyGurdy Log: ");
-    stringAppend(sc, &begin, format);
-    StringBuilder formatted = stringFormatVar(sc, begin, args);
+    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Log: ");
+    stringAppend(scratch, &begin, format);
+    StringBuilder formatted = stringFormatVar(scratch, begin, args);
     printStderr(formatted);
 
     va_end(args);
@@ -52,58 +80,41 @@ void logInternal(String format, ...)
 
 void warnInternal(String format, ...)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     va_list args;
     va_start(args, format);
 
-    StringBuilder begin = stringCopy(sc, "HurdyGurdy Warn: ");
-    stringAppend(sc, &begin, format);
-    printStderr(stringFormatVar(sc, begin, args));
+    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Warn: ");
+    stringAppend(scratch, &begin, format);
+    printStderr(stringFormatVar(scratch, begin, args));
 
     va_end(args);
 }
 
 void panicInternal(String format, ...)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     va_list args;
     va_start(args, format);
 
-    StringBuilder begin = stringCopy(sc, "HurdyGurdy Panic: ");
-    stringAppend(sc, &begin, format);
-    begin.length += stringFormat(sc, "\tLast error: \"%.*s\"\n", (int)errorGet().length, errorGet().chars).length;
-    printStderr(stringFormatVar(sc, begin, args));
+    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Panic: ");
+    stringAppend(scratch, &begin, format);
+    begin.length += stringFormat(scratch, "\tLast error: \"%.*s\"\n", (int)getError().length, getError().chars).length;
+    printStderr(stringFormatVar(scratch, begin, args));
 
     va_end(args);
 
     abort();
 }
 
-String errorGet()
+void binaryRead(Binary bin, u64 idx, void* dst, u64 len)
 {
-    return {errorMessageData, errorMessageLength};
-}
-
-void errorSet(String error)
-{
-    u64 newLength = min(error.length, sizeof(errorMessageData));
-    memCopy(errorMessageData, error.chars, newLength);
-    errorMessageLength = newLength;
-}
-
-void errorFormat(String errorFmt, ...)
-{
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
-
-    va_list args;
-    va_start(args, errorFmt);
-    errorSet(stringFormatVar(sc, errorFmt, args));
-    va_end(args);
+    HG_ASSERT(idx + len <= bin.size);
+    memCopy(dst, (u8*)bin.data + idx, len);
 }
 
 static SubsystemFlags initialized = 0;
@@ -112,13 +123,13 @@ bool init(SubsystemFlags init)
 {
     if (init & Subsystem_memory)
     {
-        scratchInit(2, (u64)1 << 24);
+        initScratch(2, (u64)1 << 24);
         initialized |= Subsystem_memory;
     }
 
     if (init & Subsystem_concurrency)
     {
-        concurrencyInit();
+        initConcurrency();
         initialized |= Subsystem_concurrency;
     }
 
@@ -133,7 +144,7 @@ bool init(SubsystemFlags init)
     if (init & Subsystem_gpu ||
         init & Subsystem_windowing)
     {
-        if (!gpuInit())
+        if (!initGpu())
             goto gpuFailed;
         initialized |= Subsystem_gpu;
     }
@@ -165,7 +176,7 @@ audioFailed:
     if (initialized & Subsystem_assets)
         assetDeinitDefaults();
     if (initialized & Subsystem_gpu)
-        gpuDeinit();
+        deinitGpu();
 gpuFailed:
     if (initialized & Subsystem_gpu ||
         initialized & Subsystem_windowing ||
@@ -173,9 +184,9 @@ gpuFailed:
         platformDeinit();
 platformFailed:
     if (initialized & Subsystem_concurrency)
-        concurrencyDeinit();
+        deinitConcurrency();
     if (initialized & Subsystem_memory)
-        scratchDeinit();
+        deinitScratch();
     initialized = 0;
     return false;
 }
@@ -192,7 +203,7 @@ void deinit()
         assetDeinitDefaults();
 
     if (initialized & Subsystem_gpu)
-        gpuDeinit();
+        deinitGpu();
 
     if (initialized & Subsystem_gpu ||
         initialized & Subsystem_windowing ||
@@ -200,20 +211,20 @@ void deinit()
         platformDeinit();
 
     if (initialized & Subsystem_concurrency)
-        concurrencyDeinit();
+        deinitConcurrency();
 
     if (initialized & Subsystem_memory)
-        scratchDeinit();
+        deinitScratch();
 
     initialized = 0;
 }
 
 void swap(void* a, void* b, u64 size)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
-    void* tmp = arenaAlloc(sc, size, 1);
+    void* tmp = arenaAlloc(scratch, size, 1);
     memCopy(tmp, a, size);
     memCopy(a, b, size);
     memCopy(b, tmp, size);
@@ -239,7 +250,7 @@ bool memEqual(const void* dst, const void* src, u64 size)
     return size == 0 || memcmp(dst, src, size) == 0;
 }
 
-void* gpaAlloc(u64 size, u64 alignment)
+void* allocGpa(u64 size, u64 alignment)
 {
     (void)alignment;
     void* alloc = malloc(size);
@@ -248,7 +259,7 @@ void* gpaAlloc(u64 size, u64 alignment)
     return alloc;
 }
 
-void* gpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
+void* reallocGpa(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 {
     (void)oldSize;
     (void)alignment;
@@ -259,7 +270,7 @@ void* gpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 }
 
 template<>
-void gpaFree(void* allocation, u64 size)
+void freeGpa(void* allocation, u64 size)
 {
     (void)size;
     free(allocation);
@@ -272,7 +283,7 @@ void* arenaAlloc(Arena* arena, u64 size, u64 alignment)
     u64 newHead = align((u64)arena->head, alignment) + size;
     if (newHead > arena->capacity)
     {
-        errorSet("Arena out of memory");
+        setError("Arena out of memory");
         return nullptr;
     }
 
@@ -284,24 +295,21 @@ void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64
 {
     HG_ASSERT(arena != nullptr);
 
-    if (allocation >= arena->memory && (uptr)allocation + oldSize <= (uptr)arena->memory + arena->capacity)
+    if (arenaCanExtend(arena, allocation, oldSize, alignment))
     {
-        if ((uptr)allocation + oldSize - (uptr)arena->memory == (uptr)arena->head)
+        u64 newHead = (uptr)allocation + newSize - (uptr)arena->memory;
+        if (newHead > arena->capacity)
         {
-            u64 newHead = (uptr)allocation + newSize - (uptr)arena->memory;
-            if (newHead > arena->capacity)
-            {
-                errorSet("Arena out of memory");
-                return nullptr;
-            }
-
-            arena->head = newHead;
-            return allocation;
+            setError("Arena out of memory");
+            return nullptr;
         }
 
-        if (newSize < oldSize)
-            return allocation;
+        arena->head = newHead;
+        return allocation;
     }
+
+    if (newSize < oldSize)
+        return allocation;
 
     void* newAllocation = arenaAlloc(arena, newSize, alignment);
     if (allocation != nullptr)
@@ -309,15 +317,21 @@ void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64
     return newAllocation;
 }
 
+bool arenaCanExtend(Arena* arena, void* allocation, u64 size, u64 align)
+{
+    (void)align;
+    return (uptr)allocation + size - (uptr)arena->memory == (uptr)arena->head;
+}
+
 static thread_local Arena* arenas{};
 static thread_local u32 arenaCount = 0;
 
-void scratchInit(u32 count, u64 size)
+void initScratch(u32 count, u64 size)
 {
     size = align(size, 16);
     HG_ASSERT(size < UINT64_MAX / count);
 
-    void* block = gpaAlloc(count * size, 16);
+    void* block = allocGpa(count * size, 16);
     Arena base = {block, size, 0};
     arenas = arenaAlloc<Arena>(&base, count);
     arenaCount = count;
@@ -329,15 +343,15 @@ void scratchInit(u32 count, u64 size)
     }
 }
 
-void scratchDeinit()
+void deinitScratch()
 {
     if (arenas != nullptr)
     {
-        gpaFree(arenas[0].memory, arenas[0].capacity * arenaCount);
+        freeGpa(arenas[0].memory, arenas[0].capacity * arenaCount);
     }
 }
 
-Arena* scratch(Arena const* const* conflicts, u32 count)
+Arena* getScratch(Arena const* const* conflicts, u32 count)
 {
     if (conflicts != nullptr)
         HG_ASSERT(count > 0);
@@ -381,33 +395,33 @@ void assetDeinitDefaults()
 template<>
 void assetLoadImpl(Asset<Binary>* data)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
-    char* cpath = cString(sc, data->path);
+    char* cpath = cString(scratch, data->path);
 
     FILE* fileHandle = fopen(cpath, "rb");
     if (fileHandle == nullptr)
     {
-        errorFormat("Could not find file to read binary: %s", cpath);
+        formatError("Could not find file to read binary: %s", cpath);
         return;
     }
     HG_DEFER(fclose(fileHandle));
 
     if (fseek(fileHandle, 0, SEEK_END) != 0)
     {
-        errorFormat("Failed to read binary from file: %s", cpath);
+        formatError("Failed to read binary from file: %s", cpath);
         return;
     }
 
     data->asset.size = (u64)ftell(fileHandle);
-    data->asset.data = gpaAlloc(data->asset.size, 1);
+    data->asset.data = allocGpa(data->asset.size, 1);
 
     rewind(fileHandle);
     if (fread((void*)data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
     {
-        gpaFree((void*)data->asset.data, data->asset.size);
-        errorFormat("Failed to read binary from file: %s", cpath);
+        freeGpa((void*)data->asset.data, data->asset.size);
+        formatError("Failed to read binary from file: %s", cpath);
         data->asset = {};
         return;
     }
@@ -416,73 +430,31 @@ void assetLoadImpl(Asset<Binary>* data)
 template<>
 void assetUnloadImpl(Asset<Binary>* data)
 {
-    gpaFree((void*)data->asset.data, data->asset.size);
+    freeGpa((void*)data->asset.data, data->asset.size);
 }
 
 bool binaryStore(Binary bin, String path)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
-    char* cpath = cString(sc, path);
+    char* cpath = cString(scratch, path);
 
     FILE* fileHandle = fopen(cpath, "wb");
     if (fileHandle == nullptr)
     {
-        errorFormat("Failed to create file to write binary: %s", cpath);
+        formatError("Failed to create file to write binary: %s", cpath);
         return false;
     }
     HG_DEFER(fclose(fileHandle));
 
     if (fwrite(bin.data, 1, bin.size, fileHandle) != bin.size)
     {
-        errorFormat("Failed to write binary data to file: %s", cpath);
+        formatError("Failed to write binary data to file: %s", cpath);
         return false;
     }
 
     return true;
-}
-
-template<>
-void assetLoadImpl(Asset<Json>* data)
-{
-    BinaryAsset* bin = assetLoad<Binary>(data->path);
-    HG_DEFER(assetUnload(bin));
-
-    Arena* sc = scratch();
-    u64 head = sc->head;
-    HG_DEFER(sc->head = head);
-
-    String jsonStr = {(char*)bin->asset.data, bin->asset.size};
-    Json parse = parseJson(sc, jsonStr);
-
-    JsonError* e = parse.errors;
-    if (e != nullptr)
-        errorSet("Json parse errors");
-    while (e != nullptr)
-    {
-        HG_WARN("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
-        e = e->next;
-    }
-
-    data->asset.file = (JsonNode*)malloc(sc->head - head);
-    if (parse.errors != nullptr)
-    {
-        data->asset.errors = (JsonError*)(
-            (u8*)data->asset.file +
-                ((uptr)parse.errors - (uptr)parse.file));
-    }
-    else
-    {
-        data->asset.errors = nullptr;
-    }
-    memCopy((void*)data->asset.file, (void*)parse.file, sc->head - head);
-}
-
-template<>
-void assetUnloadImpl(Asset<Json>* data)
-{
-    free(data->asset.file);
 }
 
 } // namespace hg

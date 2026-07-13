@@ -17,7 +17,7 @@ int main()
 
     test();
 
-    Arena* arena = scratch();
+    Arena* arena = getScratch();
     HG_ARENA_SCOPE(arena);
 
     Window* window = windowCreate("Hg Noise Test", 1200, 800, nullptr);

@@ -63,4 +63,4 @@ void* libraryFindFunction(Library* lib, String symbol);
 
 } // namespace hg
 
-#endif // LIBRARY_HPP
+#endif // HG_LIBRARY_HPP

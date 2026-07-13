@@ -41,7 +41,7 @@ namespace hg {
  * Returns
  * - The allocation, never nullptr
  */
-void* gpaAlloc(u64 size, u64 alignment);
+void* allocGpa(u64 size, u64 alignment);
 
 /**
  * A convenience to allocate an array of a type
@@ -55,9 +55,9 @@ void* gpaAlloc(u64 size, u64 alignment);
  * - The allocated array, never nullptr
  */
 template<typename T>
-T* gpaAlloc(u64 count)
+T* allocGpa(u64 count)
 {
-    return (T*)gpaAlloc(count * sizeof(T), alignof(T));
+    return (T*)allocGpa(count * sizeof(T), alignof(T));
 }
 
 /**
@@ -72,7 +72,7 @@ T* gpaAlloc(u64 count)
  * Returns
  * - The allocation, never nullptr
  */
-void* gpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment);
+void* reallocGpa(void* allocation, u64 oldSize, u64 newSize, u64 alignment);
 
 /**
  * A convenience to reallocate an array of a type
@@ -88,9 +88,9 @@ void* gpaRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment);
  * - The reallocated array, never nullptr
  */
 template<typename T>
-T* gpaRealloc(T* allocation, u64 oldCount, u64 newCount)
+T* reallocGpa(T* allocation, u64 oldCount, u64 newCount)
 {
-    return (T*)gpaRealloc(allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
+    return (T*)reallocGpa(allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
 }
 
 /**
@@ -101,9 +101,9 @@ T* gpaRealloc(T* allocation, u64 oldCount, u64 newCount)
  * - count The number of T allocated
  */
 template<typename T>
-void gpaFree(T* allocation, u64 count)
+void freeGpa(T* allocation, u64 count)
 {
-    gpaFree((void*)allocation, count * sizeof(T));
+    freeGpa((void*)allocation, count * sizeof(T));
 }
 
 /**
@@ -115,7 +115,7 @@ void gpaFree(T* allocation, u64 count)
  * - alignment The alignment of the allocation in bytes
  */
 template<>
-void gpaFree(void* allocation, u64 size);
+void freeGpa(void* allocation, u64 size);
 
 /**
  * An arena allocator
@@ -212,18 +212,32 @@ T* arenaRealloc(Arena* arena, T* allocation, u64 oldCount, u64 newCount)
 }
 
 /**
+ * Returns whether the allocation can be extended, or if it must be moved
+ */
+bool arenaCanExtend(Arena* arena, void* allocation, u64 size, u64 align);
+
+/**
+ * Returns whether the allocation can be extended, or if it must be moved
+ */
+template<typename T>
+bool arenaCanExtend(Arena* arena, T* allocation, u64 count)
+{
+    return arenaCanExtend(arena, (void*)allocation, count * sizeof(T), alignof(T));
+}
+
+/**
  * Initializes scratch arenas on this thread
  *
  * Parameters
  * - count The number of arenas to allocate
  * - size The size of each arena in bytes
  */
-void scratchInit(u32 count, u64 size);
+void initScratch(u32 count, u64 size);
 
 /**
  * Deinitializes scratch arenas
  */
-void scratchDeinit();
+void deinitScratch();
 
 /**
  * Get a scratch arena for temporary allocations, accounting for conflicts
@@ -235,8 +249,8 @@ void scratchDeinit();
  * Returns
  * - A scratch arena, never nullptr
  */
-Arena* scratch(Arena const* const* conflicts = nullptr, u32 count = 0);
+Arena* getScratch(Arena const* const* conflicts = nullptr, u32 count = 0);
 
 } // namespace hg
 
-#endif // MEMORY_HPP
+#endif // HG_MEMORY_HPP

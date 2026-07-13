@@ -627,4 +627,4 @@ constexpr Vec3 transformWorldPos(Transform& tf)
 void transformUpdate(Ecs* ecs, Entity e);
 } // namespace hg
 
-#endif // ECS_HPP
+#endif // HG_ECS_HPP

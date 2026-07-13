@@ -708,10 +708,10 @@ static void serialJsonWriteNode(Arena* arena, StringBuilder* str, u32 indentatio
             serialJsonWriteString(arena, str, node->string);
             return;
         case SerialType_integer:
-            stringAppend(arena, str, integerToString(scratch(), node->integer));
+            stringAppend(arena, str, integerToString(getScratch(), node->integer));
             return;
         case SerialType_floating:
-            stringAppend(arena, str, floatToString(scratch(), node->floating, 6));
+            stringAppend(arena, str, floatToString(getScratch(), node->floating, 6));
             return;
         case SerialType_boolean:
             if (node->boolean)

@@ -13,7 +13,7 @@ void serialize(Serializer* s, ArrayAny* arr)
     serialize(s, &arr->count);
     serialize(s, &arr->capacity);
     if (!s->writing)
-        arr->vals = gpaAlloc(arr->capacity * arr->width, arr->align);
+        arr->vals = allocGpa(arr->capacity * arr->width, arr->align);
     serializeVoid(s, arr->vals, arr->count * arr->width);
     serializeEnd(s);
 }
@@ -24,7 +24,7 @@ ArrayAny arrayAnyCreate(u32 width, u32 align, u32 count, u32 capacity)
         capacity = count;
 
     ArrayAny arr{};
-    arr.vals = gpaAlloc(capacity * width, align);
+    arr.vals = allocGpa(capacity * width, align);
     arr.count = count;
     arr.capacity = capacity;
     arr.width = width;
@@ -37,7 +37,7 @@ void arrayAnyDestroy(ArrayAny* arr)
 {
     HG_ASSERT(arr != nullptr);
 
-    gpaFree(arr->vals, arr->capacity * arr->width);
+    freeGpa(arr->vals, arr->capacity * arr->width);
 }
 
 ArrayAny arrayAnyTemp(Arena* arena, u32 width, u32 align, u32 count, u32 capacity)
@@ -59,7 +59,7 @@ void arrayAnyResize(ArrayAny* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = gpaRealloc(
+        arr->vals = reallocGpa(
             arr->vals,
             arr->capacity * arr->width,
             newCount * 2 * arr->width,
@@ -89,7 +89,7 @@ void* arrayAnyPush(ArrayAny* arr)
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = gpaRealloc(
+        arr->vals = reallocGpa(
             arr->vals,
             arr->capacity * arr->width,
             newCapacity * arr->width,
@@ -159,7 +159,7 @@ static void poolRestock(Pool* pool)
 {
     HG_ASSERT(pool != nullptr);
 
-    void* store = gpaAlloc(poolStockSize * pool->width, pool->align);
+    void* store = allocGpa(poolStockSize * pool->width, pool->align);
     for (u32 i = 0; i < poolStockSize; ++i)
     {
         queuePushBack(&pool->freeList, (u8*)store + i * pool->width);
@@ -184,7 +184,7 @@ void poolDestroy(Pool* pool)
 
     for (u32 i = 0; i < pool->itemStores.count; ++i)
     {
-        gpaFree(pool->itemStores[i], poolStockSize);
+        freeGpa(pool->itemStores[i], poolStockSize);
     }
     arrayDestroy(&pool->itemStores);
     queueDestroy(&pool->freeList);

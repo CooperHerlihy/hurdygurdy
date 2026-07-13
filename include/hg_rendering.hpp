@@ -925,4 +925,4 @@ void imGuiDraw(GpuCmd* cmd);
 
 } // namespace hg
 
-#endif // RENDERING_HPP
+#endif // HG_RENDERING_HPP

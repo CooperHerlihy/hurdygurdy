@@ -36,11 +36,11 @@
 namespace hg {
 
 template<typename F>
-void threadsFor(u64 begin, u64 end, F fn)
+void forPar(u64 begin, u64 end, F fn)
 {
     static_assert(std::is_invocable_r_v<void, F, u64>);
 
-    threadsFor(begin, end, &fn, [](void* pfn, u64 idx)
+    forPar(begin, end, &fn, [](void* pfn, u64 idx)
     {
         (*(F*)pfn)(idx);
     });
@@ -78,7 +78,7 @@ void serialize(Serializer* s, Array<T>* arr)
     serialize(s, &arr->count);
     serialize(s, &arr->capacity);
     if (!s->writing)
-        arr->vals = gpaAlloc<T>(arr->capacity);
+        arr->vals = allocGpa<T>(arr->capacity);
     for (u32 i = 0; i < arr->count; ++i)
     {
         serialize(s, &(*arr)[i]);
@@ -93,7 +93,7 @@ Array<T> arrayCreate(u32 count, u32 capacity)
         capacity = count;
 
     Array<T> arr{};
-    arr.vals = gpaAlloc<T>(capacity);
+    arr.vals = allocGpa<T>(capacity);
     arr.count = count;
     arr.capacity = capacity;
 
@@ -104,7 +104,7 @@ template<typename T>
 void arrayDestroy(Array<T>* arr)
 {
     HG_ASSERT(arr != nullptr);
-    gpaFree(arr->vals, arr->capacity);
+    freeGpa(arr->vals, arr->capacity);
 }
 
 template<typename T>
@@ -126,7 +126,7 @@ void arrayResize(Array<T>* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = gpaRealloc(arr->vals, arr->capacity, newCount * 2);
+        arr->vals = reallocGpa(arr->vals, arr->capacity, newCount * 2);
         arr->capacity = newCount * 2;
     }
     arr->count = newCount;
@@ -149,7 +149,7 @@ T* arrayPush(Array<T>* arr)
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = gpaRealloc(arr->vals, arr->capacity, newCapacity);
+        arr->vals = reallocGpa(arr->vals, arr->capacity, newCapacity);
         arr->capacity = newCapacity;
     }
     return &arr->vals[arr->count++];
@@ -210,7 +210,7 @@ template<typename T>
 Queue<T> queueCreate(u32 capacity)
 {
     Queue<T> queue{};
-    queue.vals = gpaAlloc<T>(capacity);
+    queue.vals = allocGpa<T>(capacity);
     queue.front = 0;
     queue.back = 0;
     queue.count = 0;
@@ -223,7 +223,7 @@ void queueDestroy(Queue<T>* queue)
 {
     if (queue != nullptr)
     {
-        gpaFree(queue->vals, queue->capacity);
+        freeGpa(queue->vals, queue->capacity);
     }
 }
 
@@ -237,7 +237,7 @@ void queuePushFront(Queue<T>* queue, U val)
     if (queue->count == queue->capacity)
     {
         u32 newCapacity = queue->capacity * 2;
-        queue->vals = gpaRealloc(queue->vals, queue->capacity, newCapacity);
+        queue->vals = reallocGpa(queue->vals, queue->capacity, newCapacity);
 
         if (queue->back < queue->front)
         {
@@ -262,7 +262,7 @@ void queuePushBack(Queue<T>* queue, U val)
     if (queue->count == queue->capacity)
     {
         u32 newCapacity = queue->capacity * 2;
-        queue->vals = gpaRealloc(queue->vals, queue->capacity, newCapacity);
+        queue->vals = reallocGpa(queue->vals, queue->capacity, newCapacity);
 
         if (queue->back < queue->front)
         {
@@ -335,8 +335,8 @@ Set<V> setCreate(u32 slotCount)
     HG_ASSERT(slotCount > 0);
 
     Set<V> set;
-    set.hasVal = gpaAlloc<bool>(slotCount);
-    set.vals = gpaAlloc<V>(slotCount);
+    set.hasVal = allocGpa<bool>(slotCount);
+    set.vals = allocGpa<V>(slotCount);
     set.capacity = slotCount;
     setReset(&set);
     return set;
@@ -347,8 +347,8 @@ void setDestroy(Set<V>* set)
 {
     HG_ASSERT(set != nullptr);
 
-    gpaFree(set->hasVal);
-    gpaFree(set->vals);
+    freeGpa(set->hasVal);
+    freeGpa(set->vals);
 }
 
 template<typename V>
@@ -525,9 +525,9 @@ Map<K, V> mapCreate(u32 slotCount)
     HG_ASSERT(slotCount > 0);
 
     Map<K, V> map;
-    map.hasVal = gpaAlloc<bool>(slotCount);
-    map.keys = gpaAlloc<K>(slotCount);
-    map.vals = gpaAlloc<V>(slotCount);
+    map.hasVal = allocGpa<bool>(slotCount);
+    map.keys = allocGpa<K>(slotCount);
+    map.vals = allocGpa<V>(slotCount);
     map.capacity = slotCount;
     mapReset(&map);
 
@@ -539,9 +539,9 @@ void mapDestroy(Map<K, V>* map)
 {
     HG_ASSERT(map != nullptr);
 
-    gpaFree(map->hasVal, map->capacity);
-    gpaFree(map->keys, map->capacity);
-    gpaFree(map->vals, map->capacity);
+    freeGpa(map->hasVal, map->capacity);
+    freeGpa(map->keys, map->capacity);
+    freeGpa(map->vals, map->capacity);
 }
 
 template<typename K, typename V>
@@ -865,7 +865,7 @@ void ecsForParSingle(Ecs* ecs, Fn& fn)
     };
     Capture capture{ecs, &fn};
 
-    threadsFor(0, ecsCount<T>(ecs), &capture, [](void* pcapture, u64 idx)
+    forPar(0, ecsCount<T>(ecs), &capture, [](void* pcapture, u64 idx)
     {
         Capture* capture = (Capture*)pcapture;
         (*capture->fn)(
@@ -889,7 +889,7 @@ void ecsForParMulti(Ecs* ecs, Fn& fn)
     };
     Capture capture{ecs, system, &fn};
 
-    threadsFor(1, system->entities.count, &capture, [](void* pcapture, u64 idx)
+    forPar(1, system->entities.count, &capture, [](void* pcapture, u64 idx)
     {
         Capture* capture = (Capture*)pcapture;
         Entity e = capture->system->entities[idx];

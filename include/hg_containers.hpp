@@ -804,4 +804,4 @@ void handlePoolFree(HandlePool* pool, Handle handle);
 
 } // namespace hg
 
-#endif // CONTAINERS_HPP
+#endif // HG_CONTAINERS_HPP

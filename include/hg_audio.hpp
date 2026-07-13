@@ -255,4 +255,4 @@ void audioUpdate(Ecs* ecs, Entity listener);
 
 } // namespace hg
 
-#endif // AUDIO_HPP
+#endif // HG_AUDIO_HPP

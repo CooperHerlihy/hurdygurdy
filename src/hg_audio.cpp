@@ -18,7 +18,7 @@ bool audioInit()
     audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
     {
-        errorFormat("SDL could not open audio device: %s", SDL_GetError());
+        formatError("SDL could not open audio device: %s", SDL_GetError());
         return false;
     }
 
@@ -51,13 +51,13 @@ AudioStream* audioStreamCreate(u32 frequency, u32 channels)
         stream = SDL_CreateAudioStream(&audioSpec, nullptr);
         if (stream == nullptr)
         {
-            errorSet(SDL_GetError());
+            setError(SDL_GetError());
             return nullptr;
         }
 
         if (!SDL_BindAudioStream(audio.device, stream))
         {
-            errorSet(SDL_GetError());
+            setError(SDL_GetError());
             SDL_DestroyAudioStream(stream);
             return nullptr;
         }
@@ -181,8 +181,8 @@ void audioPlayerUpdate(AudioPlayer* player)
 
         Sound* sound = &music->sound->asset;
 
-        Arena* sc = scratch();
-        HG_ARENA_SCOPE(sc);
+        Arena* scratch = getScratch();
+        HG_ARENA_SCOPE(scratch);
 
         u32 width = sizeof(f32);
 
@@ -192,7 +192,7 @@ void audioPlayerUpdate(AudioPlayer* player)
             continue;
         u32 sizeToPush = total - queued;
 
-        f32* queue = (f32*)arenaAlloc(sc, sizeToPush, width);
+        f32* queue = (f32*)arenaAlloc(scratch, sizeToPush, width);
         u32 queueSize = 0;
 
         while (queueSize < sizeToPush)
@@ -304,8 +304,8 @@ void audioUpdate(Ecs* ecs, Entity listener)
         if (src->position == audio->size && !src->repeat)
             return;
 
-        Arena* sc = scratch();
-        HG_ARENA_SCOPE(sc);
+        Arena* scratch = getScratch();
+        HG_ARENA_SCOPE(scratch);
 
         u32 width = sizeof(f32);
 
@@ -315,7 +315,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
             return;
         u32 sizeToPush = total - queued;
 
-        f32* queue = (f32*)arenaAlloc(sc, sizeToPush, width);
+        f32* queue = (f32*)arenaAlloc(scratch, sizeToPush, width);
         u32 queueSize = 0;
 
         if (src->repeat)

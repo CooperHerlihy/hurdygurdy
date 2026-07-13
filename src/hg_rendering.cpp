@@ -11,15 +11,15 @@ namespace hg {
 template<>
 void assetLoadImpl(Asset<TextureData>* data)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
-    char* cpath = cString(sc, data->path);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
+    char* cpath = cString(scratch, data->path);
 
     int x, y, channels;
     data->asset.pixels = stbi_load(cpath, &x, &y, &channels, 4);
     if (data->asset.pixels == nullptr)
     {
-        errorFormat("Could not load image: %s", cpath);
+        formatError("Could not load image: %s", cpath);
         return;
     }
     data->asset.width = (u32)x;
@@ -36,10 +36,10 @@ void assetUnloadImpl(Asset<TextureData>* data)
 
 bool textureStorePng(TextureData* texture, String path)
 {
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
-    const char* cpath = cString(sc, path);
+    const char* cpath = cString(scratch, path);
 
     if (!stbi_write_png(
          cpath,
@@ -49,7 +49,7 @@ bool textureStorePng(TextureData* texture, String path)
          texture->pixels,
          (int)(texture->width * sizeof(u32))))
     {
-        errorFormat("Could not store image: %s", cpath);
+        formatError("Could not store image: %s", cpath);
         return false;
     }
     return true;
@@ -93,8 +93,8 @@ void assetLoadImpl(Asset<MeshData>* data)
 template<>
 void assetUnloadImpl(Asset<MeshData>* data)
 {
-    gpaFree(data->asset.indices, data->asset.indexCount);
-    gpaFree(data->asset.vertices, data->asset.vertexCount);
+    freeGpa(data->asset.indices, data->asset.indexCount);
+    freeGpa(data->asset.vertices, data->asset.vertexCount);
 }
 
 void meshStoreGltf(MeshData* data, String path, Fence* fence)
@@ -541,7 +541,7 @@ Sprite2D atlasGet2D(Atlas2D* atlas, u32 idx)
 Tilemap2D tilemapCreate2D(u32 width, u32 height)
 {
     Tilemap2D tilemap{};
-    tilemap.tiles = gpaAlloc<u32>(width * height);
+    tilemap.tiles = allocGpa<u32>(width * height);
     tilemap.width = width;
     tilemap.height = height;
     for (u32 i = 0; i < width * height; ++i)
@@ -555,7 +555,7 @@ Tilemap2D tilemapCreate2D(u32 width, u32 height)
 void tilemapDestroy2D(Tilemap2D* tilemap)
 {
     HG_ASSERT(tilemap != nullptr);
-    gpaFree(tilemap->tiles, tilemap->width * tilemap->height);
+    freeGpa(tilemap->tiles, tilemap->width * tilemap->height);
 }
 
 u32 tilemapGet2D(Tilemap2D* tilemap, u32 x, u32 y)
@@ -1089,8 +1089,8 @@ void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(cmd != nullptr);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     Camera* cameraC = ecsGet<Camera>(ecs, camera);
     Transform* cameraTf = ecsGet<Transform>(ecs, camera);
@@ -1136,8 +1136,8 @@ void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
             GpuMemoryUsage_frequentUpdate);
     }
 
-    ModelPipelineDirLightData* dirLights = arenaAlloc<ModelPipelineDirLightData>(sc, dirLightCount);
-    ModelPipelinePointLightData* pointLights = arenaAlloc<ModelPipelinePointLightData>(sc, pointLightCount);
+    ModelPipelineDirLightData* dirLights = arenaAlloc<ModelPipelineDirLightData>(scratch, dirLightCount);
+    ModelPipelinePointLightData* pointLights = arenaAlloc<ModelPipelinePointLightData>(scratch, pointLightCount);
 
     u32 i = 0;
     ecsForEach<DirLight>(ecs, [&](Entity, DirLight* light)

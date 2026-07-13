@@ -490,4 +490,4 @@ Json parseJson(Arena* arena, String text);
 
 } // namespace hg
 
-#endif // SERIALIZATION_HPP
+#endif // HG_SERIALIZATION_HPP

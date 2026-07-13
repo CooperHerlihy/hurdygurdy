@@ -2027,4 +2027,4 @@ u32 getMaxMipmaps(u32 width, u32 height, u32 depth);
 
 } // namespace hg
 
-#endif // MATH_HPP
+#endif // HG_MATH_HPP

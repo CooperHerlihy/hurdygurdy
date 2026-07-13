@@ -342,4 +342,4 @@ WindowEvent* windowEvents(Window* window, u32* count);
 
 } // namespace hg
 
-#endif // WINDOW_HPP
+#endif // HG_WINDOW_HPP

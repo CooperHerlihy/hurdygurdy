@@ -2,7 +2,6 @@
 #include "hg_containers.hpp"
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
-#include "hg_time.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -14,7 +13,7 @@
 
 namespace hg {
 
-struct Mutex {
+struct Spinlock {
     std::atomic_bool acquired;
 };
 
@@ -86,11 +85,11 @@ static void poolInit()
 {
     threadPool.shouldClose.store(false);
     threadPool.threadCount = max((u32)1, std::thread::hardware_concurrency() - 1);
-    threadPool.threads = gpaAlloc<std::thread>(threadPool.threadCount);
+    threadPool.threads = allocGpa<std::thread>(threadPool.threadCount);
 
     threadPool.workCapacity = 4096;
-    threadPool.work = gpaAlloc<ThreadWork>(threadPool.workCapacity);
-    threadPool.hasWork = gpaAlloc<std::atomic_bool>(threadPool.workCapacity);
+    threadPool.work = allocGpa<ThreadWork>(threadPool.workCapacity);
+    threadPool.hasWork = allocGpa<std::atomic_bool>(threadPool.workCapacity);
 
     threadPool.workCount.store(0);
     threadPool.tail.store(0);
@@ -106,8 +105,8 @@ static void poolInit()
     for (u32 i = 0; i < threadPool.threadCount; ++i)
     {
         new (threadPool.threads + i) std::thread([] {
-            scratchInit(2, 1 << 16);
-            HG_DEFER(scratchDeinit());
+            initScratch(2, 1 << 16);
+            HG_DEFER(deinitScratch());
 
             for (;;)
             {
@@ -131,9 +130,9 @@ static void poolInit()
     }
 }
 
-void concurrencyInit()
+void initConcurrency()
 {
-    mutices = poolCreate<Mutex>();
+    mutices = poolCreate<Spinlock>();
     fences = poolCreate<Fence>();
 
     poolInit();
@@ -157,12 +156,12 @@ static void poolDeinit()
     threadPool.cv.~condition_variable();
     threadPool.mtx.~mutex();
 
-    gpaFree(threadPool.hasWork, threadPool.workCapacity);
-    gpaFree(threadPool.work, threadPool.workCapacity);
-    gpaFree(threadPool.threads, threadPool.threadCount);
+    freeGpa(threadPool.hasWork, threadPool.workCapacity);
+    freeGpa(threadPool.work, threadPool.workCapacity);
+    freeGpa(threadPool.threads, threadPool.threadCount);
 }
 
-void concurrencyDeinit()
+void deinitConcurrency()
 {
     poolDeinit();
 
@@ -170,17 +169,17 @@ void concurrencyDeinit()
     poolDestroy(&mutices);
 }
 
-Mutex* mutexCreate()
+Spinlock* mutexCreate()
 {
-    return new (poolAlloc(&mutices)) Mutex{false};
+    return new (poolAlloc(&mutices)) Spinlock{false};
 }
 
-void mutexDestroy(Mutex* mtx)
+void mutexDestroy(Spinlock* mtx)
 {
     poolFree(&mutices, mtx);
 }
 
-void mutexAcquire(Mutex* mtx)
+void mutexAcquire(Spinlock* mtx)
 {
     HG_ASSERT(mtx != nullptr);
 
@@ -192,7 +191,7 @@ void mutexAcquire(Mutex* mtx)
     }
 }
 
-bool mutexTryAcquire(Mutex* mtx)
+bool mutexTryAcquire(Spinlock* mtx)
 {
     HG_ASSERT(mtx != nullptr);
 
@@ -200,7 +199,7 @@ bool mutexTryAcquire(Mutex* mtx)
     return mtx->acquired.compare_exchange_weak(acquired, true);
 }
 
-void mutexRelease(Mutex* mtx)
+void mutexRelease(Spinlock* mtx)
 {
     HG_ASSERT(mtx != nullptr);
     HG_ASSERT(mtx->acquired);
@@ -261,7 +260,18 @@ void fenceWaitIndefinite(Fence* fence)
     }
 }
 
-void threadsCall(Fence* fence, void* data, void (*fn)(void* data))
+bool helpThreads(Fence* fence, f64 timeout)
+{
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
+    while (!fenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
+    {
+        if (!poolExecute())
+            _mm_pause();
+    }
+    return fenceIsComplete(fence);
+}
+
+void callPar(Fence* fence, void* data, void (*fn)(void* data))
 {
     HG_ASSERT(fn != nullptr);
     if (fence != nullptr)
@@ -288,24 +298,13 @@ void threadsCall(Fence* fence, void* data, void (*fn)(void* data))
     threadPool.cv.notify_one();
 }
 
-bool threadsHelp(Fence* fence, f64 timeout)
-{
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
-    while (!fenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
-    {
-        if (!poolExecute())
-            _mm_pause();
-    }
-    return fenceIsComplete(fence);
-}
-
-void threadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
+void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
 {
     HG_ASSERT(begin <= end);
     HG_ASSERT(fn != nullptr);
 
-    Arena* sc = scratch();
-    HG_ARENA_SCOPE(sc);
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
 
     u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)threadPool.threadCount));
 
@@ -322,13 +321,13 @@ void threadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
             u64 end;
         };
 
-        Capture* capture = arenaAlloc<Capture>(sc, 1);
+        Capture* capture = arenaAlloc<Capture>(scratch, 1);
         capture->data = data;
         capture->fn = fn;
         capture->begin = i;
         capture->end = min(i + chunkSize, end);
 
-        threadsCall(fence, capture, [](void* pcapture)
+        callPar(fence, capture, [](void* pcapture)
         {
             Capture* capture = (Capture*)pcapture;
             for (u64 i = capture->begin; i < capture->end; ++i)
@@ -337,7 +336,7 @@ void threadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
             }
         });
     }
-    threadsHelp(fence, INFINITY);
+    helpThreads(fence, INFINITY);
 }
 
 } // namespace hg

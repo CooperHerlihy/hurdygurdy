@@ -163,17 +163,22 @@ struct String;
 /**
  * Get this thread's most recent error message
  */
-String errorGet();
+String getError();
 
 /**
  * Set this thread's current error message
  */
-void errorSet(String error);
+void setError(String error);
 
 /**
  * Format and set this thread's current error message
  */
-void errorFormat(String errorFmt, ...);
+void formatError(String errorFmt, ...);
+
+/**
+ * Format and set this thread's current error message with varargs
+ */
+void formatErrorVar(String errorFmt, va_list args);
 
 #define HG_MACRO_CONCAT_INTERNAL(x, y) x##y
 
@@ -284,6 +289,30 @@ struct Binary {
 };
 
 /**
+ * Read data at index into a buffer
+ *
+ * Parameters
+ * - idx The index into the file in bytes to read from
+ * - dst A pointer to store the read data
+ * - size The size in bytes to read
+ */
+void binaryRead(Binary bin, u64 idx, void* dst, u64 len);
+
+/**
+ * Read data of arbitrary type from the file
+ *
+ * Parameters
+ * - idx The index into the file in bytes to read from
+ */
+template<typename T>
+T binaryRead(Binary bin, u64 idx)
+{
+    T ret;
+    binaryRead(bin, idx, &ret, sizeof(T));
+    return ret;
+}
+
+/**
  * A view into a string
  */
 struct String {
@@ -381,4 +410,4 @@ void test();
 
 } // namespace hg
 
-#endif // CORE_HPP
+#endif // HG_CORE_HPP

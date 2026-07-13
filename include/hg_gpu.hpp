@@ -37,12 +37,12 @@ namespace hg {
  * Returns
  * - Whether init succeeded
  */
-bool gpuInit();
+bool initGpu();
 
 /**
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources
  */
-void gpuDeinit();
+void deinitGpu();
 
 /**
  * Wait for the GPU to finish work
@@ -1268,4 +1268,4 @@ void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
 
 } // namespace hg
 
-#endif // GPU_HPP
+#endif // HG_GPU_HPP
