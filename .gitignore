@@ -1,5 +1,6 @@
 .cache/
 build/
+debug/
 hg_test_dir/
 result
 imgui.ini

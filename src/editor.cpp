@@ -477,8 +477,8 @@ void drawRender()
     {
         ImVec2 size = ImGui::GetContentRegionAvail();
 
-        u32 viewHeight = max(static_cast<u32>(1), fixedAspect ? static_cast<u32>(min(size.y, size.x / aspectRatio)) : static_cast<u32>(size.y));
-        u32 viewWidth = max(static_cast<u32>(1), fixedAspect ? static_cast<u32>(static_cast<f32>(viewHeight) * aspectRatio) : static_cast<u32>(size.x));
+        u32 viewHeight = std::max(static_cast<u32>(1), fixedAspect ? static_cast<u32>(std::min(size.y, size.x / aspectRatio)) : static_cast<u32>(size.y));
+        u32 viewWidth = std::max(static_cast<u32>(1), fixedAspect ? static_cast<u32>(static_cast<f32>(viewHeight) * aspectRatio) : static_cast<u32>(size.x));
         if (width != viewWidth || height != viewHeight)
         {
             width = viewWidth;

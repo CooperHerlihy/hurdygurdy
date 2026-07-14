@@ -1,15 +1,13 @@
 #include "hurdygurdy.hpp"
 
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <emmintrin.h>
-#include <mutex>
+
+#include <chrono>
 #include <random>
-#include <thread>
+
+#include <emmintrin.h>
 
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -26,7 +24,7 @@ String getError()
 
 void setError(String error)
 {
-    u64 newLength = min(error.length, sizeof(errorData));
+    u64 newLength = std::min(error.length, sizeof(errorData));
     memCopy(errorData, error.chars, newLength);
     errorLength = newLength;
 }
@@ -303,7 +301,7 @@ void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64
 
     void* newAllocation = arenaAlloc(arena, newSize, alignment);
     if (allocation != nullptr)
-        memCopy(newAllocation, allocation, min(oldSize, newSize));
+        memCopy(newAllocation, allocation, std::min(oldSize, newSize));
     return newAllocation;
 }
 
@@ -436,7 +434,7 @@ void initConcurrency()
     fences = poolCreate<Fence>();
 
     threadPool.shouldClose.store(false);
-    threadPool.threadCount = max((u32)1, std::thread::hardware_concurrency() - 1);
+    threadPool.threadCount = std::max((u32)1, std::thread::hardware_concurrency() - 1);
     threadPool.threads = heapAlloc<std::thread>(threadPool.threadCount);
 
     threadPool.workCapacity = 4096;
@@ -664,7 +662,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
         capture->data = data;
         capture->fn = fn;
         capture->begin = i;
-        capture->end = min(i + chunkSize, end);
+        capture->end = std::min(i + chunkSize, end);
 
         callPar(fence, capture, [](void* pcapture)
         {
@@ -1414,31 +1412,31 @@ Rect rectEmpty()
 Rect rectAddPoint(Rect rect, Vec2 point)
 {
     Rect newRect;
-    newRect.pos.x = min(rect.pos.x, point.x - FLT_EPSILON);
-    newRect.pos.y = min(rect.pos.y, point.y - FLT_EPSILON);
-    newRect.size.x = max(rect.size.x + rect.pos.x, point.x + FLT_EPSILON) - newRect.pos.x;
-    newRect.size.y = max(rect.size.y + rect.pos.y, point.y + FLT_EPSILON) - newRect.pos.y;
+    newRect.begin.x = std::min(rect.begin.x, point.x - FLT_EPSILON);
+    newRect.begin.y = std::min(rect.begin.y, point.y - FLT_EPSILON);
+    newRect.end.x = std::max(rect.end.x, point.x + FLT_EPSILON);
+    newRect.end.y = std::max(rect.end.y, point.y + FLT_EPSILON);
     return newRect;
 }
 
 bool containsPointRect(Vec2 point, Rect rect)
 {
-    return point.x >= rect.pos.x - FLT_EPSILON && point.x <= rect.pos.x + rect.size.x + FLT_EPSILON
-        && point.y >= rect.pos.y - FLT_EPSILON && point.y <= rect.pos.y + rect.size.y + FLT_EPSILON;
+    return point.x >= rect.begin.x - FLT_EPSILON && point.x <= rect.end.x + FLT_EPSILON
+        && point.y >= rect.begin.y - FLT_EPSILON && point.y <= rect.end.y + FLT_EPSILON;
 }
 
 Vec2 closestPointRect(Vec2 pos, Rect rect)
 {
     return {
-        clamp(pos.x, rect.pos.x, rect.pos.x + rect.size.x),
-        clamp(pos.y, rect.pos.y, rect.pos.y + rect.size.y),
+        std::clamp(pos.x, rect.begin.x, rect.end.x),
+        std::clamp(pos.y, rect.begin.y, rect.end.y),
     };
 }
 
 bool intersectRects(Rect a, Rect b)
 {
-    return a.pos.x + a.size.x >= b.pos.x && a.pos.x <= b.pos.x + b.size.x
-        && a.pos.y + a.size.y >= b.pos.y && a.pos.y <= b.pos.y + b.size.y;
+    return a.end.x >= b.begin.x && a.begin.x <= b.end.x
+        && a.end.y >= b.begin.y && a.begin.y <= b.end.y;
 }
 
 bool intersectRectCircle(Rect rect, Circle circle)
@@ -1538,7 +1536,7 @@ bool intersectRayCircle(Ray2D ray, Circle circle, Hit2D* hit)
 bool intersectRayRect(Ray2D ray, Rect rect, Hit2D* hit)
 {
     HG_ASSERT(ray.dir != Vec2{0});
-    if (vecEq2(rect.size, Vec2{0}))
+    if (vecEq2(rect.begin, rect.end))
         return false;
 
     if (containsPointRect(ray.pos, rect))
@@ -1552,10 +1550,10 @@ bool intersectRayRect(Ray2D ray, Rect rect, Hit2D* hit)
     }
 
     f32 hits[4] = {
-        (rect.pos.x - ray.pos.x) / ray.dir.x,
-        (rect.pos.y - ray.pos.y) / ray.dir.y,
-        (rect.pos.x + rect.size.x - ray.pos.x) / ray.dir.x,
-        (rect.pos.y + rect.size.y - ray.pos.y) / ray.dir.y,
+        (rect.begin.x - ray.pos.x) / ray.dir.x,
+        (rect.begin.y - ray.pos.y) / ray.dir.y,
+        (rect.end.x - ray.pos.x) / ray.dir.x,
+        (rect.end.y - ray.pos.y) / ray.dir.y,
     };
 
     constexpr Vec2 norms[4] = {
@@ -1688,14 +1686,14 @@ bool intersectLineCircle(Line2D line, Circle circle, Hit2D* hit)
 
 bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit)
 {
-    if (vecEq2(line.begin, line.end) || vecEq2(rect.size, Vec2{0}))
+    if (vecEq2(line.begin, line.end) || vecEq2(rect.begin, rect.end))
         return false;
 
     f32 hits[4] = {
-        (rect.pos.x - line.begin.x) / (line.end.x - line.begin.x),
-        (rect.pos.y - line.begin.y) / (line.end.y - line.begin.y),
-        (rect.pos.x + rect.size.x - line.begin.x) / (line.end.x - line.begin.x),
-        (rect.pos.y + rect.size.y - line.begin.y) / (line.end.y - line.begin.y),
+        (rect.begin.x - line.begin.x) / (line.end.x - line.begin.x),
+        (rect.begin.y - line.begin.y) / (line.end.y - line.begin.y),
+        (rect.end.x - line.begin.x) / (line.end.x - line.begin.x),
+        (rect.end.y - line.begin.y) / (line.end.y - line.begin.y),
     };
 
     constexpr Vec2 norms[4] = {
@@ -1771,36 +1769,36 @@ Box boxEmpty()
 Box boxAddPoint(Box box, Vec3 point)
 {
     Box newBox;
-    newBox.pos.x = min(box.pos.x, point.x - FLT_EPSILON);
-    newBox.pos.y = min(box.pos.y, point.y - FLT_EPSILON);
-    newBox.pos.z = min(box.pos.z, point.z - FLT_EPSILON);
-    newBox.size.x = max(box.size.x + box.pos.x, point.x + FLT_EPSILON) - newBox.pos.x;
-    newBox.size.y = max(box.size.y + box.pos.y, point.y + FLT_EPSILON) - newBox.pos.y;
-    newBox.size.z = max(box.size.z + box.pos.z, point.z + FLT_EPSILON) - newBox.pos.z;
+    newBox.begin.x = std::min(box.begin.x, point.x - FLT_EPSILON);
+    newBox.begin.y = std::min(box.begin.y, point.y - FLT_EPSILON);
+    newBox.begin.z = std::min(box.begin.z, point.z - FLT_EPSILON);
+    newBox.end.x = std::max(box.end.x, point.x + FLT_EPSILON);
+    newBox.end.y = std::max(box.end.y, point.y + FLT_EPSILON);
+    newBox.end.z = std::max(box.end.z, point.z + FLT_EPSILON);
     return newBox;
 }
 
 bool containsPointBox(Vec3 point, Box box)
 {
-    return point.x >= box.pos.x && point.x <= box.pos.x + box.size.x
-        && point.y >= box.pos.y && point.y <= box.pos.y + box.size.y
-        && point.z >= box.pos.z && point.z <= box.pos.z + box.size.z;
+    return point.x >= box.begin.x && point.x <= box.end.x
+        && point.y >= box.begin.y && point.y <= box.end.y
+        && point.z >= box.begin.z && point.z <= box.end.z;
 }
 
 Vec3 closestPointBox(Vec3 pos, Box box)
 {
     return {
-        clamp(pos.x, box.pos.x, box.pos.x + box.size.x),
-        clamp(pos.y, box.pos.y, box.pos.y + box.size.y),
-        clamp(pos.z, box.pos.z, box.pos.z + box.size.z),
+        std::clamp(pos.x, box.begin.x, box.end.x),
+        std::clamp(pos.y, box.begin.y, box.end.y),
+        std::clamp(pos.z, box.begin.z, box.end.z),
     };
 }
 
 bool intersectBox(Box a, Box b)
 {
-    return a.pos.x + a.size.x >= b.pos.x && a.pos.x <= b.pos.x + b.size.x
-        && a.pos.y + a.size.y >= b.pos.y && a.pos.y <= b.pos.y + b.size.y
-        && a.pos.z + a.size.z >= b.pos.z && a.pos.z <= b.pos.z + b.size.z;
+    return a.end.x >= b.begin.x && a.begin.x <= b.end.x
+        && a.end.y >= b.begin.y && a.begin.y <= b.end.y
+        && a.end.z >= b.begin.z && a.begin.z <= b.end.z;
 }
 
 bool intersectBoxSphere(Box box, Sphere sphere)
@@ -1855,7 +1853,7 @@ bool intersectRaySphere(Ray3D ray, Sphere sphere, Hit3D* hit)
 bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit)
 {
     HG_ASSERT(ray.dir != Vec3{0});
-    if (vecEq3(box.size, Vec3{0}))
+    if (vecEq3(box.begin, box.end))
         return false;
 
     if (containsPointBox(ray.pos, box))
@@ -1869,12 +1867,12 @@ bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit)
     }
 
     f32 hits[6] = {
-        (box.pos.x - ray.pos.x) / ray.dir.x,
-        (box.pos.y - ray.pos.y) / ray.dir.y,
-        (box.pos.z - ray.pos.z) / ray.dir.z,
-        (box.pos.x + box.size.x - ray.pos.x) / ray.dir.x,
-        (box.pos.y + box.size.y - ray.pos.y) / ray.dir.y,
-        (box.pos.z + box.size.z - ray.pos.y) / ray.dir.z,
+        (box.begin.x - ray.pos.x) / ray.dir.x,
+        (box.begin.y - ray.pos.y) / ray.dir.y,
+        (box.begin.z - ray.pos.z) / ray.dir.z,
+        (box.end.x - ray.pos.x) / ray.dir.x,
+        (box.end.y - ray.pos.y) / ray.dir.y,
+        (box.end.z - ray.pos.y) / ray.dir.z,
     };
 
     constexpr Vec3 norms[6] = {
@@ -2010,16 +2008,16 @@ bool intersectLineSphere(Line3D line, Sphere sphere, Hit3D* hit)
 
 bool intersectLineBox(Line3D line, Box box, Hit3D* hit)
 {
-    if (vecEq3(line.begin, line.end) || vecEq3(box.size, Vec3{0}))
+    if (vecEq3(line.begin, line.end) || vecEq3(box.begin, box.end))
         return false;
 
     f32 hits[6] = {
-        (box.pos.x - line.begin.x) / (line.end.x - line.begin.x),
-        (box.pos.y - line.begin.y) / (line.end.y - line.begin.y),
-        (box.pos.z - line.begin.z) / (line.end.z - line.begin.z),
-        (box.pos.x + box.size.x - line.begin.x) / (line.end.x - line.begin.x),
-        (box.pos.y + box.size.y - line.begin.y) / (line.end.y - line.begin.y),
-        (box.pos.z + box.size.z - line.begin.z) / (line.end.z - line.begin.z),
+        (box.begin.x - line.begin.x) / (line.end.x - line.begin.x),
+        (box.begin.y - line.begin.y) / (line.end.y - line.begin.y),
+        (box.begin.z - line.begin.z) / (line.end.z - line.begin.z),
+        (box.end.x - line.begin.x) / (line.end.x - line.begin.x),
+        (box.end.y - line.begin.y) / (line.end.y - line.begin.y),
+        (box.end.z - line.begin.z) / (line.end.z - line.begin.z),
     };
 
     constexpr Vec3 norms[6] = {
@@ -4415,7 +4413,7 @@ void audioPlayerUpdate(AudioPlayer* player)
             if (music->pos == sound->size)
                 music->pos = 0;
 
-            u32 sizeToQueue = min(sizeToPush - queueSize, static_cast<u32>(sound->size - music->pos));
+            u32 sizeToQueue = std::min(sizeToPush - queueSize, static_cast<u32>(sound->size - music->pos));
             memCopy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(sound->data) + music->pos, sizeToQueue);
             queueSize += sizeToQueue;
             music->pos += sizeToQueue;
@@ -4948,8 +4946,8 @@ void drawRect2D(Layer2D* layer, Vec4 color, Rect dst)
     HG_ASSERT(layer != nullptr);
 
     Render2DInstance instance{};
-    instance.rect.pos = dst.pos;
-    instance.rect.size = dst.size;
+    instance.rect.pos = dst.begin;
+    instance.rect.size = dst.end - dst.begin;
     instance.rect.type = Render2DInstanceType_color;
     instance.rect.color = color;
 
@@ -4968,12 +4966,12 @@ void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst)
         : &sprite->texture->asset;
 
     Render2DInstance instance{};
-    instance.sprite.pos = dst.pos;
-    instance.sprite.size = dst.size;
+    instance.sprite.pos = dst.begin;
+    instance.sprite.size = dst.end - dst.begin;
     instance.sprite.type = Render2DInstanceType_sprite;
     instance.sprite.tex = gpuImageSamplerDescriptor(texture->view);
-    instance.sprite.uvPos = sprite->uv.pos;
-    instance.sprite.uvSize = sprite->uv.size;
+    instance.sprite.uvPos = sprite->uv.begin;
+    instance.sprite.uvSize = sprite->uv.end - sprite->uv.end;
 
     *arrayPush(&layer->instances) = instance;
 
@@ -5011,14 +5009,14 @@ u32 atlasAddGrid2D(Atlas2D* atlas, Rect grid, u32 width, u32 height)
 
     u32 idx = atlas->sprites.count;
 
-    Vec2 spriteSize = grid.size / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
-    Vec2 pos = grid.pos;
+    Vec2 spriteSize = (grid.end - grid.begin) / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
+    Vec2 pos = grid.begin;
     for (u32 y = 0; y < height; ++y)
     {
-        pos.x = grid.pos.x;
+        pos.x = grid.begin.x;
         for (u32 x = 0; x < width; ++x)
         {
-            *arrayPush(&atlas->sprites) = {pos, spriteSize};
+            *arrayPush(&atlas->sprites) = {pos, pos + spriteSize};
             pos.x += spriteSize.x;
         }
         pos.y += spriteSize.y;
@@ -5071,16 +5069,16 @@ void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst)
     HG_ASSERT(layer != nullptr);
     HG_ASSERT(tilemap != nullptr);
 
-    Vec2 pos = dst.pos;
-    Vec2 size = dst.size / Vec2{static_cast<f32>(tilemap->width), static_cast<f32>(tilemap->height)};
+    Vec2 pos = dst.begin;
+    Vec2 size = (dst.end - dst.begin) / Vec2{static_cast<f32>(tilemap->width), static_cast<f32>(tilemap->height)};
     for (u32 y = 0; y < tilemap->width; ++y)
     {
-        pos.x = dst.pos.x;
+        pos.x = dst.begin.x;
         for (u32 x = 0; x < tilemap->height; ++x)
         {
             u32 tile = tilemapGet2D(tilemap, x, y);
             Sprite2D sprite = atlasGet2D(atlas, tile);
-            drawSprite2D(layer, &sprite, {pos, size});
+            drawSprite2D(layer, &sprite, {pos, pos + size});
             pos.x += size.x;
         }
         pos.y += size.y;
@@ -5762,7 +5760,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
                 if (src->position == audio->size)
                     src->position = 0;
 
-                u32 sizeToQueue = min(sizeToPush - queueSize, static_cast<u32>(audio->size - src->position));
+                u32 sizeToQueue = std::min(sizeToPush - queueSize, static_cast<u32>(audio->size - src->position));
                 memCopy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(audio->data) + src->position, sizeToQueue);
                 queueSize += sizeToQueue;
                 src->position += sizeToQueue;
@@ -5770,7 +5768,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
         }
         else
         {
-            queueSize = min(sizeToPush, static_cast<u32>(audio->size - src->position));
+            queueSize = std::min(sizeToPush, static_cast<u32>(audio->size - src->position));
             memCopy(queue, reinterpret_cast<u8*>(audio->data) + src->position, queueSize);
             src->position += queueSize;
         }

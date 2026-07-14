@@ -30,7 +30,15 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
+
+#include <algorithm>
+#include <utility>
 #include <type_traits>
+
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 namespace hg {
 
@@ -421,35 +429,6 @@ template<typename T, u64 N>
 constexpr u64 arrayCount(T (&)[N])
 {
     return N;
-}
-
-/**
- * Return the lesser of the two
- */
-template<typename T, typename... Ts>
-constexpr T min(T x, Ts... xs)
-{
-    ((x = x < xs ? x : xs), ...);
-    return x;
-}
-
-/**
- * Return the greater of the two
- */
-template<typename T, typename... Ts>
-constexpr T max(T x, Ts... xs)
-{
-    ((x = x > xs ? x : xs), ...);
-    return x;
-}
-
-/**
- * Clamps a value between two other
- */
-template<typename T>
-constexpr T clamp(T x, T min, T max)
-{
-    return x >= max ? max : x <= min ? min : x;
 }
 
 /**
@@ -3575,11 +3554,11 @@ struct Rect {
     /**
      * The origin position
      */
-    Vec2 pos;
+    Vec2 begin;
     /**
      * The extent in each dimension
      */
-    Vec2 size;
+    Vec2 end;
 };
 
 /**
@@ -3811,11 +3790,11 @@ struct Box {
     /**
      * The origin position
      */
-    Vec3 pos;
+    Vec3 begin;
     /**
      * The extent in each dimension
      */
-    Vec3 size;
+    Vec3 end;
 };
 
 /**

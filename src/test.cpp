@@ -2234,13 +2234,13 @@ void test()
         }
 
         {
-            Rect rect{{-5.0f, -3.0f}, {2.0f, 8.0f}};
+            Rect rect{{-5.0f, -3.0f}, {-3.0f, 5.0f}};
             HG_ASSERT(containsPointRect({-4.0f, 0.0f}, rect));
             HG_ASSERT(!containsPointRect({-2.9f, 0.0f}, rect));
         }
 
         {
-            Rect rect{{2.0f, 2.0f}, {0.0f, 0.0f}};
+            Rect rect{{2.0f, 2.0f}, {2.0f, 2.0f}};
             HG_ASSERT(containsPointRect({2.0f, 2.0f}, rect));
             HG_ASSERT(!containsPointRect({2.01f, 2.0f}, rect));
         }
@@ -2287,7 +2287,7 @@ void test()
 
         {
             Rect a{{0.0f, 0.0f}, {5.0f, 5.0}};
-            Rect b{{3.0f, 3.0f}, {5.0f, 5.0f}};
+            Rect b{{3.0f, 3.0f}, {8.0f, 8.0f}};
 
             HG_ASSERT(intersectRects(a, b));
             HG_ASSERT(intersectRects(b, a));
@@ -2295,28 +2295,28 @@ void test()
 
         {
             Rect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
-            Rect b{{5.0f, 0.0f}, {2.0f, 2.0f}};
+            Rect b{{5.0f, 0.0f}, {7.0f, 2.0f}};
 
             HG_ASSERT(intersectRects(a, b));
         }
 
         {
             Rect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
-            Rect b{{5.0f, 5.0f}, {2.0f, 2.0f}};
+            Rect b{{5.0f, 5.0f}, {7.0f, 7.0f}};
 
             HG_ASSERT(intersectRects(a, b));
         }
 
         {
             Rect a{{0.0f, 0.0f}, {5.0f, 5.0f}};
-            Rect b{{5.01f, 0.0f}, {2.0f, 2.0f}};
+            Rect b{{5.01f, 0.0f}, {7.01f, 2.0f}};
 
             HG_ASSERT(!intersectRects(a, b));
         }
 
         {
             Rect a{{0.0f, 0.0f}, {10.0f, 10.0f}};
-            Rect b{{2.0f, 2.0f}, {2.0f, 2.0f}};
+            Rect b{{2.0f, 2.0f}, {4.0f, 4.0f}};
 
             HG_ASSERT(intersectRects(a, b));
         }
@@ -2486,7 +2486,7 @@ void test()
 
         {
             Ray2D ray{{0.0f, 5.0f}, {1.0f, 0.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectRayRect(ray, rect, &hit));
@@ -2496,7 +2496,7 @@ void test()
 
         {
             Ray2D ray{{20.0f, 5.0f}, {-1.0f, 0.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectRayRect(ray, rect, &hit));
@@ -2506,7 +2506,7 @@ void test()
 
         {
             Ray2D ray{{12.5f, -5.0f}, {0.0f, 1.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectRayRect(ray, rect, &hit));
@@ -2516,7 +2516,7 @@ void test()
 
         {
             Ray2D ray{{12.5f, 20.0f}, {0.0f, -1.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectRayRect(ray, rect, &hit));
@@ -2526,7 +2526,7 @@ void test()
 
         {
             Ray2D ray{{0.0f, 0.0f}, {1.0f, 1.0f}};
-            Rect rect{{10.0f, 10.0f}, {5.0f, 5.0f}};
+            Rect rect{{10.0f, 10.0f}, {15.0f, 15.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectRayRect(ray, rect, &hit));
@@ -2535,14 +2535,14 @@ void test()
 
         {
             Ray2D ray{{0.0f, 5.0f}, {-1.0f, 0.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             HG_ASSERT(!intersectRayRect(ray, rect, nullptr));
         }
 
         {
             Ray2D ray{{12.5f, 5.0f}, {1.0f, 0.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectRayRect(ray, rect, &hit));
@@ -2552,7 +2552,7 @@ void test()
 
         {
             Ray2D ray{{0.0f, 20.0f}, {1.0f, 0.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             HG_ASSERT(!intersectRayRect(ray, rect, nullptr));
         }
@@ -2672,7 +2672,7 @@ void test()
 
         {
             Line2D line{{0.0f, 5.0f}, {20.0f, 5.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectLineRect(line, rect, &hit));
@@ -2682,7 +2682,7 @@ void test()
 
         {
             Line2D line{{20.0f, 5.0f}, {0.0f, 5.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectLineRect(line, rect, &hit));
@@ -2692,7 +2692,7 @@ void test()
 
         {
             Line2D line{{12.5f, -5.0f}, {12.5f, 15.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectLineRect(line, rect, &hit));
@@ -2702,14 +2702,14 @@ void test()
 
         {
             Line2D line{{0.0f, 20.0f}, {20.0f, 20.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             HG_ASSERT(!intersectLineRect(line, rect, nullptr));
         }
 
         {
             Line2D line{{12.5f, 5.0f}, {17.5f, 5.0f}};
-            Rect rect{{10.0f, 0.0f}, {5.0f, 10.0f}};
+            Rect rect{{10.0f, 0.0f}, {15.0f, 10.0f}};
 
             Hit2D hit;
             HG_ASSERT(intersectLineRect(line, rect, &hit));
@@ -2944,13 +2944,13 @@ void test()
         }
 
         {
-            Box box{{-5.0f, -3.0f, -2.0f}, {2.0f, 8.0f, 6.0f}};
+            Box box{{-5.0f, -3.0f, -2.0f}, {-3.0f, 5.0f, 4.0f}};
             HG_ASSERT(containsPointBox({-4.0f, 0.0f, 0.0f}, box));
             HG_ASSERT(!containsPointBox({-2.9f, 0.0f, 0.0f}, box));
         }
 
         {
-            Box box{{2.0f, 2.0f, 2.0f}, {0.0f, 0.0f, 0.0f}};
+            Box box{{2.0f, 2.0f, 2.0f}, {2.0f, 2.0f, 2.0f}};
             HG_ASSERT(containsPointBox({2.0f, 2.0f, 2.0f}, box));
             HG_ASSERT(!containsPointBox({2.01f, 2.0f, 2.0f}, box));
         }
@@ -2999,7 +2999,7 @@ void test()
 
         {
             Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            Box b{{3.0f, 3.0f, 3.0f}, {5.0f, 5.0f, 5.0f}};
+            Box b{{3.0f, 3.0f, 3.0f}, {8.0f, 8.0f, 8.0f}};
 
             HG_ASSERT(intersectBox(a, b));
             HG_ASSERT(intersectBox(b, a));
@@ -3007,42 +3007,42 @@ void test()
 
         {
             Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            Box b{{5.0f, 0.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
+            Box b{{5.0f, 0.0f, 0.0f}, {7.0f, 2.0f, 2.0f}};
 
             HG_ASSERT(intersectBox(a, b));
         }
 
         {
             Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            Box b{{0.0f, 5.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
+            Box b{{0.0f, 5.0f, 0.0f}, {2.0f, 7.0f, 2.0f}};
 
             HG_ASSERT(intersectBox(a, b));
         }
 
         {
             Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            Box b{{0.0f, 0.0f, 5.0f}, {2.0f, 2.0f, 2.0f}};
+            Box b{{0.0f, 0.0f, 5.0f}, {2.0f, 2.0f, 7.0f}};
 
             HG_ASSERT(intersectBox(a, b));
         }
 
         {
             Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            Box b{{5.0f, 5.0f, 5.0f}, {2.0f, 2.0f, 2.0f}};
+            Box b{{5.0f, 5.0f, 5.0f}, {7.0f, 7.0f, 7.0f}};
 
             HG_ASSERT(intersectBox(a, b));
         }
 
         {
             Box a{{0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}};
-            Box b{{5.01f, 0.0f, 0.0f}, {2.0f, 2.0f, 2.0f}};
+            Box b{{5.01f, 0.0f, 0.0f}, {7.01f, 2.0f, 2.0f}};
 
             HG_ASSERT(!intersectBox(a, b));
         }
 
         {
             Box a{{0.0f, 0.0f, 0.0f}, {10.0f, 10.0f, 10.0f}};
-            Box b{{2.0f, 2.0f, 2.0f}, {2.0f, 2.0f, 2.0f}};
+            Box b{{2.0f, 2.0f, 2.0f}, {4.0f, 4.0f, 4.0f}};
 
             HG_ASSERT(intersectBox(a, b));
         }
@@ -3189,7 +3189,7 @@ void test()
 
         {
             Ray3D ray{{0.0f, 5.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectRayBox(ray, box, &hit));
@@ -3199,7 +3199,7 @@ void test()
 
         {
             Ray3D ray{{20.0f, 5.0f, 5.0f}, {-1.0f, 0.0f, 0.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectRayBox(ray, box, &hit));
@@ -3209,7 +3209,7 @@ void test()
 
         {
             Ray3D ray{{12.5f, -5.0f, 5.0f}, {0.0f, 1.0f, 0.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectRayBox(ray, box, &hit));
@@ -3219,7 +3219,7 @@ void test()
 
         {
             Ray3D ray{{12.5f, 5.0f, -5.0f}, {0.0f, 0.0f, 1.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectRayBox(ray, box, &hit));
@@ -3229,14 +3229,14 @@ void test()
 
         {
             Ray3D ray{{0.0f, 20.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             HG_ASSERT(!intersectRayBox(ray, box, nullptr));
         }
 
         {
             Ray3D ray{{12.5f, 5.0f, 5.0f}, {1.0f, 0.0f, 0.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectRayBox(ray, box, &hit));
@@ -3392,7 +3392,7 @@ void test()
 
         {
             Line3D line{{0.0f, 5.0f, 5.0f}, {20.0f, 5.0f, 5.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectLineBox(line, box, &hit));
@@ -3402,7 +3402,7 @@ void test()
 
         {
             Line3D line{{20.0f, 5.0f, 5.0f}, {0.0f, 5.0f, 5.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectLineBox(line, box, &hit));
@@ -3412,7 +3412,7 @@ void test()
 
         {
             Line3D line{{12.5f, -5.0f, 5.0f}, {12.5f, 15.0f, 5.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectLineBox(line, box, &hit));
@@ -3422,7 +3422,7 @@ void test()
 
         {
             Line3D line{{12.5f, 5.0f, -5.0f}, {12.5f, 5.0f, 15.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectLineBox(line, box, &hit));
@@ -3432,14 +3432,14 @@ void test()
 
         {
             Line3D line{{0.0f, 20.0f, 5.0f}, {20.0f, 20.0f, 5.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             HG_ASSERT(!intersectLineBox(line, box, nullptr));
         }
 
         {
             Line3D line{{12.5f, 5.0f, 5.0f}, {17.5f, 5.0f, 5.0f}};
-            Box box{{10.0f, 0.0f, 0.0f}, {5.0f, 10.0f, 10.0f}};
+            Box box{{10.0f, 0.0f, 0.0f}, {15.0f, 10.0f, 10.0f}};
 
             Hit3D hit;
             HG_ASSERT(intersectLineBox(line, box, &hit));

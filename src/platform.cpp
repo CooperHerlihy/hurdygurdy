@@ -3009,7 +3009,7 @@ static void resizeWindowSwapchain(Window* window)
         VkSwapchainCreateInfoKHR swapchainInfo{};
         swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         swapchainInfo.surface = window->surface;
-        swapchainInfo.minImageCount = min(capabilities.minImageCount, capabilities.maxImageCount - 1) + 1;
+        swapchainInfo.minImageCount = std::min(capabilities.minImageCount, capabilities.maxImageCount - 1) + 1;
         swapchainInfo.imageFormat = formatToVk(window->format);
         swapchainInfo.imageExtent = {window->width, window->height};
         swapchainInfo.imageArrayLayers = 1;
