@@ -74,18 +74,10 @@ int main()
     HG_DEFER(layerDestroy2D(&backgroundLayer));
 
     layerClear2D(&backgroundLayer);
+    Vec2 backgroundBegin = Vec2{static_cast<f32>(width) / static_cast<f32>(height) - 0.5f, 0.5f} / 2.0f;
     drawRect2D(&backgroundLayer,
         {.002f, 0, .012f, 1},
-        {
-            Vec2{
-                static_cast<f32>(width) / static_cast<f32>(height) - 0.5f,
-                0.5f,
-            } / 2.0f,
-            Vec2{
-                0.5f,
-                0.5f,
-            }
-        });
+        {backgroundBegin, backgroundBegin + Vec2{0.5f, 0.5f}});
 
     Layer2D spriteLayer = layerCreate2D();
     HG_DEFER(layerDestroy2D(&spriteLayer));
@@ -159,7 +151,7 @@ int main()
 
         layerClear2D(&spriteLayer);
 
-        drawSprite2D(&spriteLayer, &sprite, {spritePos, spriteSize});
+        drawSprite2D(&spriteLayer, &sprite, {spritePos, spritePos + spriteSize});
 
         u32 eventCount;
         WindowEvent* event = windowEvents(window, &eventCount);

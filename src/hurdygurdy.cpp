@@ -4971,7 +4971,7 @@ void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst)
     instance.sprite.type = Render2DInstanceType_sprite;
     instance.sprite.tex = gpuImageSamplerDescriptor(texture->view);
     instance.sprite.uvPos = sprite->uv.begin;
-    instance.sprite.uvSize = sprite->uv.end - sprite->uv.end;
+    instance.sprite.uvSize = sprite->uv.end - sprite->uv.begin;
 
     *arrayPush(&layer->instances) = instance;
 
