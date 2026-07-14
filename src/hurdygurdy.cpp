@@ -45,77 +45,6 @@ void formatErrorVar(String errorFmt, va_list args)
     setError(stringFormatVar(scratch, errorFmt, args));
 }
 
-void printStdout(String str)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    fputs(cString(scratch, str), stdout);
-}
-
-void printStderr(String str)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    fputs(cString(scratch, str), stderr);
-}
-
-void logInternal(String format, ...)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    va_list args;
-    va_start(args, format);
-
-    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Log: ");
-    stringAppend(scratch, &begin, format);
-    StringBuilder formatted = stringFormatVar(scratch, begin, args);
-    printStderr(formatted);
-
-    va_end(args);
-}
-
-void warnInternal(String format, ...)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    va_list args;
-    va_start(args, format);
-
-    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Warn: ");
-    stringAppend(scratch, &begin, format);
-    printStderr(stringFormatVar(scratch, begin, args));
-
-    va_end(args);
-}
-
-void panicInternal(String format, ...)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    va_list args;
-    va_start(args, format);
-
-    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Panic: ");
-    stringAppend(scratch, &begin, format);
-    begin.length += stringFormat(scratch, "\tLast error: \"%.*s\"\n", static_cast<int>(getError().length), getError().chars).length;
-    printStderr(stringFormatVar(scratch, begin, args));
-
-    va_end(args);
-
-    abort();
-}
-
-void binaryRead(Binary bin, u64 idx, void* dst, u64 len)
-{
-    HG_ASSERT(idx + len <= bin.size);
-    memCopy(dst, static_cast<const u8*>(bin.data) + idx, len);
-}
-
 static SubsystemFlags initialized = 0;
 
 bool init(SubsystemFlags init)
@@ -216,6 +145,77 @@ void deinit()
         deinitScratch();
 
     initialized = 0;
+}
+
+void printStdout(String str)
+{
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
+
+    fputs(cString(scratch, str), stdout);
+}
+
+void printStderr(String str)
+{
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
+
+    fputs(cString(scratch, str), stderr);
+}
+
+void logInternal(String format, ...)
+{
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
+
+    va_list args;
+    va_start(args, format);
+
+    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Log: ");
+    stringAppend(scratch, &begin, format);
+    StringBuilder formatted = stringFormatVar(scratch, begin, args);
+    printStderr(formatted);
+
+    va_end(args);
+}
+
+void warnInternal(String format, ...)
+{
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
+
+    va_list args;
+    va_start(args, format);
+
+    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Warn: ");
+    stringAppend(scratch, &begin, format);
+    printStderr(stringFormatVar(scratch, begin, args));
+
+    va_end(args);
+}
+
+void panicInternal(String format, ...)
+{
+    Arena* scratch = getScratch();
+    HG_ARENA_SCOPE(scratch);
+
+    va_list args;
+    va_start(args, format);
+
+    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Panic: ");
+    stringAppend(scratch, &begin, format);
+    begin.length += stringFormat(scratch, "\tLast error: \"%.*s\"\n", static_cast<int>(getError().length), getError().chars).length;
+    printStderr(stringFormatVar(scratch, begin, args));
+
+    va_end(args);
+
+    abort();
+}
+
+void binaryRead(Binary bin, u64 idx, void* dst, u64 len)
+{
+    HG_ASSERT(idx + len <= bin.size);
+    memCopy(dst, static_cast<const u8*>(bin.data) + idx, len);
 }
 
 void memClear(void* dst, u64 size, u8 val)

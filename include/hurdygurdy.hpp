@@ -186,6 +186,49 @@ void formatError(String errorFmt, ...);
  */
 void formatErrorVar(String errorFmt, va_list args);
 
+/**
+ * The Hurdy Gurdy subsystems
+ */
+enum Subsystem : u32 {
+    Subsystem_memory = 0x1,
+    Subsystem_concurrency = 0x2,
+    Subsystem_gpu = 0x4,
+    Subsystem_assets = 0x8,
+    Subsystem_windowing = 0x10,
+    Subsystem_audio = 0x20,
+    Subsystem_all = static_cast<u32>(-1),
+};
+using SubsystemFlags = u32;
+
+/**
+ * Initialize the Hurdy Gurdy library
+ *
+ * Parameters
+ * - init Which subsystems to initialize, all are recommended
+ *
+ * Returns
+ * - Whether initialization succeeded
+ */
+bool init(SubsystemFlags init = Subsystem_all);
+
+/**
+ * Shut down the Hurdy Gurdy library
+ */
+void deinit();
+
+/**
+ * Initialize the platform
+ *
+ * Returns
+ * - Whether init succeeded
+ */
+bool platformInit();
+
+/**
+ * Deinitialize the platform
+ */
+void platformDeinit();
+
 #define HG_MACRO_CONCAT_INTERNAL(x, y) x##y
 
 /**
@@ -378,49 +421,6 @@ struct String {
         return chars[idx];
     }
 };
-
-/**
- * The Hurdy Gurdy subsystems
- */
-enum Subsystem : u32 {
-    Subsystem_memory = 0x1,
-    Subsystem_concurrency = 0x2,
-    Subsystem_gpu = 0x4,
-    Subsystem_assets = 0x8,
-    Subsystem_windowing = 0x10,
-    Subsystem_audio = 0x20,
-    Subsystem_all = static_cast<u32>(-1),
-};
-using SubsystemFlags = u32;
-
-/**
- * Initialize the Hurdy Gurdy library
- *
- * Parameters
- * - init Which subsystems to initialize, all are recommended
- *
- * Returns
- * - Whether initialization succeeded
- */
-bool init(SubsystemFlags init = Subsystem_all);
-
-/**
- * Shut down the Hurdy Gurdy library
- */
-void deinit();
-
-/**
- * Initialize the platform
- *
- * Returns
- * - Whether init succeeded
- */
-bool platformInit();
-
-/**
- * Deinitialize the platform
- */
-void platformDeinit();
 
 /**
  * Returns the size of a stack array

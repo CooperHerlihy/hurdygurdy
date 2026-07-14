@@ -1,9 +1,7 @@
 # Hurdy Gurdy
 
-C++23 game engine. Vulkan 1.3, SDL3, Dear ImGui.
+Modern C++23 game engine. Vulkan 1.3, SDL3, Dear ImGui.
 No STL containers, no exceptions, no RTTI.
-
-See [CODING_GUIDELINES.md](CODING_GUIDELINES.md) for all coding conventions (RAII, move semantics, modern C++ style).
 
 ## Hard Rules
 
@@ -35,25 +33,56 @@ src/minimal.cpp           — example minimal app
 build/                    — CMake build output
 ```
 
-## Quick Conventions
+## Conventions
 
-- Types: PascalCase. Functions: camelCase. Macros: `HG_UPPER_SNAKE_CASE`.
-- Integer types: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`, `f32`, `f64`.
-- No `int`, `unsigned`, `size_t`, `std::*` containers, exceptions, RTTI.
-- `#include "hurdygurdy.hpp"` first in .cpp files. `using namespace hg;` in executables.
+- 4-space indent, no tabs.
+- Braces:
+    - Code blocks (`if`, `for`, `while`, function bodies): brace on **next line**.
+    - Type definitions (`struct`, `class`, `enum`): brace on **same line**.
+    - Initialization (`{}`): brace on **same line**.
+- Names:
+    - namespace hg
+    - Types: PascalCase
+    - Functions/Variables: camelCase
+    - Macros: `HG_UPPER_SNAKE_CASE`.
+- Types:
+    - Integer types: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`, `f32`, `f64`.
+    - No `int`, `unsigned`, `size_t`, `std::*` containers, exceptions, RTTI.
+- Resources:
+    - Use RAII
+    - Constructors must never fail, otherwise use static create function
+    - Delete copy constructors, use clone function if needed
+- Errors:
+    - Assert all preconditions with HG_ASSERT
+    - Recoverable: Option<Foo> foo(), then getError()
+    - Unrecoverable: HG_PANIC("Error")
+- Memory:
+    - Scratch memory: getScratch(conflicts), HG_ARENA_SCOPE(scratch), and Temp containers
+    - Heap memory: prefer containers, then heapAlloc(), heapRealloc, heapFree()
+    - Common containers: Array, Queue, Set, Map, String
+- Concurrency: prefer forPar(), then callPar(), then std::* primitives
+
+## Writing Comments
+
+Header doc comments on every function, type, variable, etc:
+
+```cpp
+/**
+ * Short punchy description
+ *
+ * Parameters
+ * - param1 The parameter description
+ *
+ * Returns
+ * - What the function returns
+ */
+ ```
+
+Implementation files only comment confusing code.
+Tests comment extensively as usage documentation.
 
 ## Reading the Codebase
 
 - grep before reading big files (hurdygurdy.hpp is large).
 - Read `test.cpp` for test patterns, `minimal.cpp` for a simple usage example.
-
-## Git Workflow
-
-```
-1. git switch main && git pull --rebase
-2. git switch -c hg/<short-description>
-3. Make atomic commits as you work
-4. git switch main && git merge --squash <branch>
-5. git branch -D <branch>
-```
 
