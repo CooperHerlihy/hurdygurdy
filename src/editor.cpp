@@ -609,7 +609,7 @@ int main()
     Arena* arena = getScratch();
     HG_ARENA_SCOPE(arena);
 
-    for (u32 i = 0; i < arrayCount(audioData); ++i)
+    for (u32 i = 0; i < std::size(audioData); ++i)
     {
 
         // saw harmonics

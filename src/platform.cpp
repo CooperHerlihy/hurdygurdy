@@ -836,7 +836,7 @@ static VkInstance createInstance(String* extensions, u32 extensionCount)
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
-    instanceInfo.enabledLayerCount = static_cast<u32>(arrayCount(layers));
+    instanceInfo.enabledLayerCount = static_cast<u32>(std::size(layers));
     instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
@@ -934,7 +934,7 @@ static VkPhysicalDevice findPhysicalDevice()
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, extProps);
 
-        for (u32 j = 0; j < static_cast<u32>(arrayCount(deviceExtensions)); j++)
+        for (u32 j = 0; j < static_cast<u32>(std::size(deviceExtensions)); j++)
         {
             for (u32 k = 0; k < newPropCount; k++)
             {
@@ -1013,7 +1013,7 @@ static VkDevice createDevice()
     deviceInfo.pNext = &synchronization2Feature;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueInfo;
-    deviceInfo.enabledExtensionCount = static_cast<u32>(arrayCount(deviceExtensions));
+    deviceInfo.enabledExtensionCount = static_cast<u32>(std::size(deviceExtensions));
     deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     deviceInfo.pEnabledFeatures = &features;
 
@@ -1058,7 +1058,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     info.maxSets = 1;
-    info.poolSizeCount = static_cast<u32>(arrayCount(sizes));
+    info.poolSizeCount = static_cast<u32>(std::size(sizes));
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
@@ -1084,14 +1084,14 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    flagsInfo.bindingCount = static_cast<u32>(arrayCount(bindings));
+    flagsInfo.bindingCount = static_cast<u32>(std::size(bindings));
     flagsInfo.pBindingFlags = flags;
 
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &flagsInfo;
     info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    info.bindingCount = static_cast<u32>(arrayCount(bindings));
+    info.bindingCount = static_cast<u32>(std::size(bindings));
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
@@ -1904,7 +1904,7 @@ void gpuImageWriteCubemap(GpuView* dst, const void* src)
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = static_cast<u32>(arrayCount(transferBarriers));
+    transferDep.imageMemoryBarrierCount = static_cast<u32>(std::size(transferBarriers));
     transferDep.pImageMemoryBarriers = transferBarriers;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &transferDep);
@@ -1953,7 +1953,7 @@ void gpuImageWriteCubemap(GpuView* dst, const void* src)
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         dst->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        static_cast<u32>(arrayCount(regions)),
+        static_cast<u32>(std::size(regions)),
         regions);
 
     gpuCmdEnd(cmd);
@@ -2258,7 +2258,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = static_cast<u32>(arrayCount(dynamicStates));
+    dynamicState.dynamicStateCount = static_cast<u32>(std::size(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
     VkFormat* colorFormats = arenaAlloc<VkFormat>(scratch, config->colorAttachmentCount);
@@ -2279,7 +2279,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = static_cast<u32>(arrayCount(shaderStages));
+    pipelineInfo.stageCount = static_cast<u32>(std::size(shaderStages));
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputState;
     pipelineInfo.pInputAssemblyState = &inputAssemblyState;

@@ -1565,7 +1565,7 @@ bool intersectRayRect(Ray2D ray, Rect rect, Hit2D* hit)
 
     f32 t = INFINITY;
     Vec2 norm;
-    for (u32 i = 0; i < arrayCount(hits); ++i)
+    for (u32 i = 0; i < std::size(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON)
             continue;
@@ -1705,7 +1705,7 @@ bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit)
 
     f32 t = INFINITY;
     Vec2 norm;
-    for (u32 i = 0; i < arrayCount(hits); ++i)
+    for (u32 i = 0; i < std::size(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON || hits[i] > 1 + FLT_EPSILON)
             continue;
@@ -1886,7 +1886,7 @@ bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit)
 
     f32 t = INFINITY;
     Vec3 norm;
-    for (u32 i = 0; i < arrayCount(hits); ++i)
+    for (u32 i = 0; i < std::size(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON)
             continue;
@@ -2031,7 +2031,7 @@ bool intersectLineBox(Line3D line, Box box, Hit3D* hit)
 
     f32 t = INFINITY;
     Vec3 norm;
-    for (u32 i = 0; i < arrayCount(hits); ++i)
+    for (u32 i = 0; i < std::size(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON || hits[i] > 1 + FLT_EPSILON)
             continue;
@@ -6203,9 +6203,9 @@ void modelsInit(
     gpuBufferWrite(modelPipeline.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
     gpuBufferWrite(modelPipeline.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
 
-    modelPipeline.defaultModel.vertexCount = static_cast<u32>(arrayCount(cubeVertices));
+    modelPipeline.defaultModel.vertexCount = static_cast<u32>(std::size(cubeVertices));
     modelPipeline.defaultModel.vertexWidth = static_cast<u32>(sizeof(MeshVertex));
-    modelPipeline.defaultModel.indexCount = static_cast<u32>(arrayCount(cubeIndices));
+    modelPipeline.defaultModel.indexCount = static_cast<u32>(std::size(cubeIndices));
 
     struct Color {
         u8 r, g, b, a;

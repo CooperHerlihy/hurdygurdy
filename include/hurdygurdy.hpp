@@ -167,6 +167,18 @@ struct Binary;
 struct String;
 
 /**
+ * A view into memory of a type
+ */
+template<typename T>
+struct Span;
+
+/**
+ * An object which may or may not exist
+ */
+template<typename T>
+struct Maybe;
+
+/**
  * Get this thread's most recent error message
  */
 String getError();
@@ -423,13 +435,171 @@ struct String {
 };
 
 /**
- * Returns the size of a stack array
+ * A view into memory of a type
  */
-template<typename T, u64 N>
-constexpr u64 arrayCount(T (&)[N])
+template<typename T>
+struct Span
 {
-    return N;
-}
+    /**
+     * The values viewed
+     */
+    T* values;
+    /**
+     * The number of values
+     */
+    u32 count;
+
+    /**
+     * Access by index
+     */
+    T& operator[](u32 idx) const
+    {
+        HG_ASSERT(idx < count);
+        return values[idx];
+    }
+
+    /**
+     * Use range for
+     */
+    T* begin()
+    {
+        return values;
+    }
+
+    /**
+     * Use range for
+     */
+    T* end()
+    {
+        return values + count;
+    }
+
+    /**
+     * Use range for
+     */
+    const T* begin() const
+    {
+        return values;
+    }
+
+    /**
+     * Use range for
+     */
+    const T* end() const
+    {
+        return values + count;
+    }
+};
+
+/**
+ * An object which may or may not exist
+ */
+template<typename T>
+struct Maybe
+{
+    /**
+     * Whether the object exists
+     */
+    bool has = false;
+    union {
+        /**
+         * The object, which may or may not exist
+         */
+        T value;
+    };
+
+    /**
+     * Construct empty
+     */
+    Maybe() = default;
+
+    /**
+     * Destroy the value, if it exists
+     */
+    ~Maybe() noexcept
+    {
+        if (has)
+            value.~T();
+    }
+
+    /**
+     * Copy construct from a value
+     */
+    Maybe(const T& val)
+        : has{true}, value{val}
+    {};
+
+    /**
+     * Copy assign from a value
+     */
+    Maybe& operator=(const T& val)
+    {
+        this->~Maybe();
+        has = true;
+        new (&value) T{val};
+    }
+
+    /**
+     * Move construct from a value
+     */
+    Maybe(T&& val) noexcept
+        : has{true}, value{std::move(val)}
+    {};
+
+    /**
+     * Move assign from a value
+     */
+    Maybe& operator=(T&& val) noexcept
+    {
+        this->~Maybe();
+        has = true;
+        new (&value) T{std::move(val)};
+    }
+
+    /**
+     * Copy construct
+     */
+    Maybe(const Maybe& other)
+        : has{other.has}
+    {
+        if (other.has)
+            new (&value) T{other.value};
+    }
+
+    /**
+     * Copy assign
+     */
+    Maybe& operator=(const Maybe& other)
+    {
+        this->~Maybe();
+        has = other.has;
+        if (other.has)
+            new (&value) T{other.value};
+    }
+
+    /**
+     * Move construct
+     */
+    Maybe(Maybe&& other) noexcept
+        : has{other.has}
+    {
+        if (other.has)
+            new (&value) T{std::move(other.value)};
+        other.has = false;
+    }
+
+    /**
+     * Move assign
+     */
+    Maybe& operator=(Maybe&& other) noexcept
+    {
+        this->~Maybe();
+        has = other.has;
+        if (other.has)
+            new (&value) T{std::move(other.value)};
+        other.has = false;
+    }
+};
 
 /**
  * Returns whether a value is a power of 2

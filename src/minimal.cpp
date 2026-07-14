@@ -32,7 +32,7 @@ int main()
     music->asset.frequency = 8000;
     music->asset.channels = 1;
 
-    for (u32 i = 0; i < arrayCount(musicData); ++i)
+    for (u32 i = 0; i < std::size(musicData); ++i)
     {
         f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
         musicData[i] = 0;
@@ -50,7 +50,7 @@ int main()
     sound->asset.frequency = 8000;
     sound->asset.channels = 1;
 
-    for (u32 i = 0; i < arrayCount(soundData); ++i)
+    for (u32 i = 0; i < std::size(soundData); ++i)
     {
         f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
         soundData[i] = noiseNorm(42.0f, t) / (t + 0.1f);

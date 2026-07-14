@@ -6,9 +6,6 @@
 
 #include <cstdio>
 
-#include <atomic>
-#include <thread>
-
 #include <emmintrin.h>
 
 namespace hg {
@@ -418,7 +415,7 @@ void test()
             {
                 (static_cast<bool*>(pvals))[idx] = true;
             };
-            forPar(0, arrayCount(vals), vals, fn);
+            forPar(0, std::size(vals), vals, fn);
 
             for (bool& val : vals)
             {
@@ -455,7 +452,7 @@ void test()
                         callPar(fence, vals + i, fn);
                     }
                 };
-                for (u32 j = 0; j < arrayCount(producers); ++j)
+                for (u32 j = 0; j < std::size(producers); ++j)
                 {
                     producers[j] = std::thread(prodFn, j);
                 }
@@ -3941,7 +3938,7 @@ void test()
 
         {
             u32 smallScramble1[]{1, 0};
-            for (u32 i = 0; i < arrayCount(smallScramble1); ++i)
+            for (u32 i = 0; i < std::size(smallScramble1); ++i)
             {
                 *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = smallScramble1[i];
             }
@@ -3979,7 +3976,7 @@ void test()
 
         {
             u32 mediumScramble1[]{8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
-            for (u32 i = 0; i < arrayCount(mediumScramble1); ++i)
+            for (u32 i = 0; i < std::size(mediumScramble1); ++i)
             {
                 *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = mediumScramble1[i];
             }
@@ -4000,7 +3997,7 @@ void test()
 
         {
             u32 mediumScramble2[]{3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
-            for (u32 i = 0; i < arrayCount(mediumScramble2); ++i)
+            for (u32 i = 0; i < std::size(mediumScramble2); ++i)
             {
                 *ecsAdd<u32>(&ecs, ecsSpawn(&ecs)) = mediumScramble2[i];
             }
