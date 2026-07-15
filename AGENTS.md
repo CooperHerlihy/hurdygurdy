@@ -9,7 +9,7 @@ No STL containers, no exceptions, no RTTI.
 
 - Ask before structural changes, destructive ops, or anything ambiguous.
 - No STL, exceptions, RTTI, third-party code, or reformatting without instruction.
-- Use proper git workflow for rollback safety
+- Never run scripts without backups and tests
 
 ## Build & Verify
 
@@ -33,6 +33,62 @@ src/minimal.cpp           — example minimal app
 build/                    — CMake build output
 ```
 
+## Sections
+
+hurdygurdy.hpp is large, grep for these sections
+
+- Configuration Macros
+- Core Types (forward declarations)
+- Error Handling
+- Initialization
+- Utility Macros
+- Diagnostics
+- Core Types
+- Utility Functions
+- Memory
+- Concurrency
+- GPU
+    - GPU Init
+    - Pixel Formats
+    - Pipeline Stages & Access
+    - Buffers
+    - Images & Views
+    - Pipelines
+    - Command Buffer & Draw
+    - Barriers
+    - Compute Pass
+    - Render Pass
+- Math
+    - Constants & Helpers
+    - Vector Types
+    - Matrix Types
+    - Complex & Quaternion Types
+    - Comparison Operators
+    - Vector Functions
+    - Matrix Functions
+    - Complex Functions
+    - Quaternion Functions
+    - Transform Matrices
+    - Geometry 2D
+    - Geometry 3D
+    - Noise & RNG
+- Binary Builder
+- String Utilities
+- Serialization
+- Containers
+- Asset System
+- Timing
+- Dynamic Library
+- Windowing
+- Input
+- Audio
+- Camera
+- Texture Assets
+- 2D Renderer
+- 3D Mesh
+- ImGui Integration
+- ECS
+
 ## Conventions
 
 - 4-space indent, no tabs.
@@ -49,17 +105,14 @@ build/                    — CMake build output
     - Integer types: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`, `f32`, `f64`.
     - No `int`, `unsigned`, `size_t`, `std::*` containers, exceptions, RTTI.
 - Resources:
-    - Use RAII
+    - RAII
     - Constructors must never fail, otherwise use static create function
     - Delete copy constructors, use clone function if needed
 - Errors:
     - Assert all preconditions with HG_ASSERT
     - Recoverable: Option<Foo> foo(), then getError()
     - Unrecoverable: HG_PANIC("Error")
-- Memory:
-    - Scratch memory: getScratch(conflicts), HG_ARENA_SCOPE(scratch), and Temp containers
-    - Heap memory: prefer containers, then heapAlloc(), heapRealloc, heapFree()
-    - Common containers: Array, Queue, Set, Map, String
+- Memory: prefer scratch arena, then containers, then heapAlloc and heapFree
 - Concurrency: prefer forPar(), then callPar(), then std::* primitives
 
 ## Writing Comments
@@ -78,11 +131,6 @@ Header doc comments on every function, type, variable, etc:
  */
  ```
 
-Implementation files only comment confusing code.
-Tests comment extensively as usage documentation.
-
-## Reading the Codebase
-
-- grep before reading big files (hurdygurdy.hpp is large).
-- Read `test.cpp` for test patterns, `minimal.cpp` for a simple usage example.
+Tests comment extensively
+Cpp files only comment confusing code
 

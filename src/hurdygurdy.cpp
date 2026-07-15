@@ -29,21 +29,21 @@ void setError(String error)
     errorLength = newLength;
 }
 
-void formatError(String errorFmt, ...)
-{
-    va_list args;
-    va_start(args, errorFmt);
-    formatErrorVar(errorFmt, args);
-    va_end(args);
-}
+// void formatError(String errorFmt, ...)
+// {
+//     va_list args;
+//     va_start(args, errorFmt);
+//     formatErrorVar(errorFmt, args);
+//     va_end(args);
+// }
 
-void formatErrorVar(String errorFmt, va_list args)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    setError(stringFormatVar(scratch, errorFmt, args));
-}
+// void formatErrorVar(String errorFmt, va_list args)
+// {
+//     Arena* scratch = getScratch();
+//     HG_ARENA_SCOPE(scratch);
+//
+//     setError(stringFormatVar(scratch, errorFmt, args));
+// }
 
 static SubsystemFlags initialized = 0;
 
@@ -145,71 +145,6 @@ void deinit()
         deinitScratch();
 
     initialized = 0;
-}
-
-void printStdout(String str)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    fputs(cString(scratch, str), stdout);
-}
-
-void printStderr(String str)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    fputs(cString(scratch, str), stderr);
-}
-
-void logInternal(String format, ...)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    va_list args;
-    va_start(args, format);
-
-    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Log: ");
-    stringAppend(scratch, &begin, format);
-    StringBuilder formatted = stringFormatVar(scratch, begin, args);
-    printStderr(formatted);
-
-    va_end(args);
-}
-
-void warnInternal(String format, ...)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    va_list args;
-    va_start(args, format);
-
-    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Warn: ");
-    stringAppend(scratch, &begin, format);
-    printStderr(stringFormatVar(scratch, begin, args));
-
-    va_end(args);
-}
-
-void panicInternal(String format, ...)
-{
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
-
-    va_list args;
-    va_start(args, format);
-
-    StringBuilder begin = stringCopy(scratch, "HurdyGurdy Panic: ");
-    stringAppend(scratch, &begin, format);
-    begin.length += stringFormat(scratch, "\tLast error: \"%.*s\"\n", static_cast<int>(getError().length), getError().chars).length;
-    printStderr(stringFormatVar(scratch, begin, args));
-
-    va_end(args);
-
-    abort();
 }
 
 void binaryRead(Binary bin, u64 idx, void* dst, u64 len)
@@ -341,8 +276,8 @@ void deinitScratch()
 
 Arena* getScratch(Arena const* const* conflicts, u32 count)
 {
-    if (conflicts != nullptr)
-        HG_ASSERT(count > 0);
+    if (count > 0)
+        HG_ASSERT(conflicts != nullptr);
 
     for (u32 i = 0; i < scratchArenaCount; ++i)
     {
@@ -884,97 +819,6 @@ Quat& Quat::operator-=(Quat other)
     return* this;
 }
 
-void vecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(lhs != nullptr);
-    HG_ASSERT(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] + rhs[i];
-    }
-}
-
-void vecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(lhs != nullptr);
-    HG_ASSERT(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] - rhs[i];
-    }
-}
-
-void vecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(lhs != nullptr);
-    HG_ASSERT(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] * rhs[i];
-    }
-}
-
-void vecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(vec != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = scalar * vec[i];
-    }
-}
-
-void vecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(lhs != nullptr);
-    HG_ASSERT(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        HG_ASSERT(rhs[i] != 0);
-        dst[i] = lhs[i] / rhs[i];
-    }
-}
-
-void vecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(vec != nullptr);
-    HG_ASSERT(scalar != 0);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = vec[i] / scalar;
-    }
-}
-
-void vecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(lhs != nullptr);
-    HG_ASSERT(rhs != nullptr);
-    *dst = 0;
-    for (u32 i = 0; i < size; ++i)
-    {
-        *dst += lhs[i] * rhs[i];
-    }
-}
-
-void vecLenSqr(u32 size, f32* dst, const f32* vec)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(vec != nullptr);
-    vecDot(size, dst, vec, vec);
-}
-
-void vecLen(u32 size, f32* dst, const f32* vec)
-{
-    vecLenSqr(size, dst, vec);
-    *dst = std::sqrt(*dst);
-}
-
 f32 vecLen2(Vec2 vec)
 {
     return std::sqrt(vecLenSqr2(vec));
@@ -988,19 +832,6 @@ f32 vecLen3(Vec3 vec)
 f32 vecLen4(Vec4 vec)
 {
     return std::sqrt(vecLenSqr4(vec));
-}
-
-void vecNorm(u32 size, f32* dst, const f32* vec)
-{
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(vec != nullptr);
-    f32 len;
-    vecLen(size, &len, vec);
-    HG_ASSERT(len != 0);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = vec[i] / len;
-    }
 }
 
 Vec2 vecNorm2(Vec2 vec)
@@ -1048,7 +879,7 @@ Vec3 vecCross3(Vec3 lhs, Vec3 rhs)
     };
 }
 
-void matAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+static void matAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
 {
     HG_ASSERT(dst != nullptr);
     HG_ASSERT(lhs != nullptr);
@@ -1083,7 +914,7 @@ Mat4 operator+(const Mat4& lhs, const Mat4& rhs)
     return result;
 }
 
-void matSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+static void matSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
 {
     HG_ASSERT(dst != nullptr);
     HG_ASSERT(lhs != nullptr);
@@ -1118,7 +949,7 @@ Mat4 operator-(const Mat4& lhs, const Mat4& rhs)
     return result;
 }
 
-void matMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
+static void matMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
 {
     HG_ASSERT(hr == wl);
     HG_ASSERT(dst != nullptr);
@@ -1159,7 +990,7 @@ Mat4 operator*(const Mat4& lhs, const Mat4& rhs)
     return result;
 }
 
-void matMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
+static void matMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
 {
     HG_ASSERT(dst != nullptr);
     HG_ASSERT(mat != nullptr);
@@ -2227,13 +2058,6 @@ u64 rngNext64(Rng* rng)
     return (static_cast<u64>(rngNext(rng)) << 32) | static_cast<u64>(rngNext(rng));
 }
 
-u32 getMaxMipmaps(u32 width, u32 height, u32 depth)
-{
-    u32 max = width > height ? width : height;
-    max = max > depth ? max : depth;
-    return max == 0 ? 0 : static_cast<u32>(log2(static_cast<f32>(max))) + 1;
-}
-
 void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize)
 {
     bin->data = arenaRealloc(arena, bin->data, bin->size, newSize, 1);
@@ -2284,30 +2108,6 @@ StringBuilder stringCopy(Arena* arena, String str)
     memCopy(copy.chars, str.chars, str.length);
     copy.length = str.length;
     return copy;
-}
-
-StringBuilder stringFormat(Arena* arena, String format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    StringBuilder ret = stringFormatVar(arena, format, args);
-    va_end(args);
-    return ret;
-}
-
-StringBuilder stringFormatVar(Arena* arena, String fmt, va_list args)
-{
-    Arena* scratch = getScratch(&arena, 1);
-    HG_ARENA_SCOPE(scratch);
-
-    int len = vsnprintf(static_cast<char*>(arena->memory) + arena->head, arena->capacity - arena->head, cString(scratch, fmt), args);
-    if (len < 0)
-        HG_PANIC("snprintf returned an error");
-
-    StringBuilder ret{static_cast<char*>(arena->memory) + arena->head, static_cast<u64>(len)};
-    arena->head += static_cast<u64>(len);
-
-    return ret;
 }
 
 void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, String src)

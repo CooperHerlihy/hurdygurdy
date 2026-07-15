@@ -30,6 +30,7 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
+#include <cstdio>
 
 #include <algorithm>
 #include <utility>
@@ -41,6 +42,10 @@
 #include <thread>
 
 namespace hg {
+
+// ============================================================================
+// Configuration Macros
+// ============================================================================
 
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
@@ -156,6 +161,10 @@ using f32 = float;
  */
 using f64 = double;
 
+// ============================================================================
+// Core Types (forward declarations)
+// ============================================================================
+
 /**
  * A block of binary data
  */
@@ -178,6 +187,10 @@ struct Span;
 template<typename T>
 struct Maybe;
 
+// ============================================================================
+// Error Handling
+// ============================================================================
+
 /**
  * Get this thread's most recent error message
  */
@@ -189,14 +202,24 @@ String getError();
 void setError(String error);
 
 /**
- * Format and set this thread's current error message
+ * Format and set this thread's error message
  */
-void formatError(String errorFmt, ...);
+template<typename... Ts>
+void formatError(String errorFmt, Ts... args);
 
-/**
- * Format and set this thread's current error message with varargs
- */
-void formatErrorVar(String errorFmt, va_list args);
+// /**
+//  * Format and set this thread's current error message
+//  */
+// void formatError(String errorFmt, ...);
+
+// /**
+//  * Format and set this thread's current error message with varargs
+//  */
+// void formatErrorVar(String errorFmt, va_list args);
+
+// ============================================================================
+// Initialization
+// ============================================================================
 
 /**
  * The Hurdy Gurdy subsystems
@@ -241,6 +264,10 @@ bool platformInit();
  */
 void platformDeinit();
 
+// ============================================================================
+// Utility Macros
+// ============================================================================
+
 #define HG_MACRO_CONCAT_INTERNAL(x, y) x##y
 
 /**
@@ -277,36 +304,15 @@ struct Defer {
  */
 #define HG_DEFER(...) [[maybe_unused]] hg::Defer HG_MACRO_CONCAT(defer_, __LINE__){[&]{ __VA_ARGS__ ;}};
 
-/**
- * Format and print a string to stdout
- */
-void printStdout(String str);
-
-/**
- * Format and print a string to stderr
- */
-void printStderr(String str);
-
-/**
- * Formats and logs a message to stderr for debugging purposes
- */
-void logInternal(String format, ...);
-
-/**
- * Formats and logs a message to stderr as a warning
- */
-void warnInternal(String format, ...);
-
-/**
- * Formats and logs a message to stderr and aborts the program
- */
-[[noreturn]] void panicInternal(String format, ...);
+// ============================================================================
+// Diagnostics
+// ============================================================================
 
 #ifdef HG_LOGGING
 
-#define HG_LOG(...) do { hg::logInternal(__VA_ARGS__); } while(0)
-#define HG_WARN(...) do { hg::warnInternal(__VA_ARGS__); } while(0)
-#define HG_PANIC(...) do { hg::panicInternal(__VA_ARGS__); } while(0)
+#define HG_LOG(...) do { printf("HurdyGurdy Log: " __VA_ARGS__); } while(0)
+#define HG_WARN(...) do { printf("HurdyGurdy Warn: " __VA_ARGS__); } while(0)
+#define HG_PANIC(...) do { printf("HurdyGurdy Panic: " __VA_ARGS__); abort(); } while(0)
 
 #else
 
@@ -334,6 +340,14 @@ void warnInternal(String format, ...);
 #define HG_ASSERT(cond) do {} while(0)
 
 #endif
+
+// ============================================================================
+// Core Types
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// Binary
+// ----------------------------------------------------------------------------
 
 /**
  * A block of binary data
@@ -372,6 +386,10 @@ T binaryRead(Binary bin, u64 idx)
     binaryRead(bin, idx, &ret, sizeof(T));
     return ret;
 }
+
+// ----------------------------------------------------------------------------
+// String
+// ----------------------------------------------------------------------------
 
 /**
  * A view into a string
@@ -418,7 +436,8 @@ struct String {
             while (cStr[length] != '\0')
             {
                 ++length;
-                HG_ASSERT(length <= 4096);
+                if (length <= 4096)
+                    HG_PANIC("C string greater than 4096 cannot be implicitly converted");
             }
         }
     }
@@ -434,12 +453,15 @@ struct String {
     }
 };
 
+// ----------------------------------------------------------------------------
+// Span
+// ----------------------------------------------------------------------------
+
 /**
  * A view into memory of a type
  */
 template<typename T>
-struct Span
-{
+struct Span {
     /**
      * The values viewed
      */
@@ -490,6 +512,10 @@ struct Span
         return values + count;
     }
 };
+
+// ----------------------------------------------------------------------------
+// Maybe
+// ----------------------------------------------------------------------------
 
 /**
  * An object which may or may not exist
@@ -601,6 +627,10 @@ struct Maybe
     }
 };
 
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
 /**
  * Returns whether a value is a power of 2
  */
@@ -670,6 +700,10 @@ void memMove(void* dst, const void* src, u64 size);
  * Check if two regions of memory are identical
  */
 bool memEqual(const void* dst, const void* src, u64 size);
+
+// ============================================================================
+// Memory
+// ============================================================================
 
 /**
  * Allocates memory from a general purpose allocator
@@ -891,6 +925,10 @@ void deinitScratch();
  */
 Arena* getScratch(Arena const* const* conflicts = nullptr, u32 count = 0);
 
+// ============================================================================
+// Concurrency
+// ============================================================================
+
 /**
  * Initialize synchronization and threads
  */
@@ -1039,6 +1077,14 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
 template<typename F>
 void forPar(u64 begin, u64 end, F fn);
 
+// ============================================================================
+// GPU
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// GPU Init
+// ----------------------------------------------------------------------------
+
 /**
  * Initializes the graphics subsystem, loading all global Vulkan resources
  *
@@ -1068,6 +1114,10 @@ u32 platformGetVulkanExtensions(Arena* arena, String** extBuffer);
  * Wait for the GPU to finish work
  */
 void gpuWaitIdle();
+
+// ----------------------------------------------------------------------------
+// Pixel Formats
+// ----------------------------------------------------------------------------
 
 /**
  * Pixel formats
@@ -1353,6 +1403,10 @@ u32 formatToSize(Format format);
 
 // Vulkan allocator : TODO?
 
+// ----------------------------------------------------------------------------
+// Pipeline Stages & Access
+// ----------------------------------------------------------------------------
+
 /**
  * Where in the pipeline a resource can be accessed
  */
@@ -1402,6 +1456,10 @@ enum GpuAccess : u32 {
     GpuAccess_memoryWrite = 0x00010000,
 };
 using GpuAccessFlags = u32;
+
+// ----------------------------------------------------------------------------
+// Buffers
+// ----------------------------------------------------------------------------
 
 /**
  * A gpu buffer
@@ -1511,6 +1569,10 @@ void gpuBufferWrite(GpuBuffer* dst, u64 offset, const void* src, u64 size);
  * - size The size in bytes to read
  */
 void gpuBufferRead(void* dst, GpuBuffer* src, u64 offset, u64 size);
+
+// ----------------------------------------------------------------------------
+// Images & Views
+// ----------------------------------------------------------------------------
 
 /**
  * A gpu image
@@ -1802,6 +1864,20 @@ void gpuImageRead(void* dst, GpuView* src);
 void gpuImageGenMipmaps(GpuView* dst);
 
 /**
+ * Calculates the maximum number of mipmap levels that an image can have
+ *
+ * Parameters
+ * - width The width of the image
+ * - height The height of the image
+ * - depth The depth of the image
+ */
+u32 getMaxMipmaps(u32 width, u32 height, u32 depth);
+
+// ----------------------------------------------------------------------------
+// Pipelines
+// ----------------------------------------------------------------------------
+
+/**
  * A gpu pipeline
  */
 struct GpuPipeline;
@@ -1951,6 +2027,10 @@ GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 sh
  */
 void gpuPipelineDestroy(GpuPipeline* pipeline);
 
+// ----------------------------------------------------------------------------
+// Command Buffer & Draw
+// ----------------------------------------------------------------------------
+
 /**
  * A gpu command buffer
  */
@@ -2012,6 +2092,10 @@ void gpuDraw(GpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u
  */
 void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
 
+// ----------------------------------------------------------------------------
+// Barriers
+// ----------------------------------------------------------------------------
+
 /**
  * An image dependency barrier
  */
@@ -2069,6 +2153,10 @@ void gpuMemoryBarrier(
     const GpuImageBarrier* imageBarriers,
     u32 imageBarrierCount);
 
+// ----------------------------------------------------------------------------
+// Compute Pass
+// ----------------------------------------------------------------------------
+
 /**
  * A compute pass description
  */
@@ -2115,6 +2203,10 @@ struct GpuComputePass {
  * - pass The compute pass description
  */
 void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass);
+
+// ----------------------------------------------------------------------------
+// Render Pass
+// ----------------------------------------------------------------------------
 
 /**
  * The operation to load a render attachment
@@ -2286,6 +2378,14 @@ void gpuSetViewport(GpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near =
  */
 void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
 
+// ============================================================================
+// Math
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// Constants & Helpers
+// ----------------------------------------------------------------------------
+
 /**
  * The value of Pi
  */
@@ -2309,10 +2409,16 @@ void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
 constexpr f32 pow(f32 base, u32 exp)
 {
     f32 ret = 1.0f;
-    for (u32 i = 0; i < exp; ++i)
+
+    while (exp > 0)
     {
-        ret *= base;
+        if (exp & 1)
+            ret *= base;
+
+        base *= base;
+        exp >>= 1;
     }
+
     return ret;
 }
 
@@ -2347,6 +2453,10 @@ constexpr f32 smoothQuintic(f32 t)
 {
     return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
 }
+
+// ----------------------------------------------------------------------------
+// Vector Types
+// ----------------------------------------------------------------------------
 
 /**
  * A 2D vector
@@ -2549,6 +2659,10 @@ struct Vec4 {
     }
 };
 
+// ----------------------------------------------------------------------------
+// Matrix Types
+// ----------------------------------------------------------------------------
+
 /**
  * A 2x2 matrix
  */
@@ -2732,6 +2846,10 @@ struct Mat4 {
     }
 };
 
+// ----------------------------------------------------------------------------
+// Complex & Quaternion Types
+// ----------------------------------------------------------------------------
+
 /**
  * A complex number
  */
@@ -2809,6 +2927,10 @@ struct Quat {
     Quat& operator-=(Quat other);
 };
 
+// ----------------------------------------------------------------------------
+// Comparison Operators
+// ----------------------------------------------------------------------------
+
 /**
  * Compare vectors
  */
@@ -2823,36 +2945,6 @@ constexpr bool operator==(Vec2 lhs, Vec2 rhs)
 constexpr bool operator!=(Vec2 lhs, Vec2 rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y;
-}
-
-/**
- * Compare vectors, treating values within FLT_EPSILON as the same
- */
-constexpr bool vecEq2(Vec2 lhs, Vec2 rhs)
-{
-    return std::abs(lhs.x - rhs.x) < 1e-6 &&
-           std::abs(lhs.y - rhs.y) < 1e-6;
-}
-
-/**
- * Compare vectors, treating values within FLT_EPSILON as the same
- */
-constexpr bool vecEq3(Vec3 lhs, Vec3 rhs)
-{
-    return std::abs(lhs.x - rhs.x) < 1e-6 &&
-           std::abs(lhs.y - rhs.y) < 1e-6 &&
-           std::abs(lhs.z - rhs.z) < 1e-6;
-}
-
-/**
- * Compare vectors, treating values within FLT_EPSILON as the same
- */
-constexpr bool vecEq4(Vec4 lhs, Vec4 rhs)
-{
-    return std::abs(lhs.x - rhs.x) < 1e-6 &&
-           std::abs(lhs.y - rhs.y) < 1e-6 &&
-           std::abs(lhs.z - rhs.z) < 1e-6 &&
-           std::abs(lhs.w - rhs.w) < 1e-6;
 }
 
 /**
@@ -2885,6 +2977,36 @@ constexpr bool operator==(Vec4 lhs, Vec4 rhs)
 constexpr bool operator!=(Vec4 lhs, Vec4 rhs)
 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
+}
+
+/**
+ * Compare vectors, treating values within epsilon as the same
+ */
+constexpr bool vecEq2(Vec2 lhs, Vec2 rhs)
+{
+    return std::abs(lhs.x - rhs.x) < 1e-6 &&
+           std::abs(lhs.y - rhs.y) < 1e-6;
+}
+
+/**
+ * Compare vectors, treating values within epsilon as the same
+ */
+constexpr bool vecEq3(Vec3 lhs, Vec3 rhs)
+{
+    return std::abs(lhs.x - rhs.x) < 1e-6 &&
+           std::abs(lhs.y - rhs.y) < 1e-6 &&
+           std::abs(lhs.z - rhs.z) < 1e-6;
+}
+
+/**
+ * Compare vectors, treating values within epsilon as the same
+ */
+constexpr bool vecEq4(Vec4 lhs, Vec4 rhs)
+{
+    return std::abs(lhs.x - rhs.x) < 1e-6 &&
+           std::abs(lhs.y - rhs.y) < 1e-6 &&
+           std::abs(lhs.z - rhs.z) < 1e-6 &&
+           std::abs(lhs.w - rhs.w) < 1e-6;
 }
 
 /**
@@ -2967,16 +3089,9 @@ constexpr bool operator!=(Quat lhs, Quat rhs)
     return lhs.r != rhs.r || lhs.i != rhs.i || lhs.j != rhs.j || lhs.k != rhs.k;
 }
 
-/**
- * Add arbitrary size vectors
- *
- * Parameters
- * - size The size of the vectors
- * - dst The destination vector, must not be nullptr
- * - lhs The left-hand side vector, must not be nullptr
- * - rhs The right-hand side vector, must not be nullptr
- */
-void vecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+// ----------------------------------------------------------------------------
+// Vector Functions
+// ----------------------------------------------------------------------------
 
 /**
  * Add 2D vectors
@@ -3001,17 +3116,6 @@ constexpr Vec4 operator+(Vec4 lhs, Vec4 rhs)
 {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
 }
-
-/**
- * Subtract arbitrary size vectors
- *
- * parameters
- * - size The size of the vectors
- * - dst The destination vector, must not be nullptr
- * - lhs The left-hand side vector, must not be nullptr
- * - rhs The right-hand side vector, must not be nullptr
- */
-void vecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Subtract 2D vectors
@@ -3062,17 +3166,6 @@ constexpr Vec4 operator-(Vec4 v)
 }
 
 /**
- * Multiply pairwise arbitrary size vectors
- *
- * Parameters
- * - size The size of the vectors
- * - dst The destination vector, must not be nullptr
- * - lhs The left-hand side vector, must not be nullptr
- * - rhs The right-hand side vector, must not be nullptr
- */
-void vecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
-
-/**
  * Multiply pairwise 2D vectors
  */
 constexpr Vec2 operator*(Vec2 lhs, Vec2 rhs)
@@ -3095,11 +3188,6 @@ constexpr Vec4 operator*(Vec4 lhs, Vec4 rhs)
 {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
 }
-
-/**
- * Multiply a scalar and a vector
- */
-void vecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec);
 
 /**
  * Multiply a scalar and a 2D vector
@@ -3150,19 +3238,6 @@ constexpr Vec4 operator*(Vec4 vec, f32 scalar)
 }
 
 /**
- * Divide pairwise arbitrary size vectors
- *
- * Note, cannot divide by 0
- *
- * Parameters
- * - size The size of the vectors
- * - dst The destination vector, must not be nullptr
- * - lhs The left-hand side vector, must not be nullptr
- * - rhs The right-hand side vector, must not be nullptr
- */
-void vecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
-
-/**
  * Divide pairwise 2D vectors
  *
  * Note, cannot divide by 0
@@ -3194,13 +3269,6 @@ constexpr Vec4 operator/(Vec4 lhs, Vec4 rhs)
     HG_ASSERT(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
 }
-
-/**
- * Divide a vector by a scalar
- *
- * Note, cannot divide by 0
- */
-void vecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar);
 
 /**
  * Divide a 2D vector by a scalar
@@ -3236,17 +3304,6 @@ constexpr Vec4 operator/(Vec4 vec, f32 scalar)
 }
 
 /**
- * Compute the dot product of arbitrary size vectors
- *
- * Parameters
- * - size The size of the vectors
- * - dst The destination vector, must not be nullptr
- * - lhs The left-hand side vector, must not be nullptr
- * - rhs The right-hand side vector, must not be nullptr
- */
-void vecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs);
-
-/**
  * Compute the dot product of 2D vectors
  */
 constexpr f32 vecDot2(Vec2 lhs, Vec2 rhs)
@@ -3269,16 +3326,6 @@ constexpr f32 vecDot4(Vec4 lhs, Vec4 rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
-
-/**
- * Compute the length squared of a vector
- *
- * Parameters
- * - size The size of the vector
- * - dst The destination vector, must not be nullptr
- * - vec The vector to compute the length of, must not be nullptr
- */
-void vecLenSqr(u32 size, f32* dst, const f32* vec);
 
 /**
  * Compute the length squared of a 2D vector
@@ -3305,16 +3352,6 @@ constexpr f32 vecLenSqr4(Vec4 vec)
 }
 
 /**
- * Compute the length of a vector
- *
- * Parameters
- * - size The size of the vector
- * - dst The destination vector, must not be nullptr
- * - vec The vector to compute the length of, must not be nullptr
- */
-void vecLen(u32 size, f32* dst, const f32* vec);
-
-/**
  * Compute the length of a 2D vector
  */
 f32 vecLen2(Vec2 vec);
@@ -3328,13 +3365,6 @@ f32 vecLen3(Vec3 vec);
  * Compute the length of a 4D vector
  */
 f32 vecLen4(Vec4 vec);
-
-/**
- * Normalize a vector
- *
- * Note, cannot normalize 0
- */
-void vecNorm(u32 size, f32* dst, const f32* vec);
 
 /**
  * Normalize a 2D vector
@@ -3367,17 +3397,9 @@ f32 vecCross2(Vec2 lhs, Vec2 rhs);
  */
 Vec3 vecCross3(Vec3 lhs, Vec3 rhs);
 
-/**
- * Add arbitrary size matrices
- *
- * Parameters
- * - width The width of the matrices
- * - height The height of the matrices
- * - dst The destination matrix, must not be nullptr
- * - lhs The left-hand side matrix, must not be nullptr
- * - rhs The right-hand side matrix, must not be nullptr
- */
-void matAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
+// ----------------------------------------------------------------------------
+// Matrix Functions
+// ----------------------------------------------------------------------------
 
 /**
  * Add 2x2 matrices
@@ -3395,18 +3417,6 @@ Mat3 operator+(const Mat3& lhs, const Mat3& rhs);
 Mat4 operator+(const Mat4& lhs, const Mat4& rhs);
 
 /**
- * Subtract arbitrary size matrices
- *
- * Parameters
- * - width The width of the matrices
- * - height The height of the matrices
- * - dst The destination matrix, must not be nullptr
- * - lhs The left-hand side matrix, must not be nullptr
- * - rhs The right-hand side matrix, must not be nullptr
- */
-void matSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
-
-/**
  * Subtract 2x2 matrices
  */
 Mat2 operator-(const Mat2& lhs, const Mat2& rhs);
@@ -3422,20 +3432,6 @@ Mat3 operator-(const Mat3& lhs, const Mat3& rhs);
 Mat4 operator-(const Mat4& lhs, const Mat4& rhs);
 
 /**
- * Multiply arbitrary size matrices
- *
- * Parameters
- * - dst The destination matrix, must not be nullptr
- * - wl The width of the left-hand side matrix
- * - hl The height of the left-hand side matrix
- * - lhs The left-hand side matrix, must not be nullptr
- * - wr The width of the right-hand side matrix
- * - hr The height of the right-hand side matrix
- * - rhs The right-hand side matrix, must not be nullptr
- */
-void matMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs);
-
-/**
  * Multiply 2x2 matrices
  */
 Mat2 operator*(const Mat2& lhs, const Mat2& rhs);
@@ -3449,18 +3445,6 @@ Mat3 operator*(const Mat3& lhs, const Mat3& rhs);
  * Multiply 4x4 matrices
  */
 Mat4 operator*(const Mat4& lhs, const Mat4& rhs);
-
-/**
- * Multiply a matrix and a vector
- *
- * Parameters
- * - width The width of the matrix
- * - height The height of the matrix
- * - dst The destination vector, must not be nullptr
- * - mat The matrix to multiply with, must not be nullptr
- * - vec The vector to multiply with, must not be nullptr
- */
-void matMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec);
 
 /**
  * Multiply a 2x2 matrix and a 2D vector
@@ -3496,6 +3480,10 @@ Mat3 matTranspose3(const Mat3& mat);
  * Transpose the matrix
  */
 Mat4 matTranspose4(const Mat4& mat);
+
+// ----------------------------------------------------------------------------
+// Complex Functions
+// ----------------------------------------------------------------------------
 
 /**
  * Add complex numbers
@@ -3548,6 +3536,10 @@ Complex complexNorm(Complex comp);
  * Rotate a 2D vector using a complex number
  */
 Vec2 vecRot2(Complex lhs, Vec2 rhs);
+
+// ----------------------------------------------------------------------------
+// Quaternion Functions
+// ----------------------------------------------------------------------------
 
 /**
  * Add quaternions
@@ -3613,13 +3605,20 @@ Vec3 vecRot3(Quat lhs, Vec3 rhs);
  */
 Mat3 matRot3(Quat lhs, Mat3 rhs);
 
+// ----------------------------------------------------------------------------
+// Transform Matrices
+// ----------------------------------------------------------------------------
+
 /**
  * Creates a model matrix for 2D graphics
  *
  * Parameters
  * - position The position of the model
  * - scale The scale of the model
- * - rotation The rotation of the model
+ * - rotation The rotation of the model in radians
+ *
+ * Returns
+ * - The model matrix
  */
 Mat4 matModel2D(Vec3 position, Vec2 scale, f32 rotation);
 
@@ -3673,6 +3672,10 @@ Mat4 matOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far
  * - far The far plane of the projection, must be greater than near
  */
 Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far);
+
+// ----------------------------------------------------------------------------
+// Geometry 2D
+// ----------------------------------------------------------------------------
 
 /**
  * A 2D circle
@@ -3909,6 +3912,10 @@ bool intersectLineCircle(Line2D line, Circle circle, Hit2D* hit);
  * - Whether the line and rect intersect
  */
 bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit);
+
+// ----------------------------------------------------------------------------
+// Geometry 3D
+// ----------------------------------------------------------------------------
 
 /**
  * A 3D sphere
@@ -4188,6 +4195,96 @@ bool intersectLineTri(Line3D line, Tri tri, Hit3D* hit);
  */
 bool intersectLinePlane(Line3D line, Plane plane, Hit3D* hit);
 
+// ----------------------------------------------------------------------------
+// Noise & RNG
+// ----------------------------------------------------------------------------
+
+/**
+ * Generate white noise
+ */
+u32 noise(u32 seed, u32 pos);
+
+/**
+ * Generate white noise
+ */
+u32 noise2D(u32 seed, u32 x, u32 y);
+
+/**
+ * Generate white noise
+ */
+u32 noise3D(u32 seed, u32 x, u32 y, u32 z);
+
+/**
+ * Generate white noise
+ */
+u32 noise4D(u32 seed, u32 x, u32 y, u32 z, u32 w);
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+f32 noiseNorm(u32 seed, f32 pos);
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+f32 noiseNorm2D(u32 seed, Vec2 pos);
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+f32 noiseNorm3D(u32 seed, Vec3 pos);
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+f32 noiseNorm4D(u32 seed, Vec4 pos);
+
+/**
+ * Generate white noise unit vector
+ */
+f32 noiseVec1D(u32 seed, f32 pos);
+
+/**
+ * Generate white noise unit vector
+ */
+Vec2 noiseVec2D(u32 seed, Vec2 pos);
+
+// value and gradient noise : TODO
+
+/**
+ * Get a true random number from hardware
+ */
+u32 trueRandom();
+
+/**
+ * A pseudo random number generator
+ */
+struct Rng {
+    u32 seed = 0;
+    u32 pos = 0;
+};
+
+/**
+ * Set the rng seed
+ */
+void rngSeed(Rng* rng, u32 seed);
+
+/**
+ * Get the next random value
+ */
+u32 rngNext(Rng* rng);
+
+/**
+ * Get the next 64 bit random value
+ */
+u64 rngNext64(Rng* rng);
+
+// sort algorithm : TODO
+
+// ============================================================================
+// Binary Builder
+// ============================================================================
+
 /**
  * A binary builder
  */
@@ -4241,6 +4338,10 @@ void binaryOverwrite(BinaryBuilder* bin, u64 idx, const T& src)
 {
     binaryOverwrite(bin, idx, &src, sizeof(T));
 }
+
+// ============================================================================
+// String Utilities
+// ============================================================================
 
 /**
  * Compare strings
@@ -4335,34 +4436,9 @@ StringBuilder stringCopy(Arena* arena, String str);
 
 /**
  * Create a formatted string : TODO
- *
- * Format specifiers
- * - int (i64): "{i}"
- * - unsigned int (u64): "{u}"
- * - hexadecimal (i64): "{x}"
- * - float with 6 decimals (f64): "{f}"
- * - float with N decimals (f64): "{fN}"
- * - char (char): "{c}"
- * - string (StringView): "{s}"
- * - c string (char*): "{cstr}"
- *
- * Use {{ and }} to escape the format specifier
- *
- * Parameters
- * - arena The arena to allocate from
- * - fmt The format string
- * - ... The format parameters
  */
-
-/**
- * Create a formatted string, interally using snprintf
- */
-StringBuilder stringFormat(Arena* arena, String fmt, ...);
-
-/**
- * Create a formatted string with varargs, interally using snprintf
- */
-StringBuilder stringFormatVar(Arena* arena, String fmt, va_list args);
+// template<typename... Ts>
+// StringBuilder stringFormat(Arena* arena, String fmt, Ts... args);
 
 /**
  * Copies another string into the string at index
@@ -4472,6 +4548,10 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
+
+// ============================================================================
+// Serialization
+// ============================================================================
 
 /**
  * The primitive serializable types
@@ -4898,23 +4978,6 @@ struct Json {
     JsonError* errors = nullptr;
 };
 
-// /**
-//  * A binary file asset handle
-//  */
-// typedef AssetHandle<Json> JsonHandle;
-//
-// /**
-//  * Json asset load implementation
-//  */
-// template<>
-// void assetLoadImpl(AssetData<Json>* data);
-//
-// /**
-//  * Json asset unload implementation
-//  */
-// template<>
-// void assetUnloadImpl(AssetData<Json>* data);
-
 /**
  * Parses json text into a tree
  *
@@ -4926,6 +4989,10 @@ struct Json {
  * - The parsed json, errors contained inside
  */
 Json parseJson(Arena* arena, String text);
+
+// ============================================================================
+// Containers
+// ============================================================================
 
 /**
  * A dynamic array
@@ -5119,10 +5186,25 @@ void arrayAnyPop(ArrayAny* arr, void* dst);
  */
 template<typename T>
 struct Queue {
+    /**
+     * The values in the queue
+     */
     T* vals;
+    /**
+     * The index of the front
+     */
     u32 front;
+    /**
+     * The index of the back
+     */
     u32 back;
+    /**
+     * The number of vals in the queue
+     */
     u32 count;
+    /**
+     * The max number of vals
+     */
     u32 capacity;
 };
 
@@ -5695,97 +5777,9 @@ bool handlePoolAlive(HandlePool* pool, Handle handle);
  */
 void handlePoolFree(HandlePool* pool, Handle handle);
 
-/**
- * Generate white noise
- */
-u32 noise(u32 seed, u32 pos);
-
-/**
- * Generate white noise
- */
-u32 noise2D(u32 seed, u32 x, u32 y);
-
-/**
- * Generate white noise
- */
-u32 noise3D(u32 seed, u32 x, u32 y, u32 z);
-
-/**
- * Generate white noise
- */
-u32 noise4D(u32 seed, u32 x, u32 y, u32 z, u32 w);
-
-/**
- * Generate white noise normalized from 0.0 to 1.0
- */
-f32 noiseNorm(u32 seed, f32 pos);
-
-/**
- * Generate white noise normalized from 0.0 to 1.0
- */
-f32 noiseNorm2D(u32 seed, Vec2 pos);
-
-/**
- * Generate white noise normalized from 0.0 to 1.0
- */
-f32 noiseNorm3D(u32 seed, Vec3 pos);
-
-/**
- * Generate white noise normalized from 0.0 to 1.0
- */
-f32 noiseNorm4D(u32 seed, Vec4 pos);
-
-/**
- * Generate white noise unit vector
- */
-f32 noiseVec1D(u32 seed, f32 pos);
-
-/**
- * Generate white noise unit vector
- */
-Vec2 noiseVec2D(u32 seed, Vec2 pos);
-
-// value and gradient noise : TODO
-
-/**
- * Get a true random number from hardware
- */
-u32 trueRandom();
-
-/**
- * A pseudo random number generator
- */
-struct Rng {
-    u32 seed = 0;
-    u32 pos = 0;
-};
-
-/**
- * Set the rng seed
- */
-void rngSeed(Rng* rng, u32 seed);
-
-/**
- * Get the next random value
- */
-u32 rngNext(Rng* rng);
-
-/**
- * Get the next 64 bit random value
- */
-u64 rngNext64(Rng* rng);
-
-// sort algorithm : TODO
-
-/**
- * Calculates the maximum number of mipmap levels that an image can have
- *
- * Parameters
- * - width The width of the image
- * - height The height of the image
- * - depth The depth of the image
- */
-u32 getMaxMipmaps(u32 width, u32 height, u32 depth);
+// ============================================================================
+// Asset System
+// ============================================================================
 
 /**
  * Initialize all default asset types
@@ -5902,7 +5896,7 @@ template<typename T>
 Asset<T>* assetCopy(Asset<T>* asset);
 
 /**
- * AssetHandle serialization
+ * Asset serialization
  */
 template<typename T>
 void serialize(Serializer* s, Asset<T>** asset);
@@ -5931,6 +5925,10 @@ void assetUnloadImpl(Asset<Binary>* data);
  * - Whether the write succeeded
  */
 bool binaryStore(Binary bin, String path);
+
+// ============================================================================
+// Timing
+// ============================================================================
 
 /**
  * A high precision clock for timers and game deltas
@@ -6036,6 +6034,10 @@ enum PerfScale : u32 {
  */
 void perfLog(String title, const PerfStats* stats, PerfScale scale);
 
+// ============================================================================
+// Dynamic Library
+// ============================================================================
+
 /**
  * A dynamically loaded library
  */
@@ -6065,6 +6067,10 @@ void libraryUnload(Library* lib);
  * - A function pointer to the found symbol, or nullptr not found
  */
 void* libraryFindFunction(Library* lib, String symbol);
+
+// ============================================================================
+// Windowing
+// ============================================================================
 
 /**
  * Initialize the windowing subsystem
@@ -6155,6 +6161,10 @@ GpuView* windowImageView(Window* window);
  * Returns the window's width in pixels
  */
 Format windowImageFormat(Window* window);
+
+// ============================================================================
+// Input
+// ============================================================================
 
 /**
  * Processes all events since startup or the last call to process events
@@ -6374,6 +6384,10 @@ bool isButtonDown(Window* window, Button key);
  */
 WindowEvent* windowEvents(Window* window, u32* count);
 
+// ============================================================================
+// Audio
+// ============================================================================
+
 /**
  * Initialize the audio subsystem
  *
@@ -6549,6 +6563,10 @@ void audioPlayerSetMusicGain(AudioPlayer* player, SoundAsset* music, f32 gain = 
  */
 void audioPlayerSound(AudioPlayer* player, SoundAsset* sound, f32 gain);
 
+// ============================================================================
+// Camera
+// ============================================================================
+
 /**
  * The types of camera projections
  */
@@ -6666,6 +6684,10 @@ void cameraSetOrthographic(Camera* camera, f32 width, f32 height, f32 actualAspe
  */
 void cameraUpdate(Camera* camera);
 
+// ============================================================================
+// Texture Assets
+// ============================================================================
+
 /**
  * A texture asset
  */
@@ -6747,6 +6769,10 @@ void assetLoadImpl(Asset<Texture>* data);
  */
 template<>
 void assetUnloadImpl(Asset<Texture>* data);
+
+// ============================================================================
+// 2D Renderer
+// ============================================================================
 
 /**
  * Initialize the 2D renderer
@@ -7012,6 +7038,10 @@ void tilemapSet2D(Tilemap2D* tilemap, u32 x, u32 y, u32 tile);
  */
 void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst);
 
+// ============================================================================
+// 3D Mesh
+// ============================================================================
+
 /**
  * A vertex in a mesh
  */
@@ -7139,6 +7169,10 @@ void assetLoadImpl(Asset<Mesh>* data);
 template<>
 void assetUnloadImpl(Asset<Mesh>* data);
 
+// ============================================================================
+// ImGui Integration
+// ============================================================================
+
 /**
  * Initialize ImGui platform backend
  *
@@ -7181,6 +7215,10 @@ void beginImGuiFrame();
  * - cmd The command buffer to record to
  */
 void renderImGui(GpuCmd* cmd);
+
+// ============================================================================
+// ECS
+// ============================================================================
 
 /**
  * An entity in the ecs
@@ -8069,9 +8107,24 @@ void ecsDtor(Model* model);
  */
 void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
 
-// ========================
+// ============================================================================
 // Template Implementations
-// ========================
+// ============================================================================
+
+template<typename... Ts>
+void formatError(String errorFmt, Ts... args)
+{
+    Arena* scratch = getScratch();
+
+    constexpr u32 strLen = 512;
+    char* str = (char*)arenaAlloc(scratch, strLen, alignof(char));
+
+    char* cfmt = cString(scratch, errorFmt);
+
+    snprintf(str, strLen, cfmt, args...);
+
+    setError(str);
+}
 
 template<typename F>
 void forPar(u64 begin, u64 end, F fn)

@@ -4,8 +4,6 @@
 #define HG_ASSERTIONS 1
 #include "hurdygurdy.hpp"
 
-#include <cstdio>
-
 #include <emmintrin.h>
 
 namespace hg {

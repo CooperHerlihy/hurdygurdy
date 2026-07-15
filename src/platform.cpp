@@ -2114,6 +2114,13 @@ void gpuImageGenMipmaps(GpuView* dst)
     dst->lastLayout = GpuLayout_transferSrc;
 }
 
+u32 getMaxMipmaps(u32 width, u32 height, u32 depth)
+{
+    u32 max = width > height ? width : height;
+    max = max > depth ? max : depth;
+    return max == 0 ? 0 : static_cast<u32>(log2(static_cast<f32>(max))) + 1;
+}
+
 static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
 {
     VkShaderModuleCreateInfo info{};
