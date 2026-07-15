@@ -38,12 +38,11 @@ build/                    — CMake build output
 hurdygurdy.hpp is large, grep for these sections
 
 - Configuration Macros
-- Core Types (forward declarations)
-- Error Handling
-- Initialization
-- Utility Macros
-- Diagnostics
 - Core Types
+- Error Handling
+- Utility Macros
+- Initialization
+- Core Types (Implementations)
 - Utility Functions
 - Memory
 - Concurrency
@@ -106,7 +105,7 @@ hurdygurdy.hpp is large, grep for these sections
     - No `int`, `unsigned`, `size_t`, `std::*` containers, exceptions, RTTI.
 - Resources:
     - RAII
-    - Constructors must never fail, otherwise use static create function
+    - Constructors must never fail, otherwise use create function
     - Delete copy constructors, use clone function if needed
 - Errors:
     - Assert all preconditions with HG_ASSERT
@@ -124,7 +123,7 @@ Header doc comments on every function, type, variable, etc:
  * Short punchy description
  *
  * Parameters
- * - param1 The parameter description
+ * - param1 What the parameter means
  *
  * Returns
  * - What the function returns

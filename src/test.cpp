@@ -533,7 +533,7 @@ void test()
             Serializer writer = serialWriter(arena);
             serialize(&writer, &pod);
 
-            Binary bin = binaryWriteSerial(arena, &writer);
+            BinaryView bin = binaryWriteSerial(arena, &writer);
 
             PlainOldData podCopy{};
 
@@ -614,7 +614,7 @@ void test()
             Serializer writer = serialWriter(arena);
             serializeData(&writer, &data);
 
-            Binary bin = binaryWriteSerial(arena, &writer);
+            BinaryView bin = binaryWriteSerial(arena, &writer);
 
             Data dataCopy{};
 
@@ -677,7 +677,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
             )";
 
             Json json = parseJson(arena, file);
@@ -690,7 +690,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                 }
             )";
@@ -709,7 +709,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     1234
                 }
@@ -733,7 +733,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf"
                 }
@@ -757,7 +757,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf":
                 }
@@ -784,7 +784,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": true
                 }
@@ -811,7 +811,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": false
                 }
@@ -838,7 +838,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": asdf
                 }
@@ -865,7 +865,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": "asdf"
                 }
@@ -892,7 +892,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": 1234
                 }
@@ -919,7 +919,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": 1234.0
                 }
@@ -946,7 +946,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": 1234.0,
                     "hjkl": 5678.0
@@ -981,7 +981,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": [1, 2, 3, 4]
                 }
@@ -1032,7 +1032,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": [1 2 3 4]
                 }
@@ -1083,7 +1083,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": [1, 2, "3", 4]
                 }
@@ -1133,7 +1133,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "asdf": {
                         "a": 1,
@@ -1193,7 +1193,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            String file = R"(
+            StringView file = R"(
                 {
                     "player": {
                         "transform": {
@@ -1725,7 +1725,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            Set<String> set = setTemp<String>(arena, 128);
+            Set<StringView> set = setTemp<StringView>(arena, 128);
 
             HG_ASSERT(!setHas(&set, "a"));
             HG_ASSERT(!setHas(&set, "b"));
@@ -1945,7 +1945,7 @@ void test()
             Arena* arena = getScratch();
             HG_ARENA_SCOPE(arena);
 
-            Map<String, u32> map = mapTemp<String, u32>(arena, 6);
+            Map<StringView, u32> map = mapTemp<StringView, u32>(arena, 6);
 
             HG_ASSERT(mapGet(&map, "a") == nullptr);
             HG_ASSERT(mapGet(&map, "b") == nullptr);
@@ -3549,11 +3549,11 @@ void test()
     // AssetManager and Binary
     {
         {
-            BinaryAsset* bin1 = assetCreate<Binary>();
+            BinaryAsset* bin1 = assetCreate<BinaryView>();
             HG_ASSERT(bin1 != nullptr);
             HG_ASSERT(bin1->path == "");
 
-            BinaryAsset* bin2 = assetCreate<Binary>();
+            BinaryAsset* bin2 = assetCreate<BinaryView>();
             HG_ASSERT(bin2 != nullptr);
             HG_ASSERT(bin2->path == "");
             HG_ASSERT(bin2 != bin1);
@@ -3563,7 +3563,7 @@ void test()
         }
 
         {
-            BinaryAsset* bin = assetLoad<Binary>("file_does_not_exist.bin");
+            BinaryAsset* bin = assetLoad<BinaryView>("file_does_not_exist.bin");
             HG_ASSERT(bin->asset.data == nullptr);
             HG_ASSERT(bin->asset.size == 0);
             assetUnload(bin);
@@ -3572,7 +3572,7 @@ void test()
         u32 saveData[]{12, 42, 100, 128};
 
         {
-            Binary bin{saveData, sizeof(saveData)};
+            BinaryView bin{saveData, sizeof(saveData)};
 
             binaryStore(bin, "dir/does/not/exist.bin");
 
@@ -3581,20 +3581,20 @@ void test()
         }
 
         {
-            Binary bin{saveData, sizeof(saveData)};
+            BinaryView bin{saveData, sizeof(saveData)};
 
-            String filePath = "hg_test_dir/file_bin_test.bin";
+            StringView filePath = "hg_test_dir/file_bin_test.bin";
 
             binaryStore(bin, filePath);
 
-            BinaryAsset* newBin = assetLoad<Binary>(filePath);
+            BinaryAsset* newBin = assetLoad<BinaryView>(filePath);
 
             HG_ASSERT(newBin->asset.data != nullptr);
             HG_ASSERT(newBin->asset.data != saveData);
             HG_ASSERT(newBin->asset.size == sizeof(saveData));
             HG_ASSERT(memEqual(saveData, newBin->asset.data, newBin->asset.size));
 
-            BinaryAsset* newBin2 = assetLoad<Binary>(filePath);
+            BinaryAsset* newBin2 = assetLoad<BinaryView>(filePath);
             HG_ASSERT(newBin2 == newBin);
 
             assetUnload(newBin);
@@ -3620,7 +3620,7 @@ void test()
             {blue, yellow},
         };
 
-        String path = "hg_test_dir/image_test.png";
+        StringView path = "hg_test_dir/image_test.png";
 
         TextureData testImage{};
         testImage.width = 2;
@@ -4233,8 +4233,9 @@ using namespace hg;
 
 int main()
 {
-    init();
-    HG_DEFER(deinit());
+    Maybe<HurdyGurdy> hg = initHurdyGurdy();
+    if (!hg.has)
+        HG_PANIC("Could not init HurdyGurdy: %.*s\n", (int)getError().length, getError().chars);
 
     test();
 

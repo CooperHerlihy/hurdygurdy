@@ -1,4 +1,5 @@
 #include "hurdygurdy.hpp"
+#include "internal.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -17,37 +18,27 @@ namespace hg {
 thread_local static char errorData[4096];
 thread_local static u64 errorLength = 0;
 
-String getError()
+StringView getError()
 {
     return {errorData, errorLength};
 }
 
-void setError(String error)
+void setError(StringView error)
 {
     u64 newLength = std::min(error.length, sizeof(errorData));
     memCopy(errorData, error.chars, newLength);
     errorLength = newLength;
 }
 
-// void formatError(String errorFmt, ...)
-// {
-//     va_list args;
-//     va_start(args, errorFmt);
-//     formatErrorVar(errorFmt, args);
-//     va_end(args);
-// }
-
-// void formatErrorVar(String errorFmt, va_list args)
-// {
-//     Arena* scratch = getScratch();
-//     HG_ARENA_SCOPE(scratch);
-//
-//     setError(stringFormatVar(scratch, errorFmt, args));
-// }
+void logError()
+{
+    StringView e = getError();
+    std::fprintf(stderr, "HurdyGurdy Error Message: %.*s\n", (int)e.length, e.chars);
+}
 
 static SubsystemFlags initialized = 0;
 
-bool init(SubsystemFlags init)
+Maybe<HurdyGurdy> initHurdyGurdy(SubsystemFlags init)
 {
     if (init & Subsystem_memory)
     {
@@ -65,7 +56,7 @@ bool init(SubsystemFlags init)
         init & Subsystem_windowing ||
         init & Subsystem_audio)
     {
-        if (!platformInit())
+        if (!internal::platformInit())
             goto platformFailed;
     }
 
@@ -96,7 +87,7 @@ bool init(SubsystemFlags init)
         initialized |= Subsystem_audio;
     }
 
-    return true;
+    return some<HurdyGurdy>();
 
 audioFailed:
     if (initialized & Subsystem_windowing)
@@ -109,45 +100,49 @@ gpuFailed:
     if (initialized & Subsystem_gpu ||
         initialized & Subsystem_windowing ||
         initialized & Subsystem_audio)
-        platformDeinit();
+        internal::platformDeinit();
 platformFailed:
     if (initialized & Subsystem_concurrency)
         deinitConcurrency();
     if (initialized & Subsystem_memory)
         deinitScratch();
     initialized = 0;
-    return false;
+
+    return none<HurdyGurdy>();
 }
 
-void deinit()
+HurdyGurdy::~HurdyGurdy()
 {
-    if (initialized & Subsystem_audio)
-        audioDeinit();
+    if (alive)
+    {
+        if (initialized & Subsystem_audio)
+            audioDeinit();
 
-    if (initialized & Subsystem_windowing)
-        deinitWindowing();
+        if (initialized & Subsystem_windowing)
+            deinitWindowing();
 
-    if (initialized & Subsystem_assets)
-        assetDeinitDefaults();
+        if (initialized & Subsystem_assets)
+            assetDeinitDefaults();
 
-    if (initialized & Subsystem_gpu)
-        deinitGpu();
+        if (initialized & Subsystem_gpu)
+            deinitGpu();
 
-    if (initialized & Subsystem_gpu ||
-        initialized & Subsystem_windowing ||
-        initialized & Subsystem_audio)
-        platformDeinit();
+        if (initialized & Subsystem_gpu ||
+            initialized & Subsystem_windowing ||
+            initialized & Subsystem_audio)
+            internal::platformDeinit();
 
-    if (initialized & Subsystem_concurrency)
-        deinitConcurrency();
+        if (initialized & Subsystem_concurrency)
+            deinitConcurrency();
 
-    if (initialized & Subsystem_memory)
-        deinitScratch();
+        if (initialized & Subsystem_memory)
+            deinitScratch();
 
-    initialized = 0;
+        initialized = 0;
+    }
 }
 
-void binaryRead(Binary bin, u64 idx, void* dst, u64 len)
+void binaryRead(BinaryView bin, u64 idx, void* dst, u64 len)
 {
     HG_ASSERT(idx + len <= bin.size);
     memCopy(dst, static_cast<const u8*>(bin.data) + idx, len);
@@ -251,6 +246,8 @@ static thread_local u32 scratchArenaCount = 0;
 
 void initScratch(u32 count, u64 size)
 {
+    HG_ASSERT(count > 0);
+
     size = align(size, 16);
     HG_ASSERT(size < UINT64_MAX / count);
 
@@ -1703,7 +1700,7 @@ bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit)
         (box.begin.z - ray.pos.z) / ray.dir.z,
         (box.end.x - ray.pos.x) / ray.dir.x,
         (box.end.y - ray.pos.y) / ray.dir.y,
-        (box.end.z - ray.pos.y) / ray.dir.z,
+        (box.end.z - ray.pos.z) / ray.dir.z,
     };
 
     constexpr Vec3 norms[6] = {
@@ -2070,7 +2067,7 @@ void binaryOverwrite(BinaryBuilder* bin, u64 idx, const void* src, u64 len)
     memCopy(static_cast<u8*>(bin->data) + idx, src, len);
 }
 
-char* cString(Arena* arena, String str)
+char* cString(Arena* arena, StringView str)
 {
     HG_ASSERT(arena != nullptr);
     if (str.length > 0)
@@ -2082,9 +2079,9 @@ char* cString(Arena* arena, String str)
     return cStr;
 }
 
-String stringCreate(String data)
+StringView stringCreate(StringView data)
 {
-    String str{};
+    StringView str{};
     if (data != "")
     {
         str.chars = heapAlloc<char>(data.length);
@@ -2094,12 +2091,12 @@ String stringCreate(String data)
     return str;
 }
 
-void stringDestroy(String* str)
+void stringDestroy(StringView* str)
 {
     heapFree(const_cast<char*>(str->chars), str->length);
 }
 
-StringBuilder stringCopy(Arena* arena, String str)
+StringBuilder stringCopy(Arena* arena, StringView str)
 {
     HG_ASSERT(arena != nullptr);
 
@@ -2110,7 +2107,7 @@ StringBuilder stringCopy(Arena* arena, String str)
     return copy;
 }
 
-void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, String src)
+void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, StringView src)
 {
     HG_ASSERT(arena != nullptr);
     HG_ASSERT(dst != nullptr);
@@ -2139,7 +2136,7 @@ bool isNumeral(char c)
     return c >= '0' && c <= '9';
 }
 
-bool isInteger(String str)
+bool isInteger(StringView str)
 {
     if (str.length == 0)
         return false;
@@ -2158,7 +2155,7 @@ bool isInteger(String str)
     return true;
 }
 
-bool isFloat(String str)
+bool isFloat(StringView str)
 {
     if (str.length == 0)
         return false;
@@ -2211,7 +2208,7 @@ bool isFloat(String str)
     return hasDecimal || hasExponent;
 }
 
-i64 stringToInteger(String str)
+i64 stringToInteger(StringView str)
 {
     HG_ASSERT(isInteger(str));
 
@@ -2237,7 +2234,7 @@ i64 stringToInteger(String str)
     return ret;
 }
 
-f64 stringToFloat(String str)
+f64 stringToFloat(StringView str)
 {
     HG_ASSERT(isFloat(str));
 
@@ -2514,13 +2511,13 @@ void serializeVoid(Serializer* s, void* val, u32 size)
 }
 
 template<>
-void serialize(Serializer* s, Binary* val)
+void serialize(Serializer* s, BinaryView* val)
 {
-    serialize(s, reinterpret_cast<String*>(val));
+    serialize(s, reinterpret_cast<StringView*>(val));
 }
 
 template<>
-void serialize(Serializer* s, String* val)
+void serialize(Serializer* s, StringView* val)
 {
     serializeNodeStart(s);
 
@@ -2773,7 +2770,7 @@ struct SerialBinNode {
 
 static void serialBinWriteNode(Arena* arena, BinaryBuilder* bin, u32 idx, SerialNode* node);
 
-static void serialBinWriteString(Arena* arena, BinaryBuilder* bin, u32 idx, String string)
+static void serialBinWriteString(Arena* arena, BinaryBuilder* bin, u32 idx, StringView string)
 {
     SerialBinNode node{};
     node.type = SerialType_string;
@@ -2854,7 +2851,7 @@ static void serialBinWriteNode(Arena* arena, BinaryBuilder* bin, u32 idx, Serial
     }
 }
 
-Binary binaryWriteSerial(Arena* arena, Serializer* serial)
+BinaryView binaryWriteSerial(Arena* arena, Serializer* serial)
 {
     BinaryBuilder bin{};
 
@@ -2876,9 +2873,9 @@ Binary binaryWriteSerial(Arena* arena, Serializer* serial)
     return bin;
 }
 
-static void serialBinReadNode(Binary bin, u32 idx, Serializer* s);
+static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s);
 
-static void serialBinReadObject(Binary bin, SerialBinObject object, Serializer* s)
+static void serialBinReadObject(BinaryView bin, SerialBinObject object, Serializer* s)
 {
     serializeBegin(s);
     for (u32 i = 0; i < object.fieldCount; ++i)
@@ -2888,13 +2885,13 @@ static void serialBinReadObject(Binary bin, SerialBinObject object, Serializer* 
     serializeEnd(s);
 }
 
-static void serialBinReadString(Binary bin, SerialBinString string, Serializer* s)
+static void serialBinReadString(BinaryView bin, SerialBinString string, Serializer* s)
 {
-    String val = {static_cast<const char*>(bin.data) + string.begin, string.length};
+    StringView val = {static_cast<const char*>(bin.data) + string.begin, string.length};
     serialize(s, &val);
 }
 
-static void serialBinReadNode(Binary bin, u32 idx, Serializer* s)
+static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s)
 {
     SerialBinNode node = binaryRead<SerialBinNode>(bin, idx);
     switch (node.type)
@@ -2919,7 +2916,7 @@ static void serialBinReadNode(Binary bin, u32 idx, Serializer* s)
     }
 }
 
-Serializer binaryReadSerial(Arena* arena, Binary bin)
+Serializer binaryReadSerial(Arena* arena, BinaryView bin)
 {
     SerialBinHeader header = binaryRead<SerialBinHeader>(bin, 0);
 
@@ -2948,7 +2945,7 @@ Serializer binaryReadSerial(Arena* arena, Binary bin)
 
 static void serialJsonWriteNode(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node);
 
-static void serialJsonWriteString(Arena* arena, StringBuilder* str, String string)
+static void serialJsonWriteString(Arena* arena, StringBuilder* str, StringView string)
 {
     stringAppendC(arena, str, '"');
     for (u32 i = 0; i < string.length; ++i)
@@ -3094,7 +3091,7 @@ static void serialJsonWriteNode(Arena* arena, StringBuilder* str, u32 indentatio
     }
 }
 
-String jsonWriteSerial(Arena* arena, Serializer* serial)
+StringView jsonWriteSerial(Arena* arena, Serializer* serial)
 {
     StringBuilder str{};
     serialJsonWriteNode(arena, &str, 0, serial->current);
@@ -3107,7 +3104,7 @@ String jsonWriteSerial(Arena* arena, Serializer* serial)
 // }
 
 struct JsonParseState {
-    String text = {};
+    StringView text = {};
     u64 head = 0;
     u64 line = 0;
 };
@@ -3542,7 +3539,7 @@ static Json jsonParseNumber(Arena* arena, JsonParseState* state)
             isNumFloat = true;
         ++state->head;
     }
-    String num{&state->text[begin], &state->text[state->head]};
+    StringView num{&state->text[begin], &state->text[state->head]};
     while (state->head < state->text.length && isWhitespace(state->text[state->head]))
     {
         if (state->text[state->head] == '\n')
@@ -3599,7 +3596,7 @@ static Json jsonParseNumber(Arena* arena, JsonParseState* state)
 
 static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
 {
-    if (state->head + 4 <= state->text.length && String{&state->text[state->head], 4} == "true")
+    if (state->head + 4 <= state->text.length && StringView{&state->text[state->head], 4} == "true")
     {
         state->head += 4;
         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
@@ -3616,7 +3613,7 @@ static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
         node->boolean = true;
         return {node, nullptr};
     }
-    if (state->head + 5 <= state->text.length && String{&state->text[state->head], 5} == "false")
+    if (state->head + 5 <= state->text.length && StringView{&state->text[state->head], 5} == "false")
     {
         state->head += 5;
         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
@@ -3674,7 +3671,7 @@ static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
     }
 }
 
-Json parseJson(Arena* arena, String text)
+Json parseJson(Arena* arena, StringView text)
 {
     HG_ASSERT(arena != nullptr);
     if (text.length > 0)
@@ -3959,7 +3956,7 @@ void handlePoolFree(HandlePool* pool, Handle handle)
 
 void assetInitDefaults()
 {
-    assetInit<Binary>();
+    assetInit<BinaryView>();
     assetInit<TextureData>();
     assetInit<Texture>();
     assetInit<MeshData>();
@@ -3974,11 +3971,11 @@ void assetDeinitDefaults()
     assetDeinit<MeshData>();
     assetDeinit<Texture>();
     assetDeinit<TextureData>();
-    assetDeinit<Binary>();
+    assetDeinit<BinaryView>();
 }
 
 template<>
-void assetLoadImpl(Asset<Binary>* data)
+void assetLoadImpl(Asset<BinaryView>* data)
 {
     Arena* scratch = getScratch();
     HG_ARENA_SCOPE(scratch);
@@ -4013,12 +4010,12 @@ void assetLoadImpl(Asset<Binary>* data)
 }
 
 template<>
-void assetUnloadImpl(Asset<Binary>* data)
+void assetUnloadImpl(Asset<BinaryView>* data)
 {
     heapFree(const_cast<void*>(data->asset.data), data->asset.size);
 }
 
-bool binaryStore(Binary bin, String path)
+bool binaryStore(BinaryView bin, StringView path)
 {
     Arena* scratch = getScratch();
     HG_ARENA_SCOPE(scratch);
@@ -4108,7 +4105,7 @@ PerfStats perfAnalyze(const Perf* perf)
     return stats;
 }
 
-void perfLog(String title, const PerfStats* stats, PerfScale scale)
+void perfLog(StringView title, const PerfStats* stats, PerfScale scale)
 {
     HG_ASSERT(stats != nullptr);
     if (title.length == 0 || title.chars == nullptr)
@@ -4328,7 +4325,7 @@ void assetUnloadImpl(Asset<TextureData>* data)
     free(data->asset.pixels);
 }
 
-bool textureStorePng(TextureData* texture, String path)
+bool textureStorePng(TextureData* texture, StringView path)
 {
     Arena* scratch = getScratch();
     HG_ARENA_SCOPE(scratch);
@@ -4391,7 +4388,7 @@ void assetUnloadImpl(Asset<MeshData>* data)
     heapFree(data->asset.vertices, data->asset.vertexCount);
 }
 
-void meshStoreGltf(MeshData* data, String path, Fence* fence)
+void meshStoreGltf(MeshData* data, StringView path, Fence* fence)
 {
     static_cast<void>(data);
     static_cast<void>(path);
@@ -4965,7 +4962,7 @@ void ecsUnregisterComponent(Ecs* ecs, u64 componentId)
     mapRemove(&ecs->components, componentId);
 }
 
-String ecsComponentName(Ecs* ecs, u64 componentId)
+StringView ecsComponentName(Ecs* ecs, u64 componentId)
 {
     HG_ASSERT(ecs != nullptr);
     Component* system = mapGet(&ecs->components, componentId);
@@ -5112,6 +5109,7 @@ u32 ecsCount(Ecs* ecs, u64 componentId)
 u64 ecsFindSmallest(Ecs* ecs, u64* ids, u32 idCount)
 {
     HG_ASSERT(ecs != nullptr);
+    HG_ASSERT(idCount > 0);
 
     u32 smallestCount = static_cast<u32>(-1);
     u64 smallest = ids[0];
@@ -5287,7 +5285,7 @@ void serialize(Serializer* s, Ecs* ecs)
         }
         else
         {
-            String compName;
+            StringView compName;
             serialize(s, &compName);
             systemId = hash(compName);
             system = mapGet(&ecs->components, systemId);

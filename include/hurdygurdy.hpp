@@ -95,8 +95,8 @@ namespace hg {
 
 #ifdef HG_RELEASE_MODE
 
-#ifndef HG_NO_LOGGING
-#define HG_LOGGING 1
+#ifndef HG_LOGGING
+#define HG_NO_LOGGING 1
 #endif
 
 #ifndef HG_ASSERTIONS
@@ -108,6 +108,10 @@ namespace hg {
 #endif
 
 #endif
+
+// ============================================================================
+// Core Types
+// ============================================================================
 
 /**
  * An 8 bit, 1 byte unsigned integer
@@ -161,19 +165,15 @@ using f32 = float;
  */
 using f64 = double;
 
-// ============================================================================
-// Core Types (forward declarations)
-// ============================================================================
-
 /**
  * A block of binary data
  */
-struct Binary;
+struct BinaryView;
 
 /**
  * A view into a string
  */
-struct String;
+struct StringView;
 
 /**
  * A view into memory of a type
@@ -194,75 +194,25 @@ struct Maybe;
 /**
  * Get this thread's most recent error message
  */
-String getError();
+StringView getError();
 
 /**
  * Set this thread's current error message
+ *
+ * Note, truncates at 4096 bytes
  */
-void setError(String error);
+void setError(StringView error);
 
 /**
  * Format and set this thread's error message
  */
 template<typename... Ts>
-void formatError(String errorFmt, Ts... args);
-
-// /**
-//  * Format and set this thread's current error message
-//  */
-// void formatError(String errorFmt, ...);
-
-// /**
-//  * Format and set this thread's current error message with varargs
-//  */
-// void formatErrorVar(String errorFmt, va_list args);
-
-// ============================================================================
-// Initialization
-// ============================================================================
+void formatError(StringView errorFmt, Ts... args);
 
 /**
- * The Hurdy Gurdy subsystems
+ * Log this thread's current error message to stderr
  */
-enum Subsystem : u32 {
-    Subsystem_memory = 0x1,
-    Subsystem_concurrency = 0x2,
-    Subsystem_gpu = 0x4,
-    Subsystem_assets = 0x8,
-    Subsystem_windowing = 0x10,
-    Subsystem_audio = 0x20,
-    Subsystem_all = static_cast<u32>(-1),
-};
-using SubsystemFlags = u32;
-
-/**
- * Initialize the Hurdy Gurdy library
- *
- * Parameters
- * - init Which subsystems to initialize, all are recommended
- *
- * Returns
- * - Whether initialization succeeded
- */
-bool init(SubsystemFlags init = Subsystem_all);
-
-/**
- * Shut down the Hurdy Gurdy library
- */
-void deinit();
-
-/**
- * Initialize the platform
- *
- * Returns
- * - Whether init succeeded
- */
-bool platformInit();
-
-/**
- * Deinitialize the platform
- */
-void platformDeinit();
+void logError();
 
 // ============================================================================
 // Utility Macros
@@ -304,15 +254,12 @@ struct Defer {
  */
 #define HG_DEFER(...) [[maybe_unused]] hg::Defer HG_MACRO_CONCAT(defer_, __LINE__){[&]{ __VA_ARGS__ ;}};
 
-// ============================================================================
-// Diagnostics
-// ============================================================================
-
 #ifdef HG_LOGGING
 
-#define HG_LOG(...) do { printf("HurdyGurdy Log: " __VA_ARGS__); } while(0)
-#define HG_WARN(...) do { printf("HurdyGurdy Warn: " __VA_ARGS__); } while(0)
-#define HG_PANIC(...) do { printf("HurdyGurdy Panic: " __VA_ARGS__); abort(); } while(0)
+#define HG_LOG(...) do { std::fprintf(stderr, "HurdyGurdy Log: " __VA_ARGS__); } while(0)
+#define HG_WARN(...) do { std::fprintf(stderr, "HurdyGurdy Warn: " __VA_ARGS__); } while(0)
+#define HG_PANIC(...) do { logError(); std::fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); std::abort(); \
+} while(0)
 
 #else
 
@@ -342,17 +289,89 @@ struct Defer {
 #endif
 
 // ============================================================================
-// Core Types
+// Initialization
 // ============================================================================
 
-// ----------------------------------------------------------------------------
-// Binary
-// ----------------------------------------------------------------------------
+/**
+ * The Hurdy Gurdy subsystems
+ */
+enum Subsystem : u32 {
+    Subsystem_memory = 0x1,
+    Subsystem_concurrency = 0x2,
+    Subsystem_gpu = 0x4,
+    Subsystem_assets = 0x8,
+    Subsystem_windowing = 0x10,
+    Subsystem_audio = 0x20,
+    Subsystem_all = static_cast<u32>(-1),
+};
+using SubsystemFlags = u32;
 
 /**
- * A block of binary data
+ * A scope guard for library initialization
  */
-struct Binary {
+struct HurdyGurdy {
+    /**
+     * Whether this scope guard needs to deinitialize the library
+     */
+    bool alive = true;
+
+    /**
+     * Default construct
+     */
+    HurdyGurdy() noexcept = default;
+
+    /**
+     * Deinitialize the library
+     */
+    ~HurdyGurdy() noexcept;
+
+    /**
+     * Move the library scope guard
+     */
+    HurdyGurdy(HurdyGurdy&& other) noexcept
+        : alive{other.alive}
+    {
+        if (this != &other)
+            other.alive = false;
+    }
+
+    /**
+     * Move the library scope guard
+     */
+    HurdyGurdy& operator=(HurdyGurdy&& other) noexcept
+    {
+        HG_ASSERT(!alive);
+        if (this != &other)
+        {
+            alive = other.alive;
+            other.alive = false;
+        }
+        return *this;
+    }
+
+    HurdyGurdy(const HurdyGurdy&) = delete;
+    HurdyGurdy& operator=(const HurdyGurdy&) = delete;
+};
+
+/**
+ * Initialize the Hurdy Gurdy library
+ *
+ * Parameters
+ * - init Which subsystems to initialize, all are recommended
+ *
+ * Returns
+ * - A HurdyGurdy scope guard, or nothing on failure
+ */
+Maybe<HurdyGurdy> initHurdyGurdy(SubsystemFlags init = Subsystem_all);
+
+// ============================================================================
+// Core Types (Implementations
+// ============================================================================
+
+/**
+ * A non-owning view into binary data
+ */
+struct BinaryView {
     /**
      * The data
      */
@@ -371,7 +390,7 @@ struct Binary {
  * - dst A pointer to store the read data
  * - size The size in bytes to read
  */
-void binaryRead(Binary bin, u64 idx, void* dst, u64 len);
+void binaryRead(BinaryView bin, u64 idx, void* dst, u64 len);
 
 /**
  * Read data of arbitrary type from the file
@@ -380,21 +399,17 @@ void binaryRead(Binary bin, u64 idx, void* dst, u64 len);
  * - idx The index into the file in bytes to read from
  */
 template<typename T>
-T binaryRead(Binary bin, u64 idx)
+T binaryRead(BinaryView bin, u64 idx)
 {
     T ret;
     binaryRead(bin, idx, &ret, sizeof(T));
     return ret;
 }
 
-// ----------------------------------------------------------------------------
-// String
-// ----------------------------------------------------------------------------
-
 /**
- * A view into a string
+ * A non-owning view into a string
  */
-struct String {
+struct StringView {
     /**
      * The characters
      */
@@ -407,18 +422,18 @@ struct String {
     /**
      * Construct uninitialized
      */
-    String() = default;
+    StringView() = default;
 
     /**
      * Create a string view from a pointer and length
      */
-    constexpr String(const char* charsVal, u64 lengthVal)
+    constexpr StringView(const char* charsVal, u64 lengthVal)
         : chars{charsVal}, length{lengthVal} {}
 
     /**
      * Create a string view from begin and end pointers
      */
-    constexpr String(const char* charsBegin, const char* charsEnd)
+    constexpr StringView(const char* charsBegin, const char* charsEnd)
         : chars{charsBegin}, length{static_cast<uptr>(charsEnd - charsBegin)}
     {
         HG_ASSERT(charsBegin <= charsEnd);
@@ -429,14 +444,14 @@ struct String {
      *
      * Potentially dangerous, c string should be at most 4096 chars
      */
-    constexpr String(const char* cStr) : chars{cStr}, length{0}
+    constexpr StringView(const char* cStr) : chars{cStr}, length{0}
     {
         if (cStr != nullptr)
         {
             while (cStr[length] != '\0')
             {
                 ++length;
-                if (length <= 4096)
+                if (length > 4096)
                     HG_PANIC("C string greater than 4096 cannot be implicitly converted");
             }
         }
@@ -453,10 +468,6 @@ struct String {
     }
 };
 
-// ----------------------------------------------------------------------------
-// Span
-// ----------------------------------------------------------------------------
-
 /**
  * A view into memory of a type
  */
@@ -469,7 +480,21 @@ struct Span {
     /**
      * The number of values
      */
-    u32 count;
+    u64 count;
+
+    /**
+     * Construct from pointer and count
+     */
+    Span(T* valuesVal, u64 countVal)
+        : values{valuesVal}, count{countVal}
+    {}
+
+    /**
+     * Construct from begin and end
+     */
+    Span(T* begin, T* end)
+        : values{begin}, count{static_cast<uptr>(begin - end)}
+    {}
 
     /**
      * Access by index
@@ -513,10 +538,6 @@ struct Span {
     }
 };
 
-// ----------------------------------------------------------------------------
-// Maybe
-// ----------------------------------------------------------------------------
-
 /**
  * An object which may or may not exist
  */
@@ -531,13 +552,13 @@ struct Maybe
         /**
          * The object, which may or may not exist
          */
-        T value;
+        T val;
     };
 
     /**
      * Construct empty
      */
-    Maybe() = default;
+    Maybe() noexcept {};
 
     /**
      * Destroy the value, if it exists
@@ -545,41 +566,7 @@ struct Maybe
     ~Maybe() noexcept
     {
         if (has)
-            value.~T();
-    }
-
-    /**
-     * Copy construct from a value
-     */
-    Maybe(const T& val)
-        : has{true}, value{val}
-    {};
-
-    /**
-     * Copy assign from a value
-     */
-    Maybe& operator=(const T& val)
-    {
-        this->~Maybe();
-        has = true;
-        new (&value) T{val};
-    }
-
-    /**
-     * Move construct from a value
-     */
-    Maybe(T&& val) noexcept
-        : has{true}, value{std::move(val)}
-    {};
-
-    /**
-     * Move assign from a value
-     */
-    Maybe& operator=(T&& val) noexcept
-    {
-        this->~Maybe();
-        has = true;
-        new (&value) T{std::move(val)};
+            val.~T();
     }
 
     /**
@@ -589,7 +576,7 @@ struct Maybe
         : has{other.has}
     {
         if (other.has)
-            new (&value) T{other.value};
+            new (&val) T{other.val};
     }
 
     /**
@@ -600,7 +587,8 @@ struct Maybe
         this->~Maybe();
         has = other.has;
         if (other.has)
-            new (&value) T{other.value};
+            new (&val) T{other.val};
+        return *this;
     }
 
     /**
@@ -610,7 +598,7 @@ struct Maybe
         : has{other.has}
     {
         if (other.has)
-            new (&value) T{std::move(other.value)};
+            new (&val) T{std::move(other.val)};
         other.has = false;
     }
 
@@ -622,10 +610,28 @@ struct Maybe
         this->~Maybe();
         has = other.has;
         if (other.has)
-            new (&value) T{std::move(other.value)};
+            new (&val) T{std::move(other.val)};
         other.has = false;
+        return *this;
     }
 };
+
+template<typename T, typename... Args>
+Maybe<T> some(Args... args)
+{
+    Maybe<T> maybe;
+    new (&maybe.val) T{std::forward<Args>(args)...};
+    maybe.has = true;
+    return maybe;
+}
+
+template<typename T>
+Maybe<T> none()
+{
+    Maybe<T> maybe;
+    maybe.has = false;
+    return maybe;
+}
 
 // ============================================================================
 // Utility Functions
@@ -1097,18 +1103,6 @@ bool initGpu();
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources
  */
 void deinitGpu();
-
-/**
- * Get the platform's required instance extensions for windowing
- *
- * Parameters
- * - arena The arena to allocate from
- * - extBuffer A pointer to store the extension names
- *
- * Returns
- * - The number of required extensions
- */
-u32 platformGetVulkanExtensions(Arena* arena, String** extBuffer);
 
 /**
  * Wait for the GPU to finish work
@@ -2228,7 +2222,7 @@ enum GpuStoreOp : u32 {
 /**
  * The value to clear color attachments to
  */
-union GpuClearValueVolor {
+union GpuClearValueColor {
     /**
      * The value as f32
      */
@@ -2264,7 +2258,7 @@ union GpuClearValue {
     /**
      * The value for color attachments
      */
-    GpuClearValueVolor color;
+    GpuClearValueColor color;
     /**
      * The value for depth and stencil attachments
      */
@@ -4301,7 +4295,7 @@ struct BinaryBuilder {
     /**
      * Implicitly convert to Binary
      */
-    constexpr operator Binary()
+    constexpr operator BinaryView()
     {
         return {data, size};
     }
@@ -4346,7 +4340,7 @@ void binaryOverwrite(BinaryBuilder* bin, u64 idx, const T& src)
 /**
  * Compare strings
  */
-inline bool operator==(String lhs, String rhs)
+inline bool operator==(StringView lhs, StringView rhs)
 {
     return lhs.length == rhs.length && memEqual(lhs.chars, rhs.chars, lhs.length);
 }
@@ -4354,7 +4348,7 @@ inline bool operator==(String lhs, String rhs)
 /**
  * Compare strings
  */
-inline bool operator!=(String lhs, String rhs)
+inline bool operator!=(StringView lhs, StringView rhs)
 {
     return !(lhs == rhs);
 }
@@ -4366,17 +4360,17 @@ inline bool operator!=(String lhs, String rhs)
  * - arena The arena to allocate from
  * - str The string to create from
  */
-char* cString(Arena* arena, String str);
+char* cString(Arena* arena, StringView str);
 
 /**
  * Create a new owning string
  */
-String stringCreate(String data);
+StringView stringCreate(StringView data);
 
 /**
  * Destroy an owning string
  */
-void stringDestroy(String* str);
+void stringDestroy(StringView* str);
 
 /**
  * A string builder using arenas
@@ -4403,7 +4397,7 @@ struct StringBuilder {
     /**
      * Implicit converts to a string view
      */
-    constexpr operator String() const
+    constexpr operator StringView() const
     {
         return {chars, length};
     }
@@ -4414,7 +4408,7 @@ struct StringBuilder {
  */
 inline bool operator==(const StringBuilder& lhs, const StringBuilder& rhs)
 {
-    return String{lhs} == String{rhs};
+    return StringView{lhs} == StringView{rhs};
 }
 
 /**
@@ -4432,7 +4426,7 @@ inline bool operator!=(const StringBuilder& lhs, const StringBuilder& rhs)
  * - arena The arena to allocate from
  * - init The initial string to copy from
  */
-StringBuilder stringCopy(Arena* arena, String str);
+StringBuilder stringCopy(Arena* arena, StringView str);
 
 /**
  * Create a formatted string : TODO
@@ -4449,12 +4443,12 @@ StringBuilder stringCopy(Arena* arena, String str);
  * - idx The index into dst
  * - src The string to copy from
  */
-void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, String src);
+void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, StringView src);
 
 /**
  * Copies another string to the end of the string
  */
-inline void stringAppend(Arena* arena, StringBuilder* dst, String src)
+inline void stringAppend(Arena* arena, StringBuilder* dst, StringView src)
 {
     stringInsert(arena, dst, dst->length, src);
 }
@@ -4462,7 +4456,7 @@ inline void stringAppend(Arena* arena, StringBuilder* dst, String src)
 /**
  * Copies another string to the beginning of the string
  */
-inline void stringPrepend(Arena* arena, StringBuilder* dst, String src)
+inline void stringPrepend(Arena* arena, StringBuilder* dst, StringView src)
 {
     stringInsert(arena, dst, 0, src);
 }
@@ -4510,22 +4504,22 @@ bool isNumeral(char c);
 /**
  * Check whether a string is a base 10 integer
  */
-bool isInteger(String str);
+bool isInteger(StringView str);
 
 /**
  * Check whether a string is a base 10 floating point number
  */
-bool isFloat(String str);
+bool isFloat(StringView str);
 
 /**
  * Create an integer from a base 10 string
  */
-i64 stringToInteger(String str);
+i64 stringToInteger(StringView str);
 
 /**
  * Create a float from a base 10 string
  */
-f64 stringToFloat(String str);
+f64 stringToFloat(StringView str);
 
 /**
  * Create a base 10 string from an integer
@@ -4615,7 +4609,7 @@ struct SerialNode {
         /**
          * String data
          */
-        String string;
+        StringView string;
         /**
          * Integer value
          */
@@ -4709,13 +4703,13 @@ void serialize(Serializer* s, T (*arr)[N]);
  * Binary serialization
  */
 template<>
-void serialize(Serializer* s, Binary* val);
+void serialize(Serializer* s, BinaryView* val);
 
 /**
  * String serialization
  */
 template<>
-void serialize(Serializer* s, String* val);
+void serialize(Serializer* s, StringView* val);
 
 /**
  * StringBuilder serialization
@@ -4840,17 +4834,17 @@ void serialize(Serializer* s, Quat* val);
 /**
  * Write serialized data in a binary format
  */
-Binary binaryWriteSerial(Arena* arena, Serializer* data);
+BinaryView binaryWriteSerial(Arena* arena, Serializer* data);
 
 /**
  * Read binary data to be deserialized
  */
-Serializer binaryReadSerial(Arena* arena, Binary bin);
+Serializer binaryReadSerial(Arena* arena, BinaryView bin);
 
 /**
  * Write serialized data as json
  */
-String jsonWriteSerial(Arena* arena, Serializer* data);
+StringView jsonWriteSerial(Arena* arena, Serializer* data);
 
 // /**
 //  * Read json data to be deserialized : TODO
@@ -4868,7 +4862,7 @@ struct JsonError {
     /**
      * The error message
      */
-    String msg = {};
+    StringView msg = {};
 };
 
 /**
@@ -4901,7 +4895,7 @@ struct JsonField {
     /**
      * The name of the field
      */
-    String name = {};
+    StringView name = {};
     /**
      * The value stored in the field
      */
@@ -4957,7 +4951,7 @@ struct JsonNode {
         JsonStruct jstruct;
         JsonField field;
         JsonArray array;
-        String string;
+        StringView string;
         f64 floating;
         i64 integer;
         bool boolean;
@@ -4988,7 +4982,7 @@ struct Json {
  * Returns
  * - The parsed json, errors contained inside
  */
-Json parseJson(Arena* arena, String text);
+Json parseJson(Arena* arena, StringView text);
 
 // ============================================================================
 // Containers
@@ -5581,7 +5575,7 @@ constexpr u64 hash(void* val)
  * Hash map hashing for strings
  */
 template<>
-constexpr u64 hash(String str)
+constexpr u64 hash(StringView str)
 {
     u64 ret = 0;
     u64 mult = 1;
@@ -5599,7 +5593,7 @@ constexpr u64 hash(String str)
 template<>
 constexpr u64 hash(const char* str)
 {
-    return hash(String{str});
+    return hash(StringView{str});
 }
 
 /**
@@ -5608,7 +5602,7 @@ constexpr u64 hash(const char* str)
 template<>
 constexpr u64 hash(StringBuilder str)
 {
-    return hash(String{str});
+    return hash(StringView{str});
 }
 
 /**
@@ -5815,7 +5809,7 @@ struct Asset {
     /**
      * The unique path for caching
      */
-    String path;
+    StringView path;
 };
 
 /**
@@ -5828,7 +5822,7 @@ struct AssetManager {
     /**
      * The asset lookup
      */
-    Map<String, Asset<T>*> map;
+    Map<StringView, Asset<T>*> map;
     /**
      * The asset pool
      */
@@ -5875,7 +5869,7 @@ Asset<T>* assetCreate();
  * Load an asset (or increment the ref count)
  */
 template<typename T>
-Asset<T>* assetLoad(String path);
+Asset<T>* assetLoad(StringView path);
 
 /**
  * Destroy an asset and unload it (or decrement the ref count)
@@ -5904,19 +5898,19 @@ void serialize(Serializer* s, Asset<T>** asset);
 /**
  * A binary file asset handle
  */
-using BinaryAsset = Asset<Binary>;
+using BinaryAsset = Asset<BinaryView>;
 
 /**
  * Binary asset load implementation
  */
 template<>
-void assetLoadImpl(Asset<Binary>* data);
+void assetLoadImpl(Asset<BinaryView>* data);
 
 /**
  * Binary asset unload implementation
  */
 template<>
-void assetUnloadImpl(Asset<Binary>* data);
+void assetUnloadImpl(Asset<BinaryView>* data);
 
 /**
  * Store a binary file to disc
@@ -5924,7 +5918,7 @@ void assetUnloadImpl(Asset<Binary>* data);
  * Returns
  * - Whether the write succeeded
  */
-bool binaryStore(Binary bin, String path);
+bool binaryStore(BinaryView bin, StringView path);
 
 // ============================================================================
 // Timing
@@ -6032,7 +6026,7 @@ enum PerfScale : u32 {
 /**
  * Logs performance statistics to stdout
  */
-void perfLog(String title, const PerfStats* stats, PerfScale scale);
+void perfLog(StringView title, const PerfStats* stats, PerfScale scale);
 
 // ============================================================================
 // Dynamic Library
@@ -6049,7 +6043,7 @@ struct Library;
  * Returns
  * - The loaded library, or nullptr on failure
  */
-Library* libraryLoad(String path);
+Library* libraryLoad(StringView path);
 
 /**
  * Unload a dynamic library
@@ -6066,7 +6060,7 @@ void libraryUnload(Library* lib);
  * Returns
  * - A function pointer to the found symbol, or nullptr not found
  */
-void* libraryFindFunction(Library* lib, String symbol);
+void* libraryFindFunction(Library* lib, StringView symbol);
 
 // ============================================================================
 // Windowing
@@ -6129,7 +6123,7 @@ struct Window;
  * Returns
  * - The created window, or nullptr on failure
  */
-Window* windowCreate(String title, u32 width, u32 height, const WindowConfig* config);
+Window* windowCreate(StringView title, u32 width, u32 height, const WindowConfig* config);
 
 /**
  * Destroy a window
@@ -6737,7 +6731,7 @@ void assetUnloadImpl(Asset<TextureData>* data);
  * Returns
  * - Whether the write succeeded
  */
-bool textureStorePng(TextureData* texture, String path);
+bool textureStorePng(TextureData* texture, StringView path);
 
 /**
  * A texture asset stored on the gpu
@@ -7124,7 +7118,7 @@ void assetUnloadImpl(Asset<MeshData>* data);
 /**
  * Store the model data to disc in gltf format : TODO
  */
-void meshStoreGltf(MeshData* data, String path, Fence* fence);
+void meshStoreGltf(MeshData* data, StringView path, Fence* fence);
 
 /**
  * A 3d mesh asset stored on the gpu
@@ -7310,7 +7304,7 @@ struct Component {
     /**
      * The name of the component type
      */
-    String name = {};
+    StringView name = {};
     /**
      * The component lookup from entity index
      */
@@ -7382,7 +7376,7 @@ struct EcsRegisterComponent {
      *
      * Note, the componentId is derived from this name
      */
-    String name = {};
+    StringView name = {};
     /**
      * The width of the component data in bytes
      */
@@ -7447,7 +7441,7 @@ void ecsUnregisterComponent(Ecs* ecs)
 /**
  * Returns the name of the component type
  */
-String ecsComponentName(Ecs* ecs, u64 componentId);
+StringView ecsComponentName(Ecs* ecs, u64 componentId);
 
 /**
  * Return a new entity
@@ -8112,18 +8106,19 @@ void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
 // ============================================================================
 
 template<typename... Ts>
-void formatError(String errorFmt, Ts... args)
+void formatError(StringView errorFmt, Ts... args)
 {
-    Arena* scratch = getScratch();
+    char fmt[4096];
+    u64 fmtLen = errorFmt.length < sizeof(fmt) - 1
+        ? errorFmt.length
+        : sizeof(fmt) - 1;
+    memCopy(fmt, errorFmt.chars, fmtLen);
+    fmt[fmtLen] = 0;
 
-    constexpr u32 strLen = 512;
-    char* str = (char*)arenaAlloc(scratch, strLen, alignof(char));
+    char buf[4096];
+    snprintf(buf, sizeof(buf), fmt, args...);
 
-    char* cfmt = cString(scratch, errorFmt);
-
-    snprintf(str, strLen, cfmt, args...);
-
-    setError(str);
+    setError(buf);
 }
 
 template<typename F>
@@ -8788,7 +8783,7 @@ void mapForEach(Map<K, V>* map, F fn)
 template<typename T>
 void assetInit()
 {
-    assets<T>.map = mapCreate<String, Asset<T>*>();
+    assets<T>.map = mapCreate<StringView, Asset<T>*>();
     assets<T>.pool = poolCreate<Asset<T>>();
 }
 
@@ -8825,7 +8820,7 @@ Asset<T>* assetCreate()
 }
 
 template<typename T>
-Asset<T>* assetLoad(String path)
+Asset<T>* assetLoad(StringView path)
 {
     if (Asset<T>** asset = mapGet(&assets<T>.map, path);
         asset != nullptr)
@@ -8885,7 +8880,7 @@ void serialize(Serializer* s, Asset<T>** asset)
 {
     if (s->writing)
     {
-        String path = (*asset)->path;
+        StringView path = (*asset)->path;
         serialize(s, &path);
     }
     else

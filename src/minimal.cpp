@@ -16,9 +16,9 @@ static bool renderDebug = false;
 
 int main()
 {
-    if (!init())
+    Maybe<HurdyGurdy> hg = initHurdyGurdy();
+    if (!hg.has)
         HG_PANIC("Could not initialize Hurdy Gurdy\n");
-    HG_DEFER(deinit());
 
     Window* window = windowCreate("Hg Minimal Example", 1200, 800, nullptr);
     if (window == nullptr)

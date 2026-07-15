@@ -48,7 +48,7 @@ volatile static bool quit = false;
 static bool renderHovered = false;
 
 struct Name {
-    String name{};
+    StringView name{};
 };
 
 struct Spin {
@@ -602,9 +602,9 @@ int main()
 {
     HG_DEFER(printf("Exited successfully\n"));
 
-    if (!hg::init())
+    Maybe<HurdyGurdy> hg = initHurdyGurdy();
+    if (!hg.has)
         HG_PANIC("Could not initialize Hurdy Gurdy\n");
-    HG_DEFER(hg::deinit());
 
     Arena* arena = getScratch();
     HG_ARENA_SCOPE(arena);

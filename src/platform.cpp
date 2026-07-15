@@ -1,4 +1,5 @@
 #include "hurdygurdy.hpp"
+#include "internal.hpp"
 
 #include <cstdio>
 
@@ -13,7 +14,7 @@
 
 namespace hg {
 
-bool platformInit()
+bool internal::platformInit()
 {
     if (!SDL_Init(
         SDL_INIT_AUDIO |
@@ -22,23 +23,23 @@ bool platformInit()
         SDL_INIT_GAMEPAD |
         SDL_INIT_EVENTS))
     {
-        setError(static_cast<String>(SDL_GetError()));
+        setError(static_cast<StringView>(SDL_GetError()));
         return false;
     }
     return true;
 }
 
-void platformDeinit()
+void internal::platformDeinit()
 {
     SDL_Quit();
 }
 
-u32 platformGetVulkanExtensions(Arena* arena, String** extBuffer)
+u32 internal::platformGetVulkanExtensions(Arena* arena, StringView** extBuffer)
 {
     u32 extCount;
     const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);
 
-    *extBuffer = arenaAlloc<String>(arena, extCount);
+    *extBuffer = arenaAlloc<StringView>(arena, extCount);
     for (u32 i = 0; i < extCount; ++i)
     {
         (*extBuffer)[i] = exts[i];
@@ -808,7 +809,7 @@ static const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerInfo{
 
 #endif
 
-static VkInstance createInstance(String* extensions, u32 extensionCount)
+static VkInstance createInstance(StringView* extensions, u32 extensionCount)
 {
     if (extensionCount > 0)
         HG_ASSERT(extensions != nullptr);
@@ -1137,8 +1138,8 @@ bool initGpu()
         goto loadFailed;
 
     {
-        String* exts;
-        u32 extCount = platformGetVulkanExtensions(scratch, &exts);
+        StringView* exts;
+        u32 extCount = internal::platformGetVulkanExtensions(scratch, &exts);
 #ifdef HG_VK_DEBUG_MESSENGER
         exts = arenaRealloc(scratch, exts, extCount, extCount + 1);
         exts[extCount++] = "VK_EXT_debug_utils";
@@ -1169,7 +1170,8 @@ bool initGpu()
     if (vk.device == nullptr)
         goto deviceFailed;
 
-    loadVulkanDeviceFuncs(vk.device);
+    if (!loadVulkanDeviceFuncs(vk.device))
+        goto loadDeviceFailed;
 
     vkGetDeviceQueue(vk.device, vk.queueFamily, 0, &vk.queue);
     if (vk.queue == nullptr)
@@ -1233,6 +1235,7 @@ bool initGpu()
 vmaFailed:
 queueFailed:
     vkDestroyDevice(vk.device, nullptr);
+loadDeviceFailed:
 deviceFailed:
 queueFamilyFailed:
 physicalDeviceFailed:
@@ -3300,7 +3303,7 @@ static GpuPresentMode findSwapchainPresentMode(
     return GpuPresentMode_fifo;
 }
 
-Window* windowCreate(String title, u32 width, u32 height, const WindowConfig* config)
+Window* windowCreate(StringView title, u32 width, u32 height, const WindowConfig* config)
 {
     static const WindowConfig defaultConfig{};
     if (config == nullptr)
@@ -5652,7 +5655,7 @@ namespace hg {
 
 #include <dlfcn.h>
 
-Library* libraryLoad(String path)
+Library* libraryLoad(StringView path)
 {
     char* cstr = cString(getScratch(), path);
 
@@ -5669,7 +5672,7 @@ void libraryUnload(Library* lib)
         dlclose(lib);
 }
 
-void* libraryFindFunction(Library* lib, String symbol)
+void* libraryFindFunction(Library* lib, StringView symbol)
 {
     char* cstr = cString(getScratch(), symbol);
 
