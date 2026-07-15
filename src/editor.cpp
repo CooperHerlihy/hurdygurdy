@@ -86,7 +86,7 @@ void init(Arena* arena)
     modelsInit(Format_r8g8b8a8_srgb, Format_d32_sfloat);
     skyboxInit(Format_r8g8b8a8_srgb, Format_d32_sfloat);
 
-    ecs = arenaAlloc<Ecs>(arena, 1);
+    ecs = arena->alloc<Ecs>(1);
     *ecs = ecsCreate();
 
     HG_ECS_REGISTER_TYPE(ecs, Node);
@@ -221,7 +221,8 @@ void drawMenu()
 
             if (ImGui::MenuItem("Save Screenshot"))
             {
-                void* pixels = arenaAlloc(getScratch(), width * height * 4, 4);
+                ArenaScope scratch = getScratch();
+                void* pixels = scratch.alloc(width * height * 4, 4);
 
                 gpuImageRead(pixels, renderView);
                 stbi_write_png(
@@ -605,7 +606,6 @@ int main()
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
     Arena* arena = getScratch();
-    HG_ARENA_SCOPE(arena);
 
     for (u32 i = 0; i < std::size(audioData); ++i)
     {
@@ -688,7 +688,6 @@ int main()
         delta = clockTick(&gameClock);
 
         Arena* frame = getScratch(&arena, 1);
-        HG_ARENA_SCOPE(frame);
 
         processEvents();
         if (wasQuit() || windowWasClosed(window))

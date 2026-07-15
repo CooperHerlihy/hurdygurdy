@@ -28,32 +28,32 @@ void test()
             HG_ASSERT(arena.capacity == 1024);
             HG_ASSERT(arena.head == 0);
 
-            u32* allocU32 = arenaAlloc<u32>(&arena, 1);
+            u32* allocU32 = arena.alloc<u32>(1);
             HG_ASSERT(allocU32 == arena.memory);
 
-            u64* allocU64 = arenaAlloc<u64>(&arena, 2);
+            u64* allocU64 = arena.alloc<u64>(2);
             HG_ASSERT(reinterpret_cast<u8*>(allocU64) == reinterpret_cast<u8*>(allocU32) + 8);
 
-            u8* allocU8 = arenaAlloc<u8>(&arena, 1);
+            u8* allocU8 = arena.alloc<u8>(1);
             HG_ASSERT(allocU8 == reinterpret_cast<u8*>(allocU32) + 24);
 
             struct Big {
                 u8 data[32];
             };
-            Big* allocBig = arenaAlloc<Big>(&arena, 1);
+            Big* allocBig = arena.alloc<Big>(1);
             HG_ASSERT(reinterpret_cast<u8*>(allocBig) == reinterpret_cast<u8*>(allocU32) + 25);
 
-            Big* reallocBig = arenaRealloc(&arena, allocBig, 1, 2);
+            Big* reallocBig = arena.realloc(allocBig, 1, 2);
             HG_ASSERT(reallocBig == allocBig);
 
-            Big* reallocBigSame = arenaRealloc(&arena, reallocBig, 2, 2);
+            Big* reallocBigSame = arena.realloc(reallocBig, 2, 2);
             HG_ASSERT(reallocBigSame == reallocBig);
 
             memClear(reallocBig, 2 * sizeof(*reallocBig), 2);
-            u8* allocInterrupt = arenaAlloc<u8>(&arena, 1);
+            u8* allocInterrupt = arena.alloc<u8>(1);
             static_cast<void>(allocInterrupt);
 
-            Big* reallocBig2 = arenaRealloc(&arena, reallocBig, 2, 4);
+            Big* reallocBig2 = arena.realloc(reallocBig, 2, 4);
             HG_ASSERT(reallocBig2 != reallocBig);
             HG_ASSERT(memEqual(reallocBig, reallocBig2, 2 * sizeof(*reallocBig)));
 
@@ -63,8 +63,7 @@ void test()
 
     // String
     {
-        Arena* arena = getScratch();
-        HG_ARENA_SCOPE(arena);
+        ArenaScope arena = getScratch();
 
         StringBuilder a = stringCopy(arena, "a");
         HG_ASSERT(a[0] == 'a');
@@ -99,8 +98,7 @@ void test()
 
     // string utils
     {
-        Arena* arena = getScratch();
-        HG_ARENA_SCOPE(arena);
+        ArenaScope arena = getScratch();
 
         HG_ASSERT(isWhitespace(' '));
         HG_ASSERT(isWhitespace('\t'));
@@ -497,8 +495,7 @@ void test()
 
     // Serialization
     {
-        Arena* arena = getScratch();
-        HG_ARENA_SCOPE(arena);
+        ArenaScope arena = getScratch();
 
         struct PlainOldData {
             i64 a;
@@ -674,8 +671,7 @@ void test()
     // Json
     {
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
             )";
@@ -687,8 +683,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -706,8 +701,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -730,8 +724,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -754,8 +747,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -781,8 +773,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -808,8 +799,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -835,8 +825,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -862,8 +851,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -889,8 +877,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -916,8 +903,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -943,8 +929,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -978,8 +963,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -1029,8 +1013,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -1080,8 +1063,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -1130,8 +1112,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -1190,8 +1171,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             StringView file = R"(
                 {
@@ -1403,8 +1383,7 @@ void test()
         HG_ASSERT(arr.count == 1);
         HG_ASSERT(arr[0] == 10);
 
-        Arena* arena = getScratch();
-        HG_ARENA_SCOPE(arena);
+        ArenaScope arena = getScratch();
 
         Array<u32> temp = arrayTemp<u32>(arena, 0, 4);
 
@@ -1454,8 +1433,7 @@ void test()
         HG_ASSERT(arr.count == 1);
         HG_ASSERT(*static_cast<u32*>(arr[0]) == 10);
 
-        Arena* arena = getScratch();
-        HG_ARENA_SCOPE(arena);
+        ArenaScope arena = getScratch();
 
         ArrayAny temp = arrayAnyTemp(arena, sizeof(u32), alignof(u32), 0, 2);
 
@@ -1542,8 +1520,7 @@ void test()
     // Set
     {
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             constexpr u32 count = 128;
 
@@ -1614,8 +1591,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             using StrHash = u64;
 
@@ -1653,8 +1629,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             Set<const char*> set = setTemp<const char*>(arena, 128);
 
@@ -1690,8 +1665,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             Set<StringBuilder> set = setTemp<StringBuilder>(arena, 128);
 
@@ -1722,8 +1696,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             Set<StringView> set = setTemp<StringView>(arena, 128);
 
@@ -1757,8 +1730,7 @@ void test()
     // Map
     {
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             constexpr u32 count = 128;
 
@@ -1830,8 +1802,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             using StrHash = u64;
 
@@ -1869,8 +1840,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             Map<const char*, u32> map = mapTemp<const char*, u32>(arena, 128);
 
@@ -1906,8 +1876,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             Map<StringBuilder, u32> map = mapTemp<StringBuilder, u32>(arena, 128);
 
@@ -1942,8 +1911,7 @@ void test()
         }
 
         {
-            Arena* arena = getScratch();
-            HG_ARENA_SCOPE(arena);
+            ArenaScope arena = getScratch();
 
             Map<StringView, u32> map = mapTemp<StringView, u32>(arena, 6);
 
@@ -2016,8 +1984,7 @@ void test()
 
         constexpr u32 n = 1500;
 
-        Arena* arena = getScratch();
-        HG_ARENA_SCOPE(arena);
+        ArenaScope arena = getScratch();
 
         Array<u32*> ptrs = arrayTemp<u32*>(arena, 0, n);
 
@@ -4059,8 +4026,7 @@ void test()
 
     // Ecs serialization
     {
-        Arena* arena = getScratch();
-        HG_ARENA_SCOPE(arena);
+        ArenaScope arena = getScratch();
 
         SerialNode* scene{};
 

@@ -32,8 +32,7 @@ void setError(StringView error)
 
 void logError()
 {
-    StringView e = getError();
-    std::fprintf(stderr, "HurdyGurdy Error Message: %.*s\n", (int)e.length, e.chars);
+    std::fprintf(stderr, "HurdyGurdy Error Message: %.*s\n", (int)errorLength, errorData);
 }
 
 static SubsystemFlags initialized = 0;
@@ -194,51 +193,47 @@ void heapFree(void* allocation, u64 size)
     free(allocation);
 }
 
-void* arenaAlloc(Arena* arena, u64 size, u64 alignment)
+void* Arena::alloc(u64 size, u64 alignment)
 {
-    HG_ASSERT(arena != nullptr);
-
-    u64 newHead = align(static_cast<u64>(arena->head), alignment) + size;
-    if (newHead > arena->capacity)
+    u64 newHead = align(static_cast<u64>(head), alignment) + size;
+    if (newHead > capacity)
     {
         setError("Arena out of memory");
         return nullptr;
     }
 
-    arena->head = newHead;
-    return reinterpret_cast<void*>(reinterpret_cast<uptr>(arena->memory) + arena->head - size);
+    head = newHead;
+    return reinterpret_cast<void*>(reinterpret_cast<uptr>(memory) + head - size);
 }
 
-void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment)
+void* Arena::realloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 {
-    HG_ASSERT(arena != nullptr);
-
-    if (arenaCanExtend(arena, allocation, oldSize, alignment))
+    if (canExtend(allocation, oldSize, alignment))
     {
-        u64 newHead = reinterpret_cast<uptr>(allocation) + newSize - reinterpret_cast<uptr>(arena->memory);
-        if (newHead > arena->capacity)
+        u64 newHead = reinterpret_cast<uptr>(allocation) + newSize - reinterpret_cast<uptr>(memory);
+        if (newHead > capacity)
         {
             setError("Arena out of memory");
             return nullptr;
         }
 
-        arena->head = newHead;
+        head = newHead;
         return allocation;
     }
 
     if (newSize < oldSize)
         return allocation;
 
-    void* newAllocation = arenaAlloc(arena, newSize, alignment);
+    void* newAllocation = alloc(newSize, alignment);
     if (allocation != nullptr)
         memCopy(newAllocation, allocation, std::min(oldSize, newSize));
     return newAllocation;
 }
 
-bool arenaCanExtend(Arena* arena, void* allocation, u64 size, u64 align)
+bool Arena::canExtend(void* allocation, u64 size, u64 align)
 {
     static_cast<void>(align);
-    return reinterpret_cast<uptr>(allocation) + size - reinterpret_cast<uptr>(arena->memory) == static_cast<uptr>(arena->head);
+    return reinterpret_cast<uptr>(allocation) + size - reinterpret_cast<uptr>(memory) == static_cast<uptr>(head);
 }
 
 static thread_local Arena* scratchArenas{};
@@ -253,7 +248,7 @@ void initScratch(u32 count, u64 size)
 
     void* block = heapAlloc(count * size, 16);
     Arena base = {block, size, 0};
-    scratchArenas = arenaAlloc<Arena>(&base, count);
+    scratchArenas = base.alloc<Arena>(count);
     scratchArenaCount = count;
 
     scratchArenas[0] = base;
@@ -271,7 +266,7 @@ void deinitScratch()
     }
 }
 
-Arena* getScratch(Arena const* const* conflicts, u32 count)
+ArenaScope getScratch(Arena const* const* conflicts, u32 count)
 {
     if (count > 0)
         HG_ASSERT(conflicts != nullptr);
@@ -572,8 +567,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
     HG_ASSERT(begin <= end);
     HG_ASSERT(fn != nullptr);
 
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch();
 
     u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f32>(end - begin) / (8.0f * static_cast<f32>(threadPool.threadCount))));
 
@@ -590,7 +584,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
             u64 end = 0;
         };
 
-        Capture* capture = arenaAlloc<Capture>(scratch, 1);
+        Capture* capture = scratch.alloc<Capture>(1);
         capture->data = data;
         capture->fn = fn;
         capture->begin = i;
@@ -2057,7 +2051,7 @@ u64 rngNext64(Rng* rng)
 
 void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize)
 {
-    bin->data = arenaRealloc(arena, bin->data, bin->size, newSize, 1);
+    bin->data = arena->realloc(bin->data, bin->size, newSize, 1);
     bin->size = newSize;
 }
 
@@ -2073,7 +2067,7 @@ char* cString(Arena* arena, StringView str)
     if (str.length > 0)
         HG_ASSERT(str.chars != nullptr);
 
-    char* cStr = arenaAlloc<char>(arena, str.length + 1);
+    char* cStr = arena->alloc<char>(str.length + 1);
     memCopy(cStr, str.chars, str.length);
     cStr[str.length] = 0;
     return cStr;
@@ -2101,7 +2095,7 @@ StringBuilder stringCopy(Arena* arena, StringView str)
     HG_ASSERT(arena != nullptr);
 
     StringBuilder copy{};
-    copy.chars = arenaAlloc<char>(arena, str.length);
+    copy.chars = arena->alloc<char>(str.length);
     memCopy(copy.chars, str.chars, str.length);
     copy.length = str.length;
     return copy;
@@ -2117,7 +2111,7 @@ void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, StringView src)
 
     u64 newLength = dst->length + src.length;
 
-    dst->chars = arenaRealloc(arena, dst->chars, dst->length, newLength);
+    dst->chars = arena->realloc(dst->chars, dst->length, newLength);
 
     if (idx != dst->length)
         memMove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
@@ -2312,8 +2306,7 @@ StringBuilder integerToString(Arena* arena, i64 num)
 {
     HG_ASSERT(arena != nullptr);
 
-    Arena* scratch = getScratch(&arena, 1);
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch(&arena, 1);
 
     if (num == 0)
         return stringCopy(arena, "0");
@@ -2343,8 +2336,7 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
 {
     HG_ASSERT(arena != nullptr);
 
-    Arena* scratch = getScratch(&arena, 1);
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch(&arena, 1);
 
     if (num == 0.0)
         return stringCopy(arena, "0.0");
@@ -2394,7 +2386,7 @@ Serializer serialWriter(Arena* arena)
 {
     Serializer s{};
     s.arena = arena;
-    s.root = arenaAlloc<SerialNode>(arena, 1);
+    s.root = arena->alloc<SerialNode>(1);
     s.root->parent = nullptr;
     s.root->next = nullptr;
     s.parent = nullptr;
@@ -2420,7 +2412,7 @@ void serializeNodeStart(Serializer* s)
     {
         if (s->current != nullptr)
         {
-            s->current->next = arenaAlloc<SerialNode>(s->arena, 1);
+            s->current->next = s->arena->alloc<SerialNode>(1);
             s->current = s->current->next;
             s->current->parent = s->parent;
             s->current->next = nullptr;
@@ -2429,7 +2421,7 @@ void serializeNodeStart(Serializer* s)
         {
             if (s->parent != nullptr)
             {
-                s->current = arenaAlloc<SerialNode>(s->arena, 1);
+                s->current = s->arena->alloc<SerialNode>(1);
                 s->parent->children = s->current;
                 s->current->parent = s->parent;
                 s->current->next = nullptr;
@@ -3147,7 +3139,7 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
         case 'f':
             return jsonParseBoolean(arena, state);
         case '}': {
-            JsonError* error = arenaAlloc<JsonError>(arena, 1);
+            JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
@@ -3157,7 +3149,7 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
             return {nullptr, error};
         }
         case ']': {
-            JsonError* error = arenaAlloc<JsonError>(arena, 1);
+            JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
@@ -3172,7 +3164,7 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
         return jsonParseNumber(arena, state);
     }
 
-    JsonError* error = arenaAlloc<JsonError>(arena, 1);
+    JsonError* error = arena->alloc<JsonError>(1);
     error->next = nullptr;
 
     u64 begin = state->head;
@@ -3196,7 +3188,7 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
 static Json jsonParseStruct(Arena* arena, JsonParseState* state)
 {
     Json json{};
-    json.file = arenaAlloc<JsonNode>(arena, 1);
+    json.file = arena->alloc<JsonNode>(1);
     json.file->type = JsonType::JsonType_struct;
     json.file->jstruct.fields = nullptr;
 
@@ -3213,7 +3205,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
         }
         if (state->head >= state->text.length)
         {
-            JsonError* error = arenaAlloc<JsonError>(arena, 1);
+            JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
@@ -3229,7 +3221,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
         }
         if (state->text[state->head] == ']')
         {
-            JsonError* error = arenaAlloc<JsonError>(arena, 1);
+            JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
@@ -3272,7 +3264,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
         {
             if (value.file->type != JsonType::JsonType_field)
             {
-                JsonError* error = arenaAlloc<JsonError>(arena, 1);
+                JsonError* error = arena->alloc<JsonError>(1);
                 error->next = nullptr;
                 StringBuilder msg{};
                 stringAppend(arena, &msg, "on line ");
@@ -3286,7 +3278,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
                 lastError = error;
             } else if (value.file->field.value == nullptr)
             {
-                JsonError* error = arenaAlloc<JsonError>(arena, 1);
+                JsonError* error = arena->alloc<JsonError>(1);
                 error->next = nullptr;
                 StringBuilder msg{};
                 stringAppend(arena, &msg, "on line ");
@@ -3324,7 +3316,7 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
 static Json jsonParseArray(Arena* arena, JsonParseState* state)
 {
     Json json{};
-    json.file = arenaAlloc<JsonNode>(arena, 1);
+    json.file = arena->alloc<JsonNode>(1);
     json.file->type = JsonType::JsonType_array;
 
     JsonType type = JsonType::JsonType_none;
@@ -3341,7 +3333,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
         }
         if (state->head >= state->text.length)
         {
-            JsonError* error = arenaAlloc<JsonError>(arena, 1);
+            JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
@@ -3357,7 +3349,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
         }
         if (state->text[state->head] == '}')
         {
-            JsonError* error = arenaAlloc<JsonError>(arena, 1);
+            JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
             StringBuilder msg{};
             stringAppend(arena, &msg, "on line ");
@@ -3394,7 +3386,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
             break;
         }
 
-        JsonElem* elem = arenaAlloc<JsonElem>(arena, 1);
+        JsonElem* elem = arena->alloc<JsonElem>(1);
         elem->next = nullptr;
 
         Json value = jsonParseNext(arena, state);
@@ -3408,7 +3400,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
                 {
                     type = value.file->type;
                 } else {
-                    JsonError* error = arenaAlloc<JsonError>(arena, 1);
+                    JsonError* error = arena->alloc<JsonError>(1);
                     error->next = nullptr;
                     StringBuilder msg{};
                     stringAppend(arena, &msg, "on line ");
@@ -3424,7 +3416,7 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
             }
             if (value.file->type != type)
             {
-                JsonError* error = arenaAlloc<JsonError>(arena, 1);
+                JsonError* error = arena->alloc<JsonError>(1);
                 error->next = nullptr;
                 StringBuilder msg{};
                 stringAppend(arena, &msg, "on line ");
@@ -3482,7 +3474,7 @@ static Json jsonParseString(Arena* arena, JsonParseState* state)
         }
 
         Json json{};
-        json.file = arenaAlloc<JsonNode>(arena, 1);
+        json.file = arena->alloc<JsonNode>(1);
 
         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
         {
@@ -3514,7 +3506,7 @@ static Json jsonParseString(Arena* arena, JsonParseState* state)
         return json;
     }
 
-    JsonError* error = arenaAlloc<JsonError>(arena, 1);
+    JsonError* error = arena->alloc<JsonError>(1);
     StringBuilder msg{};
     stringAppend(arena, &msg, "on line ");
     stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
@@ -3553,7 +3545,7 @@ static Json jsonParseNumber(Arena* arena, JsonParseState* state)
     {
         if (isFloat(num))
         {
-            JsonNode* node = arenaAlloc<JsonNode>(arena, 1);
+            JsonNode* node = arena->alloc<JsonNode>(1);
             node->type = JsonType::JsonType_float;
             node->floating = stringToFloat(num);
             return {node, nullptr};
@@ -3561,14 +3553,14 @@ static Json jsonParseNumber(Arena* arena, JsonParseState* state)
     } else {
         if (isInteger(num))
         {
-            JsonNode* node = arenaAlloc<JsonNode>(arena, 1);
+            JsonNode* node = arena->alloc<JsonNode>(1);
             node->type = JsonType::JsonType_integer;
             node->integer = stringToInteger(num);
             return {node, nullptr};
         }
     }
 
-    JsonError* error = arenaAlloc<JsonError>(arena, 1);
+    JsonError* error = arena->alloc<JsonError>(1);
 
     StringBuilder msg{};
     stringAppend(arena, &msg, "on line ");
@@ -3608,7 +3600,7 @@ static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
         if (state->head < state->text.length && state->text[state->head] == ',')
             ++state->head;
 
-        JsonNode* node = arenaAlloc<JsonNode>(arena, 1);
+        JsonNode* node = arena->alloc<JsonNode>(1);
         node->type = JsonType::JsonType_bool;
         node->boolean = true;
         return {node, nullptr};
@@ -3625,13 +3617,13 @@ static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
         if (state->head < state->text.length && state->text[state->head] == ',')
             ++state->head;
 
-        JsonNode* node = arenaAlloc<JsonNode>(arena, 1);
+        JsonNode* node = arena->alloc<JsonNode>(1);
         node->type = JsonType::JsonType_bool;
         node->boolean = false;
         return {node, nullptr};
     }
 
-    JsonError* error = arenaAlloc<JsonError>(arena, 1);
+    JsonError* error = arena->alloc<JsonError>(1);
 
     u64 begin = state->head;
     while (state->head < state->text.length && !isWhitespace(state->text[state->head])
@@ -3728,7 +3720,7 @@ ArrayAny arrayAnyTemp(Arena* arena, u32 width, u32 align, u32 count, u32 capacit
     HG_ASSERT(count <= capacity);
 
     ArrayAny arr{};
-    arr.vals = arenaAlloc(arena, capacity * width, align);
+    arr.vals = arena->alloc(capacity * width, align);
     arr.count = count;
     arr.capacity = capacity;
     arr.width = width;
@@ -3755,8 +3747,7 @@ void arrayAnyResizeTemp(Arena* arena, ArrayAny* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = arenaRealloc(
-            arena,
+        arr->vals = arena->realloc(
             arr->vals,
             arr->capacity * arr->width,
             newCount * 2 * arr->width,
@@ -3786,8 +3777,7 @@ void* arrayAnyPushTemp(Arena* arena, ArrayAny* arr)
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = arenaRealloc(
-            arena,
+        arr->vals = arena->realloc(
             arr->vals,
             arr->capacity * arr->width,
             newCapacity * arr->width,
@@ -3977,22 +3967,21 @@ void assetDeinitDefaults()
 template<>
 void assetLoadImpl(Asset<BinaryView>* data)
 {
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch();
 
     char* cpath = cString(scratch, data->path);
 
     FILE* fileHandle = fopen(cpath, "rb");
     if (fileHandle == nullptr)
     {
-        formatError("Could not find file to read binary: %s", cpath);
+        setError("Could not find file to read binary: %s", cpath);
         return;
     }
     HG_DEFER(fclose(fileHandle));
 
     if (fseek(fileHandle, 0, SEEK_END) != 0)
     {
-        formatError("Failed to read binary from file: %s", cpath);
+        setError("Failed to read binary from file: %s", cpath);
         return;
     }
 
@@ -4003,7 +3992,7 @@ void assetLoadImpl(Asset<BinaryView>* data)
     if (fread(const_cast<void*>(data->asset.data), 1, data->asset.size, fileHandle) != data->asset.size)
     {
         heapFree(const_cast<void*>(data->asset.data), data->asset.size);
-        formatError("Failed to read binary from file: %s", cpath);
+        setError("Failed to read binary from file: %s", cpath);
         data->asset = {};
         return;
     }
@@ -4017,22 +4006,21 @@ void assetUnloadImpl(Asset<BinaryView>* data)
 
 bool binaryStore(BinaryView bin, StringView path)
 {
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch();
 
     char* cpath = cString(scratch, path);
 
     FILE* fileHandle = fopen(cpath, "wb");
     if (fileHandle == nullptr)
     {
-        formatError("Failed to create file to write binary: %s", cpath);
+        setError("Failed to create file to write binary: %s", cpath);
         return false;
     }
     HG_DEFER(fclose(fileHandle));
 
     if (fwrite(bin.data, 1, bin.size, fileHandle) != bin.size)
     {
-        formatError("Failed to write binary data to file: %s", cpath);
+        setError("Failed to write binary data to file: %s", cpath);
         return false;
     }
 
@@ -4060,7 +4048,7 @@ Perf perfCreate(Arena* arena, u32 count)
     HG_ASSERT(arena != nullptr);
 
     Perf perf;
-    perf.times = arenaAlloc<f64>(arena, count);
+    perf.times = arena->alloc<f64>(count);
     perf.count = count;
     perf.current = 0;
     return perf;
@@ -4191,8 +4179,7 @@ void audioPlayerUpdate(AudioPlayer* player)
 
         Sound* sound = &music->sound->asset;
 
-        Arena* scratch = getScratch();
-        HG_ARENA_SCOPE(scratch);
+        ArenaScope scratch = getScratch();
 
         u32 width = sizeof(f32);
 
@@ -4202,7 +4189,7 @@ void audioPlayerUpdate(AudioPlayer* player)
             continue;
         u32 sizeToPush = total - queued;
 
-        f32* queue = static_cast<f32*>(arenaAlloc(scratch, sizeToPush, width));
+        f32* queue = static_cast<f32*>(scratch.alloc(sizeToPush, width));
         u32 queueSize = 0;
 
         while (queueSize < sizeToPush)
@@ -4302,15 +4289,14 @@ AudioSource* audioSourceAdd(Ecs* ecs, Entity e, SoundAsset* audio, bool repeat)
 template<>
 void assetLoadImpl(Asset<TextureData>* data)
 {
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch();
     char* cpath = cString(scratch, data->path);
 
     int x, y, channels;
     data->asset.pixels = stbi_load(cpath, &x, &y, &channels, 4);
     if (data->asset.pixels == nullptr)
     {
-        formatError("Could not load image: %s", cpath);
+        setError("Could not load image: %s", cpath);
         return;
     }
     data->asset.width = static_cast<u32>(x);
@@ -4327,8 +4313,7 @@ void assetUnloadImpl(Asset<TextureData>* data)
 
 bool textureStorePng(TextureData* texture, StringView path)
 {
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch();
 
     const char* cpath = cString(scratch, path);
 
@@ -4340,7 +4325,7 @@ bool textureStorePng(TextureData* texture, StringView path)
          texture->pixels,
          static_cast<int>(texture->width * sizeof(u32))))
     {
-        formatError("Could not store image: %s", cpath);
+        setError("Could not store image: %s", cpath);
         return false;
     }
     return true;
@@ -5146,15 +5131,14 @@ static void swapIdxLocation(Ecs* ecs, u32 lhs, u32 rhs, u64 componentId)
     HG_ASSERT(ecsHas(ecs, lhsEntity, componentId));
     HG_ASSERT(ecsHas(ecs, rhsEntity, componentId));
 
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch();
 
     system->entities[lhs] = rhsEntity;
     system->entities[rhs] = lhsEntity;
     system->indices[handleIdx(lhsEntity.handle)] = rhs;
     system->indices[handleIdx(rhsEntity.handle)] = lhs;
 
-    void* temp = arenaAlloc(scratch, system->components.width, 1);
+    void* temp = scratch.alloc(system->components.width, 1);
     memCopy(temp, system->components[lhs], system->components.width);
     memCopy(system->components[lhs], system->components[rhs], system->components.width);
     memCopy(system->components[rhs], temp, system->components.width);
@@ -5228,8 +5212,7 @@ void serialize(Serializer* s, Ecs* ecs)
     HG_ASSERT(s != nullptr);
     HG_ASSERT(ecs != nullptr);
 
-    Arena* scratch = getScratch(&s->arena, 1);
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch(&s->arena, 1);
 
     serializeBegin(s);
     HG_DEFER(serializeEnd(s));
@@ -5238,7 +5221,7 @@ void serialize(Serializer* s, Ecs* ecs)
     u32 entityCount = 0;
     if (s->writing)
     {
-        ecsSerial.entityToIdx = arenaAlloc<u32>(scratch, ecs->entities.handles.count);
+        ecsSerial.entityToIdx = scratch.alloc<u32>(ecs->entities.handles.count);
         for (u32 i = 1; i < ecs->entities.handles.count; ++i)
         {
             if (ecs->entities.handles[i] != handleNull)
@@ -5251,7 +5234,7 @@ void serialize(Serializer* s, Ecs* ecs)
     {
         serialize(s, &entityCount);
 
-        ecsSerial.idxToEntity = arenaAlloc<Entity>(scratch, entityCount);
+        ecsSerial.idxToEntity = scratch.alloc<Entity>(entityCount);
         for (u32 i = 0; i < entityCount; ++i)
         {
             ecsSerial.idxToEntity[i] = ecsSpawn(ecs);
@@ -5537,8 +5520,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
         if (src->position == audio->size && !src->repeat)
             return;
 
-        Arena* scratch = getScratch();
-        HG_ARENA_SCOPE(scratch);
+        ArenaScope scratch = getScratch();
 
         u32 width = sizeof(f32);
 
@@ -5548,7 +5530,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
             return;
         u32 sizeToPush = total - queued;
 
-        f32* queue = static_cast<f32*>(arenaAlloc(scratch, sizeToPush, width));
+        f32* queue = static_cast<f32*>(scratch.alloc(sizeToPush, width));
         u32 queueSize = 0;
 
         if (src->repeat)
@@ -6088,8 +6070,7 @@ void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(cmd != nullptr);
 
-    Arena* scratch = getScratch();
-    HG_ARENA_SCOPE(scratch);
+    ArenaScope scratch = getScratch();
 
     Camera* cameraC = ecsGet<Camera>(ecs, camera);
     Transform* cameraTf = ecsGet<Transform>(ecs, camera);
@@ -6135,8 +6116,8 @@ void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
             GpuMemoryUsage_frequentUpdate);
     }
 
-    ModelPipelineDirLightData* dirLights = arenaAlloc<ModelPipelineDirLightData>(scratch, dirLightCount);
-    ModelPipelinePointLightData* pointLights = arenaAlloc<ModelPipelinePointLightData>(scratch, pointLightCount);
+    ModelPipelineDirLightData* dirLights = scratch.alloc<ModelPipelineDirLightData>(dirLightCount);
+    ModelPipelinePointLightData* pointLights = scratch.alloc<ModelPipelinePointLightData>(pointLightCount);
 
     u32 i = 0;
     ecsForEach<DirLight>(ecs, [&](Entity, DirLight* light)

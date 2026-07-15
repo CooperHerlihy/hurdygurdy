@@ -23,14 +23,15 @@ Fix all warnings (`-Werror` is on). Run both after every change.
 ## Structure
 
 ```
-include/hurdygurdy.hpp    — public API + templates (all declarations)
-include/hurdygurdy.glsl   — shared GLSL header
-src/hurdygurdy.cpp        — core engine impl
-src/platform.cpp          — Vulkan/SDL/platform impl
-src/test.cpp              — all tests (monolithic)
-src/editor.cpp            — example editor app
-src/minimal.cpp           — example minimal app
-build/                    — CMake build output
+include/hurdygurdy.hpp      — public API + templates (all declarations)
+include/hurdygurdy.glsl     — shared GLSL header
+src/internal.hpp            — internal definitions
+src/hurdygurdy.cpp          — core engine impl
+src/platform.cpp            — Vulkan/SDL/platform impl
+src/test.cpp                — all tests (monolithic)
+src/editor.cpp              — example editor app
+src/minimal.cpp             — example minimal app
+build/                      — CMake build output
 ```
 
 ## Sections

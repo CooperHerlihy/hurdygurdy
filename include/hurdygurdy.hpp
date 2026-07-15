@@ -206,8 +206,8 @@ void setError(StringView error);
 /**
  * Format and set this thread's error message
  */
-template<typename... Ts>
-void formatError(StringView errorFmt, Ts... args);
+template<typename... Ts> requires (sizeof...(Ts) > 0)
+void setError(StringView errorFmt, Ts... args);
 
 /**
  * Log this thread's current error message to stderr
@@ -228,7 +228,7 @@ void logError();
 /**
  * A template to defer code execution until end of scope
  */
-template<typename F>
+template<typename F> requires std::is_invocable_r_v<void, F>
 struct Defer {
     /**
      * The function to execute
@@ -256,8 +256,19 @@ struct Defer {
 
 #ifdef HG_LOGGING
 
+/**
+ * Log a message to stderr
+ */
 #define HG_LOG(...) do { std::fprintf(stderr, "HurdyGurdy Log: " __VA_ARGS__); } while(0)
+
+/**
+ * Log a warning to stderr
+ */
 #define HG_WARN(...) do { std::fprintf(stderr, "HurdyGurdy Warn: " __VA_ARGS__); } while(0)
+
+/**
+ * Print the most recent error, log a message to stderr, and abort the program
+ */
 #define HG_PANIC(...) do { logError(); std::fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); std::abort(); \
 } while(0)
 
@@ -887,97 +898,250 @@ struct Arena {
      * The next allocation to be given out
      */
     u64 head = 0;
+
+    /**
+     * Allocates memory
+     *
+     * Parameters
+     * - size The size in bytes to allocate
+     * - alignment The required alignment of the allocation in bytes
+     *
+     * Returns
+     * - The allocation, or nullptr if out of memory
+     */
+    void* alloc(u64 size, u64 alignment);
+
+    /**
+     * A convenience to allocate an array of a type
+     *
+     * Note, objects are not initialized
+     *
+     * Parameters
+     * - count The number of T to allocate
+     *
+     * Returns
+     * - The allocated array, or nullptr if out of memory
+     */
+    template<typename T>
+    T* alloc(u64 count)
+    {
+        return static_cast<T*>(alloc(count * sizeof(T), alignof(T)));
+    }
+
+    /**
+     * Reallocates memory
+     *
+     * Simply increases the size if allocation is the most recent allocation
+     *
+     * Parameters
+     * - allocation The allocation to grow
+     * - oldSize The old size in bytes allocation
+     * - newSize The new size in bytes to allocate
+     * - alignment The required alignment of the allocation in bytes
+     *
+     * Returns
+     * - The allocation, never or if out of memory
+     */
+    void* realloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment);
+
+    /**
+     * A convenience to reallocate an array of a type
+     *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
+     *
+     * Parameters
+     * - allocation The allocation to reallocate
+     * - oldCount The old number of T allocated
+     * - newCount The new number of T to allocate
+     *
+     * Returns
+     * - The reallocated array, or nullptr if out of memory
+     */
+    template<typename T>
+    T* realloc(T* allocation, u64 oldCount, u64 newCount)
+    {
+        return static_cast<T*>(realloc(allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T)));
+    }
+
+    /**
+     * Returns whether the allocation can be extended, or if it must be moved
+     */
+    bool canExtend(void* allocation, u64 size, u64 align);
+
+    /**
+     * Returns whether the allocation can be extended, or if it must be moved
+     */
+    template<typename T>
+    bool canExtend(T* allocation, u64 count)
+    {
+        return canExtend(static_cast<void*>(allocation), count * sizeof(T), alignof(T));
+    }
 };
 
 /**
- * Create a guard which restores an arena's head at the end of the scope
+ * An arena allocator
  */
-#define HG_ARENA_SCOPE(arena) \
-    [[maybe_unused]] u64 arenaScopeHead = arena->head; \
-    HG_DEFER(arena->head = arenaScopeHead);
+struct ArenaScope {
+    /**
+     * A pointer to the memory being allocated
+     */
+    Arena* arena = nullptr;
+    /**
+     * The next allocation to be given out
+     */
+    u64 head = 0;
 
-/**
- * Allocates memory from an arena
- *
- * Parameters
- * - arena The arena to allocate from
- * - size The size in bytes to allocate
- * - alignment The required alignment of the allocation in bytes
- *
- * Returns
- * - The allocation, or nullptr if out of memory
- */
-void* arenaAlloc(Arena* arena, u64 size, u64 alignment);
+    /**
+     * Construct empty
+     */
+    ArenaScope() noexcept = default;
 
-/**
- * A convenience to allocate an array of a type
- *
- * Note, objects are not initialized
- *
- * Parameters
- * - arena The arena to allocate from
- * - count The number of T to allocate
- *
- * Returns
- * - The allocated array, or nullptr if out of memory
- */
-template<typename T>
-T* arenaAlloc(Arena* arena, u64 count)
-{
-    return static_cast<T*>(arenaAlloc(arena, count * sizeof(T), alignof(T)));
-}
+    /**
+     * Create a scope for an arena
+     */
+    ArenaScope(Arena* arenaVal)
+        : arena{arenaVal}, head{arenaVal->head}
+    {}
 
-/**
- * Reallocates memory from a arena
- *
- * Simply increases the size if allocation is the most recent allocation
- *
- * Parameters
- * - arena The arena to allocate from
- * - allocation The allocation to grow
- * - oldSize The old size in bytes allocation
- * - newSize The new size in bytes to allocate
- * - alignment The required alignment of the allocation in bytes
- *
- * Returns
- * - The allocation, never or if out of memory
- */
-void* arenaRealloc(Arena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment);
+    /**
+     * Implicit convert to underlying arena
+     */
+    operator Arena*()
+    {
+        return arena;
+    }
 
-/**
- * A convenience to reallocate an array of a type
- *
- * Note, objects are default constructed if possible, otherwise they are
- * left uninitialized
- *
- * Parameters
- * - arena The arena to allocate from
- * - allocation The allocation to reallocate
- * - oldCount The old number of T allocated
- * - newCount The new number of T to allocate
- *
- * Returns
- * - The reallocated array, or nullptr if out of memory
- */
-template<typename T>
-T* arenaRealloc(Arena* arena, T* allocation, u64 oldCount, u64 newCount)
-{
-    return static_cast<T*>(arenaRealloc(arena, allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T)));
-}
+    /**
+     * Return the arena's head
+     */
+    ~ArenaScope() noexcept
+    {
+        if (arena != nullptr)
+            arena->head = head;
+    }
 
-/**
- * Returns whether the allocation can be extended, or if it must be moved
- */
-bool arenaCanExtend(Arena* arena, void* allocation, u64 size, u64 align);
+    /**
+     * Move construct
+     */
+    ArenaScope(ArenaScope&& other) noexcept
+    {
+        arena = other.arena;
+        head = other.head;
+        other.arena = nullptr;
+        other.head = 0;
+    }
 
-/**
- * Returns whether the allocation can be extended, or if it must be moved
- */
-template<typename T>
-bool arenaCanExtend(Arena* arena, T* allocation, u64 count)
-{
-    return arenaCanExtend(arena, static_cast<void*>(allocation), count * sizeof(T), alignof(T));
-}
+    /**
+     * Move assign
+     */
+    ArenaScope& operator=(ArenaScope&& other) noexcept
+    {
+        if (this != &other)
+        {
+            if (arena != nullptr)
+                arena->head = head;
+
+            arena = other.arena;
+            head = other.head;
+
+            other.arena = nullptr;
+            other.head = 0;
+        }
+        return *this;
+    }
+
+    ArenaScope(const ArenaScope&) = delete;
+    ArenaScope& operator=(const ArenaScope&) = delete;
+
+    /**
+     * Allocates memory
+     *
+     * Parameters
+     * - size The size in bytes to allocate
+     * - alignment The required alignment of the allocation in bytes
+     *
+     * Returns
+     * - The allocation, or nullptr if out of memory
+     */
+    void* alloc(u64 size, u64 alignment)
+    {
+        return arena->alloc(size, alignment);
+    }
+
+    /**
+     * A convenience to allocate an array of a type
+     *
+     * Note, objects are not initialized
+     *
+     * Parameters
+     * - count The number of T to allocate
+     *
+     * Returns
+     * - The allocated array, or nullptr if out of memory
+     */
+    template<typename T>
+    T* alloc(u64 count)
+    {
+        return arena->alloc<T>(count);
+    }
+
+    /**
+     * Reallocates memory
+     *
+     * Simply increases the size if allocation is the most recent allocation
+     *
+     * Parameters
+     * - allocation The allocation to grow
+     * - oldSize The old size in bytes allocation
+     * - newSize The new size in bytes to allocate
+     * - alignment The required alignment of the allocation in bytes
+     *
+     * Returns
+     * - The allocation, never or if out of memory
+     */
+    void* realloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
+    {
+        return arena->realloc(allocation, oldSize, newSize, alignment);
+    }
+
+    /**
+     * A convenience to reallocate an array of a type
+     *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
+     *
+     * Parameters
+     * - allocation The allocation to reallocate
+     * - oldCount The old number of T allocated
+     * - newCount The new number of T to allocate
+     *
+     * Returns
+     * - The reallocated array, or nullptr if out of memory
+     */
+    template<typename T>
+    T* realloc(T* allocation, u64 oldCount, u64 newCount)
+    {
+        return arena->realloc(allocation, oldCount, newCount);
+    }
+
+    /**
+     * Returns whether the allocation can be extended, or if it must be moved
+     */
+    bool canExtend(void* allocation, u64 size, u64 align)
+    {
+        return arena->canExtend(allocation, size, align);
+    }
+
+    /**
+     * Returns whether the allocation can be extended, or if it must be moved
+     */
+    template<typename T>
+    bool canExtend(T* allocation, u64 count)
+    {
+        return arena->canExtend(allocation, count);
+    }
+};
 
 /**
  * Initializes scratch arenas on this thread
@@ -1003,7 +1167,7 @@ void deinitScratch();
  * Returns
  * - A scratch arena, never nullptr
  */
-Arena* getScratch(Arena const* const* conflicts = nullptr, u32 count = 0);
+ArenaScope getScratch(Arena const* const* conflicts = nullptr, u32 count = 0);
 
 // ============================================================================
 // Concurrency
@@ -8179,8 +8343,8 @@ void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
 // Template Implementations
 // ============================================================================
 
-template<typename... Ts>
-void formatError(StringView errorFmt, Ts... args)
+template<typename... Ts> requires (sizeof...(Ts) > 0)
+void setError(StringView errorFmt, Ts... args)
 {
     char fmt[4096];
     u64 fmtLen = errorFmt.length < sizeof(fmt) - 1
@@ -8274,7 +8438,7 @@ Array<T> arrayTemp(Arena* arena, u32 count, u32 capacity)
     HG_ASSERT(count <= capacity);
 
     Array<T> arr{};
-    arr.vals = arenaAlloc<T>(arena, capacity);
+    arr.vals = arena->alloc<T>(capacity);
     arr.count = count;
     arr.capacity = capacity;
 
@@ -8297,7 +8461,7 @@ void arrayResizeTemp(Arena* arena, Array<T>* arr, u32 newCount)
 {
     if (newCount > arr->capacity)
     {
-        arr->vals = arenaRealloc(arena, arr->vals, arr->capacity, newCount * 2);
+        arr->vals = arena->realloc(arr->vals, arr->capacity, newCount * 2);
         arr->capacity = newCount * 2;
     }
     arr->count = newCount;
@@ -8321,7 +8485,7 @@ T* arrayPushTemp(Arena* arena, Array<T>* arr)
     if (arr->count == arr->capacity)
     {
         u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = arenaRealloc(arena, arr->vals, arr->capacity, newCapacity);
+        arr->vals = arena->realloc(arr->vals, arr->capacity, newCapacity);
         arr->capacity = newCapacity;
     }
     return &arr->vals[arr->count++];
@@ -8517,8 +8681,8 @@ Set<V> setTemp(Arena* arena, u32 slotCount)
     HG_ASSERT(slotCount > 0);
 
     Set<V> set;
-    set.hasVal = arenaAlloc<bool>(arena, slotCount);
-    set.vals = arenaAlloc<V>(arena, slotCount);
+    set.hasVal = arena->alloc<bool>(slotCount);
+    set.vals = arena->alloc<V>(slotCount);
     set.capacity = slotCount;
     setReset(&set);
     return set;
@@ -8711,9 +8875,9 @@ Map<K, V> mapTemp(Arena* arena, u32 slotCount)
     HG_ASSERT(slotCount > 0);
 
     Map<K, V> map;
-    map.hasVal = arenaAlloc<bool>(arena, slotCount);
-    map.keys = arenaAlloc<K>(arena, slotCount);
-    map.vals = arenaAlloc<V>(arena, slotCount);
+    map.hasVal = arena->alloc<bool>(slotCount);
+    map.keys = arena->alloc<K>(slotCount);
+    map.vals = arena->alloc<V>(slotCount);
     map.capacity = slotCount;
     mapReset(&map);
 
@@ -8959,7 +9123,7 @@ void serialize(Serializer* s, Asset<T>** asset)
     }
     else
     {
-        HG_ARENA_SCOPE(s->arena);
+        ArenaScope scope{s->arena};
         StringBuilder path;
         serialize(s, &path);
         if (path != "")
