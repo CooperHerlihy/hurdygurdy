@@ -1318,7 +1318,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
  * - end The end index to iterate to
  * - fn The function to use to iterate, takes the index
  */
-template<typename F>
+template<typename F> requires std::is_invocable_r_v<void, F, u64>
 void forPar(u64 begin, u64 end, F fn);
 
 // ============================================================================
@@ -5455,13 +5455,13 @@ void queueDestroy(Queue<T>* queue);
 /**
  * Push a value to the front of the queue
  */
-template<typename T, typename U = T>
+template<typename T, typename U = T> requires std::is_convertible_v<U, T>
 void queuePushFront(Queue<T>* queue, U val);
 
 /**
  * Push a value to the back of the queue
  */
-template<typename T, typename U = T>
+template<typename T, typename U = T> requires std::is_convertible_v<U, T>
 void queuePushBack(Queue<T>* queue, U val);
 
 /**
@@ -5482,7 +5482,7 @@ T queuePopBack(Queue<T>* queue);
 template<typename T>
 constexpr u64 hash(T)
 {
-    static_assert(false, "hash must be implemented for each type");
+    static_assert(false, "Type cannot be hashed without template specialization");
     return 0;
 }
 
@@ -5555,25 +5555,25 @@ void setReset(Set<V>* set);
 /**
  * Add a value to the set
  */
-template<typename V, typename T = V>
+template<typename V, typename T = V> requires std::is_convertible_v<T, V>
 void setAdd(Set<V>* set, const T& val);
 
 /**
  * Remove a value from the set
  */
-template<typename V, typename T = V>
+template<typename V, typename T = V> requires std::is_convertible_v<T, V>
 void setRemove(Set<V>* set, const T& val);
 
 /**
  * Check whether a value is contained in the set
  */
-template<typename V, typename T = V>
+template<typename V, typename T = V> requires std::is_convertible_v<T, V>
 bool setHas(const Set<V>* set, const T& val);
 
 /**
  * Calls a function for each value in the hash map
  */
-template<typename V, typename F>
+template<typename V, typename F> requires std::is_invocable_r_v<void, F, V*>
 void setForEach(Set<V>* set, F fn);
 
 /**
@@ -5656,6 +5656,7 @@ void mapReset(Map<K, V>* map);
  * - A reference to the added value
  */
 template<typename K, typename V, typename T = K, typename U = V>
+    requires std::is_convertible_v<T, K> && std::is_convertible_v<U, V>
 V* mapAdd(Map<K, V>* map, const T& key, const U& val);
 
 /**
@@ -5668,7 +5669,7 @@ V* mapAdd(Map<K, V>* map, const T& key, const U& val);
  * Returns
  * - Whether a value was found and stored in value
  */
-template<typename K, typename V, typename T = K>
+template<typename K, typename V, typename T> requires std::is_convertible_v<T, K>
 bool mapRemove(Map<K, V>* map, const T& key, V* val = nullptr);
 
 /**
@@ -5677,13 +5678,13 @@ bool mapRemove(Map<K, V>* map, const T& key, V* val = nullptr);
  * Returns
  * - A pointer to the value, or nullptr if it does not exist
  */
-template<typename K, typename V, typename T = K>
+template<typename K, typename V, typename T = K> requires std::is_convertible_v<T, K>
 V* mapGet(const Map<K, V>* map, const T& key);
 
 /**
  * Calls a function for each value in the hash map
  */
-template<typename K, typename V, typename F>
+template<typename K, typename V, typename F> requires std::is_invocable_r_v<void, F, K*, V*>
 void mapForEach(Map<K, V>* map, F fn);
 
 /**
@@ -6055,8 +6056,6 @@ struct Asset {
  */
 template<typename T>
 struct AssetManager {
-    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
-
     /**
      * The asset lookup
      */
@@ -7867,7 +7866,7 @@ u64 ecsFindSmallest(Ecs* ecs, u64* ids, u32 idCount);
 /**
  * Find the id of the system with the fewest elements
  */
-template<typename... Ts>
+template<typename... Ts> requires (sizeof...(Ts) > 0)
 u64 ecsFindSmallest(Ecs* ecs)
 {
     u32 index = 0;
@@ -7884,7 +7883,7 @@ u64 ecsFindSmallest(Ecs* ecs)
  * Parameters
  * - function The function to call
  */
-template<typename... Ts, typename Fn>
+template<typename... Ts, typename Fn> requires (sizeof...(Ts) != 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
 void ecsForEach(Ecs* ecs, Fn fn);
 
 /**
@@ -7900,7 +7899,7 @@ void ecsForEach(Ecs* ecs, Fn fn);
  * - chunkSize The number of executions per group
  * - fn The function to call
  */
-template<typename... Ts, typename Fn>
+template<typename... Ts, typename Fn> requires (sizeof...(Ts) > 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
 void ecsForPar(Ecs* ecs, Fn fn);
 
 /**
@@ -8359,10 +8358,9 @@ void setError(StringView errorFmt, Ts... args)
     setError(buf);
 }
 
-template<typename F>
+template<typename F> requires std::is_invocable_r_v<void, F, u64>
 void forPar(u64 begin, u64 end, F fn)
 {
-    static_assert(std::is_invocable_r_v<void, F, u64>);
 
     forPar(begin, end, &fn, [](void* pfn, u64 idx)
     {
@@ -8551,11 +8549,10 @@ void queueDestroy(Queue<T>* queue)
     }
 }
 
-template<typename T, typename U>
+template<typename T, typename U> requires std::is_convertible_v<U, T>
 void queuePushFront(Queue<T>* queue, U val)
 {
     HG_ASSERT(queue != nullptr);
-    static_assert(std::is_convertible_v<U, T>);
 
     ++queue->count;
     if (queue->count == queue->capacity)
@@ -8576,11 +8573,10 @@ void queuePushFront(Queue<T>* queue, U val)
     queue->vals[queue->front] = static_cast<T>(val);
 }
 
-template<typename T, typename U>
+template<typename T, typename U> requires std::is_convertible_v<U, T>
 void queuePushBack(Queue<T>* queue, U val)
 {
     HG_ASSERT(queue != nullptr);
-    static_assert(std::is_convertible_v<U, T>);
 
     ++queue->count;
     if (queue->count == queue->capacity)
@@ -8720,13 +8716,12 @@ void setReset(Set<V>* set)
     set->count = 0;
 }
 
-template<typename V, typename T>
+template<typename V, typename T> requires std::is_convertible_v<T, V>
 void setAdd(Set<V>* set, const T& val)
 {
     HG_ASSERT(set != nullptr);
     HG_ASSERT(set->count < set->capacity - 1);
 
-    static_assert(std::is_convertible_v<T, V>);
     V v = static_cast<V>(val);
 
     u32 idx = static_cast<u32>(hash(v) % set->capacity);
@@ -8750,12 +8745,11 @@ void setAdd(Set<V>* set, const T& val)
     ++set->count;
 }
 
-template<typename V, typename T>
+template<typename V, typename T> requires std::is_convertible_v<T, V>
 void setRemove(Set<V>* set, const T& val)
 {
     HG_ASSERT(set != nullptr);
 
-    static_assert(std::is_convertible_v<T, V>);
     V v = static_cast<V>(val);
 
     u32 idx = static_cast<u32>(hash(v) % set->capacity);
@@ -8782,12 +8776,11 @@ void setRemove(Set<V>* set, const T& val)
     --set->count;
 }
 
-template<typename V, typename T>
+template<typename V, typename T> requires std::is_convertible_v<T, V>
 bool setHas(const Set<V>* set, const T& val)
 {
     HG_ASSERT(set != nullptr);
 
-    static_assert(std::is_convertible_v<T, V>);
     V v = static_cast<V>(val);
 
     for (u32 idx = static_cast<u32>(hash(v) % set->capacity); set->hasVal[idx]; idx = (idx + 1) % set->capacity)
@@ -8798,11 +8791,10 @@ bool setHas(const Set<V>* set, const T& val)
     return false;
 }
 
-template<typename V, typename F>
+template<typename V, typename F> requires std::is_invocable_r_v<void, F, V*>
 void setForEach(Set<V>* set, F fn)
 {
     HG_ASSERT(set != nullptr);
-    static_assert(std::is_invocable_r_v<void, F, V*>);
 
     for (u32 i = 0; i < set->capacity; ++i)
     {
@@ -8917,12 +8909,12 @@ void mapReset(Map<K, V>* map)
 }
 
 template<typename K, typename V, typename T, typename U>
+    requires std::is_convertible_v<T, K> && std::is_convertible_v<U, V>
 V* mapAdd(Map<K, V>* map, const T& key, const U& val)
 {
     HG_ASSERT(map != nullptr);
     HG_ASSERT(map->count < map->capacity - 1);
 
-    static_assert(std::is_convertible_v<T, K> && std::is_convertible_v<U, V>);
     K k = static_cast<K>(key);
     V v = static_cast<V>(val);
 
@@ -8951,12 +8943,11 @@ V* mapAdd(Map<K, V>* map, const T& key, const U& val)
     return map->vals + idx;
 }
 
-template<typename K, typename V, typename T>
+template<typename K, typename V, typename T> requires std::is_convertible_v<T, K>
 bool mapRemove(Map<K, V>* map, const T& key, V* val)
 {
     HG_ASSERT(map != nullptr);
 
-    static_assert(std::is_convertible_v<T, K>);
     K k = static_cast<K>(key);
 
     u32 idx = static_cast<u32>(hash(k) % map->capacity);
@@ -8989,12 +8980,11 @@ bool mapRemove(Map<K, V>* map, const T& key, V* val)
     return true;
 }
 
-template<typename K, typename V, typename T>
+template<typename K, typename V, typename T> requires std::is_convertible_v<T, K>
 V* mapGet(const Map<K, V>* map, const T& key)
 {
     HG_ASSERT(map != nullptr);
 
-    static_assert(std::is_convertible_v<T, K>);
     K k = static_cast<K>(key);
 
     for (u32 idx = static_cast<u32>(hash(k) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
@@ -9005,11 +8995,10 @@ V* mapGet(const Map<K, V>* map, const T& key)
     return nullptr;
 }
 
-template<typename K, typename V, typename F>
+template<typename K, typename V, typename F> requires std::is_invocable_r_v<void, F, K*, V*>
 void mapForEach(Map<K, V>* map, F fn)
 {
     HG_ASSERT(map != nullptr);
-    static_assert(std::is_invocable_r_v<void, F, K*, V*>);
 
     for (u32 i = 0; i < map->capacity; ++i)
     {
@@ -9036,14 +9025,14 @@ template<typename T>
 void assetLoadImpl(Asset<T>* data)
 {
     static_cast<void>(data);
-    static_assert(false, "Asset type cannot be loaded without implementation");
+    static_assert(false, "Asset type cannot be loaded without template specialization");
 }
 
 template<typename T>
 void assetUnloadImpl(Asset<T>* data)
 {
     static_cast<void>(data);
-    static_assert(false, "Asset type cannot be unloaded without implementation");
+    static_assert(false, "Asset type cannot be unloaded without template specialization");
 }
 
 template<typename T>
@@ -9133,11 +9122,9 @@ void serialize(Serializer* s, Asset<T>** asset)
     }
 }
 
-template<typename T, typename Fn>
+template<typename T, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, T*>
 void ecsForEachSingle(Ecs* ecs, Fn& fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, Entity, T*>);
-
     Entity* e = ecsEntities<T>(ecs);
     Entity* end = e + ecsCount<T>(ecs);
     T* c = ecsComponents<T>(ecs);
@@ -9147,11 +9134,9 @@ void ecsForEachSingle(Ecs* ecs, Fn& fn)
     }
 }
 
-template<typename... Ts, typename Fn>
+template<typename... Ts, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, Ts*...>
 void ecsForEachMulti(Ecs* ecs, Fn& fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, Entity, Ts*...>);
-
     u64 id = ecsFindSmallest<Ts...>(ecs);
     Component* system = mapGet(&ecs->components, id);
     HG_ASSERT(system != nullptr);
@@ -9165,11 +9150,9 @@ void ecsForEachMulti(Ecs* ecs, Fn& fn)
     }
 }
 
-template<typename... Ts, typename Fn>
+template<typename... Ts, typename Fn> requires (sizeof...(Ts) != 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
 void ecsForEach(Ecs* ecs, Fn fn)
 {
-    static_assert(sizeof...(Ts) != 0);
-
     if constexpr (sizeof...(Ts) == 1)
     {
         ecsForEachSingle<Ts...>(ecs, fn);
@@ -9178,11 +9161,9 @@ void ecsForEach(Ecs* ecs, Fn fn)
     }
 }
 
-template<typename T, typename Fn>
+template<typename T, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, T*>
 void ecsForParSingle(Ecs* ecs, Fn& fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, Entity, T*>);
-
     struct Capture {
         Ecs* ecs;
         Fn* fn;
@@ -9198,11 +9179,9 @@ void ecsForParSingle(Ecs* ecs, Fn& fn)
     });
 }
 
-template<typename... Ts, typename Fn>
+template<typename... Ts, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, Ts*...>
 void ecsForParMulti(Ecs* ecs, Fn& fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, Entity, Ts*...>);
-
     Component* system = mapGet(&ecs->components, ecsFindSmallest<Ts...>(ecs));
     HG_ASSERT(system != nullptr);
 
@@ -9222,11 +9201,9 @@ void ecsForParMulti(Ecs* ecs, Fn& fn)
     });
 }
 
-template<typename... Ts, typename Fn>
+template<typename... Ts, typename Fn> requires (sizeof...(Ts) > 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
 void ecsForPar(Ecs* ecs, Fn fn)
 {
-    static_assert(sizeof...(Ts) != 0);
-
     if constexpr (sizeof...(Ts) == 1)
     {
         ecsForParSingle<Ts...>(ecs, fn);
