@@ -362,10 +362,10 @@ struct HurdyGurdy {
  * Returns
  * - A HurdyGurdy scope guard, or nothing on failure
  */
-Maybe<HurdyGurdy> initHurdyGurdy(SubsystemFlags init = Subsystem_all);
+Maybe<HurdyGurdy> init(SubsystemFlags init = Subsystem_all);
 
 // ============================================================================
-// Core Types (Implementations
+// Core Types (Implementations)
 // ============================================================================
 
 /**
@@ -465,6 +465,22 @@ struct StringView {
         HG_ASSERT(chars != nullptr);
         HG_ASSERT(idx < length);
         return chars[idx];
+    }
+
+    /**
+     * Use range for
+     */
+    const char* begin() const
+    {
+        return chars;
+    }
+
+    /**
+     * Use range for
+     */
+    const char* end() const
+    {
+        return chars + length;
     }
 };
 
@@ -573,10 +589,10 @@ struct Maybe
      * Copy construct
      */
     Maybe(const Maybe& other)
-        : has{other.has}
     {
         if (other.has)
             new (&val) T{other.val};
+        has = other.has;
     }
 
     /**
@@ -584,10 +600,15 @@ struct Maybe
      */
     Maybe& operator=(const Maybe& other)
     {
-        this->~Maybe();
-        has = other.has;
-        if (other.has)
-            new (&val) T{other.val};
+        if (this != &other)
+        {
+            if (has)
+                val.~T();
+
+            if (other.has)
+                new (&val) T{other.val};
+            has = other.has;
+        }
         return *this;
     }
 
@@ -595,10 +616,13 @@ struct Maybe
      * Move construct
      */
     Maybe(Maybe&& other) noexcept
-        : has{other.has}
     {
         if (other.has)
             new (&val) T{std::move(other.val)};
+        has = other.has;
+
+        if (other.has)
+            other.val.~T();
         other.has = false;
     }
 
@@ -607,17 +631,64 @@ struct Maybe
      */
     Maybe& operator=(Maybe&& other) noexcept
     {
-        this->~Maybe();
-        has = other.has;
-        if (other.has)
-            new (&val) T{std::move(other.val)};
-        other.has = false;
+        if (this != &other)
+        {
+            if (has)
+                val.~T();
+
+            if (other.has)
+                new (&val) T{std::move(other.val)};
+            has = other.has;
+
+            if (other.has)
+                other.val.~T();
+            other.has = false;
+        }
         return *this;
+    }
+
+    /**
+     * Return the value, or a default value if it does not exist
+     */
+    T orElse(T defaultVal)
+    {
+        if (has)
+        {
+            T tmp = std::move(val);
+            val.~T();
+            has = false;
+            return tmp;
+        }
+        else
+        {
+            return std::move(defaultVal);
+        }
+    }
+
+    /**
+     * Expect there to be a value, or panic
+     */
+    T expect(StringView errMsg)
+    {
+        if (has)
+        {
+            T tmp = std::move(val);
+            val.~T();
+            has = false;
+            return tmp;
+        }
+        else
+        {
+            HG_PANIC("%.*s", (int)errMsg.length, errMsg.chars);
+        }
     }
 };
 
+/**
+ * Create a filled Maybe
+ */
 template<typename T, typename... Args>
-Maybe<T> some(Args... args)
+Maybe<T> some(Args&&... args)
 {
     Maybe<T> maybe;
     new (&maybe.val) T{std::forward<Args>(args)...};
@@ -625,6 +696,9 @@ Maybe<T> some(Args... args)
     return maybe;
 }
 
+/**
+ * Create an empty Maybe
+ */
 template<typename T>
 Maybe<T> none()
 {
@@ -774,7 +848,7 @@ T* heapRealloc(T* allocation, u64 oldCount, u64 newCount)
 }
 
 /**
- * A convenienve to free an allocation from a general purpose allocator
+ * A convenience to free an allocation from a general purpose allocator
  *
  * Parameters
  * - allocation The allocation to free

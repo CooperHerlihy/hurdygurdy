@@ -4233,9 +4233,7 @@ using namespace hg;
 
 int main()
 {
-    Maybe<HurdyGurdy> hg = initHurdyGurdy();
-    if (!hg.has)
-        HG_PANIC("Could not init HurdyGurdy: %.*s\n", (int)getError().length, getError().chars);
+    HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
     test();
 

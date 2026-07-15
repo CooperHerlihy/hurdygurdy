@@ -16,9 +16,7 @@ static bool renderDebug = false;
 
 int main()
 {
-    Maybe<HurdyGurdy> hg = initHurdyGurdy();
-    if (!hg.has)
-        HG_PANIC("Could not initialize Hurdy Gurdy\n");
+    HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
     Window* window = windowCreate("Hg Minimal Example", 1200, 800, nullptr);
     if (window == nullptr)

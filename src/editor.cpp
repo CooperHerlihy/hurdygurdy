@@ -602,9 +602,7 @@ int main()
 {
     HG_DEFER(printf("Exited successfully\n"));
 
-    Maybe<HurdyGurdy> hg = initHurdyGurdy();
-    if (!hg.has)
-        HG_PANIC("Could not initialize Hurdy Gurdy\n");
+    HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
     Arena* arena = getScratch();
     HG_ARENA_SCOPE(arena);

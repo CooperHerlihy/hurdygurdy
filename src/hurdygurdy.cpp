@@ -38,7 +38,7 @@ void logError()
 
 static SubsystemFlags initialized = 0;
 
-Maybe<HurdyGurdy> initHurdyGurdy(SubsystemFlags init)
+Maybe<HurdyGurdy> init(SubsystemFlags init)
 {
     if (init & Subsystem_memory)
     {
