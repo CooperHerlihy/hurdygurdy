@@ -41,13 +41,13 @@ Maybe<HurdyGurdy> init(SubsystemFlags init)
 {
     if (init & Subsystem_memory)
     {
-        initScratch(2, static_cast<u64>(1) << 24);
+        internal::initScratch(2, static_cast<u64>(1) << 24);
         initialized |= Subsystem_memory;
     }
 
     if (init & Subsystem_concurrency)
     {
-        initConcurrency();
+        internal::initConcurrency();
         initialized |= Subsystem_concurrency;
     }
 
@@ -62,26 +62,26 @@ Maybe<HurdyGurdy> init(SubsystemFlags init)
     if (init & Subsystem_gpu ||
         init & Subsystem_windowing)
     {
-        if (!initGpu())
+        if (!internal::initGpu())
             goto gpuFailed;
         initialized |= Subsystem_gpu;
     }
 
     if (init & Subsystem_assets)
     {
-        assetInitDefaults();
+        internal::initAssetDefaults();
         initialized |= Subsystem_assets;
     }
 
     if (init & Subsystem_windowing)
     {
-        initWindowing();
+        internal::initWindowing();
         initialized |= Subsystem_windowing;
     }
 
     if (init & Subsystem_audio)
     {
-        if (!audioInit())
+        if (!internal::initAudio())
             goto audioFailed;
         initialized |= Subsystem_audio;
     }
@@ -90,11 +90,11 @@ Maybe<HurdyGurdy> init(SubsystemFlags init)
 
 audioFailed:
     if (initialized & Subsystem_windowing)
-        deinitWindowing();
+        internal::deinitWindowing();
     if (initialized & Subsystem_assets)
-        assetDeinitDefaults();
+        internal::deinitAssetDefaults();
     if (initialized & Subsystem_gpu)
-        deinitGpu();
+        internal::deinitGpu();
 gpuFailed:
     if (initialized & Subsystem_gpu ||
         initialized & Subsystem_windowing ||
@@ -102,9 +102,9 @@ gpuFailed:
         internal::platformDeinit();
 platformFailed:
     if (initialized & Subsystem_concurrency)
-        deinitConcurrency();
+        internal::deinitConcurrency();
     if (initialized & Subsystem_memory)
-        deinitScratch();
+        internal::deinitScratch();
     initialized = 0;
 
     return none<HurdyGurdy>();
@@ -115,16 +115,16 @@ HurdyGurdy::~HurdyGurdy()
     if (alive)
     {
         if (initialized & Subsystem_audio)
-            audioDeinit();
+            internal::deinitAudio();
 
         if (initialized & Subsystem_windowing)
-            deinitWindowing();
+            internal::deinitWindowing();
 
         if (initialized & Subsystem_assets)
-            assetDeinitDefaults();
+            internal::deinitAssetDefaults();
 
         if (initialized & Subsystem_gpu)
-            deinitGpu();
+            internal::deinitGpu();
 
         if (initialized & Subsystem_gpu ||
             initialized & Subsystem_windowing ||
@@ -132,10 +132,10 @@ HurdyGurdy::~HurdyGurdy()
             internal::platformDeinit();
 
         if (initialized & Subsystem_concurrency)
-            deinitConcurrency();
+            internal::deinitConcurrency();
 
         if (initialized & Subsystem_memory)
-            deinitScratch();
+            internal::deinitScratch();
 
         initialized = 0;
     }
@@ -238,7 +238,7 @@ bool Arena::canExtend(void* allocation, u64 size, u64 align)
 static thread_local Arena* scratchArenas{};
 static thread_local u32 scratchArenaCount = 0;
 
-void initScratch(u32 count, u64 size)
+void internal::initScratch(u32 count, u64 size)
 {
     HG_ASSERT(count > 0);
 
@@ -257,7 +257,7 @@ void initScratch(u32 count, u64 size)
     }
 }
 
-void deinitScratch()
+void internal::deinitScratch()
 {
     if (scratchArenas != nullptr)
     {
@@ -354,7 +354,7 @@ static bool threadPoolExecute()
     return true;
 }
 
-void initConcurrency()
+void internal::initConcurrency()
 {
     mutices = poolCreate<Spinlock>();
     fences = poolCreate<Fence>();
@@ -406,7 +406,7 @@ void initConcurrency()
     }
 }
 
-void deinitConcurrency()
+void internal::deinitConcurrency()
 {
     threadPool.mtx.lock();
     threadPool.shouldClose = true;
@@ -3980,7 +3980,7 @@ void handlePoolFree(HandlePool* pool, Handle handle)
     *arrayPush(&pool->freed) = handleNextGeneration(handle);
 }
 
-void assetInitDefaults()
+void internal::initAssetDefaults()
 {
     assetInit<BinaryView>();
     assetInit<TextureData>();
@@ -3990,7 +3990,7 @@ void assetInitDefaults()
     assetInit<Sound>();
 }
 
-void assetDeinitDefaults()
+void internal::deinitAssetDefaults()
 {
     assetDeinit<Sound>();
     assetDeinit<Mesh>();

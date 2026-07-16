@@ -1120,20 +1120,6 @@ struct ArenaScope {
 };
 
 /**
- * Initializes scratch arenas on this thread
- *
- * Parameters
- * - count The number of arenas to allocate
- * - size The size of each arena in bytes
- */
-void initScratch(u32 count, u64 size);
-
-/**
- * Deinitializes scratch arenas
- */
-void deinitScratch();
-
-/**
  * Get a scratch arena for temporary allocations, accounting for conflicts
  *
  * Parameters
@@ -1148,16 +1134,6 @@ ArenaScope getScratch(Arena const* const* conflicts = nullptr, u32 count = 0);
 // ============================================================================
 // Concurrency
 // ============================================================================
-
-/**
- * Initialize synchronization and threads
- */
-void initConcurrency();
-
-/**
- * Deinitialize synchronization and threads
- */
-void deinitConcurrency();
 
 /**
  * A spinlock mutex for basic thread synchronization
@@ -1300,23 +1276,6 @@ void forPar(u64 begin, u64 end, F fn);
 // ============================================================================
 // GPU
 // ============================================================================
-
-// ----------------------------------------------------------------------------
-// GPU Init
-// ----------------------------------------------------------------------------
-
-/**
- * Initializes the graphics subsystem, loading all global Vulkan resources
- *
- * Returns
- * - Whether init succeeded
- */
-bool initGpu();
-
-/**
- * Deinitializes the graphics subsystem, unloading all global Vulkan resources
- */
-void deinitGpu();
 
 /**
  * Wait for the GPU to finish work
@@ -6133,24 +6092,6 @@ void handlePoolFree(HandlePool* pool, Handle handle);
 // ============================================================================
 
 /**
- * Initialize all default asset types
- *
- * Asset types:
- * - Binary
- * - Texture
- * - GpuTexture
- * - Mesh
- * - GpuMesh
- * - Audio
- */
-void assetInitDefaults();
-
-/**
- * Deinitialize all default asset types
- */
-void assetDeinitDefaults();
-
-/**
  * The data associated with assets
  */
 template<typename T>
@@ -6420,16 +6361,6 @@ void* libraryFindFunction(Library* lib, StringView symbol);
 // ============================================================================
 // Windowing
 // ============================================================================
-
-/**
- * Initialize the windowing subsystem
- */
-void initWindowing();
-
-/**
- * Deinitialize the windowing subsystem
- */
-void deinitWindowing();
 
 /**
  * The present mode for the swapchain
@@ -6736,19 +6667,6 @@ WindowEvent* windowEvents(Window* window, u32* count);
 // ============================================================================
 // Audio
 // ============================================================================
-
-/**
- * Initialize the audio subsystem
- *
- * Returns
- * - Whether init succeeded
- */
-bool audioInit();
-
-/**
- * Deinitialize the audio subsystem
- */
-void audioDeinit();
 
 /**
  * An audio stream

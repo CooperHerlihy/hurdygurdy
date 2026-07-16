@@ -1126,7 +1126,7 @@ static Frame createFrame()
     return frame;
 }
 
-bool initGpu()
+bool internal::initGpu()
 {
     ArenaScope scratch = getScratch();
 
@@ -1247,7 +1247,7 @@ loadFailed:
     return false;
 }
 
-void deinitGpu()
+void internal::deinitGpu()
 {
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
@@ -3232,13 +3232,13 @@ struct WindowState {
 
 static WindowState windowState{};
 
-void initWindowing()
+void internal::initWindowing()
 {
     windowState.pool = poolCreate<Window>();
     windowState.ids = mapCreate<SDL_WindowID, Window*>();
 }
 
-void deinitWindowing()
+void internal::deinitWindowing()
 {
     mapDestroy(&windowState.ids);
     poolDestroy(&windowState.pool);
@@ -3889,7 +3889,7 @@ struct AudioState {
 
 static AudioState audio{};
 
-bool audioInit()
+bool internal::initAudio()
 {
     audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
@@ -3903,7 +3903,7 @@ bool audioInit()
     return true;
 }
 
-void audioDeinit()
+void internal::deinitAudio()
 {
     for (u32 i = 0; i < audio.streams.count; ++i)
     {
