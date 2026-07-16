@@ -5,9 +5,9 @@ No STL containers, no exceptions, no RTTI.
 
 ## Hard Rules
 
-**I make all decisions. Never act without approval.**
+**Always inform me. Never act without approval.**
 
-- Ask before structural changes, destructive ops, or anything ambiguous.
+- All new information must go through me before making decisions.
 - No STL, exceptions, RTTI, third-party code, or reformatting without instruction.
 - Never run scripts without backups and tests
 

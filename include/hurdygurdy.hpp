@@ -353,10 +353,7 @@ struct HurdyGurdy {
     {
         HG_ASSERT(!alive);
         if (this != &other)
-        {
-            alive = other.alive;
-            other.alive = false;
-        }
+            alive = std::exchange(other.alive, false);
         return *this;
     }
 
@@ -388,34 +385,34 @@ struct BinaryView {
      */
     const void* data = nullptr;
     /**
-     * The size of data in bytes
+     * The size of the data in bytes
      */
     u64 size = 0;
+
+    /**
+     * Read data at index into a buffer
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     * - dst A pointer to store the read data
+     * - size The size in bytes to read
+     */
+    void read(u64 idx, void* dst, u64 len);
+
+    /**
+     * Read data of arbitrary type from the file
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     */
+    template<typename T>
+    T read(u64 idx)
+    {
+        T ret;
+        read(idx, &ret, sizeof(T));
+        return ret;
+    }
 };
-
-/**
- * Read data at index into a buffer
- *
- * Parameters
- * - idx The index into the file in bytes to read from
- * - dst A pointer to store the read data
- * - size The size in bytes to read
- */
-void binaryRead(BinaryView bin, u64 idx, void* dst, u64 len);
-
-/**
- * Read data of arbitrary type from the file
- *
- * Parameters
- * - idx The index into the file in bytes to read from
- */
-template<typename T>
-T binaryRead(BinaryView bin, u64 idx)
-{
-    T ret;
-    binaryRead(bin, idx, &ret, sizeof(T));
-    return ret;
-}
 
 /**
  * A non-owning view into a string
@@ -4511,8 +4508,6 @@ u32 rngNext(Rng* rng);
  */
 u64 rngNext64(Rng* rng);
 
-// sort algorithm : TODO
-
 // ============================================================================
 // Binary Builder
 // ============================================================================
@@ -4522,13 +4517,101 @@ u64 rngNext64(Rng* rng);
  */
 struct BinaryBuilder {
     /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+    /**
      * The data
      */
     void* data = nullptr;
     /**
-     * The size of data in bytes
+     * The size of the data in bytes
      */
     u64 size = 0;
+
+    /**
+     * Construct empty
+     */
+    BinaryBuilder() noexcept = default;
+
+    /**
+     * Construct a new builder
+     */
+    BinaryBuilder(Arena* arenaVal, u64 sizeVal = 0)
+        : arena{arenaVal}, size{sizeVal}
+    {
+        data = arena->alloc(sizeVal, 1);
+    }
+
+    /**
+     * Read data at index into a buffer
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     * - dst A pointer to store the read data
+     * - size The size in bytes to read
+     */
+    void read(u64 idx, void* dst, u64 len);
+
+    /**
+     * Read data of arbitrary type from the file
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     */
+    template<typename T>
+    T read(u64 idx)
+    {
+        T ret;
+        read(idx, &ret, sizeof(T));
+        return ret;
+    }
+
+    /**
+     * Resize the binary
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - newSize The new size of the file in bytes
+     */
+    void resize(u64 newSize);
+
+    /**
+     * Overwrite data at the index
+     *
+     * Parameters
+     * - idx The index into the file to overwrite
+     * - src The data to write
+     * - size The size of the data in bytes
+     */
+    void overwrite(u64 idx, const void* src, u64 len);
+
+    /**
+     * Overwrite data of arbitrary type at the index
+     *
+     * Parameters
+     * - idx The index into the file to overwrite
+     * - src The data to write
+     */
+    template<typename T>
+    void overwrite(u64 idx, const T& src)
+    {
+        overwrite(idx, &src, sizeof(T));
+    }
+
+    /**
+     * Append data to the end, increasing size
+     */
+    void append(const void* src, u64 len);
+
+    /**
+     * Append data of arbitrary type to the end, increasing size
+     */
+    template<typename T>
+    void append(const T& src)
+    {
+        append(&src, sizeof(T));
+    }
 
     /**
      * Implicitly convert to Binary
@@ -4540,36 +4623,92 @@ struct BinaryBuilder {
 };
 
 /**
- * Resize the binary
- *
- * Parameters
- * - arena The arena to allocate from
- * - newSize The new size of the file in bytes
+ * An owner of binary data
  */
-void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize);
+struct Binary {
+    /**
+     * The data
+     */
+    void* data = nullptr;
+    /**
+     * The size of the data in bytes
+     */
+    u64 size = 0;
 
-/**
- * Overwrite data at the index
- *
- * Parameters
- * - idx The index into the file to overwrite
- * - src The data to write
- * - size The size of the data in bytes
- */
-void binaryOverwrite(BinaryBuilder* bin, u64 idx, const void* src, u64 len);
+    /**
+     * Construct empty
+     */
+    Binary() noexcept = default;
 
-/**
- * Overwrite data of arbitrary type at the index
- *
- * Parameters
- * - idx The index into the file to overwrite
- * - src The data to write
- */
-template<typename T>
-void binaryOverwrite(BinaryBuilder* bin, u64 idx, const T& src)
-{
-    binaryOverwrite(bin, idx, &src, sizeof(T));
-}
+    /**
+     * Create a new binary block from data
+     */
+    static Binary create(BinaryView data);
+
+    /**
+     * Free the binary
+     */
+    ~Binary() noexcept;
+
+    /**
+     * Read data at index into a buffer
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     * - dst A pointer to store the read data
+     * - size The size in bytes to read
+     */
+    void read(u64 idx, void* dst, u64 len);
+
+    /**
+     * Read data of arbitrary type from the file
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     */
+    template<typename T>
+    T read(u64 idx)
+    {
+        T ret;
+        read(idx, &ret, sizeof(T));
+        return ret;
+    }
+
+    /**
+     * Implicitly convert to Binary
+     */
+    constexpr operator BinaryView()
+    {
+        return {data, size};
+    }
+
+    /**
+     * Move construct
+     */
+    Binary(Binary&& other) noexcept
+    {
+        data = std::exchange(other.data, nullptr);
+        size = std::exchange(other.size, 0);
+    }
+
+    /**
+     * Move assign
+     */
+    Binary& operator=(Binary&& other) noexcept
+    {
+        if (this != &other)
+        {
+            if (data != nullptr)
+                heapFree(data, size);
+            data = std::exchange(other.data, nullptr);
+            size = std::exchange(other.size, 0);
+        }
+        return *this;
+    }
+
+    Binary(const Binary&) = delete;
+    Binary& operator=(const Binary&) = delete;
+};
 
 // ============================================================================
 // String Utilities
@@ -4941,7 +5080,7 @@ void serialize(Serializer* s, T (*arr)[N]);
  * Binary serialization
  */
 template<>
-void serialize(Serializer* s, BinaryView* val);
+void serialize(Serializer* s, Binary* val);
 
 /**
  * String serialization
@@ -5072,7 +5211,7 @@ void serialize(Serializer* s, Quat* val);
 /**
  * Write serialized data in a binary format
  */
-BinaryView binaryWriteSerial(Arena* arena, Serializer* data);
+BinaryBuilder binaryWriteSerial(Arena* arena, Serializer* data);
 
 /**
  * Read binary data to be deserialized
@@ -6135,19 +6274,19 @@ void serialize(Serializer* s, Asset<T>** asset);
 /**
  * A binary file asset handle
  */
-using BinaryAsset = Asset<BinaryView>;
+using BinaryAsset = Asset<Binary>;
 
 /**
  * Binary asset load implementation
  */
 template<>
-void assetLoadImpl(Asset<BinaryView>* data);
+void assetLoadImpl(Asset<Binary>* data);
 
 /**
  * Binary asset unload implementation
  */
 template<>
-void assetUnloadImpl(Asset<BinaryView>* data);
+void assetUnloadImpl(Asset<Binary>* data);
 
 /**
  * Store a binary file to disc

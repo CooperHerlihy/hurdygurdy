@@ -32,7 +32,7 @@ void setError(StringView error)
 
 void logError()
 {
-    std::fprintf(stderr, "HurdyGurdy Error Message: %.*s\n", (int)errorLength, errorData);
+    std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", (int)errorLength, errorData);
 }
 
 static SubsystemFlags initialized = 0;
@@ -141,10 +141,10 @@ HurdyGurdy::~HurdyGurdy()
     }
 }
 
-void binaryRead(BinaryView bin, u64 idx, void* dst, u64 len)
+void BinaryView::read(u64 idx, void* dst, u64 len)
 {
-    HG_ASSERT(idx + len <= bin.size);
-    memCopy(dst, static_cast<const u8*>(bin.data) + idx, len);
+    HG_ASSERT(idx + len <= size);
+    memCopy(dst, static_cast<const u8*>(data) + idx, len);
 }
 
 void memClear(void* dst, u64 size, u8 val)
@@ -2049,16 +2049,50 @@ u64 rngNext64(Rng* rng)
     return (static_cast<u64>(rngNext(rng)) << 32) | static_cast<u64>(rngNext(rng));
 }
 
-void binaryResize(Arena* arena, BinaryBuilder* bin, u64 newSize)
+void BinaryBuilder::read(u64 idx, void* dst, u64 len)
 {
-    bin->data = arena->realloc(bin->data, bin->size, newSize, 1);
-    bin->size = newSize;
+    HG_ASSERT(idx + len <= size);
+    memCopy(dst, static_cast<const u8*>(data) + idx, len);
 }
 
-void binaryOverwrite(BinaryBuilder* bin, u64 idx, const void* src, u64 len)
+void BinaryBuilder::resize(u64 newSize)
 {
-    HG_ASSERT(idx + len <= bin->size);
-    memCopy(static_cast<u8*>(bin->data) + idx, src, len);
+    data = arena->realloc(data, size, newSize, 1);
+    size = newSize;
+}
+
+void BinaryBuilder::overwrite(u64 idx, const void* src, u64 len)
+{
+    HG_ASSERT(idx + len <= size);
+    memCopy(static_cast<u8*>(data) + idx, src, len);
+}
+
+void BinaryBuilder::append(const void* src, u64 len)
+{
+    data = arena->realloc(data, size, size + len, 1);
+    memCopy(static_cast<u8*>(data) + size, src, len);
+    size += len;
+}
+
+void Binary::read(u64 idx, void* dst, u64 len)
+{
+    HG_ASSERT(idx + len <= size);
+    memCopy(dst, static_cast<const u8*>(data) + idx, len);
+}
+
+Binary::~Binary() noexcept
+{
+    if (data != nullptr)
+        heapFree(data, size);
+}
+
+Binary Binary::create(BinaryView data)
+{
+    Binary bin;
+    bin.size = data.size;
+    bin.data = heapAlloc(bin.size, 1);
+    memCopy(bin.data, data.data, bin.size);
+    return bin;
 }
 
 char* cString(Arena* arena, StringView str)
@@ -2503,9 +2537,20 @@ void serializeVoid(Serializer* s, void* val, u32 size)
 }
 
 template<>
-void serialize(Serializer* s, BinaryView* val)
+void serialize(Serializer* s, Binary* val)
 {
-    serialize(s, reinterpret_cast<StringView*>(val));
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->type = SerialType_string;
+        s->current->string = stringCopy(s->arena, {static_cast<char*>(val->data), val->size});
+    }
+    else
+    {
+        HG_ASSERT(s->current->type == SerialType_string);
+        *val = Binary::create({s->current->string.chars, s->current->string.length});
+    }
 }
 
 template<>
@@ -2760,20 +2805,17 @@ struct SerialBinNode {
     };
 };
 
-static void serialBinWriteNode(Arena* arena, BinaryBuilder* bin, u32 idx, SerialNode* node);
+static void serialBinWriteNode(BinaryBuilder* bin, u32 idx, SerialNode* node);
 
-static void serialBinWriteString(Arena* arena, BinaryBuilder* bin, u32 idx, StringView string)
+static void serialBinWriteString(BinaryBuilder* bin, u32 idx, StringView string)
 {
     SerialBinNode node{};
     node.type = SerialType_string;
     node.string.length = static_cast<u32>(string.length);
-
     node.string.begin = static_cast<u32>(bin->size);
-    binaryResize(arena, bin, bin->size + string.length);
 
-    binaryOverwrite(bin, idx, node);
-
-    binaryOverwrite(bin, node.string.begin, string.chars, string.length);
+    bin->overwrite(idx, node);
+    bin->append(string.chars, string.length);
 }
 
 static void serialBinWriteInteger(BinaryBuilder* bin, u32 idx, i64 integer)
@@ -2781,7 +2823,7 @@ static void serialBinWriteInteger(BinaryBuilder* bin, u32 idx, i64 integer)
     SerialBinNode node{};
     node.type = SerialType_integer;
     node.integer = integer;
-    binaryOverwrite(bin, idx, node);
+    bin->overwrite(idx, node);
 }
 
 static void serialBinWriteFloating(BinaryBuilder* bin, u32 idx, f64 floating)
@@ -2789,7 +2831,7 @@ static void serialBinWriteFloating(BinaryBuilder* bin, u32 idx, f64 floating)
     SerialBinNode node{};
     node.type = SerialType_floating;
     node.floating = floating;
-    binaryOverwrite(bin, idx, node);
+    bin->overwrite(idx, node);
 }
 
 static void serialBinWriteBoolean(BinaryBuilder* bin, u32 idx, bool boolean)
@@ -2797,37 +2839,37 @@ static void serialBinWriteBoolean(BinaryBuilder* bin, u32 idx, bool boolean)
     SerialBinNode node{};
     node.type = SerialType_boolean;
     node.boolean = boolean;
-    binaryOverwrite(bin, idx, node);
+    bin->overwrite(idx, node);
 }
 
-static void serialBinWriteObject(Arena* arena, BinaryBuilder* bin, u32 idx, SerialNode* object)
+static void serialBinWriteObject(BinaryBuilder* bin, u32 idx, SerialNode* object)
 {
     SerialBinNode node{};
     node.type = SerialType_object;
     node.object.fieldCount = object->count;
 
     node.object.fieldsBegin = static_cast<u32>(bin->size);
-    binaryResize(arena, bin, bin->size + object->count * sizeof(SerialBinNode));
+    bin->resize(bin->size + object->count * sizeof(SerialBinNode));
 
-    binaryOverwrite(bin, idx, node);
+    bin->overwrite(idx, node);
 
     SerialNode* data = object->children;
     for (u32 i = 0; i < object->count; ++i)
     {
-        serialBinWriteNode(arena, bin, node.object.fieldsBegin + i * static_cast<u32>(sizeof(SerialBinNode)), data);
+        serialBinWriteNode(bin, node.object.fieldsBegin + i * static_cast<u32>(sizeof(SerialBinNode)), data);
         data = data->next;
     }
 }
 
-static void serialBinWriteNode(Arena* arena, BinaryBuilder* bin, u32 idx, SerialNode* node)
+static void serialBinWriteNode(BinaryBuilder* bin, u32 idx, SerialNode* node)
 {
     switch (node->type)
     {
         case SerialType_object:
-            serialBinWriteObject(arena, bin, idx, node);
+            serialBinWriteObject(bin, idx, node);
             return;
         case SerialType_string:
-            serialBinWriteString(arena, bin, idx, node->string);
+            serialBinWriteString(bin, idx, node->string);
             return;
         case SerialType_integer:
             serialBinWriteInteger(bin, idx, node->integer);
@@ -2843,25 +2885,20 @@ static void serialBinWriteNode(Arena* arena, BinaryBuilder* bin, u32 idx, Serial
     }
 }
 
-BinaryView binaryWriteSerial(Arena* arena, Serializer* serial)
+BinaryBuilder binaryWriteSerial(Arena* arena, Serializer* serial)
 {
-    BinaryBuilder bin{};
+    BinaryBuilder bin{arena, sizeof(SerialBinHeader)};
 
     SerialBinHeader header{};
-    binaryResize(arena, &bin, bin.size + sizeof(header));
-
     memCopy(header.tag, serialBinTag, sizeof(serialBinTag));
     header.versionMajor = serialBinVersionMajor;
     header.versionMinor = serialBinVersionMinor;
     header.versionPatch = serialBinVersionPatch;
-
     header.nodeBegin = static_cast<u32>(bin.size);
-    binaryResize(arena, &bin, bin.size + sizeof(SerialBinNode));
+    bin.overwrite(0, header);
 
-    binaryOverwrite(&bin, 0, header);
-
-    serialBinWriteNode(arena, &bin, header.nodeBegin, serial->current);
-
+    bin.resize(bin.size + sizeof(SerialBinNode));
+    serialBinWriteNode(&bin, header.nodeBegin, serial->current);
     return bin;
 }
 
@@ -2885,7 +2922,7 @@ static void serialBinReadString(BinaryView bin, SerialBinString string, Serializ
 
 static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s)
 {
-    SerialBinNode node = binaryRead<SerialBinNode>(bin, idx);
+    SerialBinNode node = bin.read<SerialBinNode>(idx);
     switch (node.type)
     {
         case SerialType_object:
@@ -2910,7 +2947,7 @@ static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s)
 
 Serializer binaryReadSerial(Arena* arena, BinaryView bin)
 {
-    SerialBinHeader header = binaryRead<SerialBinHeader>(bin, 0);
+    SerialBinHeader header = bin.read<SerialBinHeader>(0);
 
     if (!memEqual(header.tag, serialBinTag, sizeof(serialBinTag)))
     {
@@ -3965,7 +4002,7 @@ void assetDeinitDefaults()
 }
 
 template<>
-void assetLoadImpl(Asset<BinaryView>* data)
+void assetLoadImpl(Asset<Binary>* data)
 {
     ArenaScope scratch = getScratch();
 
@@ -3999,9 +4036,9 @@ void assetLoadImpl(Asset<BinaryView>* data)
 }
 
 template<>
-void assetUnloadImpl(Asset<BinaryView>* data)
+void assetUnloadImpl(Asset<Binary>* data)
 {
-    heapFree(const_cast<void*>(data->asset.data), data->asset.size);
+    data->asset = {};
 }
 
 bool binaryStore(BinaryView bin, StringView path)
