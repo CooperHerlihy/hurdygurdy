@@ -186,7 +186,6 @@ void* heapRealloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
     return alloc;
 }
 
-template<>
 void heapFree(void* allocation, u64 size)
 {
     static_cast<void>(size);

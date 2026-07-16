@@ -428,7 +428,7 @@ struct StringView {
     u64 length = 0;
 
     /**
-     * Construct uninitialized
+     * Construct empty
      */
     StringView() = default;
 
@@ -460,7 +460,7 @@ struct StringView {
             {
                 ++length;
                 if (length > 4096)
-                    HG_PANIC("C string greater than 4096 cannot be implicitly converted");
+                    HG_PANIC("C string longer than 4096 chars cannot be implicitly converted");
             }
         }
     }
@@ -500,11 +500,16 @@ struct Span {
     /**
      * The values viewed
      */
-    T* values;
+    T* values = nullptr;
     /**
      * The number of values
      */
-    u64 count;
+    u64 count = 0;
+
+    /**
+     * Construct empty
+     */
+    Span() noexcept = default;
 
     /**
      * Construct from pointer and count
@@ -563,6 +568,49 @@ struct Span {
 };
 
 /**
+ * A view into memory of a type
+ */
+template<>
+struct Span<void> {
+    /**
+     * The values viewed
+     */
+    void* values = nullptr;
+    /**
+     * The number of values
+     */
+    u64 count = 0;
+
+    /**
+     * Construct empty
+     */
+    Span() noexcept = default;
+
+    /**
+     * Construct from pointer and count
+     */
+    Span(void* valuesVal, u64 countVal)
+        : values{valuesVal}, count{countVal}
+    {}
+
+    /**
+     * Construct from begin and end
+     */
+    Span(void* begin, void* end)
+        : values{begin}, count{static_cast<uptr>(static_cast<u8*>(begin) - static_cast<u8*>(end))}
+    {}
+
+    /**
+     * Access by index
+     */
+    void* operator[](u32 idx) const
+    {
+        HG_ASSERT(idx < count);
+        return static_cast<u8*>(values) + idx;
+    }
+};
+
+/**
  * An object which may or may not exist
  */
 template<typename T>
@@ -594,102 +642,34 @@ struct Maybe
     }
 
     /**
-     * Copy construct
-     */
-    Maybe(const Maybe& other)
-    {
-        if (other.has)
-            new (&val) T{other.val};
-        has = other.has;
-    }
-
-    /**
-     * Copy assign
-     */
-    Maybe& operator=(const Maybe& other)
-    {
-        if (this != &other)
-        {
-            if (has)
-                val.~T();
-
-            if (other.has)
-                new (&val) T{other.val};
-            has = other.has;
-        }
-        return *this;
-    }
-
-    /**
-     * Move construct
-     */
-    Maybe(Maybe&& other) noexcept
-    {
-        if (other.has)
-            new (&val) T{std::move(other.val)};
-        has = other.has;
-
-        if (other.has)
-            other.val.~T();
-        other.has = false;
-    }
-
-    /**
-     * Move assign
-     */
-    Maybe& operator=(Maybe&& other) noexcept
-    {
-        if (this != &other)
-        {
-            if (has)
-                val.~T();
-
-            if (other.has)
-                new (&val) T{std::move(other.val)};
-            has = other.has;
-
-            if (other.has)
-                other.val.~T();
-            other.has = false;
-        }
-        return *this;
-    }
-
-    /**
      * Return the value, or a default value if it does not exist
      */
-    T orElse(T defaultVal)
-    {
-        if (has)
-        {
-            T tmp = std::move(val);
-            val.~T();
-            has = false;
-            return tmp;
-        }
-        else
-        {
-            return std::move(defaultVal);
-        }
-    }
+    T orElse(T defaultVal);
 
     /**
      * Expect there to be a value, or panic
      */
-    T expect(StringView errMsg)
-    {
-        if (has)
-        {
-            T tmp = std::move(val);
-            val.~T();
-            has = false;
-            return tmp;
-        }
-        else
-        {
-            HG_PANIC("%.*s", (int)errMsg.length, errMsg.chars);
-        }
-    }
+    T expect(StringView errMsg);
+
+    /**
+     * Copy construct
+     */
+    Maybe(const Maybe& other);
+
+    /**
+     * Copy assign
+     */
+    Maybe& operator=(const Maybe& other);
+
+    /**
+     * Move construct
+     */
+    Maybe(Maybe&& other) noexcept;
+
+    /**
+     * Move assign
+     */
+    Maybe& operator=(Maybe&& other) noexcept;
 };
 
 /**
@@ -764,8 +744,8 @@ constexpr u32 endianReverse32(u32 val)
  */
 constexpr u64 endianReverse64(u64 val)
 {
-    u64 swapped = ((val << 8) & 0xFF00FF00FF00FF00ULL) | ((val >> 8) & 0x00FF00FF00FF00FFULL);
-    swapped = ((swapped << 16) & 0xFFFF0000FFFF0000ULL) | ((swapped >> 16) & 0x0000FFFF0000FFFFULL);
+    u64 swapped = ((val << 8) & 0xff00ff00ff00ff00ull) | ((val >> 8) & 0x00ff00ff00ff00ffull);
+    swapped = ((swapped << 16) & 0xffff0000ffff0000ull) | ((swapped >> 16) & 0x0000ffff0000ffffull);
     return (swapped << 32) | (swapped >> 32);
 }
 
@@ -856,6 +836,16 @@ T* heapRealloc(T* allocation, u64 oldCount, u64 newCount)
 }
 
 /**
+ * Free an allocation from a general purpose allocator
+ *
+ * Parameters
+ * - allocation The allocation to free
+ * - size The size of the allocation in bytes
+ * - alignment The alignment of the allocation in bytes
+ */
+void heapFree(void* allocation, u64 size);
+
+/**
  * A convenience to free an allocation from a general purpose allocator
  *
  * Parameters
@@ -867,17 +857,6 @@ void heapFree(T* allocation, u64 count)
 {
     heapFree(static_cast<void*>(allocation), count * sizeof(T));
 }
-
-/**
- * Free an allocation from a general purpose allocator
- *
- * Parameters
- * - allocation The allocation to free
- * - size The size of the allocation in bytes
- * - alignment The alignment of the allocation in bytes
- */
-template<>
-void heapFree(void* allocation, u64 size);
 
 /**
  * An arena allocator
@@ -8495,6 +8474,92 @@ void setError(StringView errorFmt, Ts... args)
     snprintf(buf, sizeof(buf), fmt, args...);
 
     setError(buf);
+}
+
+template<typename T>
+T Maybe<T>::orElse(T defaultVal)
+{
+    if (has)
+    {
+        T tmp = std::move(val);
+        val.~T();
+        has = false;
+        return tmp;
+    }
+    else
+    {
+        return std::move(defaultVal);
+    }
+}
+
+template<typename T>
+T Maybe<T>::expect(StringView errMsg)
+{
+    if (has)
+    {
+        T tmp = std::move(val);
+        val.~T();
+        has = false;
+        return tmp;
+    }
+    else
+    {
+        HG_PANIC("%.*s", (int)errMsg.length, errMsg.chars);
+    }
+}
+
+template<typename T>
+Maybe<T>::Maybe(const Maybe& other)
+{
+    if (other.has)
+        new (&val) T{other.val};
+    has = other.has;
+}
+
+template<typename T>
+Maybe<T>& Maybe<T>::operator=(const Maybe<T>& other)
+{
+    if (this != &other)
+    {
+        if (has)
+            val.~T();
+
+        if (other.has)
+            new (&val) T{other.val};
+        has = other.has;
+    }
+    return *this;
+}
+
+template<typename T>
+Maybe<T>::Maybe(Maybe&& other) noexcept
+{
+    if (other.has)
+        new (&val) T{std::move(other.val)};
+    has = other.has;
+
+    if (other.has)
+        other.val.~T();
+    other.has = false;
+}
+
+template<typename T>
+Maybe<T>& Maybe<T>::operator=(Maybe&& other) noexcept
+{
+    if (this != &other)
+    {
+        if (has)
+            val.~T();
+
+        if (other.has)
+            new (&val) T{std::move(other.val)};
+        has = other.has;
+
+        if (other.has)
+            other.val.~T();
+        other.has = false;
+    }
+    return *this;
 }
 
 template<typename F> requires std::is_invocable_r_v<void, F, u64>
