@@ -61,39 +61,39 @@ void test()
         }
     }
 
-    // String
+    // StringBuilder
     {
         ArenaScope arena = getScratch();
 
-        StringBuilder a = stringCopy(arena, "a");
+        StringBuilder a{arena, "a"};
         HG_ASSERT(a[0] == 'a');
         HG_ASSERT(a.length == 1);
 
-        StringBuilder abc = stringCopy(arena, "abc");
+        StringBuilder abc{arena, "abc"};
         HG_ASSERT(abc[0] == 'a');
         HG_ASSERT(abc[1] == 'b');
         HG_ASSERT(abc[2] == 'c');
         HG_ASSERT(abc.length == 3);
 
-        stringAppend(arena, &a, "bc");
+        a.append("bc");
         HG_ASSERT(a == abc);
 
         StringBuilder str{};
 
-        stringAppend(arena, &str, "hello");
-        HG_ASSERT(str == stringCopy(arena, "hello"));
+        str.append("hello");
+        HG_ASSERT(str == "hello");
 
-        stringAppend(arena, &str, " there");
-        HG_ASSERT(str == stringCopy(arena, "hello there"));
+        str.append(" there");
+        HG_ASSERT(str == "hello there");
 
-        stringPrepend(arena, &str, "why ");
-        HG_ASSERT(str == stringCopy(arena, "why hello there"));
+        str.prepend("why ");
+        HG_ASSERT(str == "why hello there");
 
-        stringInsert(arena, &str, 3, ",");
-        HG_ASSERT(str == stringCopy(arena, "why, hello there"));
+        str.insert(3, ",");
+        HG_ASSERT(str == "why, hello there");
 
-        stringPrepend(arena, &str, "aaaaaaaaaaaaaaaaaaaaaaaa ");
-        HG_ASSERT(str == stringCopy(arena, "aaaaaaaaaaaaaaaaaaaaaaaa why, hello there"));
+        str.prepend("aaaaaaaaaaaaaaaaaaaaaaaa ");
+        HG_ASSERT(str == "aaaaaaaaaaaaaaaaaaaaaaaa why, hello there");
     }
 
     // string utils
@@ -560,7 +560,7 @@ void test()
             f32 c;
             bool d;
             u32 e[3];
-            StringBuilder f;
+            String f;
         };
 
         Data data{};
@@ -571,7 +571,7 @@ void test()
         data.e[0] = {2};
         data.e[1] = {4};
         data.e[2] = {6};
-        data.f = stringCopy(arena, "hello");
+        data.f = String::create("hello");
 
         auto serializeData = [](Serializer* s, Data* val)
         {
@@ -1517,434 +1517,434 @@ void test()
         queueDestroy(&queue);
     }
 
-    // Set
-    {
-        {
-            ArenaScope arena = getScratch();
-
-            constexpr u32 count = 128;
-
-            Set<u32> set = setTemp<u32>(arena, count);
-
-            for (u32 i = 0; i < 3; ++i)
-            {
-                HG_ASSERT(set.count == 0);
-                HG_ASSERT(!setHas(&set, 0));
-                HG_ASSERT(!setHas(&set, 1));
-                HG_ASSERT(!setHas(&set, 12));
-                HG_ASSERT(!setHas(&set, 42));
-                HG_ASSERT(!setHas(&set, 100000));
-
-                setAdd(&set, 1);
-                HG_ASSERT(set.count == 1);
-                HG_ASSERT(setHas(&set, 1));
-
-                setRemove(&set, 1);
-                HG_ASSERT(set.count == 0);
-                HG_ASSERT(!setHas(&set, 1));
-
-                HG_ASSERT(!setHas(&set, 12));
-                HG_ASSERT(!setHas(&set, 12 + count));
-
-                setAdd(&set, 12);
-                HG_ASSERT(set.count == 1);
-                HG_ASSERT(setHas(&set, 12));
-                HG_ASSERT(!setHas(&set, 12 + count));
-
-                setAdd(&set, 12 + count);
-                HG_ASSERT(set.count == 2);
-                HG_ASSERT(setHas(&set, 12));
-                HG_ASSERT(setHas(&set, 12 + count));
-
-                setAdd(&set, 12 + count * 2);
-                HG_ASSERT(set.count == 3);
-                HG_ASSERT(setHas(&set, 12));
-                HG_ASSERT(setHas(&set, 12 + count));
-                HG_ASSERT(setHas(&set, 12 + count * 2));
-
-                setRemove(&set, 12);
-                HG_ASSERT(set.count == 2);
-                HG_ASSERT(!setHas(&set, 12));
-                HG_ASSERT(setHas(&set, 12 + count));
-
-                setAdd(&set, 42);
-                HG_ASSERT(set.count == 3);
-                HG_ASSERT(setHas(&set, 42));
-
-                setRemove(&set, 12 + count);
-                HG_ASSERT(set.count == 2);
-                HG_ASSERT(!setHas(&set, 12));
-                HG_ASSERT(!setHas(&set, 12 + count));
-
-                setRemove(&set, 42);
-                HG_ASSERT(set.count == 1);
-                HG_ASSERT(!setHas(&set, 42));
-
-                setRemove(&set, 12 + count * 2);
-                HG_ASSERT(set.count == 0);
-                HG_ASSERT(!setHas(&set, 12));
-                HG_ASSERT(!setHas(&set, 12 + count));
-                HG_ASSERT(!setHas(&set, 12 + count * 2));
-
-                setReset(&set);
-            }
-        }
-
-        {
-            ArenaScope arena = getScratch();
-
-            using StrHash = u64;
-
-            Set<StrHash> set = setTemp<StrHash>(arena, 128);
-
-            StrHash a = hash("a");
-            StrHash b = hash("b");
-            StrHash ab = hash("ab");
-            StrHash scf = hash("supercalifragilisticexpialidocious");
-
-            HG_ASSERT(!setHas(&set, a));
-            HG_ASSERT(!setHas(&set, b));
-            HG_ASSERT(!setHas(&set, ab));
-            HG_ASSERT(!setHas(&set, scf));
-
-            setAdd(&set, a);
-            setAdd(&set, b);
-            setAdd(&set, ab);
-            setAdd(&set, scf);
-
-            HG_ASSERT(setHas(&set, a));
-            HG_ASSERT(setHas(&set, b));
-            HG_ASSERT(setHas(&set, ab));
-            HG_ASSERT(setHas(&set, scf));
-
-            setRemove(&set, a);
-            setRemove(&set, b);
-            setRemove(&set, ab);
-            setRemove(&set, scf);
-
-            HG_ASSERT(!setHas(&set, a));
-            HG_ASSERT(!setHas(&set, b));
-            HG_ASSERT(!setHas(&set, ab));
-            HG_ASSERT(!setHas(&set, scf));
-        }
-
-        {
-            ArenaScope arena = getScratch();
-
-            Set<const char*> set = setTemp<const char*>(arena, 128);
-
-            const char* a = "a";
-            const char* b = "b";
-            const char* ab = "ab";
-            const char* scf = "supercalifragilisticexpialidocious";
-
-            HG_ASSERT(!setHas(&set, a));
-            HG_ASSERT(!setHas(&set, b));
-            HG_ASSERT(!setHas(&set, ab));
-            HG_ASSERT(!setHas(&set, scf));
-
-            setAdd(&set, a);
-            setAdd(&set, b);
-            setAdd(&set, ab);
-            setAdd(&set, scf);
-
-            HG_ASSERT(setHas(&set, a));
-            HG_ASSERT(setHas(&set, b));
-            HG_ASSERT(setHas(&set, ab));
-            HG_ASSERT(setHas(&set, scf));
-
-            setRemove(&set, a);
-            setRemove(&set, b);
-            setRemove(&set, ab);
-            setRemove(&set, scf);
-
-            HG_ASSERT(!setHas(&set, a));
-            HG_ASSERT(!setHas(&set, b));
-            HG_ASSERT(!setHas(&set, ab));
-            HG_ASSERT(!setHas(&set, scf));
-        }
-
-        {
-            ArenaScope arena = getScratch();
-
-            Set<StringBuilder> set = setTemp<StringBuilder>(arena, 128);
-
-            HG_ASSERT(!setHas(&set, stringCopy(arena, "a")));
-            HG_ASSERT(!setHas(&set, stringCopy(arena, "b")));
-            HG_ASSERT(!setHas(&set, stringCopy(arena, "ab")));
-            HG_ASSERT(!setHas(&set, stringCopy(arena, "supercalifragilisticexpialidocious")));
-
-            setAdd(&set, stringCopy(arena, "a"));
-            setAdd(&set, stringCopy(arena, "b"));
-            setAdd(&set, stringCopy(arena, "ab"));
-            setAdd(&set, stringCopy(arena, "supercalifragilisticexpialidocious"));
-
-            HG_ASSERT(setHas(&set, stringCopy(arena, "a")));
-            HG_ASSERT(setHas(&set, stringCopy(arena, "b")));
-            HG_ASSERT(setHas(&set, stringCopy(arena, "ab")));
-            HG_ASSERT(setHas(&set, stringCopy(arena, "supercalifragilisticexpialidocious")));
-
-            setRemove(&set, stringCopy(arena, "a"));
-            setRemove(&set, stringCopy(arena, "b"));
-            setRemove(&set, stringCopy(arena, "ab"));
-            setRemove(&set, stringCopy(arena, "supercalifragilisticexpialidocious"));
-
-            HG_ASSERT(!setHas(&set, stringCopy(arena, "a")));
-            HG_ASSERT(!setHas(&set, stringCopy(arena, "b")));
-            HG_ASSERT(!setHas(&set, stringCopy(arena, "ab")));
-            HG_ASSERT(!setHas(&set, stringCopy(arena, "supercalifragilisticexpialidocious")));
-        }
-
-        {
-            ArenaScope arena = getScratch();
-
-            Set<StringView> set = setTemp<StringView>(arena, 128);
-
-            HG_ASSERT(!setHas(&set, "a"));
-            HG_ASSERT(!setHas(&set, "b"));
-            HG_ASSERT(!setHas(&set, "ab"));
-            HG_ASSERT(!setHas(&set, "supercalifragilisticexpialidocious"));
-
-            setAdd(&set, "a");
-            setAdd(&set, "b");
-            setAdd(&set, "ab");
-            setAdd(&set, "supercalifragilisticexpialidocious");
-
-            HG_ASSERT(setHas(&set, "a"));
-            HG_ASSERT(setHas(&set, "b"));
-            HG_ASSERT(setHas(&set, "ab"));
-            HG_ASSERT(setHas(&set, "supercalifragilisticexpialidocious"));
-
-            setRemove(&set, "a");
-            setRemove(&set, "b");
-            setRemove(&set, "ab");
-            setRemove(&set, "supercalifragilisticexpialidocious");
-
-            HG_ASSERT(!setHas(&set, "a"));
-            HG_ASSERT(!setHas(&set, "b"));
-            HG_ASSERT(!setHas(&set, "ab"));
-            HG_ASSERT(!setHas(&set, "supercalifragilisticexpialidocious"));
-        }
-    }
-
-    // Map
-    {
-        {
-            ArenaScope arena = getScratch();
-
-            constexpr u32 count = 128;
-
-            Map<u32, u32> map = mapTemp<u32, u32>(arena, count);
-
-            for (u32 i = 0; i < 3; ++i)
-            {
-                HG_ASSERT(map.count == 0);
-                HG_ASSERT(mapGet(&map, 0) == nullptr);
-                HG_ASSERT(mapGet(&map, 1) == nullptr);
-                HG_ASSERT(mapGet(&map, 12) == nullptr);
-                HG_ASSERT(mapGet(&map, 42) == nullptr);
-                HG_ASSERT(mapGet(&map, 100000) == nullptr);
-
-                mapAdd(&map, 1, 1);
-                HG_ASSERT(map.count == 1);
-                HG_ASSERT(mapGet(&map, 1) != nullptr);
-                HG_ASSERT(*mapGet(&map, 1) == 1);
-
-                mapRemove(&map, 1);
-                HG_ASSERT(map.count == 0);
-                HG_ASSERT(mapGet(&map, 1) == nullptr);
-
-                HG_ASSERT(mapGet(&map, 12) == nullptr);
-                HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
-
-                mapAdd(&map, 12, 42);
-                HG_ASSERT(map.count == 1);
-                HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
-                HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
-
-                mapAdd(&map, 12 + count, 100);
-                HG_ASSERT(map.count == 2);
-                HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
-                HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
-
-                mapAdd(&map, 12 + count * 2, 200);
-                HG_ASSERT(map.count == 3);
-                HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
-                HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
-                HG_ASSERT(mapGet(&map, 12 + count * 2) != nullptr && *mapGet(&map, 12 + count * 2) == 200);
-
-                mapRemove(&map, 12);
-                HG_ASSERT(map.count == 2);
-                HG_ASSERT(mapGet(&map, 12) == nullptr);
-                HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
-
-                mapAdd(&map, 42, 12);
-                HG_ASSERT(map.count == 3);
-                HG_ASSERT(mapGet(&map, 42) != nullptr && *mapGet(&map, 42) == 12);
-
-                mapRemove(&map, 12 + count);
-                HG_ASSERT(map.count == 2);
-                HG_ASSERT(mapGet(&map, 12) == nullptr);
-                HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
-
-                mapRemove(&map, 42);
-                HG_ASSERT(map.count == 1);
-                HG_ASSERT(mapGet(&map, 42) == nullptr);
-
-                mapRemove(&map, 12 + count * 2);
-                HG_ASSERT(map.count == 0);
-                HG_ASSERT(mapGet(&map, 12) == nullptr);
-                HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
-                HG_ASSERT(mapGet(&map, 12 + count * 2) == nullptr);
-
-                mapReset(&map);
-            }
-        }
-
-        {
-            ArenaScope arena = getScratch();
-
-            using StrHash = u64;
-
-            Map<StrHash, u32> map = mapTemp<StrHash, u32>(arena, 128);
-
-            StrHash a = hash("a");
-            StrHash b = hash("b");
-            StrHash ab = hash("ab");
-            StrHash scf = hash("supercalifragilisticexpialidocious");
-
-            HG_ASSERT(mapGet(&map, a) == nullptr);
-            HG_ASSERT(mapGet(&map, b) == nullptr);
-            HG_ASSERT(mapGet(&map, ab) == nullptr);
-            HG_ASSERT(mapGet(&map, scf) == nullptr);
-
-            mapAdd(&map, a, 1);
-            mapAdd(&map, b, 2);
-            mapAdd(&map, ab, 3);
-            mapAdd(&map, scf, 4);
-
-            HG_ASSERT(mapGet(&map, a) != nullptr && *mapGet(&map, a) == 1);
-            HG_ASSERT(mapGet(&map, b) != nullptr && *mapGet(&map, b) == 2);
-            HG_ASSERT(mapGet(&map, ab) != nullptr && *mapGet(&map, ab) == 3);
-            HG_ASSERT(mapGet(&map, scf) != nullptr && *mapGet(&map, scf) == 4);
-
-            mapRemove(&map, a);
-            mapRemove(&map, b);
-            mapRemove(&map, ab);
-            mapRemove(&map, scf);
-
-            HG_ASSERT(mapGet(&map, a) == nullptr);
-            HG_ASSERT(mapGet(&map, b) == nullptr);
-            HG_ASSERT(mapGet(&map, ab) == nullptr);
-            HG_ASSERT(mapGet(&map, scf) == nullptr);
-        }
-
-        {
-            ArenaScope arena = getScratch();
-
-            Map<const char*, u32> map = mapTemp<const char*, u32>(arena, 128);
-
-            const char* a = "a";
-            const char* b = "b";
-            const char* ab = "ab";
-            const char* scf = "supercalifragilisticexpialidocious";
-
-            HG_ASSERT(mapGet(&map, a) == nullptr);
-            HG_ASSERT(mapGet(&map, b) == nullptr);
-            HG_ASSERT(mapGet(&map, ab) == nullptr);
-            HG_ASSERT(mapGet(&map, scf) == nullptr);
-
-            mapAdd(&map, a, 1);
-            mapAdd(&map, b, 2);
-            mapAdd(&map, ab, 3);
-            mapAdd(&map, scf, 4);
-
-            HG_ASSERT(mapGet(&map, a) != nullptr && *mapGet(&map, a) == 1);
-            HG_ASSERT(mapGet(&map, b) != nullptr && *mapGet(&map, b) == 2);
-            HG_ASSERT(mapGet(&map, ab) != nullptr && *mapGet(&map, ab) == 3);
-            HG_ASSERT(mapGet(&map, scf) != nullptr && *mapGet(&map, scf) == 4);
-
-            mapRemove(&map, a);
-            mapRemove(&map, b);
-            mapRemove(&map, ab);
-            mapRemove(&map, scf);
-
-            HG_ASSERT(mapGet(&map, a) == nullptr);
-            HG_ASSERT(mapGet(&map, b) == nullptr);
-            HG_ASSERT(mapGet(&map, ab) == nullptr);
-            HG_ASSERT(mapGet(&map, scf) == nullptr);
-        }
-
-        {
-            ArenaScope arena = getScratch();
-
-            Map<StringBuilder, u32> map = mapTemp<StringBuilder, u32>(arena, 128);
-
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "a")) == nullptr);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "b")) == nullptr);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "ab")) == nullptr);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
-
-            mapAdd(&map, stringCopy(arena, "a"), 1);
-            mapAdd(&map, stringCopy(arena, "b"), 2);
-            mapAdd(&map, stringCopy(arena, "ab"), 3);
-            mapAdd(&map, stringCopy(arena, "supercalifragilisticexpialidocious"), 4);
-
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "a")) != nullptr);
-            HG_ASSERT(*mapGet(&map, stringCopy(arena, "a")) == 1);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "b")) != nullptr);
-            HG_ASSERT(*mapGet(&map, stringCopy(arena, "b")) == 2);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "ab")) != nullptr);
-            HG_ASSERT(*mapGet(&map, stringCopy(arena, "ab")) == 3);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "supercalifragilisticexpialidocious")) != nullptr);
-            HG_ASSERT(*mapGet(&map, stringCopy(arena, "supercalifragilisticexpialidocious")) == 4);
-
-            mapRemove(&map, stringCopy(arena, "a"));
-            mapRemove(&map, stringCopy(arena, "b"));
-            mapRemove(&map, stringCopy(arena, "ab"));
-            mapRemove(&map, stringCopy(arena, "supercalifragilisticexpialidocious"));
-
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "a")) == nullptr);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "b")) == nullptr);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "ab")) == nullptr);
-            HG_ASSERT(mapGet(&map, stringCopy(arena, "supercalifragilisticexpialidocious")) == nullptr);
-        }
-
-        {
-            ArenaScope arena = getScratch();
-
-            Map<StringView, u32> map = mapTemp<StringView, u32>(arena, 6);
-
-            HG_ASSERT(mapGet(&map, "a") == nullptr);
-            HG_ASSERT(mapGet(&map, "b") == nullptr);
-            HG_ASSERT(mapGet(&map, "ab") == nullptr);
-            HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
-
-            mapAdd(&map, "a", 1);
-            mapAdd(&map, "b", 2);
-            mapAdd(&map, "ab", 3);
-            mapAdd(&map, "supercalifragilisticexpialidocious", 4);
-
-            HG_ASSERT(mapGet(&map, "a") != nullptr);
-            HG_ASSERT(*mapGet(&map, "a") == 1);
-            HG_ASSERT(mapGet(&map, "b") != nullptr);
-            HG_ASSERT(*mapGet(&map, "b") == 2);
-            HG_ASSERT(mapGet(&map, "ab") != nullptr);
-            HG_ASSERT(*mapGet(&map, "ab") == 3);
-            HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") != nullptr);
-            HG_ASSERT(*mapGet(&map, "supercalifragilisticexpialidocious") == 4);
-
-            mapRemove(&map, "a");
-            mapRemove(&map, "b");
-            mapRemove(&map, "ab");
-            mapRemove(&map, "supercalifragilisticexpialidocious");
-
-            HG_ASSERT(mapGet(&map, "a") == nullptr);
-            HG_ASSERT(mapGet(&map, "b") == nullptr);
-            HG_ASSERT(mapGet(&map, "ab") == nullptr);
-            HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
-        }
-    }
+    // // Set
+    // {
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         constexpr u32 count = 128;
+    //
+    //         Set<u32> set = setTemp<u32>(arena, count);
+    //
+    //         for (u32 i = 0; i < 3; ++i)
+    //         {
+    //             HG_ASSERT(set.count == 0);
+    //             HG_ASSERT(!setHas(&set, 0));
+    //             HG_ASSERT(!setHas(&set, 1));
+    //             HG_ASSERT(!setHas(&set, 12));
+    //             HG_ASSERT(!setHas(&set, 42));
+    //             HG_ASSERT(!setHas(&set, 100000));
+    //
+    //             setAdd(&set, 1);
+    //             HG_ASSERT(set.count == 1);
+    //             HG_ASSERT(setHas(&set, 1));
+    //
+    //             setRemove(&set, 1);
+    //             HG_ASSERT(set.count == 0);
+    //             HG_ASSERT(!setHas(&set, 1));
+    //
+    //             HG_ASSERT(!setHas(&set, 12));
+    //             HG_ASSERT(!setHas(&set, 12 + count));
+    //
+    //             setAdd(&set, 12);
+    //             HG_ASSERT(set.count == 1);
+    //             HG_ASSERT(setHas(&set, 12));
+    //             HG_ASSERT(!setHas(&set, 12 + count));
+    //
+    //             setAdd(&set, 12 + count);
+    //             HG_ASSERT(set.count == 2);
+    //             HG_ASSERT(setHas(&set, 12));
+    //             HG_ASSERT(setHas(&set, 12 + count));
+    //
+    //             setAdd(&set, 12 + count * 2);
+    //             HG_ASSERT(set.count == 3);
+    //             HG_ASSERT(setHas(&set, 12));
+    //             HG_ASSERT(setHas(&set, 12 + count));
+    //             HG_ASSERT(setHas(&set, 12 + count * 2));
+    //
+    //             setRemove(&set, 12);
+    //             HG_ASSERT(set.count == 2);
+    //             HG_ASSERT(!setHas(&set, 12));
+    //             HG_ASSERT(setHas(&set, 12 + count));
+    //
+    //             setAdd(&set, 42);
+    //             HG_ASSERT(set.count == 3);
+    //             HG_ASSERT(setHas(&set, 42));
+    //
+    //             setRemove(&set, 12 + count);
+    //             HG_ASSERT(set.count == 2);
+    //             HG_ASSERT(!setHas(&set, 12));
+    //             HG_ASSERT(!setHas(&set, 12 + count));
+    //
+    //             setRemove(&set, 42);
+    //             HG_ASSERT(set.count == 1);
+    //             HG_ASSERT(!setHas(&set, 42));
+    //
+    //             setRemove(&set, 12 + count * 2);
+    //             HG_ASSERT(set.count == 0);
+    //             HG_ASSERT(!setHas(&set, 12));
+    //             HG_ASSERT(!setHas(&set, 12 + count));
+    //             HG_ASSERT(!setHas(&set, 12 + count * 2));
+    //
+    //             setReset(&set);
+    //         }
+    //     }
+    //
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         using StrHash = u64;
+    //
+    //         Set<StrHash> set = setTemp<StrHash>(arena, 128);
+    //
+    //         StrHash a = hash("a");
+    //         StrHash b = hash("b");
+    //         StrHash ab = hash("ab");
+    //         StrHash scf = hash("supercalifragilisticexpialidocious");
+    //
+    //         HG_ASSERT(!setHas(&set, a));
+    //         HG_ASSERT(!setHas(&set, b));
+    //         HG_ASSERT(!setHas(&set, ab));
+    //         HG_ASSERT(!setHas(&set, scf));
+    //
+    //         setAdd(&set, a);
+    //         setAdd(&set, b);
+    //         setAdd(&set, ab);
+    //         setAdd(&set, scf);
+    //
+    //         HG_ASSERT(setHas(&set, a));
+    //         HG_ASSERT(setHas(&set, b));
+    //         HG_ASSERT(setHas(&set, ab));
+    //         HG_ASSERT(setHas(&set, scf));
+    //
+    //         setRemove(&set, a);
+    //         setRemove(&set, b);
+    //         setRemove(&set, ab);
+    //         setRemove(&set, scf);
+    //
+    //         HG_ASSERT(!setHas(&set, a));
+    //         HG_ASSERT(!setHas(&set, b));
+    //         HG_ASSERT(!setHas(&set, ab));
+    //         HG_ASSERT(!setHas(&set, scf));
+    //     }
+    //
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         Set<const char*> set = setTemp<const char*>(arena, 128);
+    //
+    //         const char* a = "a";
+    //         const char* b = "b";
+    //         const char* ab = "ab";
+    //         const char* scf = "supercalifragilisticexpialidocious";
+    //
+    //         HG_ASSERT(!setHas(&set, a));
+    //         HG_ASSERT(!setHas(&set, b));
+    //         HG_ASSERT(!setHas(&set, ab));
+    //         HG_ASSERT(!setHas(&set, scf));
+    //
+    //         setAdd(&set, a);
+    //         setAdd(&set, b);
+    //         setAdd(&set, ab);
+    //         setAdd(&set, scf);
+    //
+    //         HG_ASSERT(setHas(&set, a));
+    //         HG_ASSERT(setHas(&set, b));
+    //         HG_ASSERT(setHas(&set, ab));
+    //         HG_ASSERT(setHas(&set, scf));
+    //
+    //         setRemove(&set, a);
+    //         setRemove(&set, b);
+    //         setRemove(&set, ab);
+    //         setRemove(&set, scf);
+    //
+    //         HG_ASSERT(!setHas(&set, a));
+    //         HG_ASSERT(!setHas(&set, b));
+    //         HG_ASSERT(!setHas(&set, ab));
+    //         HG_ASSERT(!setHas(&set, scf));
+    //     }
+    //
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         Set<StringBuilder> set = setTemp<StringBuilder>(arena, 128);
+    //
+    //         HG_ASSERT(!setHas(&set, StringBuilder{arena, "a"}));
+    //         HG_ASSERT(!setHas(&set, StringBuilder{arena, "b"}));
+    //         HG_ASSERT(!setHas(&set, StringBuilder{arena, "ab"}));
+    //         HG_ASSERT(!setHas(&set, StringBuilder{arena, "supercalifragilisticexpialidocious"}));
+    //
+    //         setAdd(&set, StringBuilder{arena, "a"});
+    //         setAdd(&set, StringBuilder{arena, "b"});
+    //         setAdd(&set, StringBuilder{arena, "ab"});
+    //         setAdd(&set, StringBuilder{arena, "supercalifragilisticexpialidocious"});
+    //
+    //         HG_ASSERT(setHas(&set, StringBuilder{arena, "a"}));
+    //         HG_ASSERT(setHas(&set, StringBuilder{arena, "b"}));
+    //         HG_ASSERT(setHas(&set, StringBuilder{arena, "ab"}));
+    //         HG_ASSERT(setHas(&set, StringBuilder{arena, "supercalifragilisticexpialidocious"}));
+    //
+    //         setRemove(&set, StringBuilder{arena, "a"});
+    //         setRemove(&set, StringBuilder{arena, "b"});
+    //         setRemove(&set, StringBuilder{arena, "ab"});
+    //         setRemove(&set, StringBuilder{arena, "supercalifragilisticexpialidocious"});
+    //
+    //         HG_ASSERT(!setHas(&set, StringBuilder{arena, "a"}));
+    //         HG_ASSERT(!setHas(&set, StringBuilder{arena, "b"}));
+    //         HG_ASSERT(!setHas(&set, StringBuilder{arena, "ab"}));
+    //         HG_ASSERT(!setHas(&set, StringBuilder{arena, "supercalifragilisticexpialidocious"}));
+    //     }
+    //
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         Set<StringView> set = setTemp<StringView>(arena, 128);
+    //
+    //         HG_ASSERT(!setHas(&set, "a"));
+    //         HG_ASSERT(!setHas(&set, "b"));
+    //         HG_ASSERT(!setHas(&set, "ab"));
+    //         HG_ASSERT(!setHas(&set, "supercalifragilisticexpialidocious"));
+    //
+    //         setAdd(&set, "a");
+    //         setAdd(&set, "b");
+    //         setAdd(&set, "ab");
+    //         setAdd(&set, "supercalifragilisticexpialidocious");
+    //
+    //         HG_ASSERT(setHas(&set, "a"));
+    //         HG_ASSERT(setHas(&set, "b"));
+    //         HG_ASSERT(setHas(&set, "ab"));
+    //         HG_ASSERT(setHas(&set, "supercalifragilisticexpialidocious"));
+    //
+    //         setRemove(&set, "a");
+    //         setRemove(&set, "b");
+    //         setRemove(&set, "ab");
+    //         setRemove(&set, "supercalifragilisticexpialidocious");
+    //
+    //         HG_ASSERT(!setHas(&set, "a"));
+    //         HG_ASSERT(!setHas(&set, "b"));
+    //         HG_ASSERT(!setHas(&set, "ab"));
+    //         HG_ASSERT(!setHas(&set, "supercalifragilisticexpialidocious"));
+    //     }
+    // }
+    //
+    // // Map
+    // {
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         constexpr u32 count = 128;
+    //
+    //         Map<u32, u32> map = mapTemp<u32, u32>(arena, count);
+    //
+    //         for (u32 i = 0; i < 3; ++i)
+    //         {
+    //             HG_ASSERT(map.count == 0);
+    //             HG_ASSERT(mapGet(&map, 0) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 1) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 12) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 42) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 100000) == nullptr);
+    //
+    //             mapAdd(&map, 1, 1);
+    //             HG_ASSERT(map.count == 1);
+    //             HG_ASSERT(mapGet(&map, 1) != nullptr);
+    //             HG_ASSERT(*mapGet(&map, 1) == 1);
+    //
+    //             mapRemove(&map, 1);
+    //             HG_ASSERT(map.count == 0);
+    //             HG_ASSERT(mapGet(&map, 1) == nullptr);
+    //
+    //             HG_ASSERT(mapGet(&map, 12) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
+    //
+    //             mapAdd(&map, 12, 42);
+    //             HG_ASSERT(map.count == 1);
+    //             HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
+    //             HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
+    //
+    //             mapAdd(&map, 12 + count, 100);
+    //             HG_ASSERT(map.count == 2);
+    //             HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
+    //             HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
+    //
+    //             mapAdd(&map, 12 + count * 2, 200);
+    //             HG_ASSERT(map.count == 3);
+    //             HG_ASSERT(mapGet(&map, 12) != nullptr && *mapGet(&map, 12) == 42);
+    //             HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
+    //             HG_ASSERT(mapGet(&map, 12 + count * 2) != nullptr && *mapGet(&map, 12 + count * 2) == 200);
+    //
+    //             mapRemove(&map, 12);
+    //             HG_ASSERT(map.count == 2);
+    //             HG_ASSERT(mapGet(&map, 12) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 12 + count) != nullptr && *mapGet(&map, 12 + count) == 100);
+    //
+    //             mapAdd(&map, 42, 12);
+    //             HG_ASSERT(map.count == 3);
+    //             HG_ASSERT(mapGet(&map, 42) != nullptr && *mapGet(&map, 42) == 12);
+    //
+    //             mapRemove(&map, 12 + count);
+    //             HG_ASSERT(map.count == 2);
+    //             HG_ASSERT(mapGet(&map, 12) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
+    //
+    //             mapRemove(&map, 42);
+    //             HG_ASSERT(map.count == 1);
+    //             HG_ASSERT(mapGet(&map, 42) == nullptr);
+    //
+    //             mapRemove(&map, 12 + count * 2);
+    //             HG_ASSERT(map.count == 0);
+    //             HG_ASSERT(mapGet(&map, 12) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 12 + count) == nullptr);
+    //             HG_ASSERT(mapGet(&map, 12 + count * 2) == nullptr);
+    //
+    //             mapReset(&map);
+    //         }
+    //     }
+    //
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         using StrHash = u64;
+    //
+    //         Map<StrHash, u32> map = mapTemp<StrHash, u32>(arena, 128);
+    //
+    //         StrHash a = hash("a");
+    //         StrHash b = hash("b");
+    //         StrHash ab = hash("ab");
+    //         StrHash scf = hash("supercalifragilisticexpialidocious");
+    //
+    //         HG_ASSERT(mapGet(&map, a) == nullptr);
+    //         HG_ASSERT(mapGet(&map, b) == nullptr);
+    //         HG_ASSERT(mapGet(&map, ab) == nullptr);
+    //         HG_ASSERT(mapGet(&map, scf) == nullptr);
+    //
+    //         mapAdd(&map, a, 1);
+    //         mapAdd(&map, b, 2);
+    //         mapAdd(&map, ab, 3);
+    //         mapAdd(&map, scf, 4);
+    //
+    //         HG_ASSERT(mapGet(&map, a) != nullptr && *mapGet(&map, a) == 1);
+    //         HG_ASSERT(mapGet(&map, b) != nullptr && *mapGet(&map, b) == 2);
+    //         HG_ASSERT(mapGet(&map, ab) != nullptr && *mapGet(&map, ab) == 3);
+    //         HG_ASSERT(mapGet(&map, scf) != nullptr && *mapGet(&map, scf) == 4);
+    //
+    //         mapRemove(&map, a);
+    //         mapRemove(&map, b);
+    //         mapRemove(&map, ab);
+    //         mapRemove(&map, scf);
+    //
+    //         HG_ASSERT(mapGet(&map, a) == nullptr);
+    //         HG_ASSERT(mapGet(&map, b) == nullptr);
+    //         HG_ASSERT(mapGet(&map, ab) == nullptr);
+    //         HG_ASSERT(mapGet(&map, scf) == nullptr);
+    //     }
+    //
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         Map<const char*, u32> map = mapTemp<const char*, u32>(arena, 128);
+    //
+    //         const char* a = "a";
+    //         const char* b = "b";
+    //         const char* ab = "ab";
+    //         const char* scf = "supercalifragilisticexpialidocious";
+    //
+    //         HG_ASSERT(mapGet(&map, a) == nullptr);
+    //         HG_ASSERT(mapGet(&map, b) == nullptr);
+    //         HG_ASSERT(mapGet(&map, ab) == nullptr);
+    //         HG_ASSERT(mapGet(&map, scf) == nullptr);
+    //
+    //         mapAdd(&map, a, 1);
+    //         mapAdd(&map, b, 2);
+    //         mapAdd(&map, ab, 3);
+    //         mapAdd(&map, scf, 4);
+    //
+    //         HG_ASSERT(mapGet(&map, a) != nullptr && *mapGet(&map, a) == 1);
+    //         HG_ASSERT(mapGet(&map, b) != nullptr && *mapGet(&map, b) == 2);
+    //         HG_ASSERT(mapGet(&map, ab) != nullptr && *mapGet(&map, ab) == 3);
+    //         HG_ASSERT(mapGet(&map, scf) != nullptr && *mapGet(&map, scf) == 4);
+    //
+    //         mapRemove(&map, a);
+    //         mapRemove(&map, b);
+    //         mapRemove(&map, ab);
+    //         mapRemove(&map, scf);
+    //
+    //         HG_ASSERT(mapGet(&map, a) == nullptr);
+    //         HG_ASSERT(mapGet(&map, b) == nullptr);
+    //         HG_ASSERT(mapGet(&map, ab) == nullptr);
+    //         HG_ASSERT(mapGet(&map, scf) == nullptr);
+    //     }
+    //
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         Map<StringBuilder, u32> map = mapTemp<StringBuilder, u32>(arena, 128);
+    //
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "a"}) == nullptr);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "b"}) == nullptr);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "ab"}) == nullptr);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "supercalifragilisticexpialidocious"}) == nullptr);
+    //
+    //         mapAdd(&map, StringBuilder{arena, "a"}, 1);
+    //         mapAdd(&map, StringBuilder{arena, "b"}, 2);
+    //         mapAdd(&map, StringBuilder{arena, "ab"}, 3);
+    //         mapAdd(&map, StringBuilder{arena, "supercalifragilisticexpialidocious"}, 4);
+    //
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "a"}) != nullptr);
+    //         HG_ASSERT(*mapGet(&map, StringBuilder{arena, "a"}) == 1);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "b"}) != nullptr);
+    //         HG_ASSERT(*mapGet(&map, StringBuilder{arena, "b"}) == 2);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "ab"}) != nullptr);
+    //         HG_ASSERT(*mapGet(&map, StringBuilder{arena, "ab"}) == 3);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "supercalifragilisticexpialidocious"}) != nullptr);
+    //         HG_ASSERT(*mapGet(&map, StringBuilder{arena, "supercalifragilisticexpialidocious"}) == 4);
+    //
+    //         mapRemove(&map, StringBuilder{arena, "a"});
+    //         mapRemove(&map, StringBuilder{arena, "b"});
+    //         mapRemove(&map, StringBuilder{arena, "ab"});
+    //         mapRemove(&map, StringBuilder{arena, "supercalifragilisticexpialidocious"});
+    //
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "a"}) == nullptr);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "b"}) == nullptr);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "ab"}) == nullptr);
+    //         HG_ASSERT(mapGet(&map, StringBuilder{arena, "supercalifragilisticexpialidocious"}) == nullptr);
+    //     }
+    //
+    //     {
+    //         ArenaScope arena = getScratch();
+    //
+    //         Map<StringView, u32> map = mapTemp<StringView, u32>(arena, 6);
+    //
+    //         HG_ASSERT(mapGet(&map, "a") == nullptr);
+    //         HG_ASSERT(mapGet(&map, "b") == nullptr);
+    //         HG_ASSERT(mapGet(&map, "ab") == nullptr);
+    //         HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
+    //
+    //         mapAdd(&map, "a", 1);
+    //         mapAdd(&map, "b", 2);
+    //         mapAdd(&map, "ab", 3);
+    //         mapAdd(&map, "supercalifragilisticexpialidocious", 4);
+    //
+    //         HG_ASSERT(mapGet(&map, "a") != nullptr);
+    //         HG_ASSERT(*mapGet(&map, "a") == 1);
+    //         HG_ASSERT(mapGet(&map, "b") != nullptr);
+    //         HG_ASSERT(*mapGet(&map, "b") == 2);
+    //         HG_ASSERT(mapGet(&map, "ab") != nullptr);
+    //         HG_ASSERT(*mapGet(&map, "ab") == 3);
+    //         HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") != nullptr);
+    //         HG_ASSERT(*mapGet(&map, "supercalifragilisticexpialidocious") == 4);
+    //
+    //         mapRemove(&map, "a");
+    //         mapRemove(&map, "b");
+    //         mapRemove(&map, "ab");
+    //         mapRemove(&map, "supercalifragilisticexpialidocious");
+    //
+    //         HG_ASSERT(mapGet(&map, "a") == nullptr);
+    //         HG_ASSERT(mapGet(&map, "b") == nullptr);
+    //         HG_ASSERT(mapGet(&map, "ab") == nullptr);
+    //         HG_ASSERT(mapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
+    //     }
+    // }
 
     // Pool
     {

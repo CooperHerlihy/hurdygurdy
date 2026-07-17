@@ -294,8 +294,8 @@ void drawEditorEntity(Arena* frame, Entity e)
     }
     else
     {
-        StringBuilder nameStr = stringCopy(frame, "ID ");
-        stringAppend(frame, &nameStr, integerToString(frame, static_cast<i64>(handleIdx(e.handle))));
+        StringBuilder nameStr{frame, "ID "};
+        nameStr.append(integerToString(frame, static_cast<i64>(handleIdx(e.handle))));
         name = cString(frame, nameStr);
     }
 

@@ -72,8 +72,8 @@ hurdygurdy.hpp is large, grep for these sections
     - Geometry 2D
     - Geometry 3D
     - Noise & RNG
-- Binary Builder
-- String Utilities
+- Binary
+- String
 - Serialization
 - Containers
 - Asset System

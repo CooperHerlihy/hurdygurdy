@@ -1212,7 +1212,7 @@ bool internal::initGpu()
     vk.views = poolCreate<GpuView>();
     vk.pipelines = poolCreate<GpuPipeline>();
 
-    vk.samplers = mapCreate<SamplerInfo, VkSampler>(
+    vk.samplers = Map<SamplerInfo, VkSampler>(
         2 *
         GpuFilter_count *
         GpuSamplerEdgeMode_count *
@@ -1257,11 +1257,11 @@ void internal::deinitGpu()
     }
     heapFree(vk.frames, vk.frameCount);
 
-    mapForEach(&vk.samplers, [](SamplerInfo*, VkSampler* sampler)
+    vk.samplers.forEach([](SamplerInfo*, VkSampler* sampler)
     {
         vkDestroySampler(vk.device, *sampler, nullptr);
     });
-    mapDestroy(&vk.samplers);
+    vk.samplers = {};
 
     poolDestroy(&vk.pipelines);
     poolDestroy(&vk.views);
@@ -1652,10 +1652,10 @@ static VkSampler samplerGet(
     GpuSamplerBorder borderColor = GpuSamplerBorder_floatTransparentBlack)
 {
     SamplerInfo desc = {filter, addressMode, borderColor};
-    VkSampler* sampler = mapGet(&vk.samplers, desc);
+    VkSampler* sampler = vk.samplers.get(desc);
     if (sampler == nullptr)
     {
-        sampler = mapAdd(&vk.samplers, desc, samplerCreate(&desc));
+        sampler = vk.samplers.add(desc, samplerCreate(&desc));
     }
     return *sampler;
 }
@@ -3235,12 +3235,12 @@ static WindowState windowState{};
 void internal::initWindowing()
 {
     windowState.pool = poolCreate<Window>();
-    windowState.ids = mapCreate<SDL_WindowID, Window*>();
+    windowState.ids = Map<SDL_WindowID, Window*>();
 }
 
 void internal::deinitWindowing()
 {
-    mapDestroy(&windowState.ids);
+    windowState.ids = {};
     poolDestroy(&windowState.pool);
 }
 
@@ -3331,7 +3331,7 @@ Window* windowCreate(StringView title, u32 width, u32 height, const WindowConfig
         goto surfaceFailed;
     }
 
-    mapAdd(&windowState.ids, SDL_GetWindowID(window->sdlWindow), window);
+    windowState.ids.add(SDL_GetWindowID(window->sdlWindow), window);
 
     SDL_GetWindowSize(window->sdlWindow, reinterpret_cast<int*>(&window->width), reinterpret_cast<int*>(&window->height));
 
@@ -3380,7 +3380,7 @@ void windowDestroy(Window* window)
     arrayDestroy(&window->views);
     arrayDestroy(&window->images);
 
-    mapRemove(&windowState.ids, SDL_GetWindowID(window->sdlWindow));
+    windowState.ids.remove(SDL_GetWindowID(window->sdlWindow));
 
     vkDestroySurfaceKHR(vk.instance, window->surface, nullptr);
     SDL_DestroyWindow(window->sdlWindow);
@@ -3641,7 +3641,7 @@ void processEvents()
     windowState.mouseDX = 0;
     windowState.mouseDY = 0;
 
-    mapForEach(&windowState.ids, [&](SDL_WindowID*, Window** window)
+    windowState.ids.forEach([&](SDL_WindowID*, Window** window)
     {
         (*window)->events.count = 0;
     });
@@ -3659,7 +3659,7 @@ void processEvents()
                 break;
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             {
-                Window** window = mapGet(&windowState.ids, event.window.windowID);
+                Window** window = windowState.ids.get(event.window.windowID);
                 if (window != nullptr)
                     (*window)->wasClosed = true;
             } break;
@@ -3667,7 +3667,7 @@ void processEvents()
             case SDL_EVENT_WINDOW_RESTORED: [[fallthrough]];
             case SDL_EVENT_WINDOW_RESIZED:
             {
-                Window** window = mapGet(&windowState.ids, event.window.windowID);
+                Window** window = windowState.ids.get(event.window.windowID);
                 if (window != nullptr)
                 {
                     SDL_GetWindowSize((*window)->sdlWindow, reinterpret_cast<int*>(&(*window)->width), reinterpret_cast<int*>(&(*window)->height));
@@ -3676,7 +3676,7 @@ void processEvents()
             } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
-                Window** window = mapGet(&windowState.ids, event.button.windowID);
+                Window** window = windowState.ids.get(event.button.windowID);
                 if (window != nullptr)
                 {
                     (*window)->mouseX = event.motion.x;
@@ -3688,7 +3688,7 @@ void processEvents()
             case SDL_EVENT_KEY_DOWN:
             {
                 Button key = sdlKeycodeToHgButton(event.key.key);
-                Window** window = mapGet(&windowState.ids, event.key.windowID);
+                Window** window = windowState.ids.get(event.key.windowID);
                 if (window != nullptr)
                 {
                     WindowEvent windowEvent{};
@@ -3702,7 +3702,7 @@ void processEvents()
             case SDL_EVENT_KEY_UP:
             {
                 Button key = sdlKeycodeToHgButton(event.key.key);
-                Window** window = mapGet(&windowState.ids, event.key.windowID);
+                Window** window = windowState.ids.get(event.key.windowID);
                 if (window != nullptr)
                 {
                     WindowEvent windowEvent{};
@@ -3716,7 +3716,7 @@ void processEvents()
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 Button key = sdlButtonToHgButton(event.button.button);
-                Window** window = mapGet(&windowState.ids, event.button.windowID);
+                Window** window = windowState.ids.get(event.button.windowID);
                 if (window != nullptr)
                 {
                     WindowEvent windowEvent{};
@@ -3730,7 +3730,7 @@ void processEvents()
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
                 Button key = sdlButtonToHgButton(event.button.button);
-                Window** window = mapGet(&windowState.ids, event.button.windowID);
+                Window** window = windowState.ids.get(event.button.windowID);
                 if (window != nullptr)
                 {
                     WindowEvent windowEvent{};

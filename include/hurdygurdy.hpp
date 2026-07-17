@@ -33,6 +33,7 @@
 #include <cstdio>
 
 #include <algorithm>
+#include <concepts>
 #include <utility>
 #include <type_traits>
 
@@ -452,7 +453,8 @@ struct StringView {
      *
      * Potentially dangerous, c string should be at most 4096 chars
      */
-    constexpr StringView(const char* cStr) : chars{cStr}, length{0}
+    constexpr StringView(const char* cStr)
+        : chars{cStr}, length{0}
     {
         if (cStr != nullptr)
         {
@@ -530,6 +532,7 @@ struct Span {
      */
     T& operator[](u32 idx) const
     {
+        HG_ASSERT(values != nullptr);
         HG_ASSERT(idx < count);
         return values[idx];
     }
@@ -998,39 +1001,6 @@ struct ArenaScope {
     }
 
     /**
-     * Move construct
-     */
-    ArenaScope(ArenaScope&& other) noexcept
-    {
-        arena = other.arena;
-        head = other.head;
-        other.arena = nullptr;
-        other.head = 0;
-    }
-
-    /**
-     * Move assign
-     */
-    ArenaScope& operator=(ArenaScope&& other) noexcept
-    {
-        if (this != &other)
-        {
-            if (arena != nullptr)
-                arena->head = head;
-
-            arena = other.arena;
-            head = other.head;
-
-            other.arena = nullptr;
-            other.head = 0;
-        }
-        return *this;
-    }
-
-    ArenaScope(const ArenaScope&) = delete;
-    ArenaScope& operator=(const ArenaScope&) = delete;
-
-    /**
      * Allocates memory
      *
      * Parameters
@@ -1117,6 +1087,30 @@ struct ArenaScope {
     {
         return arena->canExtend(allocation, count);
     }
+
+    /**
+     * Move construct
+     */
+    ArenaScope(ArenaScope&& other) noexcept
+        : arena{std::exchange(other.arena, nullptr)}
+        , head{std::exchange(other.head, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    ArenaScope& operator=(ArenaScope&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~ArenaScope();
+            new (this) ArenaScope{std::move(other)};
+        }
+        return *this;
+    }
+
+    ArenaScope(const ArenaScope&) = delete;
+    ArenaScope& operator=(const ArenaScope&) = delete;
 };
 
 /**
@@ -4447,7 +4441,7 @@ u32 rngNext(Rng* rng);
 u64 rngNext64(Rng* rng);
 
 // ============================================================================
-// Binary Builder
+// Binary
 // ============================================================================
 
 /**
@@ -4479,6 +4473,14 @@ struct BinaryBuilder {
         : arena{arenaVal}, size{sizeVal}
     {
         data = arena->alloc(sizeVal, 1);
+    }
+
+    /**
+     * Implicitly convert to Binary
+     */
+    constexpr operator BinaryView()
+    {
+        return {data, size};
     }
 
     /**
@@ -4550,14 +4552,6 @@ struct BinaryBuilder {
     {
         append(&src, sizeof(T));
     }
-
-    /**
-     * Implicitly convert to Binary
-     */
-    constexpr operator BinaryView()
-    {
-        return {data, size};
-    }
 };
 
 /**
@@ -4624,10 +4618,9 @@ struct Binary {
      * Move construct
      */
     Binary(Binary&& other) noexcept
-    {
-        data = std::exchange(other.data, nullptr);
-        size = std::exchange(other.size, 0);
-    }
+        : data{std::exchange(other.data, nullptr)}
+        , size{std::exchange(other.size, 0)}
+    {}
 
     /**
      * Move assign
@@ -4636,10 +4629,8 @@ struct Binary {
     {
         if (this != &other)
         {
-            if (data != nullptr)
-                heapFree(data, size);
-            data = std::exchange(other.data, nullptr);
-            size = std::exchange(other.size, 0);
+            this->~Binary();
+            new (this) Binary{std::move(other)};
         }
         return *this;
     }
@@ -4649,7 +4640,7 @@ struct Binary {
 };
 
 // ============================================================================
-// String Utilities
+// String
 // ============================================================================
 
 /**
@@ -4678,19 +4669,13 @@ inline bool operator!=(StringView lhs, StringView rhs)
 char* cString(Arena* arena, StringView str);
 
 /**
- * Create a new owning string
- */
-StringView stringCreate(StringView data);
-
-/**
- * Destroy an owning string
- */
-void stringDestroy(StringView* str);
-
-/**
- * A string builder using arenas
+ * A string builder
  */
 struct StringBuilder {
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
     /**
      * The string data
      */
@@ -4699,6 +4684,29 @@ struct StringBuilder {
      * The number of characters currently in the string
      */
     u64 length = 0;
+
+    /**
+     * Construct empty
+     */
+    StringBuilder() noexcept = default;
+
+    /**
+     * Construct a new builder
+     */
+    StringBuilder(Arena* arenaVal, StringView str = "")
+        : arena{arenaVal} , chars{arenaVal->alloc<char>(str.length)} , length{str.length}
+    {
+        if (str != "")
+            memCopy(chars, str.chars, str.length);
+    }
+
+    /**
+     * Implicit converts to a string view
+     */
+    constexpr operator StringView() const
+    {
+        return {chars, length};
+    }
 
     /**
      * Access using the index operator
@@ -4710,12 +4718,50 @@ struct StringBuilder {
     }
 
     /**
-     * Implicit converts to a string view
+     * Insert a string at idx
      */
-    constexpr operator StringView() const
+    void insert(u64 idx, StringView src);
+
+    /**
+     * Add a string to the end
+     */
+    void append(StringView src)
     {
-        return {chars, length};
+        insert(length - 1, src);
     }
+
+    /**
+     * Insert a string at the beginning
+     */
+    void prepend(StringView src)
+    {
+        insert(0, src);
+    }
+
+    /**
+     * Insert a char at idx
+     */
+    void insert(u64 idx, char c)
+    {
+        insert(idx, {&c, 1});
+    }
+
+    /**
+     * Add a char to the end
+     */
+    void append(char c)
+    {
+        insert(length - 1, c);
+    }
+
+    /**
+     * Insert a char at the beginning
+     */
+    void prepend(char c)
+    {
+        insert(0, c);
+    }
+
 };
 
 /**
@@ -4735,76 +4781,10 @@ inline bool operator!=(const StringBuilder& lhs, const StringBuilder& rhs)
 }
 
 /**
- * Creates a new string copied from an existing string
- *
- * Parameters
- * - arena The arena to allocate from
- * - init The initial string to copy from
- */
-StringBuilder stringCopy(Arena* arena, StringView str);
-
-/**
  * Create a formatted string : TODO
  */
 // template<typename... Ts>
 // StringBuilder stringFormat(Arena* arena, String fmt, Ts... args);
-
-/**
- * Copies another string into the string at index
- *
- * Parameters
- * - arena The arena to allocate from
- * - dst The string to insert into
- * - idx The index into dst
- * - src The string to copy from
- */
-void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, StringView src);
-
-/**
- * Copies another string to the end of the string
- */
-inline void stringAppend(Arena* arena, StringBuilder* dst, StringView src)
-{
-    stringInsert(arena, dst, dst->length, src);
-}
-
-/**
- * Copies another string to the beginning of the string
- */
-inline void stringPrepend(Arena* arena, StringBuilder* dst, StringView src)
-{
-    stringInsert(arena, dst, 0, src);
-}
-
-/**
- * Copies a character into the string at index
- *
- * Parameters
- * - arena The arena to allocate from
- * - dst The string to insert into
- * - idx The index into dst
- * - c The character to insert
- */
-inline void stringInsertC(Arena* arena, StringBuilder* dst, u64 idx, char c)
-{
-    stringInsert(arena, dst, idx, {&c, 1});
-}
-
-/**
- * Copies another string to the end of the string
- */
-inline void stringAppendC(Arena* arena, StringBuilder* dst, char c)
-{
-    stringInsertC(arena, dst, dst->length, c);
-}
-
-/**
- * Copies another string to the beginning of the string
- */
-inline void stringPrependC(Arena* arena, StringBuilder* dst, char c)
-{
-    stringInsertC(arena, dst, 0, c);
-}
 
 /**
  * Check whether a character is whitespace (space, tab, or newline)
@@ -4857,6 +4837,90 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
+
+/**
+ * An owning string
+ */
+struct String {
+    /**
+     * The string data
+     */
+    char* chars = nullptr;
+    /**
+     * The number of characters currently in the string
+     */
+    u64 length = 0;
+
+    /**
+     * Construct empty
+     */
+    String() noexcept = default;
+
+    /**
+     * Create a new string from data
+     */
+    static String create(StringView data)
+    {
+        String str;
+        str.chars = heapAlloc<char>(data.length);
+        str.length = data.length;
+        memCopy(&str.chars, &data.chars, data.length);
+        return str;
+    }
+
+    /**
+     * Destroy the string
+     */
+    ~String() noexcept
+    {
+        if (chars != nullptr)
+            heapFree(chars, length);
+    }
+
+    /**
+     * Implicit converts to a string view
+     */
+    constexpr operator StringView() const
+    {
+        return {chars, length};
+    }
+
+    /**
+     * Access using the index operator
+     */
+    constexpr char& operator[](u64 index) const
+    {
+        HG_ASSERT(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Move construct
+     */
+    String(String&& other) noexcept
+    {
+        chars = std::exchange(other.chars, nullptr);
+        length = std::exchange(other.length, 0);
+    }
+
+    /**
+     * Move assign
+     */
+    String& operator=(String&& other) noexcept
+    {
+        if (this != &other)
+        {
+            if (chars != nullptr)
+                heapFree(chars, length);
+            chars = std::exchange(other.chars, nullptr);
+            length = std::exchange(other.length, 0);
+        }
+        return *this;
+    }
+
+    String(const String&) = delete;
+    String& operator=(const String&) = delete;
+};
 
 // ============================================================================
 // Serialization
@@ -5024,13 +5088,7 @@ void serialize(Serializer* s, Binary* val);
  * String serialization
  */
 template<>
-void serialize(Serializer* s, StringView* val);
-
-/**
- * StringBuilder serialization
- */
-template<>
-void serialize(Serializer* s, StringBuilder* val);
+void serialize(Serializer* s, String* val);
 
 /**
  * u8 serialization
@@ -5571,19 +5629,91 @@ struct Set {
     /**
      * Whether each index has a value
      */
-    bool* hasVal;
+    bool* hasVal = nullptr;
     /**
      * Where the values are stored;
      */
-    V* vals;
+    V* vals = nullptr;
     /**
      * The max number of vals
      */
-    u32 capacity;
+    u32 capacity = 0;
     /**
      * The current number of values that are stored
      */
-    u32 count;
+    u32 count = 0;
+
+    /**
+     * Construct empty
+     */
+    Set() noexcept = default;
+
+    /**
+     * Destroy the set
+     */
+    ~Set() noexcept;
+
+    /**
+     * Construct with capacity
+     */
+    Set(u32 initCapacity);
+
+    /**
+     * Remove all elements
+     */
+    void reset();
+
+    /**
+     * Change the capacity, must be greater than count
+     */
+    void resize(u32 newCapacity);
+
+    /**
+     * Add a value to the set
+     */
+    void add(V val);
+
+    /**
+     * Remove a value from the set
+     */
+    void remove(const V& val);
+
+    /**
+     * Returns whether a value is contained in the set
+     */
+    bool has(const V& val);
+
+    /**
+     * Calls a function for each value in the hash set
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, V*>
+    void forEach(F fn);
+
+    /**
+     * Move construct
+     */
+    Set(Set&& other) noexcept
+        : hasVal{std::exchange(other.hasVal, nullptr)}
+        , vals{std::exchange(other.vals, nullptr)}
+        , capacity{std::exchange(other.capacity, 0)}
+        , count{std::exchange(other.count, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    Set& operator=(Set&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Set();
+            new (this) Set{std::move(other)};
+        }
+        return *this;
+    }
+
+    Set(const Set&) = delete;
+    Set& operator=(const Set&) = delete;
 };
 
 /**
@@ -5593,65 +5723,104 @@ template<typename V>
 void serialize(Serializer* s, Set<V>* set);
 
 /**
- * Creates a new hash set
- *
- * Parameters
- * - slotCount The max number of slots to store values in
+ * A hash set using an arena
  */
 template<typename V>
-Set<V> setCreate(u32 slotCount);
+struct SetTemp {
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+    /**
+     * Whether each index has a value
+     */
+    bool* hasVal = nullptr;
+    /**
+     * Where the values are stored;
+     */
+    V* vals = nullptr;
+    /**
+     * The max number of vals
+     */
+    u32 capacity = 0;
+    /**
+     * The current number of values that are stored
+     */
+    u32 count = 0;
 
-/**
- * Destroy a hash set
- */
-template<typename V>
-void setDestroy(Set<V>* set);
+    /**
+     * Construct empty
+     */
+    SetTemp() noexcept = default;
 
-/**
- * Create a new hash set which need not be destroyed, but cannot be resized
- *
- * Parameters
- * - arena The arena to allocate from
- * - slotCount The max number of slots to store values in
- */
-template<typename V>
-Set<V> setTemp(Arena* arena, u32 slotCount);
+    /**
+     * Destroy the set
+     */
+    ~SetTemp() noexcept;
 
-/**
- * Resize the set
- */
-template<typename V>
-void setResize(Set<V>* set, u32 newSize);
+    /**
+     * Construct with capacity
+     */
+    SetTemp(Arena* arenaVal, u32 initCapacity);
 
-/**
- * Empty all slots
- */
-template<typename V>
-void setReset(Set<V>* set);
+    /**
+     * Remove all elements
+     */
+    void reset();
 
-/**
- * Add a value to the set
- */
-template<typename V, typename T = V> requires std::is_convertible_v<T, V>
-void setAdd(Set<V>* set, const T& val);
+    /**
+     * Change the capacity, must be greater than or equal to count
+     */
+    void resize(u32 newCapacity);
 
-/**
- * Remove a value from the set
- */
-template<typename V, typename T = V> requires std::is_convertible_v<T, V>
-void setRemove(Set<V>* set, const T& val);
+    /**
+     * Add a value to the set
+     */
+    void add(V val);
 
-/**
- * Check whether a value is contained in the set
- */
-template<typename V, typename T = V> requires std::is_convertible_v<T, V>
-bool setHas(const Set<V>* set, const T& val);
+    /**
+     * Remove a value from the set
+     */
+    void remove(const V& val);
 
-/**
- * Calls a function for each value in the hash map
- */
-template<typename V, typename F> requires std::is_invocable_r_v<void, F, V*>
-void setForEach(Set<V>* set, F fn);
+    /**
+     * Returns whether a value is contained in the set
+     */
+    bool has(const V& val);
+
+    /**
+     * Calls a function for each value in the hash map
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, V*>
+    void forEach(F fn);
+
+    /**
+     * Move construct
+     */
+    SetTemp(SetTemp&& other) noexcept
+        : arena{std::exchange(other.arena, nullptr)}
+        , hasVal{std::exchange(other.hasVal, nullptr)}
+        , vals{std::exchange(other.vals, nullptr)}
+        , capacity{std::exchange(other.capacity, 0)}
+        , count{std::exchange(other.count, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    SetTemp& operator=(SetTemp&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~SetTemp();
+            new (this) SetTemp{std::move(other)};
+        }
+        return *this;
+    }
+
+    SetTemp(const SetTemp&) = delete;
+    SetTemp& operator=(const SetTemp&) = delete;
+};
 
 /**
  * A key-value hash map
@@ -5661,23 +5830,108 @@ struct Map {
     /**
      * Whether each index has a value
      */
-    bool* hasVal;
+    bool* hasVal = nullptr;
     /**
      * Where the keys are stored;
      */
-    K* keys;
+    K* keys = nullptr;
     /**
      * Where the values are stored
      */
-    V* vals;
+    V* vals = nullptr;
     /**
      * The max number of key value pairs
      */
-    u32 capacity;
+    u32 capacity = 0;
     /**
      * The current number of values that are stored
      */
-    u32 count;
+    u32 count = 0;
+
+    /**
+     * Construct empty
+     */
+    Map() noexcept = default;
+
+    /**
+     * Destroy the Map
+     */
+    ~Map() noexcept;
+
+    /**
+     * Construct with capacity
+     */
+    Map(u32 initCapacity);
+
+    /**
+     * Remove all elements
+     */
+    void reset();
+
+    /**
+     * Change the capacity
+     */
+    void resize(u32 newCapacity);
+
+    /**
+     * Add a key-value pair
+     */
+    V* add(K key, V val);
+
+    /**
+     * Remove a key-value pair
+     *
+     * Parameters
+     * - key The key of the pair to remove
+     * - val A pointer to store the value, if found
+     *
+     * Returns
+     * - Whether a key-value pair was found
+     */
+    bool remove(const K& key, V* val = nullptr);
+
+    /**
+     * Returns whether the key is contained in the map
+     */
+    bool has(const K& key);
+
+    /**
+     * Returns a pointer to the value at key, or nullptr if it does not exist
+     */
+    V* get(const K& key);
+
+    /**
+     * Calls a function for each value in the hash map
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, K*, V*>
+    void forEach(F fn);
+
+    /**
+     * Move construct
+     */
+    Map(Map&& other) noexcept
+        : hasVal{std::exchange(other.hasVal, nullptr)}
+        , keys{std::exchange(other.keys, nullptr)}
+        , vals{std::exchange(other.vals, nullptr)}
+        , capacity{std::exchange(other.capacity, 0)}
+        , count{std::exchange(other.count, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    Map& operator=(Map&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Map();
+            new (this) Map{std::move(other)};
+        }
+        return *this;
+    }
+
+    Map(const Map&) = delete;
+    Map& operator=(const Map&) = delete;
 };
 
 /**
@@ -5687,82 +5941,121 @@ template<typename K, typename V>
 void serialize(Serializer* s, Map<K, V>* set);
 
 /**
- * Create a new hash map
- *
- * Parameters
- * - slotCount The max number of slots to store values in
+ * A key-value hash map using an arena
  */
 template<typename K, typename V>
-Map<K, V> mapCreate(u32 slotCount = 1024);
+struct MapTemp {
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+    /**
+     * Whether each index has a value
+     */
+    bool* hasVal = nullptr;
+    /**
+     * Where the keys are stored;
+     */
+    K* keys = nullptr;
+    /**
+     * Where the values are stored
+     */
+    V* vals = nullptr;
+    /**
+     * The max number of key value pairs
+     */
+    u32 capacity = 0;
+    /**
+     * The current number of values that are stored
+     */
+    u32 count = 0;
 
-/**
- * Destroy a hash map
- */
-template<typename K, typename V>
-void mapDestroy(Map<K, V>* map);
+    /**
+     * Construct empty
+     */
+    MapTemp() noexcept = default;
 
-/**
- * Create a new hash map which need not be destroyed, but cannot be resized
- *
- * Parameters
- * - arena The arena to allocate from
- * - slotCount The max number of slots to store values in
- */
-template<typename K, typename V>
-Map<K, V> mapTemp(Arena* arena, u32 slotCount);
+    /**
+     * Destroy the map
+     */
+    ~MapTemp() noexcept;
 
-/**
- * Resize a hash map
- */
-template<typename K, typename V>
-void mapResize(Map<K, V>* map, u32 newSize);
+    /**
+     * Construct with capacity
+     */
+    MapTemp(Arena* arenaVal, u32 initCapacity);
 
-/**
- * Empties all slots
- */
-template<typename K, typename V>
-void mapReset(Map<K, V>* map);
+    /**
+     * Remove all elements
+     */
+    void reset();
 
-/**
- * Add a key-value pair to the hash map
- *
- * Parameters
- * - key The key to add
- *
- * Returns
- * - A reference to the added value
- */
-template<typename K, typename V, typename T = K, typename U = V>
-    requires std::is_convertible_v<T, K> && std::is_convertible_v<U, V>
-V* mapAdd(Map<K, V>* map, const T& key, const U& val);
+    /**
+     * Change the capacity
+     */
+    void resize(u32 newCapacity);
 
-/**
- * Remove a key-value pair from the hash map, and stores it
- *
- * Parameters
- * - key The key to remove
- * - val A pointer to store the value, if found
- *
- * Returns
- * - Whether a value was found and stored in value
- */
-template<typename K, typename V, typename T> requires std::is_convertible_v<T, K>
-bool mapRemove(Map<K, V>* map, const T& key, V* val = nullptr);
+    /**
+     * Add a key-value pair
+     */
+    V* add(K key, V val);
 
-/**
- * Gets the value stored at a key
- *
- * Returns
- * - A pointer to the value, or nullptr if it does not exist
- */
-template<typename K, typename V, typename T = K> requires std::is_convertible_v<T, K>
-V* mapGet(const Map<K, V>* map, const T& key);
+    /**
+     * Remove a key-value pair
+     *
+     * Parameters
+     * - key The key of the pair to remove
+     * - val A pointer to store the value, if found
+     *
+     * Returns
+     * - Whether a key-value pair was found
+     */
+    bool remove(const K& key, V* val = nullptr);
 
-/**
- * Calls a function for each value in the hash map
- */
-template<typename K, typename V, typename F> requires std::is_invocable_r_v<void, F, K*, V*>
-void mapForEach(Map<K, V>* map, F fn);
+    /**
+     * Returns whether the key is contained in the map
+     */
+    bool has(const K& key);
+
+    /**
+     * Returns a pointer to the value at key, or nullptr if it does not exist
+     */
+    V* get(const K& key);
+
+    /**
+     * Calls a function for each value in the hash map
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, K*, V*>
+    void forEach(F fn);
+
+    /**
+     * Move construct
+     */
+    MapTemp(MapTemp&& other) noexcept
+        : arena{std::exchange(other.arena, nullptr)}
+        , hasVal{std::exchange(other.hasVal, nullptr)}
+        , keys{std::exchange(other.keys, nullptr)}
+        , vals{std::exchange(other.vals, nullptr)}
+        , capacity{std::exchange(other.capacity, 0)}
+        , count{std::exchange(other.count, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    MapTemp& operator=(MapTemp&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~MapTemp();
+            new (this) MapTemp{std::move(other)};
+        }
+        return *this;
+    }
+
+    MapTemp(const MapTemp&) = delete;
+    MapTemp& operator=(const MapTemp&) = delete;
+};
 
 /**
  * Hash map hashing for u8
@@ -6107,7 +6400,7 @@ struct Asset {
     /**
      * The unique path for caching
      */
-    StringView path;
+    String path;
 };
 
 /**
@@ -7577,7 +7870,7 @@ struct Component {
     /**
      * The name of the component type
      */
-    StringView name = {};
+    String name = {};
     /**
      * The component lookup from entity index
      */
@@ -8466,16 +8759,8 @@ Maybe<T>& Maybe<T>::operator=(Maybe&& other) noexcept
 {
     if (this != &other)
     {
-        if (has)
-            val.~T();
-
-        if (other.has)
-            new (&val) T{std::move(other.val)};
-        has = other.has;
-
-        if (other.has)
-            other.val.~T();
-        other.has = false;
+        this->~Maybe();
+        new (this) Maybe{std::move(other)};
     }
     return *this;
 }
@@ -8741,16 +9026,147 @@ T queuePopBack(Queue<T>* queue)
 }
 
 template<typename V>
+Set<V>::Set(u32 initCapacity)
+    : hasVal{heapAlloc<bool>(initCapacity)}
+    , vals{headAlloc<V>(initCapacity)}
+    , capacity{initCapacity}
+    , count{0}
+{
+    reset();
+}
+
+template<typename V>
+Set<V>::~Set() noexcept
+{
+    forEach([&](V* val)
+    {
+        val->~V();
+    });
+    heapFree(hasVal, capacity);
+    heapFree(vals, capacity);
+}
+
+template<typename V>
+void Set<V>::resize(u32 newSize)
+{
+    HG_ASSERT(newSize > count);
+    if (newSize == capacity)
+        return;
+
+    Set<V> newSet{newSize};
+
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
+            setAdd(&newSet, std::move(vals[i]));
+    }
+
+    *this = std::move(newSet);
+}
+
+template<typename V>
+void Set<V>::reset()
+{
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
+        {
+            vals[i].~V();
+            hasVal[i] = false;
+        }
+    }
+    count = 0;
+}
+
+template<typename V>
+void Set<V>::add(V val)
+{
+    if (capacity / 2 > count)
+        resize(capacity == 0 ? 128 : capacity * 2);
+
+    u32 idx = static_cast<u32>(hash(val) % capacity);
+    for (u32 dist = 0; hasVal[idx] && !(vals[idx] == val); ++dist)
+    {
+        u32 otherDist = static_cast<u32>(hash(vals[idx]) % capacity) - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
+
+        if (otherDist < dist)
+        {
+            std::swap(val, vals[idx]);
+            dist = otherDist;
+        }
+
+        idx = (idx + 1) % capacity;
+    }
+
+    new (vals + idx) V{std::move(val)};
+    hasVal[idx] = true;
+    ++count;
+}
+
+template<typename V>
+void Set<V>::remove(const V& val)
+{
+    u32 idx = static_cast<u32>(hash(val) % capacity);
+    while (hasVal[idx])
+    {
+        if (vals[idx] == val)
+            break;
+        idx = (idx + 1) % capacity;
+    }
+    if (!hasVal[idx])
+        return;
+
+    u32 next = (idx + 1) % capacity;
+    while (hasVal[next])
+    {
+        if (hash(vals[next]) % capacity != next)
+        {
+            vals[idx] = std::move(vals[next]);
+            idx = next;
+        }
+        next = (next + 1) % capacity;
+    }
+
+    vals[idx].~V();
+    hasVal[idx] = false;
+    --count;
+}
+
+template<typename V>
+bool Set<V>::has(const V& val)
+{
+    for (u32 idx = static_cast<u32>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
+    {
+        if (vals[idx] == val)
+            return true;
+    }
+    return false;
+}
+
+template<typename V>
+template<typename F> requires std::is_invocable_r_v<void, F, V*>
+void Set<V>::forEach(F fn)
+{
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
+            fn(vals + i);
+    }
+}
+
+template<typename V>
 void serialize(Serializer* s, Set<V>* set)
 {
     serializeBegin(s);
 
-    serialize(s, &set->count);
     serialize(s, &set->capacity);
+    serialize(s, &set->count);
 
     if (s->writing)
     {
-        setForEach(set, [&](V* val)
+        set->forEach([&](V* val)
         {
             serialize(s, val);
         });
@@ -8758,13 +9174,12 @@ void serialize(Serializer* s, Set<V>* set)
     else
     {
         u32 count = set->count;
-        setDestroy(set);
-        *set = setCreate(set->capacity);
+        *set = Set{set->capacity};
         for (u32 i = 0; i < count; ++i)
         {
             V val;
             serialize(s, &val);
-            setAdd(set, val);
+            set->add(val);
         }
     }
 
@@ -8772,156 +9187,277 @@ void serialize(Serializer* s, Set<V>* set)
 }
 
 template<typename V>
-Set<V> setCreate(u32 slotCount)
+SetTemp<V>::SetTemp(Arena* arenaVal, u32 initCapacity)
+    : arena{arenaVal}
+    , hasVal{arenaVal->alloc<bool>(initCapacity)}
+    , vals{arenaVal->alloc<V>(initCapacity)}
+    , capacity{initCapacity}
+    , count{0}
 {
-    HG_ASSERT(slotCount > 0);
-
-    Set<V> set;
-    set.hasVal = heapAlloc<bool>(slotCount);
-    set.vals = heapAlloc<V>(slotCount);
-    set.capacity = slotCount;
-    setReset(&set);
-    return set;
+    reset();
 }
 
 template<typename V>
-void setDestroy(Set<V>* set)
+SetTemp<V>::~SetTemp() noexcept
 {
-    HG_ASSERT(set != nullptr);
-
-    heapFree(set->hasVal);
-    heapFree(set->vals);
-}
-
-template<typename V>
-Set<V> setTemp(Arena* arena, u32 slotCount)
-{
-    HG_ASSERT(slotCount > 0);
-
-    Set<V> set;
-    set.hasVal = arena->alloc<bool>(slotCount);
-    set.vals = arena->alloc<V>(slotCount);
-    set.capacity = slotCount;
-    setReset(&set);
-    return set;
-}
-
-template<typename V>
-void setResize(Set<V>* set, u32 newSize)
-{
-    HG_ASSERT(set != nullptr);
-
-    if (newSize > set->capacity)
+    forEach([&](V* val)
     {
-        Set<V> newSet = setCreate<V>(newSize);
+        val->~V();
+    });
+}
 
-        for (u32 i = 0; i < set->capacity; ++i)
+template<typename V>
+void SetTemp<V>::resize(u32 newSize)
+{
+    HG_ASSERT(newSize > count);
+    if (newSize == capacity)
+        return;
+
+    SetTemp<V> newSet{newSize};
+
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
+            setAdd(&newSet, std::move(vals[i]));
+    }
+
+    *this = std::move(newSet);
+}
+
+template<typename V>
+void SetTemp<V>::reset()
+{
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
         {
-            if (set->hasVal[i])
-                setAdd(&newSet, set->vals[i]);
+            vals[i].~V();
+            hasVal[i] = false;
         }
-
-        setDestroy(set);
-        *set = newSet;
     }
+    count = 0;
 }
 
 template<typename V>
-void setReset(Set<V>* set)
+void SetTemp<V>::add(V val)
 {
-    HG_ASSERT(set != nullptr);
+    if (capacity / 2 > count)
+        resize(capacity == 0 ? 128 : capacity * 2);
 
-    for (u32 i = 0; i < set->capacity; ++i)
+    u32 idx = static_cast<u32>(hash(val) % capacity);
+    for (u32 dist = 0; hasVal[idx] && !(vals[idx] == val); ++dist)
     {
-        set->hasVal[i] = false;
-    }
-    set->count = 0;
-}
-
-template<typename V, typename T> requires std::is_convertible_v<T, V>
-void setAdd(Set<V>* set, const T& val)
-{
-    HG_ASSERT(set != nullptr);
-    HG_ASSERT(set->count < set->capacity - 1);
-
-    V v = static_cast<V>(val);
-
-    u32 idx = static_cast<u32>(hash(v) % set->capacity);
-    for (u32 dist = 0; set->hasVal[idx] && !(set->vals[idx] == v); ++dist)
-    {
-        u32 otherDist = static_cast<u32>(hash(set->vals[idx]) % set->capacity) - idx;
-        if (otherDist > set->capacity)
-            otherDist += set->capacity;
+        u32 otherDist = static_cast<u32>(hash(vals[idx]) % capacity) - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
 
         if (otherDist < dist)
         {
-            std::swap(v, set->vals[idx]);
+            std::swap(val, vals[idx]);
             dist = otherDist;
         }
 
-        idx = (idx + 1) % set->capacity;
+        idx = (idx + 1) % capacity;
     }
 
-    set->hasVal[idx] = true;
-    set->vals[idx] = v;
-    ++set->count;
+    new (vals + idx) V{std::move(val)};
+    hasVal[idx] = true;
+    ++count;
 }
 
-template<typename V, typename T> requires std::is_convertible_v<T, V>
-void setRemove(Set<V>* set, const T& val)
+template<typename V>
+void SetTemp<V>::remove(const V& val)
 {
-    HG_ASSERT(set != nullptr);
-
-    V v = static_cast<V>(val);
-
-    u32 idx = static_cast<u32>(hash(v) % set->capacity);
-    while (set->hasVal[idx])
+    u32 idx = static_cast<u32>(hash(val) % capacity);
+    while (hasVal[idx])
     {
-        if (set->vals[idx] == v)
+        if (vals[idx] == val)
             break;
-        idx = (idx + 1) % set->capacity;
+        idx = (idx + 1) % capacity;
     }
-    if (!set->hasVal[idx])
+    if (!hasVal[idx])
         return;
 
-    u32 next = (idx + 1) % set->capacity;
-    while (set->hasVal[next])
+    u32 next = (idx + 1) % capacity;
+    while (hasVal[next])
     {
-        if (hash(set->vals[next]) % set->capacity != next)
+        if (hash(vals[next]) % capacity != next)
         {
-            set->vals[idx] = set->vals[next];
+            vals[idx] = std::move(vals[next]);
             idx = next;
         }
-        next = (next + 1) % set->capacity;
+        next = (next + 1) % capacity;
     }
-    set->hasVal[idx] = false;
-    --set->count;
+    vals[idx].~V();
+    hasVal[idx] = false;
+    --count;
 }
 
-template<typename V, typename T> requires std::is_convertible_v<T, V>
-bool setHas(const Set<V>* set, const T& val)
+template<typename V>
+bool SetTemp<V>::has(const V& val)
 {
-    HG_ASSERT(set != nullptr);
-
-    V v = static_cast<V>(val);
-
-    for (u32 idx = static_cast<u32>(hash(v) % set->capacity); set->hasVal[idx]; idx = (idx + 1) % set->capacity)
+    for (u32 idx = static_cast<u32>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
     {
-        if (set->vals[idx] == v)
+        if (vals[idx] == val)
             return true;
     }
     return false;
 }
 
-template<typename V, typename F> requires std::is_invocable_r_v<void, F, V*>
-void setForEach(Set<V>* set, F fn)
+template<typename V>
+template<typename F> requires std::is_invocable_r_v<void, F, V*>
+void SetTemp<V>::forEach(F fn)
 {
-    HG_ASSERT(set != nullptr);
-
-    for (u32 i = 0; i < set->capacity; ++i)
+    for (u32 i = 0; i < capacity; ++i)
     {
-        if (set->hasVal[i])
-            fn(&set->vals[i]);
+        if (hasVal[i])
+            fn(vals + i);
+    }
+}
+
+template<typename K, typename V>
+Map<K, V>::Map(u32 initCapacity)
+    : hasVal{heapAlloc<bool>(initCapacity)}
+    , keys{heapAlloc<K>(initCapacity)}
+    , vals{heapAlloc<V>(initCapacity)}
+    , capacity{initCapacity}
+    , count{0}
+{
+    reset();
+}
+
+template<typename K, typename V>
+Map<K, V>::~Map() noexcept
+{
+    forEach([&](K* key, V* val)
+    {
+        key->~K();
+        val->~V();
+    });
+    heapFree(hasVal, capacity);
+    heapFree(keys, capacity);
+    heapFree(vals, capacity);
+}
+
+template<typename K, typename V>
+void Map<K, V>::resize(u32 newSize)
+{
+    HG_ASSERT(newSize > count);
+    if (newSize == capacity)
+        return;
+
+    Map<K, V> newMap{newSize};
+
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
+            newMap.add(std::move(keys[i]), std::move(vals[i]));
+    }
+
+    *this = std::move(newMap);
+}
+
+template<typename K, typename V>
+void Map<K, V>::reset()
+{
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
+        {
+            keys[i].~K();
+            vals[i].~V();
+            hasVal[i] = false;
+        }
+    }
+    count = 0;
+}
+
+template<typename K, typename V>
+V* Map<K, V>::add(K key, V val)
+{
+    if (capacity / 2 > count)
+        resize(capacity == 0 ? 128 : capacity * 2);
+
+    u32 idx = static_cast<u32>(hash(key) % capacity);
+    for (u32 dist = 0; hasVal[idx] && !(keys[idx] == key); ++dist)
+    {
+        u32 otherDist = static_cast<u32>(hash(keys[idx]) % capacity) - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
+
+        if (otherDist < dist)
+        {
+            std::swap(key, keys[idx]);
+            std::swap(val, vals[idx]);
+            dist = otherDist;
+        }
+
+        idx = (idx + 1) % capacity;
+    }
+
+    hasVal[idx] = true;
+    new (keys + idx) K{std::move(key)};
+    new (vals + idx) V{std::move(val)};
+    ++count;
+
+    return vals + idx;
+}
+
+template<typename K, typename V>
+bool Map<K, V>::remove(const K& key, V* val)
+{
+    u32 idx = static_cast<u32>(hash(key) % capacity);
+    while (hasVal[idx])
+    {
+        if (keys[idx] == key)
+            break;
+        idx = (idx + 1) % capacity;
+    }
+    if (!hasVal[idx])
+        return false;
+
+    if (val != nullptr)
+        *val = std::move(vals[idx]);
+
+    u32 next = (idx + 1) % capacity;
+    while (hasVal[next])
+    {
+        if (hash(keys[next]) % capacity != next)
+        {
+            keys[idx] = std::move(keys[next]);
+            vals[idx] = std::move(vals[next]);
+            idx = next;
+        }
+        next = (next + 1)  % capacity;
+    }
+
+    keys[idx].~K();
+    vals[idx].~V();
+    hasVal[idx] = false;
+    --count;
+
+    return true;
+}
+
+template<typename K, typename V>
+V* Map<K, V>::get(const K& key)
+{
+    for (u32 idx = static_cast<u32>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
+    {
+        if (keys[idx] == key)
+            return vals + idx;
+    }
+    return nullptr;
+}
+
+template<typename K, typename V>
+template<typename F> requires std::is_invocable_r_v<void, F, K*, V*>
+void Map<K, V>::forEach(F fn)
+{
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
+            fn(&keys[i], &vals[i]);
     }
 }
 
@@ -8930,8 +9466,8 @@ void serialize(Serializer* s, Map<K, V>* map)
 {
     serializeBegin(s);
 
-    serialize(s, &map->count);
     serialize(s, &map->capacity);
+    serialize(s, &map->count);
 
     if (s->writing)
     {
@@ -8950,7 +9486,7 @@ void serialize(Serializer* s, Map<K, V>* map)
             K key;
             V val;
             serializeObject(s, &key, &val);
-            mapAdd(map, key, val);
+            map->add(std::move(key), std::move(val));
         }
     }
 
@@ -8958,181 +9494,153 @@ void serialize(Serializer* s, Map<K, V>* map)
 }
 
 template<typename K, typename V>
-Map<K, V> mapCreate(u32 slotCount)
+MapTemp<K, V>::MapTemp(Arena* arenaVal, u32 initCapacity)
+    : arena{arenaVal}
+    , hasVal{arenaVal->alloc<bool>(initCapacity)}
+    , keys{arenaVal->alloc<K>(initCapacity)}
+    , vals{arenaVal->alloc<V>(initCapacity)}
+    , capacity{initCapacity}
+    , count{0}
 {
-    HG_ASSERT(slotCount > 0);
-
-    Map<K, V> map;
-    map.hasVal = heapAlloc<bool>(slotCount);
-    map.keys = heapAlloc<K>(slotCount);
-    map.vals = heapAlloc<V>(slotCount);
-    map.capacity = slotCount;
-    mapReset(&map);
-
-    return map;
+    reset();
 }
 
 template<typename K, typename V>
-void mapDestroy(Map<K, V>* map)
+MapTemp<K, V>::~MapTemp() noexcept
 {
-    HG_ASSERT(map != nullptr);
-
-    heapFree(map->hasVal, map->capacity);
-    heapFree(map->keys, map->capacity);
-    heapFree(map->vals, map->capacity);
-}
-
-template<typename K, typename V>
-Map<K, V> mapTemp(Arena* arena, u32 slotCount)
-{
-    HG_ASSERT(arena != nullptr);
-    HG_ASSERT(slotCount > 0);
-
-    Map<K, V> map;
-    map.hasVal = arena->alloc<bool>(slotCount);
-    map.keys = arena->alloc<K>(slotCount);
-    map.vals = arena->alloc<V>(slotCount);
-    map.capacity = slotCount;
-    mapReset(&map);
-
-    return map;
-}
-
-template<typename K, typename V>
-void mapResize(Map<K, V>* map, u32 newSize)
-{
-    HG_ASSERT(map != nullptr);
-
-    if (newSize > map->capacity)
+    forEach([&](K* key, V* val)
     {
-        Map<K, V> newMap = mapCreate<K, V>(newSize);
+        key->~K();
+        val->~V();
+    });
+}
 
-        for (u32 i = 0; i < map->capacity; ++i)
+template<typename K, typename V>
+void MapTemp<K, V>::resize(u32 newSize)
+{
+    HG_ASSERT(newSize > count);
+    if (newSize == capacity)
+        return;
+
+    MapTemp<K, V> newMapTemp{newSize};
+
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
+            newMapTemp.add(std::move(keys[i]), std::move(vals[i]));
+    }
+
+    *this = std::move(newMapTemp);
+}
+
+template<typename K, typename V>
+void MapTemp<K, V>::reset()
+{
+    for (u32 i = 0; i < capacity; ++i)
+    {
+        if (hasVal[i])
         {
-            if (map->hasVal[i])
-                mapAdd(&newMap, map->keys[i], map->vals[i]);
+            keys[i].~K();
+            vals[i].~V();
+            hasVal[i] = false;
         }
-
-        mapDestroy(map);
-        *map = newMap;
     }
+    count = 0;
 }
 
 template<typename K, typename V>
-void mapReset(Map<K, V>* map)
+V* MapTemp<K, V>::add(K key, V val)
 {
-    HG_ASSERT(map != nullptr);
+    if (capacity / 2 > count)
+        resize(capacity == 0 ? 128 : capacity * 2);
 
-    for (u32 i = 0; i < map->capacity; ++i)
+    u32 idx = static_cast<u32>(hash(key) % capacity);
+    for (u32 dist = 0; hasVal[idx] && !(keys[idx] == key); ++dist)
     {
-        map->hasVal[i] = false;
-    }
-    map->count = 0;
-}
-
-template<typename K, typename V, typename T, typename U>
-    requires std::is_convertible_v<T, K> && std::is_convertible_v<U, V>
-V* mapAdd(Map<K, V>* map, const T& key, const U& val)
-{
-    HG_ASSERT(map != nullptr);
-    HG_ASSERT(map->count < map->capacity - 1);
-
-    K k = static_cast<K>(key);
-    V v = static_cast<V>(val);
-
-    u32 idx = static_cast<u32>(hash(k) % map->capacity);
-    for (u32 dist = 0; map->hasVal[idx] && !(map->keys[idx] == k); ++dist)
-    {
-        u32 otherDist = static_cast<u32>(hash(map->keys[idx]) % map->capacity) - idx;
-        if (otherDist > map->capacity)
-            otherDist += map->capacity;
+        u32 otherDist = static_cast<u32>(hash(keys[idx]) % capacity) - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
 
         if (otherDist < dist)
         {
-            std::swap(k, map->keys[idx]);
-            std::swap(v, map->vals[idx]);
+            std::swap(key, keys[idx]);
+            std::swap(val, vals[idx]);
             dist = otherDist;
         }
 
-        idx = (idx + 1) % map->capacity;
+        idx = (idx + 1) % capacity;
     }
 
-    map->hasVal[idx] = true;
-    map->keys[idx] = k;
-    map->vals[idx] = v;
-    ++map->count;
+    hasVal[idx] = true;
+    new (keys + idx) K{std::move(key)};
+    new (vals + idx) V{std::move(val)};
+    ++count;
 
-    return map->vals + idx;
+    return vals + idx;
 }
 
-template<typename K, typename V, typename T> requires std::is_convertible_v<T, K>
-bool mapRemove(Map<K, V>* map, const T& key, V* val)
+template<typename K, typename V>
+bool MapTemp<K, V>::remove(const K& key, V* val)
 {
-    HG_ASSERT(map != nullptr);
-
-    K k = static_cast<K>(key);
-
-    u32 idx = static_cast<u32>(hash(k) % map->capacity);
-    while (map->hasVal[idx])
+    u32 idx = static_cast<u32>(hash(key) % capacity);
+    while (hasVal[idx])
     {
-        if (map->keys[idx] == k)
+        if (keys[idx] == key)
             break;
-        idx = (idx + 1) % map->capacity;
+        idx = (idx + 1) % capacity;
     }
-    if (!map->hasVal[idx])
+    if (!hasVal[idx])
         return false;
 
     if (val != nullptr)
-        *val = map->vals[idx];
+        *val = std::move(vals[idx]);
 
-    u32 next = (idx + 1) % map->capacity;
-    while (map->hasVal[next])
+    u32 next = (idx + 1) % capacity;
+    while (hasVal[next])
     {
-        if (hash(map->keys[next]) % map->capacity != next)
+        if (hash(keys[next]) % capacity != next)
         {
-            map->keys[idx] = map->keys[next];
-            map->vals[idx] = map->vals[next];
+            keys[idx] = std::move(keys[next]);
+            vals[idx] = std::move(vals[next]);
             idx = next;
         }
-        next = (next + 1)  % map->capacity;
+        next = (next + 1)  % capacity;
     }
-    map->hasVal[idx] = false;
-    --map->count;
+
+    keys[idx].~K();
+    vals[idx].~V();
+    hasVal[idx] = false;
+    --count;
 
     return true;
 }
 
-template<typename K, typename V, typename T> requires std::is_convertible_v<T, K>
-V* mapGet(const Map<K, V>* map, const T& key)
+template<typename K, typename V>
+V* MapTemp<K, V>::get(const K& key)
 {
-    HG_ASSERT(map != nullptr);
-
-    K k = static_cast<K>(key);
-
-    for (u32 idx = static_cast<u32>(hash(k) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    for (u32 idx = static_cast<u32>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
     {
-        if (map->keys[idx] == k)
-            return map->vals + idx;
+        if (keys[idx] == key)
+            return vals + idx;
     }
     return nullptr;
 }
 
-template<typename K, typename V, typename F> requires std::is_invocable_r_v<void, F, K*, V*>
-void mapForEach(Map<K, V>* map, F fn)
+template<typename K, typename V>
+template<typename F> requires std::is_invocable_r_v<void, F, K*, V*>
+void MapTemp<K, V>::forEach(F fn)
 {
-    HG_ASSERT(map != nullptr);
-
-    for (u32 i = 0; i < map->capacity; ++i)
+    for (u32 i = 0; i < capacity; ++i)
     {
-        if (map->hasVal[i])
-            fn(&map->keys[i], &map->vals[i]);
+        if (hasVal[i])
+            fn(&keys[i], &vals[i]);
     }
 }
 
 template<typename T>
 void assetInit()
 {
-    assets<T>.map = mapCreate<StringView, Asset<T>*>();
+    assets<T>.map = Map<StringView, Asset<T>*>(128);
     assets<T>.pool = poolCreate<Asset<T>>();
 }
 
@@ -9140,7 +9648,7 @@ template<typename T>
 void assetDeinit()
 {
     poolDestroy(&assets<T>.pool);
-    mapDestroy(&assets<T>.map);
+    assets<T>.map = {};
 }
 
 template<typename T>
@@ -9171,7 +9679,7 @@ Asset<T>* assetCreate()
 template<typename T>
 Asset<T>* assetLoad(StringView path)
 {
-    if (Asset<T>** asset = mapGet(&assets<T>.map, path);
+    if (Asset<T>** asset = assets<T>.map.get(path);
         asset != nullptr)
     {
         ++(*asset)->refCount;
@@ -9181,11 +9689,9 @@ Asset<T>* assetLoad(StringView path)
     Asset<T>* data = static_cast<Asset<T>*>(poolAlloc(&assets<T>.pool));
     data->asset = {};
     data->refCount = 1;
-    data->path = stringCreate(path);
+    data->path = String::create(path);
 
-    if (assets<T>.map.count * 2 > assets<T>.map.capacity)
-        mapResize(&assets<T>.map, assets<T>.map.capacity * 2);
-    mapAdd(&assets<T>.map, data->path, data);
+    assets<T>.map.add(data->path, data);
 
     assetLoadImpl(data);
     return data;
@@ -9200,8 +9706,8 @@ void assetUnload(Asset<T>* asset)
 
         if (asset->path != nullptr)
         {
-            mapRemove(&assets<T>.map, asset->path);
-            stringDestroy(&asset->path);
+            assets<T>.map.remove(asset->path);
+            asset->path = {};
         }
         poolFree(&assets<T>.pool, asset);
     }
@@ -9260,7 +9766,7 @@ template<typename... Ts, typename Fn> requires std::is_invocable_r_v<void, Fn, E
 void ecsForEachMulti(Ecs* ecs, Fn& fn)
 {
     u64 id = ecsFindSmallest<Ts...>(ecs);
-    Component* system = mapGet(&ecs->components, id);
+    Component* system = ecs->components.get(id);
     HG_ASSERT(system != nullptr);
 
     Entity* e = system->entities.vals + 1;
@@ -9304,7 +9810,7 @@ void ecsForParSingle(Ecs* ecs, Fn& fn)
 template<typename... Ts, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, Ts*...>
 void ecsForParMulti(Ecs* ecs, Fn& fn)
 {
-    Component* system = mapGet(&ecs->components, ecsFindSmallest<Ts...>(ecs));
+    Component* system = ecs->components.get(ecsFindSmallest<Ts...>(ecs));
     HG_ASSERT(system != nullptr);
 
     struct Capture {

@@ -2056,6 +2056,7 @@ void BinaryBuilder::read(u64 idx, void* dst, u64 len)
 
 void BinaryBuilder::resize(u64 newSize)
 {
+    HG_ASSERT(arena != nullptr);
     data = arena->realloc(data, size, newSize, 1);
     size = newSize;
 }
@@ -2068,6 +2069,7 @@ void BinaryBuilder::overwrite(u64 idx, const void* src, u64 len)
 
 void BinaryBuilder::append(const void* src, u64 len)
 {
+    HG_ASSERT(arena != nullptr);
     data = arena->realloc(data, size, size + len, 1);
     memCopy(static_cast<u8*>(data) + size, src, len);
     size += len;
@@ -2106,51 +2108,22 @@ char* cString(Arena* arena, StringView str)
     return cStr;
 }
 
-StringView stringCreate(StringView data)
-{
-    StringView str{};
-    if (data != "")
-    {
-        str.chars = heapAlloc<char>(data.length);
-        memCopy(const_cast<char*>(str.chars), data.chars, data.length);
-        str.length = data.length;
-    }
-    return str;
-}
-
-void stringDestroy(StringView* str)
-{
-    heapFree(const_cast<char*>(str->chars), str->length);
-}
-
-StringBuilder stringCopy(Arena* arena, StringView str)
+void StringBuilder::insert(u64 idx, StringView src)
 {
     HG_ASSERT(arena != nullptr);
-
-    StringBuilder copy{};
-    copy.chars = arena->alloc<char>(str.length);
-    memCopy(copy.chars, str.chars, str.length);
-    copy.length = str.length;
-    return copy;
-}
-
-void stringInsert(Arena* arena, StringBuilder* dst, u64 idx, StringView src)
-{
-    HG_ASSERT(arena != nullptr);
-    HG_ASSERT(dst != nullptr);
-    HG_ASSERT(idx <= dst->length);
+    HG_ASSERT(idx <= length);
     if (src.length > 0)
         HG_ASSERT(src.chars != nullptr);
 
-    u64 newLength = dst->length + src.length;
+    u64 newLength = length + src.length;
 
-    dst->chars = arena->realloc(dst->chars, dst->length, newLength);
+    chars = arena->realloc(chars, length, newLength);
 
-    if (idx != dst->length)
-        memMove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
-    memCopy(&dst->chars[idx], src.chars, src.length);
+    if (idx != length)
+        memMove(&chars[idx + src.length], &chars[idx], length - idx);
+    memCopy(&chars[idx], src.chars, src.length);
 
-    dst->length = newLength;
+    length = newLength;
 }
 
 bool isWhitespace(char c)
@@ -2342,25 +2315,25 @@ StringBuilder integerToString(Arena* arena, i64 num)
     ArenaScope scratch = getScratch(&arena, 1);
 
     if (num == 0)
-        return stringCopy(arena, "0");
+        return {arena, "0"};
 
     bool isNegative = num < 0;
     u64 unum = static_cast<u64>(std::abs(num));
 
-    StringBuilder reverse{};
+    StringBuilder reverse{scratch};
     while (unum != 0)
     {
         u64 digit = unum % 10;
         unum = static_cast<u64>(static_cast<f64>(unum) / 10.0);
-        stringAppendC(scratch, &reverse, '0' + static_cast<char>(digit));
+        reverse.append('0' + static_cast<char>(digit));
     }
 
-    StringBuilder ret{};
+    StringBuilder ret{arena};
     if (isNegative)
-        stringAppendC(arena, &ret, '-');
+        ret.append('-');
     for (u64 i = reverse.length - 1; i < reverse.length; --i)
     {
-        stringAppendC(arena, &ret, reverse[i]);
+        ret.append(reverse[i]);
     }
     return ret;
 }
@@ -2372,25 +2345,25 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
     ArenaScope scratch = getScratch(&arena, 1);
 
     if (num == 0.0)
-        return stringCopy(arena, "0.0");
+        return {arena, "0.0"};
 
     StringBuilder intStr = integerToString(scratch, static_cast<i64>(std::abs(num)));
 
-    StringBuilder decStr{};
-    stringAppendC(scratch, &decStr, '.');
+    StringBuilder decStr{scratch};
+    decStr.append('.');
 
     f64 decPart = std::abs(num);
     for (u64 i = 0; i < decimalCount; ++i)
     {
         decPart *= 10.0;
-        stringAppendC(scratch, &decStr, '0' + static_cast<char>(static_cast<u64>(decPart) % 10));
+        decStr.append('0' + static_cast<char>(static_cast<u64>(decPart) % 10));
     }
 
-    StringBuilder ret{};
+    StringBuilder ret{arena};
     if (num < 0.0)
-        stringAppendC(arena, &ret, '-');
-    stringAppend(arena, &ret, intStr);
-    stringAppend(arena, &ret, decStr);
+        ret.append('-');
+    ret.append(intStr);
+    ret.append(decStr);
     return ret;
 }
 
@@ -2525,7 +2498,7 @@ void serializeVoid(Serializer* s, void* val, u32 size)
     if (s->writing)
     {
         s->current->type = SerialType_string;
-        s->current->string = stringCopy(s->arena, {static_cast<char*>(val), size});
+        s->current->string = StringBuilder{s->arena, {static_cast<char*>(val), size}};
     }
     else
     {
@@ -2543,7 +2516,7 @@ void serialize(Serializer* s, Binary* val)
     if (s->writing)
     {
         s->current->type = SerialType_string;
-        s->current->string = stringCopy(s->arena, {static_cast<char*>(val->data), val->size});
+        s->current->string = StringBuilder{s->arena, {static_cast<char*>(val->data), val->size}};
     }
     else
     {
@@ -2553,36 +2526,19 @@ void serialize(Serializer* s, Binary* val)
 }
 
 template<>
-void serialize(Serializer* s, StringView* val)
+void serialize(Serializer* s, String* val)
 {
     serializeNodeStart(s);
 
     if (s->writing)
     {
         s->current->type = SerialType_string;
-        s->current->string = stringCopy(s->arena, *val);
+        s->current->string = StringBuilder{s->arena, *val};
     }
     else
     {
         HG_ASSERT(s->current->type == SerialType_string);
-        *val = stringCreate(s->current->string);
-    }
-}
-
-template<>
-void serialize(Serializer* s, StringBuilder* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->type = SerialType_string;
-        s->current->string = stringCopy(s->arena, *val);
-    }
-    else
-    {
-        HG_ASSERT(s->current->type == SerialType_string);
-        *val = stringCopy(s->arena, s->current->string);
+        *val = String::create(s->current->string);
     }
 }
 
@@ -2971,79 +2927,79 @@ Serializer binaryReadSerial(Arena* arena, BinaryView bin)
     return serialReader(arena, s.current);
 }
 
-static void serialJsonWriteNode(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node);
+static void serialJsonWriteNode(StringBuilder* str, u32 indentation, SerialNode* node);
 
-static void serialJsonWriteString(Arena* arena, StringBuilder* str, StringView string)
+static void serialJsonWriteString(StringBuilder* str, StringView string)
 {
-    stringAppendC(arena, str, '"');
+    str->append('"');
     for (u32 i = 0; i < string.length; ++i)
     {
         switch (string[i])
         {
         case '\\':
-            stringAppend(arena, str, "\\\\");
+            str->append("\\\\");
             break;
         case '\"':
-            stringAppend(arena, str, "\\\"");
+            str->append("\\\"");
             break;
         case '\n':
-            stringAppend(arena, str, "\\n");
+            str->append("\\n");
             break;
         case '\r':
-            stringAppend(arena, str, "\\r");
+            str->append("\\r");
             break;
         case '\f':
-            stringAppend(arena, str, "\\f");
+            str->append("\\f");
             break;
         case '\b':
-            stringAppend(arena, str, "\\b");
+            str->append("\\b");
             break;
         default:
-            stringAppendC(arena, str, string[i]);
+            str->append(string[i]);
             break;
         }
     }
-    stringAppendC(arena, str, '"');
+    str->append('"');
 }
 
-static void serialJsonWriteArray(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node)
+static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialNode* node)
 {
     if (node->count > 0)
     {
-        stringAppend(arena, str, "[\n");
+        str->append("[\n");
 
         SerialNode* elem = node->children;
 
         for (u32 i = 0; i < indentation + 1; ++i)
         {
-            stringAppend(arena, str, "    ");
+            str->append("    ");
         }
-        serialJsonWriteNode(arena, str, indentation + 1, elem);
+        serialJsonWriteNode(str, indentation + 1, elem);
 
         elem = elem->next;
 
         for (u32 i = 1; i < node->count; ++i)
         {
-            stringAppend(arena, str, ",\n");
+            str->append(",\n");
             for (u32 i = 0; i < indentation + 1; ++i)
             {
-                stringAppend(arena, str, "    ");
+                str->append("    ");
             }
-            serialJsonWriteNode(arena, str, indentation + 1, elem);
+            serialJsonWriteNode(str, indentation + 1, elem);
 
             elem = elem->next;
         }
 
-        stringAppendC(arena, str, '\n');
+        str->append( '\n');
         for (u32 i = 0; i < indentation; ++i)
         {
-            stringAppend(arena, str, "    ");
+            str->append("    ");
         }
-        stringAppendC(arena, str, ']');
+        str->append(']');
     }
     else
     {
-        stringAppend(arena, str, "[]");
+        str->append("[]");
     }
 }
 
@@ -3092,27 +3048,27 @@ static void serialJsonWriteArray(Arena* arena, StringBuilder* str, u32 indentati
 //     }
 // }
 
-static void serialJsonWriteNode(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node)
+static void serialJsonWriteNode(StringBuilder* str, u32 indentation, SerialNode* node)
 {
     switch (node->type)
     {
         case SerialType_object:
-            serialJsonWriteArray(arena, str, indentation, node);
+            serialJsonWriteArray(str, indentation, node);
             return;
         case SerialType_string:
-            serialJsonWriteString(arena, str, node->string);
+            serialJsonWriteString(str, node->string);
             return;
         case SerialType_integer:
-            stringAppend(arena, str, integerToString(getScratch(), node->integer));
+            str->append(integerToString(getScratch(), node->integer));
             return;
         case SerialType_floating:
-            stringAppend(arena, str, floatToString(getScratch(), node->floating, 6));
+            str->append(floatToString(getScratch(), node->floating, 6));
             return;
         case SerialType_boolean:
             if (node->boolean)
-                stringAppend(arena, str, "true");
+                str->append("true");
             else
-                stringAppend(arena, str, "false");
+                str->append("false");
             return;
         default:
             HG_PANIC("Invalid SerialType: %s\n", serialTypeToString(node->type));
@@ -3121,9 +3077,9 @@ static void serialJsonWriteNode(Arena* arena, StringBuilder* str, u32 indentatio
 
 StringView jsonWriteSerial(Arena* arena, Serializer* serial)
 {
-    StringBuilder str{};
-    serialJsonWriteNode(arena, &str, 0, serial->current);
-    stringAppendC(arena, &str, '\n');
+    StringBuilder str{arena};
+    serialJsonWriteNode(&str, 0, serial->current);
+    str.append('\n');
     return str;
 }
 
@@ -3177,20 +3133,20 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
         case '}': {
             JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
-            StringBuilder msg{};
-            stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-            stringAppend(arena, &msg, ", found unexpected token \"}\"\n");
+            StringBuilder msg{arena};
+            msg.append("on line ");
+            msg.append(integerToString(arena, static_cast<i64>(state->line)));
+            msg.append(", found unexpected token \"}\"\n");
             error->msg = msg;
             return {nullptr, error};
         }
         case ']': {
             JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
-            StringBuilder msg{};
-            stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-            stringAppend(arena, &msg, ", found unexpected token \"]\"\n");
+            StringBuilder msg{arena};
+            msg.append("on line ");
+            msg.append(integerToString(arena, static_cast<i64>(state->line)));
+            msg.append(", found unexpected token \"]\"\n");
             error->msg = msg;
             return {nullptr, error};
         }
@@ -3210,12 +3166,12 @@ static Json jsonParseNext(Arena* arena, JsonParseState* state)
             ++state->line;
         ++state->head;
     }
-    StringBuilder msg{};
-    stringAppend(arena, &msg, "on line ");
-    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-    stringAppend(arena, &msg, ", found unexpected token \"");
-    stringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
-    stringAppend(arena, &msg, "\"\n");
+    StringBuilder msg{arena};
+    msg.append("on line ");
+    msg.append(integerToString(arena, static_cast<i64>(state->line)));
+    msg.append(", found unexpected token \"");
+    msg.append({&state->text[begin], &state->text[state->head]});
+    msg.append("\"\n");
     error->msg = msg;
 
     return {nullptr, error};
@@ -3243,10 +3199,10 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
         {
             JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
-            StringBuilder msg{};
-            stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-            stringAppend(arena, &msg, ", expected struct to terminate\n");
+            StringBuilder msg{arena};
+            msg.append("on line ");
+            msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
+            msg.append(", expected struct to terminate\n");
             error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
@@ -3259,10 +3215,10 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
         {
             JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
-            StringBuilder msg{};
-            stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-            stringAppend(arena, &msg, ", struct ends with \"]\" instead of \"}\"\n");
+            StringBuilder msg{arena};
+            msg.append("on line ");
+            msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
+            msg.append(", struct ends with \"]\" instead of \"}\"\n");
             error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
@@ -3302,10 +3258,10 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
             {
                 JsonError* error = arena->alloc<JsonError>(1);
                 error->next = nullptr;
-                StringBuilder msg{};
-                stringAppend(arena, &msg, "on line ");
-                stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-                stringAppend(arena, &msg, ", struct has a literal instead of a field\n");
+                StringBuilder msg{arena};
+                msg.append("on line ");
+                msg.append(integerToString(arena, static_cast<i64>(state->line)));
+                msg.append(", struct has a literal instead of a field\n");
                 error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
@@ -3316,12 +3272,12 @@ static Json jsonParseStruct(Arena* arena, JsonParseState* state)
             {
                 JsonError* error = arena->alloc<JsonError>(1);
                 error->next = nullptr;
-                StringBuilder msg{};
-                stringAppend(arena, &msg, "on line ");
-                stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-                stringAppend(arena, &msg, ", struct has a field named \"");
-                stringAppend(arena, &msg, value.file->field.name);
-                stringAppend(arena, &msg, "\" which has no value\n");
+                StringBuilder msg{arena};
+                msg.append("on line ");
+                msg.append(integerToString(arena, static_cast<i64>(state->line)));
+                msg.append(", struct has a field named \"");
+                msg.append(value.file->field.name);
+                msg.append("\" which has no value\n");
                 error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
@@ -3371,10 +3327,10 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
         {
             JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
-            StringBuilder msg{};
-            stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-            stringAppend(arena, &msg, ", expected struct to terminate\n");
+            StringBuilder msg{arena};
+            msg.append("on line ");
+            msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
+            msg.append(", expected struct to terminate\n");
             error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
@@ -3387,10 +3343,10 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
         {
             JsonError* error = arena->alloc<JsonError>(1);
             error->next = nullptr;
-            StringBuilder msg{};
-            stringAppend(arena, &msg, "on line ");
-            stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-            stringAppend(arena, &msg, ", array ends with \"}\" instead of \"]\"\n");
+            StringBuilder msg{arena};
+            msg.append("on line ");
+            msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
+            msg.append(", array ends with \"}\" instead of \"]\"\n");
             error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
@@ -3438,10 +3394,10 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
                 } else {
                     JsonError* error = arena->alloc<JsonError>(1);
                     error->next = nullptr;
-                    StringBuilder msg{};
-                    stringAppend(arena, &msg, "on line ");
-                    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-                    stringAppend(arena, &msg, ", array has a field as an element\n");
+                    StringBuilder msg{arena};
+                    msg.append("on line ");
+                    msg.append(integerToString(arena, static_cast<i64>(state->line)));
+                    msg.append(", array has a field as an element\n");
                     error->msg = msg;
                     if (lastError == nullptr)
                         json.errors = lastError = error;
@@ -3454,10 +3410,10 @@ static Json jsonParseArray(Arena* arena, JsonParseState* state)
             {
                 JsonError* error = arena->alloc<JsonError>(1);
                 error->next = nullptr;
-                StringBuilder msg{};
-                stringAppend(arena, &msg, "on line ");
-                stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-                stringAppend(arena, &msg, ", array has element which is not the same type as the first valid element\n");
+                StringBuilder msg{arena};
+                msg.append("on line ");
+                msg.append(integerToString(arena, static_cast<i64>(state->line)));
+                msg.append(", array has element which is not the same type as the first valid element\n");
                 error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
@@ -3506,7 +3462,7 @@ static Json jsonParseString(Arena* arena, JsonParseState* state)
             {
                 // escape sequences : TODO
             }
-            stringAppendC(arena, &str, c);
+            str.append(c);
         }
 
         Json json{};
@@ -3543,10 +3499,10 @@ static Json jsonParseString(Arena* arena, JsonParseState* state)
     }
 
     JsonError* error = arena->alloc<JsonError>(1);
-    StringBuilder msg{};
-    stringAppend(arena, &msg, "on line ");
-    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-    stringAppend(arena, &msg, ", expected string to terminate\n");
+    StringBuilder msg{arena};
+    msg.append("on line ");
+    msg.append(integerToString(arena, static_cast<i64>(state->line)));
+    msg.append(", expected string to terminate\n");
     error->msg = msg;
     return {nullptr, error};
 }
@@ -3598,12 +3554,12 @@ static Json jsonParseNumber(Arena* arena, JsonParseState* state)
 
     JsonError* error = arena->alloc<JsonError>(1);
 
-    StringBuilder msg{};
-    stringAppend(arena, &msg, "on line ");
-    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-    stringAppend(arena, &msg, ", expected numeral value, found \"");
-    stringAppend(arena, &msg, num);
-    stringAppend(arena, &msg, "\"\n");
+    StringBuilder msg{arena};
+    msg.append("on line ");
+    msg.append(integerToString(arena, static_cast<i64>(state->line)));
+    msg.append(", expected numeral value, found \"");
+    msg.append(num);
+    msg.append("\"\n");
     error->msg = msg;
 
     while (state->head < state->text.length && isWhitespace(state->text[state->head]))
@@ -3672,12 +3628,12 @@ static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
             ++state->line;
         ++state->head;
     }
-    StringBuilder msg{};
-    stringAppend(arena, &msg, "on line ");
-    stringAppend(arena, &msg, integerToString(arena, static_cast<i64>(state->line)));
-    stringAppend(arena, &msg, ", expected boolean value, found \"");
-    stringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
-    stringAppend(arena, &msg, "\"\n");
+    StringBuilder msg{arena};
+    msg.append("on line ");
+    msg.append(integerToString(arena, static_cast<i64>(state->line)));
+    msg.append(", expected boolean value, found \"");
+    msg.append({&state->text[begin], &state->text[state->head]});
+    msg.append("\"\n");
     error->msg = msg;
 
     if (state->text[state->head] == ',')
@@ -3711,8 +3667,6 @@ Json parseJson(Arena* arena, StringView text)
     parseState.line = 1;
     return jsonParseNext(arena, &parseState);
 }
-
-
 
 template<>
 void serialize(Serializer* s, ArrayAny* arr)
@@ -4907,7 +4861,7 @@ Ecs ecsCreate()
 {
     Ecs ecs{};
     ecs.entities = handlePoolCreate();
-    ecs.components = mapCreate<u64, Component>(128);
+    ecs.components = Map<u64, Component>(128);
     ecsReset(&ecs);
     return ecs;
 }
@@ -4916,15 +4870,15 @@ void ecsDestroy(Ecs* ecs)
 {
     ecsReset(ecs);
 
-    mapForEach(&ecs->components, [&](u64*, Component* system)
+    ecs->components.forEach([&](u64*, Component* system)
     {
         arrayAnyDestroy(&system->components);
         arrayDestroy(&system->entities);
         arrayDestroy(&system->indices);
-        stringDestroy(&system->name);
+        system->name = {};
     });
 
-    mapDestroy(&ecs->components);
+    ecs->components = {};
     handlePoolDestroy(&ecs->entities);
 }
 
@@ -4932,7 +4886,7 @@ void ecsReset(Ecs* ecs)
 {
     HG_ASSERT(ecs != nullptr);
 
-    mapForEach(&ecs->components, [&](u64*, Component* system)
+    ecs->components.forEach([&](u64*, Component* system)
     {
         for (u32 c = 1; c < system->components.count; ++c)
         {
@@ -4950,13 +4904,13 @@ void ecsRegisterComponent(Ecs* ecs, EcsRegisterComponent* config)
     HG_ASSERT(ecs != nullptr);
 
     u64 id = hash(config->name);
-    HG_ASSERT(mapGet(&ecs->components, id) == nullptr);
+    HG_ASSERT(ecs->components.get(id) == nullptr);
 
     if (ecs->components.count * 2 > ecs->components.capacity)
-        mapResize(&ecs->components, ecs->components.capacity * 2);
-    Component* system = mapAdd(&ecs->components, id, {});
+        ecs->components.resize(ecs->components.capacity * 2);
+    Component* system = ecs->components.add(id, {});
 
-    system->name = stringCreate(config->name);
+    system->name = String::create(config->name);
     system->indices = arrayCreate<u32>();
     system->entities = arrayCreate<Entity>();
     system->components = arrayAnyCreate(config->width, config->align);
@@ -4969,7 +4923,7 @@ void ecsRegisterComponent(Ecs* ecs, EcsRegisterComponent* config)
 
 void ecsUnregisterComponent(Ecs* ecs, u64 componentId)
 {
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
 
     for (u32 c = 1; c < system->components.count; ++c)
     {
@@ -4978,15 +4932,15 @@ void ecsUnregisterComponent(Ecs* ecs, u64 componentId)
     arrayAnyDestroy(&system->components);
     arrayDestroy(&system->entities);
     arrayDestroy(&system->indices);
-    stringDestroy(&system->name);
+    system->name = {};
 
-    mapRemove(&ecs->components, componentId);
+    ecs->components.remove(componentId);
 }
 
 StringView ecsComponentName(Ecs* ecs, u64 componentId)
 {
     HG_ASSERT(ecs != nullptr);
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
     HG_ASSERT(system != nullptr);
     return system->name;
 }
@@ -5002,7 +4956,7 @@ void ecsDespawn(Ecs* ecs, Entity e)
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(ecsAlive(ecs, e));
 
-    mapForEach(&ecs->components, [&](u64* id, Component*)
+    ecs->components.forEach([&](u64* id, Component*)
     {
         if (ecsHas(ecs, e, *id))
             ecsRemove(ecs, e, *id);
@@ -5022,7 +4976,7 @@ void* ecsAdd(Ecs* ecs, Entity e, u64 componentId)
     HG_ASSERT(ecsAlive(ecs, e));
     HG_ASSERT(!ecsHas(ecs, e, componentId));
 
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
     HG_ASSERT(system != nullptr);
 
     u32 idx = handleIdx(e.handle);
@@ -5045,7 +4999,7 @@ void ecsRemove(Ecs* ecs, Entity e, u64 componentId)
     HG_ASSERT(ecsAlive(ecs, e));
     HG_ASSERT(ecsHas(ecs, e, componentId));
 
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
     HG_ASSERT(system != nullptr);
 
     u32 idx = system->indices[handleIdx(e.handle)];
@@ -5070,7 +5024,7 @@ bool ecsHas(Ecs* ecs, Entity e, u64 componentId)
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(ecsAlive(ecs, e));
 
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
     if (system == nullptr)
         return false;
 
@@ -5083,7 +5037,7 @@ void* ecsGet(Ecs* ecs, Entity e, u64 componentId)
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(ecsAlive(ecs, e));
 
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
     HG_ASSERT(system != nullptr);
     HG_ASSERT(system->indices[handleIdx(e.handle)] != 0);
     HG_ASSERT(system->indices[handleIdx(e.handle)] < system->entities.count);
@@ -5096,7 +5050,7 @@ Entity ecsGetEntity(Ecs* ecs, const void* component, u64 componentId)
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(component != nullptr);
 
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
     HG_ASSERT(system != nullptr);
 
     return system->entities[static_cast<u32>(reinterpret_cast<uptr>(component) - reinterpret_cast<uptr>(system->components.vals)) / system->components.width];
@@ -5105,26 +5059,26 @@ Entity ecsGetEntity(Ecs* ecs, const void* component, u64 componentId)
 Entity* ecsEntities(Ecs* ecs, u64 componentId)
 {
     HG_ASSERT(ecs != nullptr);
-    HG_ASSERT(mapGet(&ecs->components, componentId) != nullptr);
-    HG_ASSERT(mapGet(&ecs->components, componentId)->entities.count != 0);
-    return mapGet(&ecs->components, componentId)->entities.vals + 1;
+    HG_ASSERT(ecs->components.get(componentId) != nullptr);
+    HG_ASSERT(ecs->components.get(componentId)->entities.count != 0);
+    return ecs->components.get(componentId)->entities.vals + 1;
 }
 
 void* ecsComponents(Ecs* ecs, u64 componentId)
 {
     HG_ASSERT(ecs != nullptr);
-    HG_ASSERT(mapGet(&ecs->components, componentId) != nullptr);
-    HG_ASSERT(mapGet(&ecs->components, componentId)->components.count != 0);
-    Component* system = mapGet(&ecs->components, componentId);
+    HG_ASSERT(ecs->components.get(componentId) != nullptr);
+    HG_ASSERT(ecs->components.get(componentId)->components.count != 0);
+    Component* system = ecs->components.get(componentId);
     return static_cast<u8*>(system->components.vals) + system->components.width;
 }
 
 u32 ecsCount(Ecs* ecs, u64 componentId)
 {
     HG_ASSERT(ecs != nullptr);
-    HG_ASSERT(mapGet(&ecs->components, componentId) != nullptr);
-    HG_ASSERT(mapGet(&ecs->components, componentId)->entities.count != 0);
-    return mapGet(&ecs->components, componentId)->entities.count - 1;
+    HG_ASSERT(ecs->components.get(componentId) != nullptr);
+    HG_ASSERT(ecs->components.get(componentId)->entities.count != 0);
+    return ecs->components.get(componentId)->entities.count - 1;
 }
 
 u64 ecsFindSmallest(Ecs* ecs, u64* ids, u32 idCount)
@@ -5137,7 +5091,7 @@ u64 ecsFindSmallest(Ecs* ecs, u64* ids, u32 idCount)
 
     for (u32 i = 1; i < idCount; ++i)
     {
-        Component* system = mapGet(&ecs->components, ids[i]);
+        Component* system = ecs->components.get(ids[i]);
         HG_ASSERT(system != nullptr);
 
         if (system->entities.count < smallestCount)
@@ -5153,7 +5107,7 @@ static void swapIdxLocation(Ecs* ecs, u32 lhs, u32 rhs, u64 componentId)
 {
     HG_ASSERT(ecs != nullptr);
 
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
     HG_ASSERT(system != nullptr);
 
     HG_ASSERT(lhs != 0 && lhs < system->entities.count);
@@ -5235,7 +5189,7 @@ void ecsSort(
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(compare != nullptr);
 
-    Component* system = mapGet(&ecs->components, componentId);
+    Component* system = ecs->components.get(componentId);
     HG_ASSERT(system != nullptr);
 
     QuicksortData q{ecs, system, componentId, data, compare};
@@ -5307,7 +5261,7 @@ void serialize(Serializer* s, Ecs* ecs)
             StringView compName;
             serialize(s, &compName);
             systemId = hash(compName);
-            system = mapGet(&ecs->components, systemId);
+            system = ecs->components.get(systemId);
         }
 
         u32 compCount;
