@@ -2,38 +2,65 @@
     "version": 6,
     "configurePresets": [
         {
-            "name": "default",
-            "displayName": "Default (no config)",
-            "description": "Fastest build, no debug flags or sanitizers",
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build"
-        },
-        {
             "name": "debug",
             "displayName": "Debug",
-            "description": "Debug build with sanitizers",
+            "description": "Debug build",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/debug",
+            "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/prefer-clang.cmake"
             }
         },
         {
             "name": "release",
             "displayName": "Release",
-            "description": "Optimized release build",
+            "description": "Optimized release build, prefers Clang",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/prefer-clang.cmake"
+            }
+        },
+        {
+            "name": "release-clang",
+            "displayName": "Release (Clang)",
+            "description": "Optimized release build with Clang",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/release-clang",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "release-gcc",
+            "displayName": "Release (GCC)",
+            "description": "Optimized release build with GCC",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/release-gcc",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "release-msvc",
+            "displayName": "Release (MSVC)",
+            "description": "Optimized release build with MSVC (Windows only)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/release-msvc",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl"
             }
         }
     ],
     "buildPresets": [
-        {
-            "name": "default",
-            "configurePreset": "default"
-        },
         {
             "name": "debug",
             "configurePreset": "debug"
@@ -41,16 +68,21 @@
         {
             "name": "release",
             "configurePreset": "release"
+        },
+        {
+            "name": "release-clang",
+            "configurePreset": "release-clang"
+        },
+        {
+            "name": "release-gcc",
+            "configurePreset": "release-gcc"
+        },
+        {
+            "name": "release-msvc",
+            "configurePreset": "release-msvc"
         }
     ],
     "workflowPresets": [
-        {
-            "name": "default",
-            "steps": [
-                { "type": "configure", "name": "default" },
-                { "type": "build", "name": "default" }
-            ]
-        },
         {
             "name": "debug",
             "steps": [
@@ -64,6 +96,28 @@
                 { "type": "configure", "name": "release" },
                 { "type": "build", "name": "release" }
             ]
+        },
+        {
+            "name": "release-clang",
+            "steps": [
+                { "type": "configure", "name": "release-clang" },
+                { "type": "build", "name": "release-clang" }
+            ]
+        },
+        {
+            "name": "release-gcc",
+            "steps": [
+                { "type": "configure", "name": "release-gcc" },
+                { "type": "build", "name": "release-gcc" }
+            ]
+        },
+        {
+            "name": "release-msvc",
+            "steps": [
+                { "type": "configure", "name": "release-msvc" },
+                { "type": "build", "name": "release-msvc" }
+            ]
         }
     ]
 }
+

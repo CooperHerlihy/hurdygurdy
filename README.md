@@ -8,10 +8,11 @@ Hurdy Gurdy is a game engine written in C++ for fun.
 
 ### Dependencies
 
-#### Required
+On Nix, `nix develop` provides all dependencies.
 
-- C++23 compiler — GCC 15+, Clang 19+, or MSVC
+- C++23 compiler — Clang 19+ (preferred), GCC 15+, or MSVC
 - CMake (3.18+)
+- Ninja — build system generator
 - SDL3 — found on system, or downloaded automatically by CMake
 - glslc (SPIR-V compiler) + Vulkan Validation Layers (debug only):
   - Windows: included in LunarG Vulkan SDK
@@ -19,26 +20,25 @@ Hurdy Gurdy is a game engine written in C++ for fun.
 
 #### Preferred (auto-detected, speeds up builds)
 
-- Ninja — faster build system generator (vs Make)
 - ccache — caches compilation results for instant rebuilds
 - mold — faster Linux linker (auto-detected on Linux)
-
-On Nix, `nix develop` provides all of the above.
 
 ### Compilation
 
 ```bash
-# Fastest — no debug flags or sanitizers
-cmake --workflow --preset default
-
-# Debug — full debug info + UBSan
+# Debug — fast build with debug info, prefers Clang
 cmake --workflow --preset debug
 
-# Release — optimized
+# Release — optimized, prefers Clang
 cmake --workflow --preset release
+
+# Release — explicit compiler for perf comparisons
+cmake --workflow --preset release-clang   # Clang only
+cmake --workflow --preset release-gcc     # GCC only (Linux)
+cmake --workflow --preset release-msvc    # MSVC only (Windows)
 ```
 
-On Nix, also use `nix build` to compile a standalone release build
+On Nix, also use `nix build` to compile a standalone release build.
 
 ### Integration
 

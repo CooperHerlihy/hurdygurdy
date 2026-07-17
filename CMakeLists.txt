@@ -20,8 +20,15 @@ if(MSVC)
     set(STRICT_FLAGS /W4 /WX)
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -fsanitize=undefined -Wno-cpp")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wno-cpp")
     set(STRICT_FLAGS -Wall -Wextra -Wconversion -Wsign-conversion -pedantic -Werror)
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(CLANG_VENDOR_FLAGS
+            -Wno-nullability-extension
+            -Wno-nullability-completeness
+        )
+    endif()
 
     find_program(MOLD_PROGRAM mold)
     if(MOLD_PROGRAM)
@@ -108,7 +115,6 @@ set(MISC_VENDOR_SOURCES
     src/stb.c
 )
 
-# Core C++ library (with precompiled header for hurdygurdy.hpp)
 add_library(hurdygurdy_core OBJECT ${CORE_SOURCES})
 add_dependencies(hurdygurdy_core shaders)
 target_include_directories(hurdygurdy_core
@@ -120,9 +126,8 @@ target_link_libraries(hurdygurdy_core
     PUBLIC ${SDL3_TARGET}
 )
 target_precompile_headers(hurdygurdy_core PRIVATE include/hurdygurdy.hpp)
-target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS})
+target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
 
-# ImGui library (with precompiled header for imgui.h)
 add_library(hurdygurdy_imgui OBJECT ${IMGUI_SOURCES} ${IMGUI_BACKEND_SOURCES})
 target_include_directories(hurdygurdy_imgui
     PUBLIC
@@ -134,8 +139,8 @@ target_link_libraries(hurdygurdy_imgui
 )
 target_precompile_headers(hurdygurdy_imgui PRIVATE vendor/imgui/imgui.h)
 target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
+target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
 
-# Misc vendor (C files — no precompiled header)
 add_library(hurdygurdy_misc OBJECT ${MISC_VENDOR_SOURCES})
 target_include_directories(hurdygurdy_misc
     PUBLIC
@@ -145,8 +150,8 @@ target_include_directories(hurdygurdy_misc
 target_link_libraries(hurdygurdy_misc
     PUBLIC ${SDL3_TARGET}
 )
+target_compile_options(hurdygurdy_misc PRIVATE ${CLANG_VENDOR_FLAGS})
 
-# Combined library
 add_library(hurdygurdy STATIC)
 target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_misc)
 

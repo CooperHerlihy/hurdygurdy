@@ -1060,7 +1060,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
-    VkResult result = vkCreateDescriptorPool(vk.device, &info, nullptr, &pool);
+    [[maybe_unused]] VkResult result = vkCreateDescriptorPool(vk.device, &info, nullptr, &pool);
     if (pool == nullptr)
         HG_PANIC("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
 
@@ -1093,7 +1093,7 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
-    VkResult result = vkCreateDescriptorSetLayout(vk.device, &info, nullptr, &layout);
+    [[maybe_unused]] VkResult result = vkCreateDescriptorSetLayout(vk.device, &info, nullptr, &layout);
     if (layout == nullptr)
         HG_PANIC("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
 
@@ -1111,7 +1111,7 @@ static Frame createFrame()
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     poolInfo.queueFamilyIndex = vk.queueFamily;
 
-    VkResult poolResult = vkCreateCommandPool(vk.device, &poolInfo, nullptr, &frame.cmdPool);
+    [[maybe_unused]] VkResult poolResult = vkCreateCommandPool(vk.device, &poolInfo, nullptr, &frame.cmdPool);
     if (frame.cmdPool == nullptr)
         HG_PANIC("Could not create Vulkan command pool: %s\n", vkResultToStr(poolResult));
 
@@ -1119,7 +1119,7 @@ static Frame createFrame()
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VkResult fenceResult = vkCreateFence(vk.device, &fenceInfo, nullptr, &frame.fence);
+    [[maybe_unused]] VkResult fenceResult = vkCreateFence(vk.device, &fenceInfo, nullptr, &frame.fence);
     if (frame.fence == nullptr)
         HG_PANIC("Could not create Vulkan fence: %s\n", vkResultToStr(fenceResult));
 
@@ -1183,7 +1183,7 @@ bool internal::initGpu()
         cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         cmdPoolInfo.queueFamilyIndex = vk.queueFamily;
 
-        VkResult result = vkCreateCommandPool(vk.device, &cmdPoolInfo, nullptr, &vk.cmdPool);
+        [[maybe_unused]]         VkResult result = vkCreateCommandPool(vk.device, &cmdPoolInfo, nullptr, &vk.cmdPool);
         if (vk.cmdPool == nullptr)
             HG_PANIC("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
     }
@@ -1197,7 +1197,7 @@ bool internal::initGpu()
         info.descriptorSetCount = 1;
         info.pSetLayouts = &vk.bindlessLayout;
 
-        VkResult result = vkAllocateDescriptorSets(vk.device, &info, &vk.bindlessSet);
+        [[maybe_unused]]         VkResult result = vkAllocateDescriptorSets(vk.device, &info, &vk.bindlessSet);
         if (vk.bindlessSet == nullptr)
             HG_PANIC("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
     }
@@ -1639,7 +1639,7 @@ static VkSampler samplerCreate(SamplerInfo* desc)
     info.borderColor = gpuSamplerBorderToVk(desc->border);
 
     VkSampler sampler = nullptr;
-    VkResult result = vkCreateSampler(vk.device, &info, nullptr, &sampler);
+    [[maybe_unused]]     VkResult result = vkCreateSampler(vk.device, &info, nullptr, &sampler);
     if (sampler == nullptr)
         HG_PANIC("Could not create VkSampler: %s\n", vkResultToStr(result));
 
@@ -1697,7 +1697,7 @@ GpuView* gpuViewCreateEx(const GpuViewCreateEx* config)
     info.subresourceRange.baseArrayLayer = config->baseArrayLayer;
     info.subresourceRange.layerCount = config->layerCount;
 
-    VkResult result = vkCreateImageView(vk.device, &info, nullptr, &view->view);
+    [[maybe_unused]]     VkResult result = vkCreateImageView(vk.device, &info, nullptr, &view->view);
     if (view->view == nullptr)
         HG_PANIC("Could not create VkImageView: %s\n", vkResultToStr(result));
 
@@ -2127,7 +2127,7 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
     info.pCode = (const u32*)spirvCode;
 
     VkShaderModule shader = nullptr;
-    VkResult result = vkCreateShaderModule(vk.device, &info, nullptr, &shader);
+    [[maybe_unused]]     VkResult result = vkCreateShaderModule(vk.device, &info, nullptr, &shader);
     if (shader == nullptr)
         HG_PANIC("Could not create VkShaderModule: %s\n", vkResultToStr(result));
 
@@ -2157,7 +2157,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
         layoutInfo.pPushConstantRanges = &pushRange;
     }
 
-    VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
+    [[maybe_unused]]     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
         HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
@@ -2298,7 +2298,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     pipelineInfo.basePipelineHandle = nullptr;
     pipelineInfo.basePipelineIndex = -1;
 
-    VkResult pipelineResult = vkCreateGraphicsPipelines(
+    [[maybe_unused]]     VkResult pipelineResult = vkCreateGraphicsPipelines(
         vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
     if (pipeline == nullptr)
         HG_PANIC("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
@@ -2325,7 +2325,7 @@ GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 sh
     layoutInfo.pushConstantRangeCount = pushSize > 0 ? 1 : 0;
     layoutInfo.pPushConstantRanges = pushSize > 0 ? &push : nullptr;
 
-    VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
+    [[maybe_unused]]     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
         HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
@@ -2342,7 +2342,7 @@ GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 sh
     pipelineInfo.basePipelineHandle = nullptr;
     pipelineInfo.basePipelineIndex = -1;
 
-    VkResult pipelineResult = vkCreateComputePipelines(
+    [[maybe_unused]]     VkResult pipelineResult = vkCreateComputePipelines(
         vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
     if (pipeline == nullptr)
         HG_PANIC("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
@@ -3019,7 +3019,7 @@ static void resizeWindowSwapchain(Window* window)
         swapchainInfo.clipped = VK_TRUE;
         swapchainInfo.oldSwapchain = window->swapchain;
 
-        VkResult result = vkCreateSwapchainKHR(vk.device, &swapchainInfo, nullptr, &window->swapchain);
+        [[maybe_unused]]         VkResult result = vkCreateSwapchainKHR(vk.device, &swapchainInfo, nullptr, &window->swapchain);
         if (window->swapchain == nullptr)
             HG_PANIC("Failed to create swapchain: %s\n", vkResultToStr(result));
 
@@ -3058,7 +3058,7 @@ static void resizeWindowSwapchain(Window* window)
 
             window->views[i] = {};
 
-            VkResult viewResult = vkCreateImageView(vk.device, &viewInfo, nullptr, &window->views[i].view);
+            [[maybe_unused]]             VkResult viewResult = vkCreateImageView(vk.device, &viewInfo, nullptr, &window->views[i].view);
             if (window->views[i].view == nullptr)
                 HG_PANIC("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
 
@@ -3073,7 +3073,7 @@ static void resizeWindowSwapchain(Window* window)
             VkSemaphoreCreateInfo semaphoreInfo{};
             semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-            VkResult readyToPresentResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
+            [[maybe_unused]]             VkResult readyToPresentResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
             if (window->readyToPresent[i] == nullptr)
                 HG_PANIC("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
         }
@@ -3083,7 +3083,7 @@ static void resizeWindowSwapchain(Window* window)
             VkSemaphoreCreateInfo semaphoreInfo{};
             semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-            VkResult imageAvailableResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
+            [[maybe_unused]]             VkResult imageAvailableResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
             if (window->imageAvailable[i] == nullptr)
                 HG_PANIC("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
         }

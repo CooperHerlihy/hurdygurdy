@@ -19,10 +19,17 @@
                 packages = with pkgs; [
                     cmake
                     ninja
+
+                    clang
                     mold
                     ccache
+
                     shaderc
                     pkgs-vvl.vulkan-validation-layers
+
+                    gdb
+                    sdl3
+                    vulkan-headers
                 ];
 
                 buildInputs = with pkgs; [
@@ -54,8 +61,11 @@
                 nativeBuildInputs = with pkgs; [
                     cmake
                     ninja
+
+                    clang
                     mold
                     ccache
+
                     shaderc
                 ];
 

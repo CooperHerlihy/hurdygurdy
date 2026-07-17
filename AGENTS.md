@@ -14,11 +14,11 @@ No STL containers, no exceptions, no RTTI.
 ## Build & Verify
 
 ```
-build: cmake --workflow --preset default
+build: cmake --workflow --preset debug
 test:  ./build/test
 ```
 
-Fix all warnings (`-Werror` is on). Run both after every change.
+Run both after every change. Use gdb to debug.
 
 ## Navigation
 
