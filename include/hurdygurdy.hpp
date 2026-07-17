@@ -31,6 +31,7 @@
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 #include <algorithm>
 #include <concepts>
@@ -45,7 +46,7 @@
 namespace hg {
 
 // ============================================================================
-// Configuration Macros
+// Config Macros
 // ============================================================================
 
 #ifdef __GNUC__
@@ -167,14 +168,14 @@ using f32 = float;
 using f64 = double;
 
 /**
- * A block of binary data
- */
-struct BinaryView;
-
-/**
  * A view into a string
  */
 struct StringView;
+
+/**
+ * A block of binary data
+ */
+struct BinaryView;
 
 /**
  * A view into memory of a type
@@ -378,44 +379,6 @@ Maybe<HurdyGurdy> init(SubsystemFlags init = Subsystem_all);
 // ============================================================================
 
 /**
- * A non-owning view into binary data
- */
-struct BinaryView {
-    /**
-     * The data
-     */
-    const void* data = nullptr;
-    /**
-     * The size of the data in bytes
-     */
-    u64 size = 0;
-
-    /**
-     * Read data at index into a buffer
-     *
-     * Parameters
-     * - idx The index into the file in bytes to read from
-     * - dst A pointer to store the read data
-     * - size The size in bytes to read
-     */
-    void read(u64 idx, void* dst, u64 len);
-
-    /**
-     * Read data of arbitrary type from the file
-     *
-     * Parameters
-     * - idx The index into the file in bytes to read from
-     */
-    template<typename T>
-    T read(u64 idx)
-    {
-        T ret;
-        read(idx, &ret, sizeof(T));
-        return ret;
-    }
-};
-
-/**
  * A non-owning view into a string
  */
 struct StringView {
@@ -491,6 +454,44 @@ struct StringView {
     const char* end() const
     {
         return chars + length;
+    }
+};
+
+/**
+ * A non-owning view into binary data
+ */
+struct BinaryView {
+    /**
+     * The data
+     */
+    const void* data = nullptr;
+    /**
+     * The size of the data in bytes
+     */
+    u64 size = 0;
+
+    /**
+     * Read data at index into a buffer
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     * - dst A pointer to store the read data
+     * - size The size in bytes to read
+     */
+    void read(u64 idx, void* dst, u64 len);
+
+    /**
+     * Read data of arbitrary type from the file
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     */
+    template<typename T>
+    T read(u64 idx)
+    {
+        T ret;
+        read(idx, &ret, sizeof(T));
+        return ret;
     }
 };
 
@@ -751,26 +752,6 @@ constexpr u64 endianReverse64(u64 val)
     swapped = ((swapped << 16) & 0xffff0000ffff0000ull) | ((swapped >> 16) & 0x0000ffff0000ffffull);
     return (swapped << 32) | (swapped >> 32);
 }
-
-/**
- * Clear a section of memory
- */
-void memClear(void* dst, u64 size, u8 val = 0);
-
-/**
- * Copy memory from src to dst, may not overlap
- */
-void memCopy(void* __restrict dst, const void* __restrict src, u64 size);
-
-/**
- * Copy memory from src to dst, may overlap
- */
-void memMove(void* dst, const void* src, u64 size);
-
-/**
- * Check if two regions of memory are identical
- */
-bool memEqual(const void* dst, const void* src, u64 size);
 
 // ============================================================================
 // Memory
@@ -1276,10 +1257,6 @@ void forPar(u64 begin, u64 end, F fn);
  */
 void gpuWaitIdle();
 
-// ----------------------------------------------------------------------------
-// Pixel Formats
-// ----------------------------------------------------------------------------
-
 /**
  * Pixel formats
  */
@@ -1564,10 +1541,6 @@ u32 formatToSize(Format format);
 
 // Vulkan allocator : TODO?
 
-// ----------------------------------------------------------------------------
-// Pipeline Stages & Access
-// ----------------------------------------------------------------------------
-
 /**
  * Where in the pipeline a resource can be accessed
  */
@@ -1617,10 +1590,6 @@ enum GpuAccess : u32 {
     GpuAccess_memoryWrite = 0x00010000,
 };
 using GpuAccessFlags = u32;
-
-// ----------------------------------------------------------------------------
-// Buffers
-// ----------------------------------------------------------------------------
 
 /**
  * A gpu buffer
@@ -1730,10 +1699,6 @@ void gpuBufferWrite(GpuBuffer* dst, u64 offset, const void* src, u64 size);
  * - size The size in bytes to read
  */
 void gpuBufferRead(void* dst, GpuBuffer* src, u64 offset, u64 size);
-
-// ----------------------------------------------------------------------------
-// Images & Views
-// ----------------------------------------------------------------------------
 
 /**
  * A gpu image
@@ -2188,10 +2153,6 @@ GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 sh
  */
 void gpuPipelineDestroy(GpuPipeline* pipeline);
 
-// ----------------------------------------------------------------------------
-// Command Buffer & Draw
-// ----------------------------------------------------------------------------
-
 /**
  * A gpu command buffer
  */
@@ -2253,10 +2214,6 @@ void gpuDraw(GpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u
  */
 void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
 
-// ----------------------------------------------------------------------------
-// Barriers
-// ----------------------------------------------------------------------------
-
 /**
  * An image dependency barrier
  */
@@ -2314,10 +2271,6 @@ void gpuMemoryBarrier(
     const GpuImageBarrier* imageBarriers,
     u32 imageBarrierCount);
 
-// ----------------------------------------------------------------------------
-// Compute Pass
-// ----------------------------------------------------------------------------
-
 /**
  * A compute pass description
  */
@@ -2364,10 +2317,6 @@ struct GpuComputePass {
  * - pass The compute pass description
  */
 void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass);
-
-// ----------------------------------------------------------------------------
-// Render Pass
-// ----------------------------------------------------------------------------
 
 /**
  * The operation to load a render attachment
@@ -2543,10 +2492,6 @@ void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
 // Math
 // ============================================================================
 
-// ----------------------------------------------------------------------------
-// Constants & Helpers
-// ----------------------------------------------------------------------------
-
 /**
  * The value of Pi
  */
@@ -2614,10 +2559,6 @@ constexpr f32 smoothQuintic(f32 t)
 {
     return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
 }
-
-// ----------------------------------------------------------------------------
-// Vector Types
-// ----------------------------------------------------------------------------
 
 /**
  * A 2D vector
@@ -2820,10 +2761,6 @@ struct Vec4 {
     }
 };
 
-// ----------------------------------------------------------------------------
-// Matrix Types
-// ----------------------------------------------------------------------------
-
 /**
  * A 2x2 matrix
  */
@@ -3007,10 +2944,6 @@ struct Mat4 {
     }
 };
 
-// ----------------------------------------------------------------------------
-// Complex & Quaternion Types
-// ----------------------------------------------------------------------------
-
 /**
  * A complex number
  */
@@ -3087,10 +3020,6 @@ struct Quat {
      */
     Quat& operator-=(Quat other);
 };
-
-// ----------------------------------------------------------------------------
-// Comparison Operators
-// ----------------------------------------------------------------------------
 
 /**
  * Compare vectors
@@ -3249,10 +3178,6 @@ constexpr bool operator!=(Quat lhs, Quat rhs)
 {
     return lhs.r != rhs.r || lhs.i != rhs.i || lhs.j != rhs.j || lhs.k != rhs.k;
 }
-
-// ----------------------------------------------------------------------------
-// Vector Functions
-// ----------------------------------------------------------------------------
 
 /**
  * Add 2D vectors
@@ -3558,10 +3483,6 @@ f32 vecCross2(Vec2 lhs, Vec2 rhs);
  */
 Vec3 vecCross3(Vec3 lhs, Vec3 rhs);
 
-// ----------------------------------------------------------------------------
-// Matrix Functions
-// ----------------------------------------------------------------------------
-
 /**
  * Add 2x2 matrices
  */
@@ -3642,10 +3563,6 @@ Mat3 matTranspose3(const Mat3& mat);
  */
 Mat4 matTranspose4(const Mat4& mat);
 
-// ----------------------------------------------------------------------------
-// Complex Functions
-// ----------------------------------------------------------------------------
-
 /**
  * Add complex numbers
  */
@@ -3697,10 +3614,6 @@ Complex complexNorm(Complex comp);
  * Rotate a 2D vector using a complex number
  */
 Vec2 vecRot2(Complex lhs, Vec2 rhs);
-
-// ----------------------------------------------------------------------------
-// Quaternion Functions
-// ----------------------------------------------------------------------------
 
 /**
  * Add quaternions
@@ -3766,10 +3679,6 @@ Vec3 vecRot3(Quat lhs, Vec3 rhs);
  */
 Mat3 matRot3(Quat lhs, Mat3 rhs);
 
-// ----------------------------------------------------------------------------
-// Transform Matrices
-// ----------------------------------------------------------------------------
-
 /**
  * Creates a model matrix for 2D graphics
  *
@@ -3834,9 +3743,9 @@ Mat4 matOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far
  */
 Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far);
 
-// ----------------------------------------------------------------------------
+// ============================================================================
 // Geometry 2D
-// ----------------------------------------------------------------------------
+// ============================================================================
 
 /**
  * A 2D circle
@@ -4074,10 +3983,9 @@ bool intersectLineCircle(Line2D line, Circle circle, Hit2D* hit);
  */
 bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit);
 
-// ----------------------------------------------------------------------------
+// ============================================================================
 // Geometry 3D
-// ----------------------------------------------------------------------------
-
+// ============================================================================
 /**
  * A 3D sphere
  */
@@ -4441,7 +4349,721 @@ u32 rngNext(Rng* rng);
 u64 rngNext64(Rng* rng);
 
 // ============================================================================
-// Binary
+// Serialization
+// ============================================================================
+
+/**
+ * The primitive serializable types
+ */
+enum SerialType : u32 {
+    /**
+     * An object with fields
+     */
+    SerialType_object,
+    /**
+     * String data
+     */
+    SerialType_string,
+    /**
+     * An integer value
+     */
+    SerialType_integer,
+    /**
+     * A floating point value
+     */
+    SerialType_floating,
+    /**
+     * A boolean value
+     */
+    SerialType_boolean,
+};
+
+/**
+ * Stringify SerialType
+ */
+const char* serialTypeToString(SerialType s);
+
+/**
+ * A serialized data node
+ */
+struct SerialNode {
+    /**
+     * The parent object or array
+     */
+    SerialNode* parent = nullptr;
+    /**
+     * The next node in the object or array
+     */
+    SerialNode* next = nullptr;
+    /**
+     * The type of data
+     */
+    SerialType type = {};
+    /**
+     * The number of fields, if an object
+     */
+    u32 count = 0;
+    /**
+     * The data
+     */
+    union {
+        /**
+         * The fields of an object
+         */
+        SerialNode* children;
+        /**
+         * String data
+         */
+        StringView string;
+        /**
+         * Integer value
+         */
+        i64 integer;
+        /**
+         * Floating point value
+         */
+        f64 floating;
+        /**
+         * Boolean value
+         */
+        bool boolean;
+    };
+};
+
+/**
+ * The data for serialization
+ */
+struct Serializer {
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+    /**
+     * The root node
+     */
+    SerialNode* root = nullptr;
+    /**
+     * The current object
+     */
+    SerialNode* parent = nullptr;
+    /**
+     * The current data node
+     */
+    SerialNode* current = nullptr;
+    /**
+     * Whether the serializer is reading or writing
+     */
+    bool writing = false;
+};
+
+/**
+ * Begin a serial writer
+ */
+Serializer serialWriter(Arena* arena);
+
+/**
+ * Begin a serial reader
+ */
+Serializer serialReader(Arena* arena, SerialNode* begin);
+
+/**
+ * The preamble to serializing a node, generally not needed
+ */
+void serializeNodeStart(Serializer* s);
+
+/**
+ * Begin serializing an object or array
+ */
+void serializeBegin(Serializer* s, u32* size = nullptr);
+
+/**
+ * Begin serializing an object or array
+ */
+void serializeEnd(Serializer* s);
+
+/**
+ * Serialize a value of unknown type
+ */
+void serializeVoid(Serializer* s, void* val, u32 size);
+
+/**
+ * Serialize a value, should be overridden
+ */
+template<typename T>
+void serialize(Serializer* s, T* val);
+
+/**
+ * Serialize an object conveniently
+ */
+template<typename... Ts>
+void serializeObject(Serializer* s, Ts*... vals);
+
+/**
+ * Serialize an array of values
+ */
+template<typename T, u64 N>
+void serialize(Serializer* s, T (*arr)[N]);
+
+/**
+ * u8 serialization
+ */
+template<>
+void serialize(Serializer* s, u8* val);
+
+/**
+ * u16 serialization
+ */
+template<>
+void serialize(Serializer* s, u16* val);
+
+/**
+ * u32 serialization
+ */
+template<>
+void serialize(Serializer* s, u32* val);
+
+/**
+ * u64 serialization
+ */
+template<>
+void serialize(Serializer* s, u64* val);
+
+/**
+ * i8 serialization
+ */
+template<>
+void serialize(Serializer* s, i8* val);
+
+/**
+ * i16 serialization
+ */
+template<>
+void serialize(Serializer* s, i16* val);
+
+/**
+ * i32 serialization
+ */
+template<>
+void serialize(Serializer* s, i32* val);
+
+/**
+ * i64 serialization
+ */
+template<>
+void serialize(Serializer* s, i64* val);
+
+/**
+ * f32 serialization
+ */
+template<>
+void serialize(Serializer* s, f32* val);
+
+/**
+ * f64 serialization
+ */
+template<>
+void serialize(Serializer* s, f64* val);
+
+/**
+ * bool serialization
+ */
+template<>
+void serialize(Serializer* s, bool* val);
+
+/**
+ * Vec2 serialization
+ */
+template<>
+void serialize(Serializer* s, Vec2* val);
+
+/**
+ * Vec3 serialization
+ */
+template<>
+void serialize(Serializer* s, Vec3* val);
+
+/**
+ * Vec4 serialization
+ */
+template<>
+void serialize(Serializer* s, Vec4* val);
+
+/**
+ * Mat2 serialization
+ */
+template<>
+void serialize(Serializer* s, Mat2* val);
+
+/**
+ * Mat3 serialization
+ */
+template<>
+void serialize(Serializer* s, Mat3* val);
+
+/**
+ * Mat4 serialization
+ */
+template<>
+void serialize(Serializer* s, Mat4* val);
+
+/**
+ * Complex serialization
+ */
+template<>
+void serialize(Serializer* s, Complex* val);
+
+/**
+ * Quat serialization
+ */
+template<>
+void serialize(Serializer* s, Quat* val);
+
+/**
+ * Write serialized data in a binary format
+ */
+BinaryView binaryWriteSerial(Arena* arena, Serializer* data);
+
+/**
+ * Read binary data to be deserialized
+ */
+Serializer binaryReadSerial(Arena* arena, BinaryView bin);
+
+/**
+ * Write serialized data as json
+ */
+StringView jsonWriteSerial(Arena* arena, Serializer* data);
+
+// /**
+//  * Read json data to be deserialized : TODO
+//  */
+// Serializer jsonReadSerial(Arena* arena, StringView json);
+
+/**
+ * An error contained in the json
+ */
+struct JsonError {
+    /**
+     * The next error
+     */
+    JsonError* next = nullptr;
+    /**
+     * The error message
+     */
+    StringView msg = {};
+};
+
+/**
+ * A node in the json file
+ */
+struct JsonNode;
+
+/**
+ * The types contained in nodes
+ */
+enum JsonType : u32 {
+    JsonType_none = 0,
+    JsonType_struct,
+    JsonType_field,
+    JsonType_array,
+    JsonType_string,
+    JsonType_float,
+    JsonType_integer,
+    JsonType_bool,
+};
+
+/**
+ * A field in a struct
+ */
+struct JsonField {
+    /**
+     * The next field
+     */
+    JsonField* next = nullptr;
+    /**
+     * The name of the field
+     */
+    StringView name = {};
+    /**
+     * The value stored in the field
+     */
+    JsonNode* value = nullptr;
+};
+
+/**
+ * A struct contained in the json
+ */
+struct JsonStruct {
+    /**
+     * The first field
+     */
+    JsonField* fields = nullptr;
+};
+
+/**
+ * An element in an array
+ */
+struct JsonElem {
+    /**
+     * The next element
+     */
+    JsonElem* next = nullptr;
+    /**
+     * The value stored in the element
+     */
+    JsonNode* value = nullptr;
+};
+
+/**
+ * An array contained in the json
+ */
+struct JsonArray {
+    /**
+     * The first element
+     */
+    JsonElem* elems = nullptr;
+};
+
+/**
+ * A node in the json file
+ */
+struct JsonNode {
+    /**
+     * The node's type
+     */
+    JsonType type = {};
+    /**
+     * The value in the node
+     */
+    union {
+        JsonStruct jstruct;
+        JsonField field;
+        JsonArray array;
+        StringView string;
+        f64 floating;
+        i64 integer;
+        bool boolean;
+    };
+};
+
+/**
+ * A parsed Json file
+ */
+struct Json {
+    /**
+     * The successfully parsed nodes
+     */
+    JsonNode* file = nullptr;
+    /**
+     * The errors found
+     */
+    JsonError* errors = nullptr;
+};
+
+/**
+ * Parses json text into a tree
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - text The json text to parse
+ *
+ * Returns
+ * - The parsed json, errors contained inside
+ */
+Json parseJson(Arena* arena, StringView text);
+
+// ============================================================================
+// Strings
+// ============================================================================
+
+/**
+ * Compare strings
+ */
+inline bool operator==(StringView lhs, StringView rhs)
+{
+    return lhs.length == rhs.length && memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
+}
+
+/**
+ * Compare strings
+ */
+inline bool operator!=(StringView lhs, StringView rhs)
+{
+    return !(lhs == rhs);
+}
+
+/**
+ * Create a null terminated string for C interop
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - str The string to create from
+ */
+char* cString(Arena* arena, StringView str);
+
+/**
+ * A string builder
+ */
+struct StringBuilder {
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+    /**
+     * The string data
+     */
+    char* chars = nullptr;
+    /**
+     * The number of characters currently in the string
+     */
+    u64 length = 0;
+
+    /**
+     * Construct empty
+     */
+    StringBuilder() noexcept = default;
+
+    /**
+     * Construct a new builder
+     */
+    StringBuilder(Arena* arenaVal, StringView str = "")
+        : arena{arenaVal} , chars{arenaVal->alloc<char>(str.length)} , length{str.length}
+    {
+        if (str != "")
+            memcpy(chars, str.chars, str.length);
+    }
+
+    /**
+     * Implicit converts to a string view
+     */
+    constexpr operator StringView() const
+    {
+        return {chars, length};
+    }
+
+    /**
+     * Access using the index operator
+     */
+    constexpr char& operator[](u64 index) const
+    {
+        HG_ASSERT(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Insert a string at idx
+     */
+    void insert(u64 idx, StringView src);
+
+    /**
+     * Add a string to the end
+     */
+    void append(StringView src)
+    {
+        insert(length - 1, src);
+    }
+
+    /**
+     * Insert a string at the beginning
+     */
+    void prepend(StringView src)
+    {
+        insert(0, src);
+    }
+
+    /**
+     * Insert a char at idx
+     */
+    void insert(u64 idx, char c)
+    {
+        insert(idx, {&c, 1});
+    }
+
+    /**
+     * Add a char to the end
+     */
+    void append(char c)
+    {
+        insert(length - 1, c);
+    }
+
+    /**
+     * Insert a char at the beginning
+     */
+    void prepend(char c)
+    {
+        insert(0, c);
+    }
+
+};
+
+/**
+ * Compare string builders
+ */
+inline bool operator==(const StringBuilder& lhs, const StringBuilder& rhs)
+{
+    return StringView{lhs} == StringView{rhs};
+}
+
+/**
+ * Compare string builders
+ */
+inline bool operator!=(const StringBuilder& lhs, const StringBuilder& rhs)
+{
+    return !(lhs == rhs);
+}
+
+/**
+ * An owning string
+ */
+struct String {
+    /**
+     * The string data
+     */
+    char* chars = nullptr;
+    /**
+     * The number of characters currently in the string
+     */
+    u64 length = 0;
+
+    /**
+     * Construct empty
+     */
+    String() noexcept = default;
+
+    /**
+     * Create a new string from data
+     */
+    static String create(StringView data);
+
+    /**
+     * Destroy the string
+     */
+    ~String() noexcept;
+
+    /**
+     * Implicit converts to a string view
+     */
+    constexpr operator StringView() const
+    {
+        return {chars, length};
+    }
+
+    /**
+     * Access using the index operator
+     */
+    constexpr char& operator[](u64 index) const
+    {
+        HG_ASSERT(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Move construct
+     */
+    String(String&& other) noexcept
+        : chars{std::exchange(other.chars, nullptr)}
+        , length{std::exchange(other.length, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    String& operator=(String&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~String();
+            new (this) String{std::move(other)};
+        }
+        return *this;
+    }
+
+    String(const String&) = delete;
+    String& operator=(const String&) = delete;
+};
+
+/**
+ * Compare strings
+ */
+inline bool operator==(const String& lhs, const String& rhs)
+{
+    return StringView{lhs} == StringView{rhs};
+}
+
+/**
+ * Compare strings
+ */
+inline bool operator!=(const String& lhs, const String& rhs)
+{
+    return !(lhs == rhs);
+}
+
+/**
+ * String serialization
+ */
+template<>
+void serialize(Serializer* s, String* val);
+
+/**
+ * Create a formatted string : TODO
+ */
+// template<typename... Ts>
+// StringBuilder stringFormat(Arena* arena, String fmt, Ts... args);
+
+/**
+ * Check whether a character is whitespace (space, tab, or newline)
+ */
+bool isWhitespace(char c);
+
+/**
+ * Check whether a character is a base 10 numeral (0-9)
+ */
+bool isNumeral(char c);
+
+/**
+ * Check whether a string is a base 10 integer
+ */
+bool isInteger(StringView str);
+
+/**
+ * Check whether a string is a base 10 floating point number
+ */
+bool isFloat(StringView str);
+
+/**
+ * Create an integer from a base 10 string
+ */
+i64 stringToInteger(StringView str);
+
+/**
+ * Create a float from a base 10 string
+ */
+f64 stringToFloat(StringView str);
+
+/**
+ * Create a base 10 string from an integer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ */
+StringBuilder integerToString(Arena* arena, i64 num);
+
+/**
+ * Create a base 10 string from an integer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ * - decimalCount The number of trailing decimal digits
+ */
+StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount);
+
+// base 2 and 16 string-int conversions : TODO
+// arbitrary base string-int conversions : TODO?
+
+// ============================================================================
+// Containers
 // ============================================================================
 
 /**
@@ -4639,727 +5261,11 @@ struct Binary {
     Binary& operator=(const Binary&) = delete;
 };
 
-// ============================================================================
-// String
-// ============================================================================
-
-/**
- * Compare strings
- */
-inline bool operator==(StringView lhs, StringView rhs)
-{
-    return lhs.length == rhs.length && memEqual(lhs.chars, rhs.chars, lhs.length);
-}
-
-/**
- * Compare strings
- */
-inline bool operator!=(StringView lhs, StringView rhs)
-{
-    return !(lhs == rhs);
-}
-
-/**
- * Create a null terminated string for C interop
- *
- * Parameters
- * - arena The arena to allocate from
- * - str The string to create from
- */
-char* cString(Arena* arena, StringView str);
-
-/**
- * A string builder
- */
-struct StringBuilder {
-    /**
-     * The arena to allocate from
-     */
-    Arena* arena = nullptr;
-    /**
-     * The string data
-     */
-    char* chars = nullptr;
-    /**
-     * The number of characters currently in the string
-     */
-    u64 length = 0;
-
-    /**
-     * Construct empty
-     */
-    StringBuilder() noexcept = default;
-
-    /**
-     * Construct a new builder
-     */
-    StringBuilder(Arena* arenaVal, StringView str = "")
-        : arena{arenaVal} , chars{arenaVal->alloc<char>(str.length)} , length{str.length}
-    {
-        if (str != "")
-            memCopy(chars, str.chars, str.length);
-    }
-
-    /**
-     * Implicit converts to a string view
-     */
-    constexpr operator StringView() const
-    {
-        return {chars, length};
-    }
-
-    /**
-     * Access using the index operator
-     */
-    constexpr char& operator[](u64 index) const
-    {
-        HG_ASSERT(index < length);
-        return chars[index];
-    }
-
-    /**
-     * Insert a string at idx
-     */
-    void insert(u64 idx, StringView src);
-
-    /**
-     * Add a string to the end
-     */
-    void append(StringView src)
-    {
-        insert(length - 1, src);
-    }
-
-    /**
-     * Insert a string at the beginning
-     */
-    void prepend(StringView src)
-    {
-        insert(0, src);
-    }
-
-    /**
-     * Insert a char at idx
-     */
-    void insert(u64 idx, char c)
-    {
-        insert(idx, {&c, 1});
-    }
-
-    /**
-     * Add a char to the end
-     */
-    void append(char c)
-    {
-        insert(length - 1, c);
-    }
-
-    /**
-     * Insert a char at the beginning
-     */
-    void prepend(char c)
-    {
-        insert(0, c);
-    }
-
-};
-
-/**
- * Compare string builders
- */
-inline bool operator==(const StringBuilder& lhs, const StringBuilder& rhs)
-{
-    return StringView{lhs} == StringView{rhs};
-}
-
-/**
- * Compare string builders
- */
-inline bool operator!=(const StringBuilder& lhs, const StringBuilder& rhs)
-{
-    return !(lhs == rhs);
-}
-
-/**
- * Create a formatted string : TODO
- */
-// template<typename... Ts>
-// StringBuilder stringFormat(Arena* arena, String fmt, Ts... args);
-
-/**
- * Check whether a character is whitespace (space, tab, or newline)
- */
-bool isWhitespace(char c);
-
-/**
- * Check whether a character is a base 10 numeral (0-9)
- */
-bool isNumeral(char c);
-
-/**
- * Check whether a string is a base 10 integer
- */
-bool isInteger(StringView str);
-
-/**
- * Check whether a string is a base 10 floating point number
- */
-bool isFloat(StringView str);
-
-/**
- * Create an integer from a base 10 string
- */
-i64 stringToInteger(StringView str);
-
-/**
- * Create a float from a base 10 string
- */
-f64 stringToFloat(StringView str);
-
-/**
- * Create a base 10 string from an integer
- *
- * Parameters
- * - arena The arena to allocate from
- * - num The integer number to create from
- */
-StringBuilder integerToString(Arena* arena, i64 num);
-
-/**
- * Create a base 10 string from an integer
- *
- * Parameters
- * - arena The arena to allocate from
- * - num The integer number to create from
- * - decimalCount The number of trailing decimal digits
- */
-StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount);
-
-// base 2 and 16 string-int conversions : TODO
-// arbitrary base string-int conversions : TODO?
-
-/**
- * An owning string
- */
-struct String {
-    /**
-     * The string data
-     */
-    char* chars = nullptr;
-    /**
-     * The number of characters currently in the string
-     */
-    u64 length = 0;
-
-    /**
-     * Construct empty
-     */
-    String() noexcept = default;
-
-    /**
-     * Create a new string from data
-     */
-    static String create(StringView data)
-    {
-        String str;
-        str.chars = heapAlloc<char>(data.length);
-        str.length = data.length;
-        memCopy(&str.chars, &data.chars, data.length);
-        return str;
-    }
-
-    /**
-     * Destroy the string
-     */
-    ~String() noexcept
-    {
-        if (chars != nullptr)
-            heapFree(chars, length);
-    }
-
-    /**
-     * Implicit converts to a string view
-     */
-    constexpr operator StringView() const
-    {
-        return {chars, length};
-    }
-
-    /**
-     * Access using the index operator
-     */
-    constexpr char& operator[](u64 index) const
-    {
-        HG_ASSERT(index < length);
-        return chars[index];
-    }
-
-    /**
-     * Move construct
-     */
-    String(String&& other) noexcept
-    {
-        chars = std::exchange(other.chars, nullptr);
-        length = std::exchange(other.length, 0);
-    }
-
-    /**
-     * Move assign
-     */
-    String& operator=(String&& other) noexcept
-    {
-        if (this != &other)
-        {
-            if (chars != nullptr)
-                heapFree(chars, length);
-            chars = std::exchange(other.chars, nullptr);
-            length = std::exchange(other.length, 0);
-        }
-        return *this;
-    }
-
-    String(const String&) = delete;
-    String& operator=(const String&) = delete;
-};
-
-// ============================================================================
-// Serialization
-// ============================================================================
-
-/**
- * The primitive serializable types
- */
-enum SerialType : u32 {
-    /**
-     * An object with fields
-     */
-    SerialType_object,
-    /**
-     * String data
-     */
-    SerialType_string,
-    /**
-     * An integer value
-     */
-    SerialType_integer,
-    /**
-     * A floating point value
-     */
-    SerialType_floating,
-    /**
-     * A boolean value
-     */
-    SerialType_boolean,
-};
-
-/**
- * Stringify SerialType
- */
-const char* serialTypeToString(SerialType s);
-
-/**
- * A serialized data node
- */
-struct SerialNode {
-    /**
-     * The parent object or array
-     */
-    SerialNode* parent = nullptr;
-    /**
-     * The next node in the object or array
-     */
-    SerialNode* next = nullptr;
-    /**
-     * The type of data
-     */
-    SerialType type = {};
-    /**
-     * The number of fields, if an object
-     */
-    u32 count = 0;
-    /**
-     * The data
-     */
-    union {
-        /**
-         * The fields of an object
-         */
-        SerialNode* children;
-        /**
-         * String data
-         */
-        StringView string;
-        /**
-         * Integer value
-         */
-        i64 integer;
-        /**
-         * Floating point value
-         */
-        f64 floating;
-        /**
-         * Boolean value
-         */
-        bool boolean;
-    };
-};
-
-/**
- * The data for serialization
- */
-struct Serializer {
-    /**
-     * The arena to allocate from
-     */
-    Arena* arena = nullptr;
-    /**
-     * The root node
-     */
-    SerialNode* root = nullptr;
-    /**
-     * The current object
-     */
-    SerialNode* parent = nullptr;
-    /**
-     * The current data node
-     */
-    SerialNode* current = nullptr;
-    /**
-     * Whether the serializer is reading or writing
-     */
-    bool writing = false;
-};
-
-/**
- * Begin a serial writer
- */
-Serializer serialWriter(Arena* arena);
-
-/**
- * Begin a serial reader
- */
-Serializer serialReader(Arena* arena, SerialNode* begin);
-
-/**
- * The preamble to serializing a node, generally not needed
- */
-void serializeNodeStart(Serializer* s);
-
-/**
- * Begin serializing an object or array
- */
-void serializeBegin(Serializer* s, u32* size = nullptr);
-
-/**
- * Begin serializing an object or array
- */
-void serializeEnd(Serializer* s);
-
-/**
- * Serialize a value of unknown type
- */
-void serializeVoid(Serializer* s, void* val, u32 size);
-
-/**
- * Serialize a value, should be overridden
- */
-template<typename T>
-void serialize(Serializer* s, T* val);
-
-/**
- * Serialize an object conveniently
- */
-template<typename... Ts>
-void serializeObject(Serializer* s, Ts*... vals);
-
-/**
- * Serialize an array of values
- */
-template<typename T, u64 N>
-void serialize(Serializer* s, T (*arr)[N]);
-
 /**
  * Binary serialization
  */
 template<>
 void serialize(Serializer* s, Binary* val);
-
-/**
- * String serialization
- */
-template<>
-void serialize(Serializer* s, String* val);
-
-/**
- * u8 serialization
- */
-template<>
-void serialize(Serializer* s, u8* val);
-
-/**
- * u16 serialization
- */
-template<>
-void serialize(Serializer* s, u16* val);
-
-/**
- * u32 serialization
- */
-template<>
-void serialize(Serializer* s, u32* val);
-
-/**
- * u64 serialization
- */
-template<>
-void serialize(Serializer* s, u64* val);
-
-/**
- * i8 serialization
- */
-template<>
-void serialize(Serializer* s, i8* val);
-
-/**
- * i16 serialization
- */
-template<>
-void serialize(Serializer* s, i16* val);
-
-/**
- * i32 serialization
- */
-template<>
-void serialize(Serializer* s, i32* val);
-
-/**
- * i64 serialization
- */
-template<>
-void serialize(Serializer* s, i64* val);
-
-/**
- * f32 serialization
- */
-template<>
-void serialize(Serializer* s, f32* val);
-
-/**
- * f64 serialization
- */
-template<>
-void serialize(Serializer* s, f64* val);
-
-/**
- * bool serialization
- */
-template<>
-void serialize(Serializer* s, bool* val);
-
-/**
- * Vec2 serialization
- */
-template<>
-void serialize(Serializer* s, Vec2* val);
-
-/**
- * Vec3 serialization
- */
-template<>
-void serialize(Serializer* s, Vec3* val);
-
-/**
- * Vec4 serialization
- */
-template<>
-void serialize(Serializer* s, Vec4* val);
-
-/**
- * Mat2 serialization
- */
-template<>
-void serialize(Serializer* s, Mat2* val);
-
-/**
- * Mat3 serialization
- */
-template<>
-void serialize(Serializer* s, Mat3* val);
-
-/**
- * Mat4 serialization
- */
-template<>
-void serialize(Serializer* s, Mat4* val);
-
-/**
- * Complex serialization
- */
-template<>
-void serialize(Serializer* s, Complex* val);
-
-/**
- * Quat serialization
- */
-template<>
-void serialize(Serializer* s, Quat* val);
-
-/**
- * Write serialized data in a binary format
- */
-BinaryBuilder binaryWriteSerial(Arena* arena, Serializer* data);
-
-/**
- * Read binary data to be deserialized
- */
-Serializer binaryReadSerial(Arena* arena, BinaryView bin);
-
-/**
- * Write serialized data as json
- */
-StringView jsonWriteSerial(Arena* arena, Serializer* data);
-
-// /**
-//  * Read json data to be deserialized : TODO
-//  */
-// Serializer jsonReadSerial(Arena* arena, StringView json);
-
-/**
- * An error contained in the json
- */
-struct JsonError {
-    /**
-     * The next error
-     */
-    JsonError* next = nullptr;
-    /**
-     * The error message
-     */
-    StringView msg = {};
-};
-
-/**
- * A node in the json file
- */
-struct JsonNode;
-
-/**
- * The types contained in nodes
- */
-enum JsonType : u32 {
-    JsonType_none = 0,
-    JsonType_struct,
-    JsonType_field,
-    JsonType_array,
-    JsonType_string,
-    JsonType_float,
-    JsonType_integer,
-    JsonType_bool,
-};
-
-/**
- * A field in a struct
- */
-struct JsonField {
-    /**
-     * The next field
-     */
-    JsonField* next = nullptr;
-    /**
-     * The name of the field
-     */
-    StringView name = {};
-    /**
-     * The value stored in the field
-     */
-    JsonNode* value = nullptr;
-};
-
-/**
- * A struct contained in the json
- */
-struct JsonStruct {
-    /**
-     * The first field
-     */
-    JsonField* fields = nullptr;
-};
-
-/**
- * An element in an array
- */
-struct JsonElem {
-    /**
-     * The next element
-     */
-    JsonElem* next = nullptr;
-    /**
-     * The value stored in the element
-     */
-    JsonNode* value = nullptr;
-};
-
-/**
- * An array contained in the json
- */
-struct JsonArray {
-    /**
-     * The first element
-     */
-    JsonElem* elems = nullptr;
-};
-
-/**
- * A node in the json file
- */
-struct JsonNode {
-    /**
-     * The node's type
-     */
-    JsonType type = {};
-    /**
-     * The value in the node
-     */
-    union {
-        JsonStruct jstruct;
-        JsonField field;
-        JsonArray array;
-        StringView string;
-        f64 floating;
-        i64 integer;
-        bool boolean;
-    };
-};
-
-/**
- * A parsed Json file
- */
-struct Json {
-    /**
-     * The successfully parsed nodes
-     */
-    JsonNode* file = nullptr;
-    /**
-     * The errors found
-     */
-    JsonError* errors = nullptr;
-};
-
-/**
- * Parses json text into a tree
- *
- * Parameters
- * - arena The arena to allocate from
- * - text The json text to parse
- *
- * Returns
- * - The parsed json, errors contained inside
- */
-Json parseJson(Arena* arena, StringView text);
-
-// ============================================================================
-// Containers
-// ============================================================================
 
 /**
  * A dynamic array
@@ -7124,8 +7030,217 @@ void audioPlayerSetMusicGain(AudioPlayer* player, SoundAsset* music, f32 gain = 
 void audioPlayerSound(AudioPlayer* player, SoundAsset* sound, f32 gain);
 
 // ============================================================================
-// Camera
+// Rendering
 // ============================================================================
+
+/**
+ * A texture asset
+ */
+struct TextureData {
+    /**
+     * The width of the texture in pixels
+     */
+    u32 width = 0;
+    /**
+     * The height of the texture in pixels
+     */
+    u32 height = 0;
+    /**
+     * The depth of the texture in pixels
+     */
+    u32 depth = 0;
+    /**
+     * The format of each pixel
+     */
+    Format format = {};
+    /**
+     * The pixel data, aligned to 16 bytes
+     */
+    void* pixels = nullptr;
+};
+
+/**
+ * A handle to a texture
+ */
+using TextureDataAsset = Asset<TextureData>;
+
+/**
+ * Texture asset load implementation
+ */
+template<>
+void assetLoadImpl(Asset<TextureData>* data);
+
+/**
+ * Texture asset unload implementation
+ */
+template<>
+void assetUnloadImpl(Asset<TextureData>* data);
+
+/**
+ * Store an image to disc in the png format
+ *
+ * Returns
+ * - Whether the write succeeded
+ */
+bool textureStorePng(TextureData* texture, StringView path);
+
+/**
+ * A texture asset stored on the gpu
+ */
+struct Texture {
+    /**
+     * The image
+     */
+    GpuImage* image = nullptr;
+    /**
+     * The image view
+     */
+    GpuView* view = nullptr;
+};
+
+/**
+ * A handle to a texture asset
+ */
+using TextureAsset = Asset<Texture>;
+
+/**
+ * GpuTexture asset load implementation
+ */
+template<>
+void assetLoadImpl(Asset<Texture>* data);
+
+/**
+ * GpuTexture asset unload implementation
+ */
+template<>
+void assetUnloadImpl(Asset<Texture>* data);
+
+/**
+ * A vertex in a mesh
+ */
+struct MeshVertex {
+    /**
+     * The vertex position
+     */
+    Vec3 pos;
+    /**
+     * The u part of the vertex uv coordinate
+     */
+    f32 uvU;
+    /**
+     * The vertex normal
+     */
+    Vec3 norm;
+    /**
+     * The v part of the vertex uv coordinate
+     */
+    f32 uvV;
+    /**
+     * The vertex tangent
+     */
+    Vec4 tan;
+
+    /**
+     * Construct the vertex
+     */
+    MeshVertex(Vec3 pos, Vec3 norm, Vec4 tan, Vec2 uv)
+        : pos{pos}, uvU{uv.x}, norm{norm}, uvV{uv.y}, tan{tan} {}
+};
+
+/**
+ * A 3d mesh asset
+ */
+struct MeshData {
+    /**
+     * The file index of the first vertex
+     */
+    MeshVertex* vertices = nullptr;
+    /**
+     * The file index of the first geometry index
+     */
+    u32* indices = nullptr;
+    /**
+     * The number of vertices
+     */
+    u32 vertexCount = 0;
+    /**
+     * The size of each vertex in bytes
+     */
+    u32 vertexWidth = 0;
+    /**
+     * The number of indices (4 bytes each)
+     */
+    u32 indexCount = 0;
+    /**
+     * How the vertices should be interpreted in sequence
+     */
+    GpuTopology topology = {};
+};
+
+/**
+ * A handle to a 3d mesh asset
+ */
+using MeshDataAsset = Asset<MeshData>;
+
+/**
+ * Mesh asset load implementation
+ */
+template<>
+void assetLoadImpl(Asset<MeshData>* data);
+
+/**
+ * Mesh asset unload implementation
+ */
+template<>
+void assetUnloadImpl(Asset<MeshData>* data);
+
+/**
+ * Store the model data to disc in gltf format : TODO
+ */
+void meshStoreGltf(MeshData* data, StringView path, Fence* fence);
+
+/**
+ * A 3d mesh asset stored on the gpu
+ */
+struct Mesh {
+    /**
+     * The vertex buffer
+     */
+    GpuBuffer* vertexBuffer = nullptr;
+    /**
+     * The index buffer
+     **/
+    GpuBuffer* indexBuffer = nullptr;
+    /**
+     * The number of vertices
+     */
+    u32 vertexCount = 0;
+    /**
+     * The size of each vertex in bytes
+     */
+    u32 vertexWidth = 0;
+    /**
+     * The number of indices (4 bytes each)
+     */
+    u32 indexCount = 0;
+};
+
+/**
+ * A gpu mesh asset handle
+ */
+using MeshAsset = Asset<Mesh>;
+
+/**
+ * GpuMesh asset load implementation
+ */
+template<>
+void assetLoadImpl(Asset<Mesh>* data);
+
+/**
+ * GpuMesh asset unload implementation
+ */
+template<>
+void assetUnloadImpl(Asset<Mesh>* data);
 
 /**
  * The types of camera projections
@@ -7243,96 +7358,6 @@ void cameraSetOrthographic(Camera* camera, f32 width, f32 height, f32 actualAspe
  * Update the camera's gpu side data
  */
 void cameraUpdate(Camera* camera);
-
-// ============================================================================
-// Texture Assets
-// ============================================================================
-
-/**
- * A texture asset
- */
-struct TextureData {
-    /**
-     * The width of the texture in pixels
-     */
-    u32 width = 0;
-    /**
-     * The height of the texture in pixels
-     */
-    u32 height = 0;
-    /**
-     * The depth of the texture in pixels
-     */
-    u32 depth = 0;
-    /**
-     * The format of each pixel
-     */
-    Format format = {};
-    /**
-     * The pixel data, aligned to 16 bytes
-     */
-    void* pixels = nullptr;
-};
-
-/**
- * A handle to a texture
- */
-using TextureDataAsset = Asset<TextureData>;
-
-/**
- * Texture asset load implementation
- */
-template<>
-void assetLoadImpl(Asset<TextureData>* data);
-
-/**
- * Texture asset unload implementation
- */
-template<>
-void assetUnloadImpl(Asset<TextureData>* data);
-
-/**
- * Store an image to disc in the png format
- *
- * Returns
- * - Whether the write succeeded
- */
-bool textureStorePng(TextureData* texture, StringView path);
-
-/**
- * A texture asset stored on the gpu
- */
-struct Texture {
-    /**
-     * The image
-     */
-    GpuImage* image = nullptr;
-    /**
-     * The image view
-     */
-    GpuView* view = nullptr;
-};
-
-/**
- * A handle to a texture asset
- */
-using TextureAsset = Asset<Texture>;
-
-/**
- * GpuTexture asset load implementation
- */
-template<>
-void assetLoadImpl(Asset<Texture>* data);
-
-/**
- * GpuTexture asset unload implementation
- */
-template<>
-void assetUnloadImpl(Asset<Texture>* data);
-
-// ============================================================================
-// 2D Renderer
-// ============================================================================
 
 /**
  * Initialize the 2D renderer
@@ -7597,141 +7622,6 @@ void tilemapSet2D(Tilemap2D* tilemap, u32 x, u32 y, u32 tile);
  * Draw a tilemap to the layer
  */
 void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst);
-
-// ============================================================================
-// 3D Mesh
-// ============================================================================
-
-/**
- * A vertex in a mesh
- */
-struct MeshVertex {
-    /**
-     * The vertex position
-     */
-    Vec3 pos;
-    /**
-     * The u part of the vertex uv coordinate
-     */
-    f32 uvU;
-    /**
-     * The vertex normal
-     */
-    Vec3 norm;
-    /**
-     * The v part of the vertex uv coordinate
-     */
-    f32 uvV;
-    /**
-     * The vertex tangent
-     */
-    Vec4 tan;
-
-    /**
-     * Construct the vertex
-     */
-    MeshVertex(Vec3 pos, Vec3 norm, Vec4 tan, Vec2 uv)
-        : pos{pos}, uvU{uv.x}, norm{norm}, uvV{uv.y}, tan{tan} {}
-};
-
-/**
- * A 3d mesh asset
- */
-struct MeshData {
-    /**
-     * The file index of the first vertex
-     */
-    MeshVertex* vertices = nullptr;
-    /**
-     * The file index of the first geometry index
-     */
-    u32* indices = nullptr;
-    /**
-     * The number of vertices
-     */
-    u32 vertexCount = 0;
-    /**
-     * The size of each vertex in bytes
-     */
-    u32 vertexWidth = 0;
-    /**
-     * The number of indices (4 bytes each)
-     */
-    u32 indexCount = 0;
-    /**
-     * How the vertices should be interpreted in sequence
-     */
-    GpuTopology topology = {};
-};
-
-/**
- * A handle to a 3d mesh asset
- */
-using MeshDataAsset = Asset<MeshData>;
-
-/**
- * Mesh asset load implementation
- */
-template<>
-void assetLoadImpl(Asset<MeshData>* data);
-
-/**
- * Mesh asset unload implementation
- */
-template<>
-void assetUnloadImpl(Asset<MeshData>* data);
-
-/**
- * Store the model data to disc in gltf format : TODO
- */
-void meshStoreGltf(MeshData* data, StringView path, Fence* fence);
-
-/**
- * A 3d mesh asset stored on the gpu
- */
-struct Mesh {
-    /**
-     * The vertex buffer
-     */
-    GpuBuffer* vertexBuffer = nullptr;
-    /**
-     * The index buffer
-     **/
-    GpuBuffer* indexBuffer = nullptr;
-    /**
-     * The number of vertices
-     */
-    u32 vertexCount = 0;
-    /**
-     * The size of each vertex in bytes
-     */
-    u32 vertexWidth = 0;
-    /**
-     * The number of indices (4 bytes each)
-     */
-    u32 indexCount = 0;
-};
-
-/**
- * A gpu mesh asset handle
- */
-using MeshAsset = Asset<Mesh>;
-
-/**
- * GpuMesh asset load implementation
- */
-template<>
-void assetLoadImpl(Asset<Mesh>* data);
-
-/**
- * GpuMesh asset unload implementation
- */
-template<>
-void assetUnloadImpl(Asset<Mesh>* data);
-
-// ============================================================================
-// ImGui Integration
-// ============================================================================
 
 /**
  * Initialize ImGui platform backend
@@ -8678,7 +8568,7 @@ void setError(StringView errorFmt, Ts... args)
     u64 fmtLen = errorFmt.length < sizeof(fmt) - 1
         ? errorFmt.length
         : sizeof(fmt) - 1;
-    memCopy(fmt, errorFmt.chars, fmtLen);
+    memcpy(fmt, errorFmt.chars, fmtLen);
     fmt[fmtLen] = 0;
 
     char buf[4096];
@@ -8904,7 +8794,7 @@ T arrayRemove(Array<T>* arr, u32 idx)
     T val = (*arr)[idx];
     if (idx + 1 < arr->count)
     {
-        memCopy(
+        memcpy(
             &(*arr)[idx],
             &(*arr)[idx + 1],
             (arr->count - (idx + 1)) * sizeof(T));
@@ -8919,7 +8809,7 @@ T arrayRemoveSwap(Array<T>* arr, u32 idx)
     T val = (*arr)[idx];
     if (idx + 1 < arr->count)
     {
-        memCopy(
+        memcpy(
             &(*arr)[idx],
             &(*arr)[arr->count - 1],
             sizeof(T));
@@ -8969,7 +8859,7 @@ void queuePushFront(Queue<T>* queue, U val)
 
         if (queue->back < queue->front)
         {
-            memCopy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
+            memcpy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
             queue->back += queue->capacity;
         }
 
@@ -8993,7 +8883,7 @@ void queuePushBack(Queue<T>* queue, U val)
 
         if (queue->back < queue->front)
         {
-            memCopy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
+            memcpy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
             queue->back += queue->capacity;
         }
 

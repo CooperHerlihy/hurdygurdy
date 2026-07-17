@@ -49,13 +49,13 @@ void test()
             Big* reallocBigSame = arena.realloc(reallocBig, 2, 2);
             HG_ASSERT(reallocBigSame == reallocBig);
 
-            memClear(reallocBig, 2 * sizeof(*reallocBig), 2);
+            memset(reallocBig, 2, 2 * sizeof(*reallocBig));
             u8* allocInterrupt = arena.alloc<u8>(1);
             static_cast<void>(allocInterrupt);
 
             Big* reallocBig2 = arena.realloc(reallocBig, 2, 4);
             HG_ASSERT(reallocBig2 != reallocBig);
-            HG_ASSERT(memEqual(reallocBig, reallocBig2, 2 * sizeof(*reallocBig)));
+            HG_ASSERT(memcmp(reallocBig, reallocBig2, 2 * sizeof(*reallocBig)) == 0);
 
             arena.head = 0;
         }
@@ -523,7 +523,7 @@ void test()
             Serializer reader = serialReader(arena, writer.current);
             serialize(&reader, &podCopy);
 
-            HG_ASSERT(memEqual(&podCopy, &pod, sizeof(pod)));
+            HG_ASSERT(memcmp(&podCopy, &pod, sizeof(pod)) == 0);
         }
 
         {
@@ -537,7 +537,7 @@ void test()
             Serializer reader = binaryReadSerial(arena, bin);
             serialize(&reader, &podCopy);
 
-            HG_ASSERT(memEqual(&podCopy, &pod, sizeof(pod)));
+            HG_ASSERT(memcmp(&podCopy, &pod, sizeof(pod)) == 0);
         }
 
         // {
@@ -596,7 +596,7 @@ void test()
             Serializer reader = serialReader(arena, writer.current);
             serializeData(&reader, &dataCopy);
 
-            HG_ASSERT(!memEqual(&dataCopy, &data, sizeof(data)));
+            HG_ASSERT(memcmp(&dataCopy, &data, sizeof(data)) != 0);
             HG_ASSERT(data.a == dataCopy.a);
             HG_ASSERT(data.b == dataCopy.b);
             HG_ASSERT(data.c == dataCopy.c);
@@ -618,7 +618,7 @@ void test()
             Serializer reader = binaryReadSerial(arena, bin);
             serializeData(&reader, &dataCopy);
 
-            HG_ASSERT(!memEqual(&dataCopy, &data, sizeof(data)));
+            HG_ASSERT(memcmp(&dataCopy, &data, sizeof(data)) != 0);
             HG_ASSERT(data.a == dataCopy.a);
             HG_ASSERT(data.b == dataCopy.b);
             HG_ASSERT(data.c == dataCopy.c);
@@ -3603,7 +3603,7 @@ void test()
             HG_DEFER(assetUnload(image));
             HG_ASSERT(image->asset.width == testImage.width);
             HG_ASSERT(image->asset.height == testImage.height);
-            HG_ASSERT(memEqual(image->asset.pixels, saveData, sizeof(saveData)));
+            HG_ASSERT(memcmp(image->asset.pixels, saveData, sizeof(saveData)) == 0);
         }
     }
 

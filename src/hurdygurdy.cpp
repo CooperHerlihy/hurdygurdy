@@ -26,7 +26,7 @@ StringView getError()
 void setError(StringView error)
 {
     u64 newLength = std::min(error.length, sizeof(errorData));
-    memCopy(errorData, error.chars, newLength);
+    memcpy(errorData, error.chars, newLength);
     errorLength = newLength;
 }
 
@@ -144,27 +144,7 @@ HurdyGurdy::~HurdyGurdy()
 void BinaryView::read(u64 idx, void* dst, u64 len)
 {
     HG_ASSERT(idx + len <= size);
-    memCopy(dst, static_cast<const u8*>(data) + idx, len);
-}
-
-void memClear(void* dst, u64 size, u8 val)
-{
-    memset(dst, val, size);
-}
-
-void memCopy(void* __restrict dst, const void* __restrict src, u64 size)
-{
-    memcpy(dst, src, size);
-}
-
-void memMove(void* dst, const void* src, u64 size)
-{
-    memmove(dst, src, size);
-}
-
-bool memEqual(const void* dst, const void* src, u64 size)
-{
-    return size == 0 || memcmp(dst, src, size) == 0;
+    memcpy(dst, static_cast<const u8*>(data) + idx, len);
 }
 
 void* heapAlloc(u64 size, u64 alignment)
@@ -225,7 +205,7 @@ void* Arena::realloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 
     void* newAllocation = alloc(newSize, alignment);
     if (allocation != nullptr)
-        memCopy(newAllocation, allocation, std::min(oldSize, newSize));
+        memcpy(newAllocation, allocation, std::min(oldSize, newSize));
     return newAllocation;
 }
 
@@ -2048,327 +2028,6 @@ u64 rngNext64(Rng* rng)
     return (static_cast<u64>(rngNext(rng)) << 32) | static_cast<u64>(rngNext(rng));
 }
 
-void BinaryBuilder::read(u64 idx, void* dst, u64 len)
-{
-    HG_ASSERT(idx + len <= size);
-    memCopy(dst, static_cast<const u8*>(data) + idx, len);
-}
-
-void BinaryBuilder::resize(u64 newSize)
-{
-    HG_ASSERT(arena != nullptr);
-    data = arena->realloc(data, size, newSize, 1);
-    size = newSize;
-}
-
-void BinaryBuilder::overwrite(u64 idx, const void* src, u64 len)
-{
-    HG_ASSERT(idx + len <= size);
-    memCopy(static_cast<u8*>(data) + idx, src, len);
-}
-
-void BinaryBuilder::append(const void* src, u64 len)
-{
-    HG_ASSERT(arena != nullptr);
-    data = arena->realloc(data, size, size + len, 1);
-    memCopy(static_cast<u8*>(data) + size, src, len);
-    size += len;
-}
-
-void Binary::read(u64 idx, void* dst, u64 len)
-{
-    HG_ASSERT(idx + len <= size);
-    memCopy(dst, static_cast<const u8*>(data) + idx, len);
-}
-
-Binary::~Binary() noexcept
-{
-    if (data != nullptr)
-        heapFree(data, size);
-}
-
-Binary Binary::create(BinaryView data)
-{
-    Binary bin;
-    bin.size = data.size;
-    bin.data = heapAlloc(bin.size, 1);
-    memCopy(bin.data, data.data, bin.size);
-    return bin;
-}
-
-char* cString(Arena* arena, StringView str)
-{
-    HG_ASSERT(arena != nullptr);
-    if (str.length > 0)
-        HG_ASSERT(str.chars != nullptr);
-
-    char* cStr = arena->alloc<char>(str.length + 1);
-    memCopy(cStr, str.chars, str.length);
-    cStr[str.length] = 0;
-    return cStr;
-}
-
-void StringBuilder::insert(u64 idx, StringView src)
-{
-    HG_ASSERT(arena != nullptr);
-    HG_ASSERT(idx <= length);
-    if (src.length > 0)
-        HG_ASSERT(src.chars != nullptr);
-
-    u64 newLength = length + src.length;
-
-    chars = arena->realloc(chars, length, newLength);
-
-    if (idx != length)
-        memMove(&chars[idx + src.length], &chars[idx], length - idx);
-    memCopy(&chars[idx], src.chars, src.length);
-
-    length = newLength;
-}
-
-bool isWhitespace(char c)
-{
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
-}
-
-bool isNumeral(char c)
-{
-    return c >= '0' && c <= '9';
-}
-
-bool isInteger(StringView str)
-{
-    if (str.length == 0)
-        return false;
-
-    u64 head = 0;
-    if (!isNumeral(str[head]) && str[head] != '+' && str[head] != '-')
-        return false;
-
-    ++head;
-    while (head < str.length)
-    {
-        if (!isNumeral(str[head]))
-            return false;
-        ++head;
-    }
-    return true;
-}
-
-bool isFloat(StringView str)
-{
-    if (str.length == 0)
-        return false;
-
-    bool hasDecimal = false;
-    bool hasExponent = false;
-
-    u64 head = 0;
-
-    if (!isNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
-        return false;
-
-    if (str[head] == '.')
-        hasDecimal = true;
-
-    ++head;
-    while (head < str.length)
-    {
-        if (isNumeral(str[head]))
-        {
-            ++head;
-            continue;
-        }
-
-        if (str[head] == '.' && !hasDecimal)
-        {
-            hasDecimal = true;
-            ++head;
-            continue;
-        }
-
-        if (str[head] == 'e' && !hasExponent)
-        {
-            hasExponent = true;
-            ++head;
-            if (isNumeral(str[head]) || str[head] == '+' || str[head] == '-')
-            {
-                ++head;
-                continue;
-            }
-            return false;
-        }
-
-        if (str[head] == 'f' && head == str.length - 1)
-            break;
-
-        return false;
-    }
-
-    return hasDecimal || hasExponent;
-}
-
-i64 stringToInteger(StringView str)
-{
-    HG_ASSERT(isInteger(str));
-
-    i64 power = 1;
-    i64 ret = 0;
-
-    u64 head = str.length - 1;
-    while (head > 0)
-    {
-            ret += static_cast<i64>(str[head] - '0') * power;
-        power *= 10;
-        --head;
-    }
-
-    if (str[head] != '+')
-    {
-        if (str[head] == '-')
-            ret *= -1;
-        else
-        ret += static_cast<i64>(str[head] - '0') * power;
-    }
-
-    return ret;
-}
-
-f64 stringToFloat(StringView str)
-{
-    HG_ASSERT(isFloat(str));
-
-    f64 ret = 0.0;
-    u64 head = 0;
-
-    bool isNegative = str[head] == '-';
-    if (isNegative || str[head] == '+')
-        ++head;
-
-    if (isNumeral(str[head]))
-    {
-        u64 intPartBegin = head;
-        while (head < str.length && str[head] != '.' && str[head] != 'e')
-        {
-            ++head;
-        }
-        ret += static_cast<f64>(stringToInteger({&str[intPartBegin], &str[head]}));
-    }
-
-    if (head < str.length && str[head] == '.')
-    {
-        ++head;
-
-        f64 power = 0.1;
-        while (head < str.length && isNumeral(str[head]))
-        {
-            ret += static_cast<f64>(str[head] - '0') * power;
-            power *= 0.1;
-            ++head;
-        }
-    }
-
-    if (head < str.length && str[head] == 'e')
-    {
-        ++head;
-
-        bool expIsNegative = str[head] == '-';
-        if (expIsNegative || str[head] == '+')
-            ++head;
-
-        u64 expBegin = head;
-        while (head < str.length && isNumeral(str[head]))
-        {
-            ++head;
-        }
-
-        i64 exp = stringToInteger({&str[expBegin], str.chars + head});
-        if (exp != 0)
-        {
-            if (expIsNegative)
-            {
-                for (i64 i = 0; i < exp; ++i)
-                {
-                    ret *= 0.1;
-                }
-            } else {
-                for (i64 i = 0; i < exp; ++i)
-                {
-                    ret *= 10.0;
-                }
-            }
-        } else {
-            ret = 1.0;
-        }
-    }
-
-    if (isNegative)
-        ret *= -1.0;
-
-    return ret;
-}
-
-StringBuilder integerToString(Arena* arena, i64 num)
-{
-    HG_ASSERT(arena != nullptr);
-
-    ArenaScope scratch = getScratch(&arena, 1);
-
-    if (num == 0)
-        return {arena, "0"};
-
-    bool isNegative = num < 0;
-    u64 unum = static_cast<u64>(std::abs(num));
-
-    StringBuilder reverse{scratch};
-    while (unum != 0)
-    {
-        u64 digit = unum % 10;
-        unum = static_cast<u64>(static_cast<f64>(unum) / 10.0);
-        reverse.append('0' + static_cast<char>(digit));
-    }
-
-    StringBuilder ret{arena};
-    if (isNegative)
-        ret.append('-');
-    for (u64 i = reverse.length - 1; i < reverse.length; --i)
-    {
-        ret.append(reverse[i]);
-    }
-    return ret;
-}
-
-StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
-{
-    HG_ASSERT(arena != nullptr);
-
-    ArenaScope scratch = getScratch(&arena, 1);
-
-    if (num == 0.0)
-        return {arena, "0.0"};
-
-    StringBuilder intStr = integerToString(scratch, static_cast<i64>(std::abs(num)));
-
-    StringBuilder decStr{scratch};
-    decStr.append('.');
-
-    f64 decPart = std::abs(num);
-    for (u64 i = 0; i < decimalCount; ++i)
-    {
-        decPart *= 10.0;
-        decStr.append('0' + static_cast<char>(static_cast<u64>(decPart) % 10));
-    }
-
-    StringBuilder ret{arena};
-    if (num < 0.0)
-        ret.append('-');
-    ret.append(intStr);
-    ret.append(decStr);
-    return ret;
-}
-
-
-
 const char* serialTypeToString(SerialType s)
 {
     switch (s)
@@ -2504,41 +2163,7 @@ void serializeVoid(Serializer* s, void* val, u32 size)
     {
         HG_ASSERT(s->current->type == SerialType_string);
         HG_ASSERT(s->current->string.length == size);
-        memCopy(val, s->current->string.chars, size);
-    }
-}
-
-template<>
-void serialize(Serializer* s, Binary* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->type = SerialType_string;
-        s->current->string = StringBuilder{s->arena, {static_cast<char*>(val->data), val->size}};
-    }
-    else
-    {
-        HG_ASSERT(s->current->type == SerialType_string);
-        *val = Binary::create({s->current->string.chars, s->current->string.length});
-    }
-}
-
-template<>
-void serialize(Serializer* s, String* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->type = SerialType_string;
-        s->current->string = StringBuilder{s->arena, *val};
-    }
-    else
-    {
-        HG_ASSERT(s->current->type == SerialType_string);
-        *val = String::create(s->current->string);
+        memcpy(val, s->current->string.chars, size);
     }
 }
 
@@ -2840,12 +2465,12 @@ static void serialBinWriteNode(BinaryBuilder* bin, u32 idx, SerialNode* node)
     }
 }
 
-BinaryBuilder binaryWriteSerial(Arena* arena, Serializer* serial)
+BinaryView binaryWriteSerial(Arena* arena, Serializer* serial)
 {
     BinaryBuilder bin{arena, sizeof(SerialBinHeader)};
 
     SerialBinHeader header{};
-    memCopy(header.tag, serialBinTag, sizeof(serialBinTag));
+    memcpy(header.tag, serialBinTag, sizeof(serialBinTag));
     header.versionMajor = serialBinVersionMajor;
     header.versionMinor = serialBinVersionMinor;
     header.versionPatch = serialBinVersionPatch;
@@ -2904,7 +2529,7 @@ Serializer binaryReadSerial(Arena* arena, BinaryView bin)
 {
     SerialBinHeader header = bin.read<SerialBinHeader>(0);
 
-    if (!memEqual(header.tag, serialBinTag, sizeof(serialBinTag)))
+    if (memcmp(header.tag, serialBinTag, sizeof(serialBinTag)) != 0)
     {
         HG_WARN("Serial binary could not be read, does not have a header\n");
         return {};
@@ -3668,6 +3293,374 @@ Json parseJson(Arena* arena, StringView text)
     return jsonParseNext(arena, &parseState);
 }
 
+char* cString(Arena* arena, StringView str)
+{
+    HG_ASSERT(arena != nullptr);
+    if (str.length > 0)
+        HG_ASSERT(str.chars != nullptr);
+
+    char* cStr = arena->alloc<char>(str.length + 1);
+    memcpy(cStr, str.chars, str.length);
+    cStr[str.length] = 0;
+    return cStr;
+}
+
+void StringBuilder::insert(u64 idx, StringView src)
+{
+    HG_ASSERT(arena != nullptr);
+    HG_ASSERT(idx <= length);
+    if (src.length > 0)
+        HG_ASSERT(src.chars != nullptr);
+
+    u64 newLength = length + src.length;
+
+    chars = arena->realloc(chars, length, newLength);
+
+    if (idx != length)
+        memmove(&chars[idx + src.length], &chars[idx], length - idx);
+    memcpy(&chars[idx], src.chars, src.length);
+
+    length = newLength;
+}
+
+String String::create(StringView data)
+{
+    String str;
+    str.chars = heapAlloc<char>(data.length);
+    str.length = data.length;
+    memcpy(&str.chars, &data.chars, data.length);
+    return str;
+}
+
+String::~String() noexcept
+{
+    if (chars != nullptr)
+        heapFree(chars, length);
+}
+
+template<>
+void serialize(Serializer* s, String* val)
+{
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->type = SerialType_string;
+        s->current->string = StringBuilder{s->arena, *val};
+    }
+    else
+    {
+        HG_ASSERT(s->current->type == SerialType_string);
+        *val = String::create(s->current->string);
+    }
+}
+
+bool isWhitespace(char c)
+{
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+bool isNumeral(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
+bool isInteger(StringView str)
+{
+    if (str.length == 0)
+        return false;
+
+    u64 head = 0;
+    if (!isNumeral(str[head]) && str[head] != '+' && str[head] != '-')
+        return false;
+
+    ++head;
+    while (head < str.length)
+    {
+        if (!isNumeral(str[head]))
+            return false;
+        ++head;
+    }
+    return true;
+}
+
+bool isFloat(StringView str)
+{
+    if (str.length == 0)
+        return false;
+
+    bool hasDecimal = false;
+    bool hasExponent = false;
+
+    u64 head = 0;
+
+    if (!isNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
+        return false;
+
+    if (str[head] == '.')
+        hasDecimal = true;
+
+    ++head;
+    while (head < str.length)
+    {
+        if (isNumeral(str[head]))
+        {
+            ++head;
+            continue;
+        }
+
+        if (str[head] == '.' && !hasDecimal)
+        {
+            hasDecimal = true;
+            ++head;
+            continue;
+        }
+
+        if (str[head] == 'e' && !hasExponent)
+        {
+            hasExponent = true;
+            ++head;
+            if (isNumeral(str[head]) || str[head] == '+' || str[head] == '-')
+            {
+                ++head;
+                continue;
+            }
+            return false;
+        }
+
+        if (str[head] == 'f' && head == str.length - 1)
+            break;
+
+        return false;
+    }
+
+    return hasDecimal || hasExponent;
+}
+
+i64 stringToInteger(StringView str)
+{
+    HG_ASSERT(isInteger(str));
+
+    i64 power = 1;
+    i64 ret = 0;
+
+    u64 head = str.length - 1;
+    while (head > 0)
+    {
+            ret += static_cast<i64>(str[head] - '0') * power;
+        power *= 10;
+        --head;
+    }
+
+    if (str[head] != '+')
+    {
+        if (str[head] == '-')
+            ret *= -1;
+        else
+        ret += static_cast<i64>(str[head] - '0') * power;
+    }
+
+    return ret;
+}
+
+f64 stringToFloat(StringView str)
+{
+    HG_ASSERT(isFloat(str));
+
+    f64 ret = 0.0;
+    u64 head = 0;
+
+    bool isNegative = str[head] == '-';
+    if (isNegative || str[head] == '+')
+        ++head;
+
+    if (isNumeral(str[head]))
+    {
+        u64 intPartBegin = head;
+        while (head < str.length && str[head] != '.' && str[head] != 'e')
+        {
+            ++head;
+        }
+        ret += static_cast<f64>(stringToInteger({&str[intPartBegin], &str[head]}));
+    }
+
+    if (head < str.length && str[head] == '.')
+    {
+        ++head;
+
+        f64 power = 0.1;
+        while (head < str.length && isNumeral(str[head]))
+        {
+            ret += static_cast<f64>(str[head] - '0') * power;
+            power *= 0.1;
+            ++head;
+        }
+    }
+
+    if (head < str.length && str[head] == 'e')
+    {
+        ++head;
+
+        bool expIsNegative = str[head] == '-';
+        if (expIsNegative || str[head] == '+')
+            ++head;
+
+        u64 expBegin = head;
+        while (head < str.length && isNumeral(str[head]))
+        {
+            ++head;
+        }
+
+        i64 exp = stringToInteger({&str[expBegin], str.chars + head});
+        if (exp != 0)
+        {
+            if (expIsNegative)
+            {
+                for (i64 i = 0; i < exp; ++i)
+                {
+                    ret *= 0.1;
+                }
+            } else {
+                for (i64 i = 0; i < exp; ++i)
+                {
+                    ret *= 10.0;
+                }
+            }
+        } else {
+            ret = 1.0;
+        }
+    }
+
+    if (isNegative)
+        ret *= -1.0;
+
+    return ret;
+}
+
+StringBuilder integerToString(Arena* arena, i64 num)
+{
+    HG_ASSERT(arena != nullptr);
+
+    ArenaScope scratch = getScratch(&arena, 1);
+
+    if (num == 0)
+        return {arena, "0"};
+
+    bool isNegative = num < 0;
+    u64 unum = static_cast<u64>(std::abs(num));
+
+    StringBuilder reverse{scratch};
+    while (unum != 0)
+    {
+        u64 digit = unum % 10;
+        unum = static_cast<u64>(static_cast<f64>(unum) / 10.0);
+        reverse.append('0' + static_cast<char>(digit));
+    }
+
+    StringBuilder ret{arena};
+    if (isNegative)
+        ret.append('-');
+    for (u64 i = reverse.length - 1; i < reverse.length; --i)
+    {
+        ret.append(reverse[i]);
+    }
+    return ret;
+}
+
+StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
+{
+    HG_ASSERT(arena != nullptr);
+
+    ArenaScope scratch = getScratch(&arena, 1);
+
+    if (num == 0.0)
+        return {arena, "0.0"};
+
+    StringBuilder intStr = integerToString(scratch, static_cast<i64>(std::abs(num)));
+
+    StringBuilder decStr{scratch};
+    decStr.append('.');
+
+    f64 decPart = std::abs(num);
+    for (u64 i = 0; i < decimalCount; ++i)
+    {
+        decPart *= 10.0;
+        decStr.append('0' + static_cast<char>(static_cast<u64>(decPart) % 10));
+    }
+
+    StringBuilder ret{arena};
+    if (num < 0.0)
+        ret.append('-');
+    ret.append(intStr);
+    ret.append(decStr);
+    return ret;
+}
+
+void BinaryBuilder::read(u64 idx, void* dst, u64 len)
+{
+    HG_ASSERT(idx + len <= size);
+    memcpy(dst, static_cast<const u8*>(data) + idx, len);
+}
+
+void BinaryBuilder::resize(u64 newSize)
+{
+    HG_ASSERT(arena != nullptr);
+    data = arena->realloc(data, size, newSize, 1);
+    size = newSize;
+}
+
+void BinaryBuilder::overwrite(u64 idx, const void* src, u64 len)
+{
+    HG_ASSERT(idx + len <= size);
+    memcpy(static_cast<u8*>(data) + idx, src, len);
+}
+
+void BinaryBuilder::append(const void* src, u64 len)
+{
+    HG_ASSERT(arena != nullptr);
+    data = arena->realloc(data, size, size + len, 1);
+    memcpy(static_cast<u8*>(data) + size, src, len);
+    size += len;
+}
+
+void Binary::read(u64 idx, void* dst, u64 len)
+{
+    HG_ASSERT(idx + len <= size);
+    memcpy(dst, static_cast<const u8*>(data) + idx, len);
+}
+
+Binary Binary::create(BinaryView data)
+{
+    Binary bin;
+    bin.size = data.size;
+    bin.data = heapAlloc(bin.size, 1);
+    memcpy(bin.data, data.data, bin.size);
+    return bin;
+}
+
+Binary::~Binary() noexcept
+{
+    if (data != nullptr)
+        heapFree(data, size);
+}
+
+template<>
+void serialize(Serializer* s, Binary* val)
+{
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->type = SerialType_string;
+        s->current->string = StringBuilder{s->arena, {static_cast<char*>(val->data), val->size}};
+    }
+    else
+    {
+        HG_ASSERT(s->current->type == SerialType_string);
+        *val = Binary::create({s->current->string.chars, s->current->string.length});
+    }
+}
+
 template<>
 void serialize(Serializer* s, ArrayAny* arr)
 {
@@ -3781,10 +3774,10 @@ void arrayAnyRemove(ArrayAny* arr, u32 idx, void* dst)
 {
     HG_ASSERT(idx < arr->count);
 
-    memCopy(dst, (*arr)[idx], arr->width);
+    memcpy(dst, (*arr)[idx], arr->width);
     if (idx + 1 < arr->count)
     {
-        memCopy(
+        memcpy(
             (*arr)[idx],
             (*arr)[idx + 1],
             (arr->count - (idx + 1)) * arr->width);
@@ -3796,10 +3789,10 @@ void arrayAnyRemoveSwap(ArrayAny* arr, u32 idx, void* dst)
 {
     HG_ASSERT(idx < arr->count);
 
-    memCopy(dst, (*arr)[idx], arr->width);
+    memcpy(dst, (*arr)[idx], arr->width);
     if (idx + 1 < arr->count)
     {
-        memCopy(
+        memcpy(
             (*arr)[idx],
             (*arr)[arr->count - 1],
             arr->width);
@@ -3812,7 +3805,7 @@ void arrayAnyPop(ArrayAny* arr, void* dst)
     HG_ASSERT(arr->count > 0);
     --arr->count;
     if (dst != nullptr)
-        memCopy(dst, static_cast<u8*>(arr->vals) + arr->count * arr->width, arr->width);
+        memcpy(dst, static_cast<u8*>(arr->vals) + arr->count * arr->width, arr->width);
 }
 
 static constexpr u32 poolStockSize = 1024;
@@ -4188,7 +4181,7 @@ void audioPlayerUpdate(AudioPlayer* player)
                 music->pos = 0;
 
             u32 sizeToQueue = std::min(sizeToPush - queueSize, static_cast<u32>(sound->size - music->pos));
-            memCopy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(sound->data) + music->pos, sizeToQueue);
+            memcpy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(sound->data) + music->pos, sizeToQueue);
             queueSize += sizeToQueue;
             music->pos += sizeToQueue;
         }
@@ -4894,7 +4887,7 @@ void ecsReset(Ecs* ecs)
         }
         system->entities.count = 1;
         system->components.count = 1;
-        memClear(system->indices.vals, system->indices.count * sizeof(*system->indices.vals));
+        memset(system->indices.vals, 0, system->indices.count * sizeof(*system->indices.vals));
     });
     handlePoolReset(&ecs->entities);
 }
@@ -5010,7 +5003,7 @@ void ecsRemove(Ecs* ecs, Entity e, u64 componentId)
     {
         system->entities[idx] = last;
         system->indices[handleIdx(last.handle)] = idx;
-        memCopy(
+        memcpy(
             system->components[idx],
             system->components[system->components.count - 1],
             system->components.width);
@@ -5129,9 +5122,9 @@ static void swapIdxLocation(Ecs* ecs, u32 lhs, u32 rhs, u64 componentId)
     system->indices[handleIdx(rhsEntity.handle)] = lhs;
 
     void* temp = scratch.alloc(system->components.width, 1);
-    memCopy(temp, system->components[lhs], system->components.width);
-    memCopy(system->components[lhs], system->components[rhs], system->components.width);
-    memCopy(system->components[rhs], temp, system->components.width);
+    memcpy(temp, system->components[lhs], system->components.width);
+    memcpy(system->components[lhs], system->components[rhs], system->components.width);
+    memcpy(system->components[rhs], temp, system->components.width);
 }
 
 namespace {
@@ -5531,7 +5524,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
                     src->position = 0;
 
                 u32 sizeToQueue = std::min(sizeToPush - queueSize, static_cast<u32>(audio->size - src->position));
-                memCopy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(audio->data) + src->position, sizeToQueue);
+                memcpy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(audio->data) + src->position, sizeToQueue);
                 queueSize += sizeToQueue;
                 src->position += sizeToQueue;
             }
@@ -5539,7 +5532,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
         else
         {
             queueSize = std::min(sizeToPush, static_cast<u32>(audio->size - src->position));
-            memCopy(queue, reinterpret_cast<u8*>(audio->data) + src->position, queueSize);
+            memcpy(queue, reinterpret_cast<u8*>(audio->data) + src->position, queueSize);
             src->position += queueSize;
         }
 

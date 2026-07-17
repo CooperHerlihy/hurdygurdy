@@ -1,0 +1,189 @@
+# Contents
+
+## hurdygurdy.hpp
+
+- Config Macros
+    - platform detection
+    - TODO: cpu feature detection
+    - library feature config
+- Core Types
+    - i32, u8, f64, etc.
+    - StringView
+    - BinaryView
+    - Span
+    - Maybe
+- Error Handling
+- Utility Macros
+    - HG_MACRO_CONCAT
+    - HG_DEFER
+    - HG_LOG
+    - HG_WARN
+    - HG_PANIC
+    - HG_ASSERT
+- Initialization
+    - HurdyGurdy (scope guard)
+- Core types (Implementations)
+- Utility Functions
+- Memory
+    - heap alloc/realloc/free
+    - Arena
+    - ArenaScope
+    - scratch
+- Concurrency
+    - Spinlock
+    - Fence
+    - thread pool
+    - parallel for
+- GPU
+    - Format
+    - TODO: alloction ???
+    - GpuBuffer
+    - GpuImage
+    - GpuView
+    - GpuPipeline
+    - GpuCmd (command buffer)
+    - barriers and passes
+- Math
+    - constants and util functions
+    - Vec2/3/4
+    - Mat2/3/4
+    - Complex
+    - Quat
+    - model view projection matrices
+- Geometry 2D
+    - Circle
+    - Rect (aabb)
+    - Ray
+    - Line
+- Geometry 3D
+    - Sphere
+    - Box (aabb)
+    - Tri
+    - Plane
+    - Ray
+    - Line
+- Noise & RNG
+    - white noise
+    - TODO: value noise
+    - TODO: gradient noise
+    - true random
+    - random number generator
+- Serialization
+    - Serializer
+    - binary format
+    - TODO: text format
+- Strings
+    - cString
+    - StringBuilder
+    - TODO: format
+    - String (owning)
+    - parsing
+        - TODO: utf8
+        - TODO: split, join, trim, search, replace
+- Containers
+    - BinaryBuilder
+    - Binary (owning)
+    - Array
+    - ArrayAny (void)
+    - Queue
+    - Set
+    - SetTemp
+    - Map
+    - MapTemp
+    - Pool (allocator)
+    - HandlePool
+- TODO: Algorithms ???
+- Asset System
+    - Asset
+    - Asset Manager
+    - load impl template
+    - unload impl template
+    - TODO: streaming ???
+    - TODO: dependency tracking ???
+- Timing
+    - Clock
+    - Perf
+    - TODO: profiling tools
+- TODO: Filesystem
+    - paths
+    - files
+    - directories
+    - watch
+    - archiving
+    - compression
+- TODO: Networking
+- Dynamic Library
+- TODO: Process
+- TODO: Console
+- Windowing
+- Input
+    - state queries
+    - event queue
+- Audio
+    - AudioStream (primitive)
+    - TODO: recording
+    - Sound (asset)
+    - AudioPlayer (high level)
+        - TODO: effects
+    - TODO: mixing
+- Rendering
+    - Camera
+    - Texture
+    - Mesh
+    - TODO: render graph
+    - 2D renderer
+        - Layer2D
+        - Sprite2D
+        - Atlas2D
+        - Tilemap2D
+        - TODO: font and text
+    - TODO: 3D renderer ???
+    - TODO: post processing
+        - color grading
+        - tone mapping
+        - antialiasing
+        - SSAO
+        - bloom
+        - depth of field
+    - ImGui
+- TODO: UI
+- TODO: Animation
+- TODO: Physics
+- TODO: Particles
+- ECS
+    - Entity
+    - Ecs
+    - Node (hierarchy)
+    - Transform
+    - old 3D rendering
+
+## hurdygurdy.glsl
+
+- bindless resource bindings
+- math
+    - constants
+    - square
+    - smoothing
+- noise
+    - white noise
+    - unit vector
+    - value noise
+    - perlin noise
+    - TODO: simplex noise
+    - TODO: worley noise
+    - fractal noise macro
+- geometry
+    - vertex transform
+    - normal map transform
+- post processing
+    - color grading : TODO
+    - tonemapping
+        - Reinhard
+        - Uncharted 2
+        - ACES approx and fitted
+        - PBR Neutral
+- lighting
+    - Lambertian diffuse
+    - Blinn-Phong specular
+    - TODO: Cooke-Torrence
+
