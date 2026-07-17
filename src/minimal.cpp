@@ -24,11 +24,11 @@ int main()
     HG_DEFER(windowDestroy(window));
 
     f32 musicData[2000];
-    SoundAsset* music = assetCreate<Sound>();
-    music->asset.data = musicData;
-    music->asset.size = sizeof(musicData);
-    music->asset.frequency = 8000;
-    music->asset.channels = 1;
+    Asset<Sound> music = newAsset<Sound>();
+    music->data = musicData;
+    music->size = sizeof(musicData);
+    music->frequency = 8000;
+    music->channels = 1;
 
     for (u32 i = 0; i < std::size(musicData); ++i)
     {
@@ -42,11 +42,11 @@ int main()
     }
 
     f32 soundData[2000];
-    SoundAsset* sound = assetCreate<Sound>();
-    sound->asset.data = soundData;
-    sound->asset.size = sizeof(soundData);
-    sound->asset.frequency = 8000;
-    sound->asset.channels = 1;
+    Asset<Sound> sound = newAsset<Sound>();
+    sound->data = soundData;
+    sound->size = sizeof(soundData);
+    sound->frequency = 8000;
+    sound->channels = 1;
 
     for (u32 i = 0; i < std::size(soundData); ++i)
     {
@@ -55,9 +55,9 @@ int main()
     }
 
     AudioPlayer audio = audioPlayerCreate();
-    audioPlayerMusic(&audio, music);
-    audioPlayerSetMusicGain(&audio, music, 0.3f);
-    audioPlayerMusicPause(&audio, music);
+    audioPlayerMusic(&audio, &music);
+    audioPlayerSetMusicGain(&audio, &music, 0.3f);
+    audioPlayerMusicPause(&audio, &music);
 
     rendererInit2D(windowImageFormat(window));
     HG_DEFER(rendererDeinit2D());
@@ -106,13 +106,11 @@ int main()
         }
     });
 
-    Clock gameClock;
-    clockTick(&gameClock);
-    clockTick(&cpuClock);
+    Clock gameClock{};
     for (;;)
     {
-        clockTick(&cpuClock);
-        f64 delta = clockTick(&gameClock);
+        cpuClock.tick();
+        f64 delta = gameClock.tick();
 
         processEvents();
         if (wasQuit() || windowWasClosed(window))
@@ -157,19 +155,19 @@ int main()
         {
             if (event->type == WindowEventType_buttonPress &&
                 event->button.button == Button_space)
-                audioPlayerSound(&audio, sound, 0.5f);
+                audioPlayerSound(&audio, &sound, 0.5f);
         }
 
         if (isButtonDown(window, Button_m))
-            audioPlayerMusic(&audio, music);
+            audioPlayerMusic(&audio, &music);
         else
-            audioPlayerMusicPause(&audio, music);
+            audioPlayerMusicPause(&audio, &music);
 
         if (ImGui::Begin("Info"))
         {
             ImGui::Text("Total: %.3fms", delta * 1.0e3);
 
-            cpuTime += clockTick(&cpuClock);
+            cpuTime += cpuClock.tick();
             ImGui::Text("Cpu: %.3fms", cpuTime * 1.0e3);
             cpuTime = 0.0f;
 
@@ -179,9 +177,9 @@ int main()
 
         ImGui::Render();
 
-        cpuTime += clockTick(&cpuClock);
+        cpuTime += cpuClock.tick();
         GpuCmd* cmd = gpuFrameBegin(&window, 1);
-        clockTick(&cpuClock);
+        cpuClock.tick();
         if (windowImageView(window) != nullptr)
         {
             GpuRenderAttachment colorAttachment{};
@@ -206,7 +204,7 @@ int main()
 
             gpuRenderPassEnd(cmd);
         }
-        cpuTime += clockTick(&cpuClock);
+        cpuTime += cpuClock.tick();
 
         gpuFrameEnd(cmd);
     }

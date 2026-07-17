@@ -67,24 +67,6 @@ bool initGpu();
 void deinitGpu();
 
 /**
- * Initialize all default asset types
- *
- * Asset types:
- * - Binary
- * - Texture
- * - GpuTexture
- * - Mesh
- * - GpuMesh
- * - Audio
- */
-void initAssetDefaults();
-
-/**
- * Deinitialize all default asset types
- */
-void deinitAssetDefaults();
-
-/**
  * Initialize the windowing subsystem
  */
 void initWindowing();

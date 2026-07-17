@@ -743,10 +743,10 @@ struct VulkanState {
 
     HandlePool descriptorPools[DescriptorType_count];
 
-    Pool buffers;
-    Pool images;
-    Pool views;
-    Pool pipelines;
+    Pool<GpuBuffer> buffers{};
+    Pool<GpuImage> images{};
+    Pool<GpuView> views{};
+    Pool<GpuPipeline> pipelines{};
 
     Map<SamplerInfo, VkSampler> samplers;
 
@@ -1104,7 +1104,7 @@ static Frame createFrame()
 {
     Frame frame{};
 
-    frame.windows = arrayCreate<Window*>(0, 8);
+    frame.windows = Array<Window*>{0, 8};
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1207,11 +1207,6 @@ bool internal::initGpu()
         vk.descriptorPools[i] = handlePoolCreate();
     }
 
-    vk.buffers = poolCreate<GpuBuffer>();
-    vk.images = poolCreate<GpuImage>();
-    vk.views = poolCreate<GpuView>();
-    vk.pipelines = poolCreate<GpuPipeline>();
-
     vk.samplers = Map<SamplerInfo, VkSampler>(
         2 *
         GpuFilter_count *
@@ -1223,7 +1218,7 @@ bool internal::initGpu()
     vk.frames = heapAlloc<Frame>(vk.frameCount);
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
-        vk.frames[i] = createFrame();
+        new (vk.frames + i) Frame{createFrame()};
     }
 
     return true;
@@ -1253,7 +1248,7 @@ void internal::deinitGpu()
     {
         vkDestroyFence(vk.device, vk.frames[i].fence, nullptr);
         vkDestroyCommandPool(vk.device, vk.frames[i].cmdPool, nullptr);
-        arrayDestroy(&vk.frames[i].windows);
+        vk.frames[i].windows = {};
     }
     heapFree(vk.frames, vk.frameCount);
 
@@ -1263,10 +1258,10 @@ void internal::deinitGpu()
     });
     vk.samplers = {};
 
-    poolDestroy(&vk.pipelines);
-    poolDestroy(&vk.views);
-    poolDestroy(&vk.images);
-    poolDestroy(&vk.buffers);
+    vk.pipelines = {};
+    vk.views = {};
+    vk.images = {};
+    vk.buffers = {};
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
@@ -1401,8 +1396,7 @@ GpuBuffer* gpuBufferCreate(
     HG_ASSERT(size > 0);
     HG_ASSERT(usageFlags != 0);
 
-    GpuBuffer* buffer = static_cast<GpuBuffer*>(poolAlloc(&vk.buffers));
-    *buffer = {};
+    GpuBuffer* buffer = vk.buffers.alloc();
 
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1459,7 +1453,7 @@ void gpuBufferDestroy(GpuBuffer* buffer)
         descriptorDestroy(buffer->storageDesc, DescriptorType_storageBuffer);
         descriptorDestroy(buffer->uniformDesc, DescriptorType_uniformBuffer);
         vmaDestroyBuffer(vk.vma, buffer->buffer, buffer->alloc);
-        poolFree(&vk.buffers, buffer);
+        vk.buffers.free(buffer);
     }
 }
 
@@ -1561,8 +1555,7 @@ GpuImage* gpuImageCreateEx(const GpuImageCreateEx* create)
     HG_ASSERT(create->format != Format_undefined);
     HG_ASSERT(create->usage != 0);
 
-    GpuImage* image = static_cast<GpuImage*>(poolAlloc(&vk.images));
-    *image = {};
+    GpuImage* image = vk.images.alloc();
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1607,7 +1600,7 @@ void gpuImageDestroy(GpuImage* image)
     if (image != nullptr)
     {
         vmaDestroyImage(vk.vma, image->image, image->alloc);
-        poolFree(&vk.images, image);
+        vk.images.free(image);
     }
 }
 
@@ -1683,8 +1676,7 @@ GpuView* gpuViewCreateEx(const GpuViewCreateEx* config)
 {
     HG_ASSERT(config->aspectFlags != 0);
 
-    GpuView* view = static_cast<GpuView*>(poolAlloc(&vk.views));
-    *view = {};
+    GpuView* view = vk.views.alloc();
 
     VkImageViewCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1733,7 +1725,7 @@ void gpuViewDestroy(GpuView* view)
         descriptorDestroy(view->storageDesc, DescriptorType_storageImage);
         descriptorDestroy(view->samplerDesc, DescriptorType_combinedImageSampler);
         vkDestroyImageView(vk.device, view->view, nullptr);
-        poolFree(&vk.views, view);
+        vk.views.free(view);
     }
 }
 
@@ -2141,8 +2133,7 @@ GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config)
     if (config->colorAttachmentCount > 0)
         HG_ASSERT(config->colorAttachmentFormats != nullptr);
 
-    GpuPipeline* pipeline = static_cast<GpuPipeline*>(poolAlloc(&vk.pipelines));
-    *pipeline = {};
+    GpuPipeline* pipeline = vk.pipelines.alloc();
 
     ArenaScope scratch = getScratch();
 
@@ -2313,8 +2304,7 @@ GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 sh
     HG_ASSERT(shaderCode != nullptr);
     HG_ASSERT(shaderCodeSize > 0);
 
-    GpuPipeline* pipeline = static_cast<GpuPipeline*>(poolAlloc(&vk.pipelines));
-    *pipeline = {};
+    GpuPipeline* pipeline = vk.pipelines.alloc();
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2358,7 +2348,7 @@ void gpuPipelineDestroy(GpuPipeline* pipeline)
     {
         vkDestroyPipeline(vk.device, pipeline->pipeline, nullptr);
         vkDestroyPipelineLayout(vk.device, pipeline->layout, nullptr);
-        poolFree(&vk.pipelines, pipeline);
+        vk.pipelines.free(pipeline);
     }
 }
 
@@ -3028,9 +3018,9 @@ static void resizeWindowSwapchain(Window* window)
 
         if (window->images.count != swapImageCount)
         {
-            arrayResize(&window->images, swapImageCount);
-            arrayResize(&window->views, swapImageCount);
-            arrayResize(&window->readyToPresent, swapImageCount);
+            window->images.resize(swapImageCount);
+            window->views.resize(swapImageCount);
+            window->readyToPresent.resize(swapImageCount);
         }
 
         VkImage* swapImages = scratch.alloc<VkImage>(swapImageCount);
@@ -3121,7 +3111,7 @@ GpuCmd* gpuFrameBegin(Window** windows, u32 windowCount)
 
         if (result == VK_SUCCESS)
         {
-            *arrayPush(&frame->windows) = windows[i];
+            frame->windows.push(windows[i]);
         }
         else if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         {
@@ -3161,11 +3151,10 @@ void gpuFrameEnd(GpuCmd* cmd)
 
     Frame* frame = &vk.frames[vk.currentFrame];
 
-    Array<GpuImageBarrier> presentBarriers = arrayTemp<GpuImageBarrier>(scratch, 0, frame->windows.count);
+    ArrayTemp<GpuImageBarrier> presentBarriers = ArrayTemp<GpuImageBarrier>{scratch, 0, frame->windows.count};
     for (u32 i = 0; i < frame->windows.count; ++i)
     {
-        GpuImageBarrier* barrier = arrayPushTemp(scratch, &presentBarriers);
-        *barrier = {};
+        GpuImageBarrier* barrier = presentBarriers.push();
         barrier->image = windowImageView(frame->windows[i]);
         barrier->nextLayout = GpuLayout_presentSrc;
     }
@@ -3220,8 +3209,8 @@ void gpuFrameEnd(GpuCmd* cmd)
 }
 
 struct WindowState {
-    Pool pool = {};
-    Map<SDL_WindowID, Window*> ids = {};
+    Pool<Window> pool{};
+    Map<SDL_WindowID, Window*> ids{};
 
     f32 mouseDX = 0.0f;
     f32 mouseDY = 0.0f;
@@ -3234,14 +3223,13 @@ static WindowState windowState{};
 
 void internal::initWindowing()
 {
-    windowState.pool = poolCreate<Window>();
-    windowState.ids = Map<SDL_WindowID, Window*>();
+    windowState.ids = Map<SDL_WindowID, Window*>{8};
 }
 
 void internal::deinitWindowing()
 {
     windowState.ids = {};
-    poolDestroy(&windowState.pool);
+    windowState.pool = {};
 }
 
 static Format findSwapchainFormat(VkSurfaceKHR surface)
@@ -3295,8 +3283,7 @@ Window* windowCreate(StringView title, u32 width, u32 height, const WindowConfig
     if (config == nullptr)
         config = &defaultConfig;
 
-    Window* window = static_cast<Window*>(poolAlloc(&windowState.pool));
-    *window = {};
+    Window* window = windowState.pool.alloc();
 
     if (title == "")
         title = "Hurdy Gurdy";
@@ -3339,7 +3326,7 @@ Window* windowCreate(StringView title, u32 width, u32 height, const WindowConfig
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
     window->imageUsage = config->imageUsage;
 
-    window->imageAvailable = arrayCreate<VkSemaphore>(vk.frameCount, vk.frameCount);
+    window->imageAvailable = Array<VkSemaphore>{vk.frameCount, vk.frameCount};
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
         window->imageAvailable[i] = nullptr;
@@ -3347,20 +3334,20 @@ Window* windowCreate(StringView title, u32 width, u32 height, const WindowConfig
 
     resizeWindowSwapchain(window);
 
-    window->events = arrayCreate<WindowEvent>();
+    window->events = Array<WindowEvent>(0, 1024);
 
     return window;
 
 surfaceFailed:
     SDL_DestroyWindow(window->sdlWindow);
 windowFailed:
-    poolFree(&windowState.pool, window);
+    windowState.pool.free(window);
     return nullptr;
 }
 
 void windowDestroy(Window* window)
 {
-    arrayDestroy(&window->events);
+    window->events = {};
 
     for (u32 i = 0; i < window->images.count; ++i)
     {
@@ -3375,17 +3362,17 @@ void windowDestroy(Window* window)
 
     vkDestroySwapchainKHR(vk.device, window->swapchain, nullptr);
 
-    arrayDestroy(&window->readyToPresent);
-    arrayDestroy(&window->imageAvailable);
-    arrayDestroy(&window->views);
-    arrayDestroy(&window->images);
+    window->readyToPresent = {};
+    window->imageAvailable = {};
+    window->views = {};
+    window->images = {};
 
     windowState.ids.remove(SDL_GetWindowID(window->sdlWindow));
 
     vkDestroySurfaceKHR(vk.instance, window->surface, nullptr);
     SDL_DestroyWindow(window->sdlWindow);
 
-    poolFree(&windowState.pool, window);
+    windowState.pool.free(window);
 }
 
 GpuView* windowImageView(Window* window)
@@ -3695,7 +3682,7 @@ void processEvents()
                     windowEvent.button.type = WindowEventType_buttonPress;
                     windowEvent.button.button = key;
 
-                    *arrayPush(&(*window)->events) = windowEvent;
+                    (*window)->events.push(windowEvent);
                     (*window)->isKeyDown[key] = true;
                 }
             } break;
@@ -3709,7 +3696,7 @@ void processEvents()
                     windowEvent.button.type = WindowEventType_buttonRelease;
                     windowEvent.button.button = key;
 
-                    *arrayPush(&(*window)->events) = windowEvent;
+                    (*window)->events.push(windowEvent);
                     (*window)->isKeyDown[key] = false;
                 }
             } break;
@@ -3723,7 +3710,7 @@ void processEvents()
                     windowEvent.button.type = WindowEventType_buttonPress;
                     windowEvent.button.button = key;
 
-                    *arrayPush(&(*window)->events) = windowEvent;
+                    (*window)->events.push(windowEvent);
                     (*window)->isKeyDown[key] = true;
                 }
             } break;
@@ -3737,7 +3724,7 @@ void processEvents()
                     windowEvent.button.type = WindowEventType_buttonRelease;
                     windowEvent.button.button = key;
 
-                    *arrayPush(&(*window)->events) = windowEvent;
+                    (*window)->events.push(windowEvent);
                     (*window)->isKeyDown[key] = false;
                 }
             } break;
@@ -3898,7 +3885,7 @@ bool internal::initAudio()
         return false;
     }
 
-    audio.streams = arrayCreate<SDL_AudioStream*>();
+    audio.streams = Array<SDL_AudioStream*>(0, 1024);
 
     return true;
 }
@@ -3909,7 +3896,7 @@ void internal::deinitAudio()
     {
         SDL_DestroyAudioStream(audio.streams[i]);
     }
-    arrayDestroy(&audio.streams);
+    audio.streams = {};
 
     SDL_CloseAudioDevice(audio.device);
 }
@@ -3940,7 +3927,7 @@ AudioStream* audioStreamCreate(u32 frequency, u32 channels)
     }
     else
     {
-        stream = arrayPop(&audio.streams);
+        stream = audio.streams.pop();
         if (!SDL_SetAudioStreamFormat(stream, &audioSpec, nullptr))
             HG_PANIC("SDL could not set audio stream format: %s\n", SDL_GetError());
     }
@@ -3957,7 +3944,7 @@ void audioStreamDestroy(AudioStream* stream)
         if (!SDL_ClearAudioStream(sdlStream))
             HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
 
-        *arrayPush(&audio.streams) = sdlStream;
+        audio.streams.push(sdlStream);
     }
 }
 

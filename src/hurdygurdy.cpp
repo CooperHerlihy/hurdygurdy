@@ -67,12 +67,6 @@ Maybe<HurdyGurdy> init(SubsystemFlags init)
         initialized |= Subsystem_gpu;
     }
 
-    if (init & Subsystem_assets)
-    {
-        internal::initAssetDefaults();
-        initialized |= Subsystem_assets;
-    }
-
     if (init & Subsystem_windowing)
     {
         internal::initWindowing();
@@ -91,8 +85,6 @@ Maybe<HurdyGurdy> init(SubsystemFlags init)
 audioFailed:
     if (initialized & Subsystem_windowing)
         internal::deinitWindowing();
-    if (initialized & Subsystem_assets)
-        internal::deinitAssetDefaults();
     if (initialized & Subsystem_gpu)
         internal::deinitGpu();
 gpuFailed:
@@ -119,9 +111,6 @@ HurdyGurdy::~HurdyGurdy()
 
         if (initialized & Subsystem_windowing)
             internal::deinitWindowing();
-
-        if (initialized & Subsystem_assets)
-            internal::deinitAssetDefaults();
 
         if (initialized & Subsystem_gpu)
             internal::deinitGpu();
@@ -187,20 +176,7 @@ void* Arena::alloc(u64 size, u64 alignment)
 
 void* Arena::realloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 {
-    if (canExtend(allocation, oldSize, alignment))
-    {
-        u64 newHead = reinterpret_cast<uptr>(allocation) + newSize - reinterpret_cast<uptr>(memory);
-        if (newHead > capacity)
-        {
-            setError("Arena out of memory");
-            return nullptr;
-        }
-
-        head = newHead;
-        return allocation;
-    }
-
-    if (newSize < oldSize)
+    if (newSize <= oldSize || extend(allocation, oldSize, newSize))
         return allocation;
 
     void* newAllocation = alloc(newSize, alignment);
@@ -209,10 +185,24 @@ void* Arena::realloc(void* allocation, u64 oldSize, u64 newSize, u64 alignment)
     return newAllocation;
 }
 
-bool Arena::canExtend(void* allocation, u64 size, u64 align)
+bool Arena::canExtend(void* allocation, u64 size)
 {
-    static_cast<void>(align);
     return reinterpret_cast<uptr>(allocation) + size - reinterpret_cast<uptr>(memory) == static_cast<uptr>(head);
+}
+
+bool Arena::extend(void* allocation, u64 oldSize, u64 newSize)
+{
+    if (!canExtend(allocation, oldSize))
+        return false;
+
+    u64 newHead = reinterpret_cast<uptr>(allocation) + newSize - reinterpret_cast<uptr>(memory);
+    if (newHead > capacity)
+    {
+        return false;
+    }
+
+    head = newHead;
+    return true;
 }
 
 static thread_local Arena* scratchArenas{};
@@ -270,13 +260,13 @@ struct Spinlock {
     std::atomic_bool acquired{false};
 };
 
-static Pool mutices{};
+static Pool<Spinlock> spinlocks{};
 
 struct Fence {
     std::atomic<u32> counter{0};
 };
 
-static Pool fences{};
+static Pool<Fence> fences{};
 
 struct ThreadWork {
     Fence* fence = nullptr;
@@ -336,9 +326,6 @@ static bool threadPoolExecute()
 
 void internal::initConcurrency()
 {
-    mutices = poolCreate<Spinlock>();
-    fences = poolCreate<Fence>();
-
     threadPool.shouldClose.store(false);
     threadPool.threadCount = std::max((u32)1, std::thread::hardware_concurrency() - 1);
     threadPool.threads = heapAlloc<std::thread>(threadPool.threadCount);
@@ -408,18 +395,18 @@ void internal::deinitConcurrency()
     heapFree(threadPool.work, threadPool.workCapacity);
     heapFree(threadPool.threads, threadPool.threadCount);
 
-    poolDestroy(&fences);
-    poolDestroy(&mutices);
+    fences = {};
+    spinlocks = {};
 }
 
 Spinlock* mutexCreate()
 {
-    return new (poolAlloc(&mutices)) Spinlock{false};
+    return spinlocks.alloc(false);
 }
 
 void mutexDestroy(Spinlock* mtx)
 {
-    poolFree(&mutices, mtx);
+    spinlocks.free(mtx);
 }
 
 void mutexAcquire(Spinlock* mtx)
@@ -452,14 +439,12 @@ void mutexRelease(Spinlock* mtx)
 
 Fence* fenceCreate()
 {
-    return new (poolAlloc(&fences)) Fence{0};
+    return fences.alloc(0);
 }
 
 void fenceDestroy(Fence* fence)
 {
-    HG_ASSERT(fence != nullptr);
-    if (fence != nullptr)
-        poolFree(&fences, fence);
+    fences.free(fence);
 }
 
 void fenceAttach(Fence* fence, u32 count)
@@ -3808,67 +3793,11 @@ void arrayAnyPop(ArrayAny* arr, void* dst)
         memcpy(dst, static_cast<u8*>(arr->vals) + arr->count * arr->width, arr->width);
 }
 
-static constexpr u32 poolStockSize = 1024;
-
-static void poolRestock(Pool* pool)
-{
-    HG_ASSERT(pool != nullptr);
-
-    void* store = heapAlloc(poolStockSize * pool->width, pool->align);
-    for (u32 i = 0; i < poolStockSize; ++i)
-    {
-        queuePushBack(&pool->freeList, static_cast<u8*>(store) + i * pool->width);
-    }
-    *arrayPush(&pool->itemStores) = store;
-}
-
-Pool poolCreate(u32 width, u32 align)
-{
-    Pool pool{};
-    pool.freeList = queueCreate<void*>();
-    pool.itemStores = arrayCreate<void*>(0, 4);
-    pool.width = width;
-    pool.align = align;
-    poolRestock(&pool);
-    return pool;
-}
-
-void poolDestroy(Pool* pool)
-{
-    HG_ASSERT(pool != nullptr);
-
-    for (u32 i = 0; i < pool->itemStores.count; ++i)
-    {
-        heapFree(pool->itemStores[i], poolStockSize);
-    }
-    arrayDestroy(&pool->itemStores);
-    queueDestroy(&pool->freeList);
-}
-
-void* poolAlloc(Pool* pool)
-{
-    HG_ASSERT(pool != nullptr);
-
-    if (pool->freeList.count == 0)
-    {
-        poolRestock(pool);
-    }
-
-    return queuePopFront(&pool->freeList);
-}
-
-void poolFree(Pool* pool, void* item)
-{
-    HG_ASSERT(pool != nullptr);
-    HG_ASSERT(item != nullptr);
-    queuePushFront(&pool->freeList, item);
-}
-
 HandlePool handlePoolCreate()
 {
     HandlePool handles{};
-    handles.handles = arrayCreate<Handle>();
-    handles.freed = arrayCreate<Handle>();
+    handles.handles = Array<Handle>{0, 1024};
+    handles.freed = Array<Handle>{0, 1024};
 
     handlePoolAlloc(&handles);
 
@@ -3879,8 +3808,8 @@ void handlePoolDestroy(HandlePool* pool)
 {
     HG_ASSERT(pool != nullptr);
 
-    arrayDestroy(&pool->handles);
-    arrayDestroy(&pool->freed);
+    pool->handles = {};
+    pool->freed = {};
 }
 
 void handlePoolReset(HandlePool* pool)
@@ -3899,14 +3828,14 @@ Handle handlePoolAlloc(HandlePool* pool)
 
     if (pool->freed.count > 0)
     {
-        Handle handle = arrayPop(&pool->freed);
+        Handle handle = pool->freed.pop();
         pool->handles[handleIdx(handle)] = handle;
         return handle;
     }
     else
     {
         Handle handle = {pool->handles.count};
-        *arrayPush(&pool->handles) = handle;
+        pool->handles.push(handle);
         return handle;
     }
 }
@@ -3924,31 +3853,11 @@ void handlePoolFree(HandlePool* pool, Handle handle)
     HG_ASSERT(pool != nullptr);
     HG_ASSERT(handlePoolAlive(pool, handle));
     pool->handles[handleIdx(handle)] = handleNull;
-    *arrayPush(&pool->freed) = handleNextGeneration(handle);
-}
-
-void internal::initAssetDefaults()
-{
-    assetInit<BinaryView>();
-    assetInit<TextureData>();
-    assetInit<Texture>();
-    assetInit<MeshData>();
-    assetInit<Mesh>();
-    assetInit<Sound>();
-}
-
-void internal::deinitAssetDefaults()
-{
-    assetDeinit<Sound>();
-    assetDeinit<Mesh>();
-    assetDeinit<MeshData>();
-    assetDeinit<Texture>();
-    assetDeinit<TextureData>();
-    assetDeinit<BinaryView>();
+    pool->freed.push(handleNextGeneration(handle));
 }
 
 template<>
-void assetLoadImpl(Asset<Binary>* data)
+void assetLoadImpl(AssetData<Binary>* data)
 {
     ArenaScope scratch = getScratch();
 
@@ -3982,7 +3891,7 @@ void assetLoadImpl(Asset<Binary>* data)
 }
 
 template<>
-void assetUnloadImpl(Asset<Binary>* data)
+void assetUnloadImpl(AssetData<Binary>* data)
 {
     data->asset = {};
 }
@@ -4010,15 +3919,13 @@ bool binaryStore(BinaryView bin, StringView path)
     return true;
 }
 
-f64 clockTick(Clock* clock)
+f64 Clock::tick()
 {
-    HG_ASSERT(clock != nullptr);
-
-    f64 prev = clock->time;
+    f64 prev = time;
     timespec ts;
     timespec_get(&ts, TIME_UTC);
-    clock->time = static_cast<f64>(ts.tv_sec) + static_cast<f64>(ts.tv_nsec) * 1e-9;
-    return clock->time - prev;
+    time = static_cast<f64>(ts.tv_sec) + static_cast<f64>(ts.tv_nsec) * 1e-9;
+    return time - prev;
 }
 
 void sleep(f64 time)
@@ -4040,7 +3947,7 @@ Perf perfCreate(Arena* arena, u32 count)
 void perfBegin(Perf* perf)
 {
     HG_ASSERT(perf != nullptr);
-    clockTick(&perf->clock);
+    perf->clock.tick();
 }
 
 f64 perfEnd(Perf* perf)
@@ -4048,7 +3955,7 @@ f64 perfEnd(Perf* perf)
     HG_ASSERT(perf != nullptr);
     HG_ASSERT(perf->current < perf->count);
 
-    f64 time = clockTick(&perf->clock);
+    f64 time = perf->clock.tick();
     perf->times[perf->current++] = time;
 
     return time;
@@ -4104,14 +4011,14 @@ void perfLog(StringView title, const PerfStats* stats, PerfScale scale)
 }
 
 template<>
-void assetLoadImpl(Asset<Sound>* data)
+void assetLoadImpl(AssetData<Sound>* data)
 {
     static_cast<void>(data);
     HG_PANIC("Load audio file impl : TODO\n");
 }
 
 template<>
-void assetUnloadImpl(Asset<Sound>* data)
+void assetUnloadImpl(AssetData<Sound>* data)
 {
     static_cast<void>(data);
     HG_PANIC("Unload audio file impl : TODO\n");
@@ -4120,8 +4027,8 @@ void assetUnloadImpl(Asset<Sound>* data)
 AudioPlayer audioPlayerCreate()
 {
     AudioPlayer player{};
-    player.music = arrayCreate<AudioPlayerMusic>();
-    player.sounds = arrayCreate<AudioStream*>();
+    player.music = Array<AudioPlayerMusic>{0, 1024};
+    player.sounds = Array<AudioStream*>{0, 1024};
     return player;
 }
 
@@ -4139,8 +4046,8 @@ void audioPlayerDestroy(AudioPlayer* player)
         audioStreamDestroy(player->music[i].stream);
     }
 
-    arrayDestroy(&player->sounds);
-    arrayDestroy(&player->music);
+    player->sounds = {};
+    player->music = {};
 }
 
 void audioPlayerUpdate(AudioPlayer* player)
@@ -4149,7 +4056,7 @@ void audioPlayerUpdate(AudioPlayer* player)
     {
         if (audioStreamQueuedSize(player->sounds[i]) == 0)
         {
-            AudioStream* stream = arrayRemove(&player->sounds, i);
+            AudioStream* stream = player->sounds.removeShift(i);
             audioStreamDestroy(stream);
         }
     }
@@ -4160,13 +4067,11 @@ void audioPlayerUpdate(AudioPlayer* player)
         if (!music->playing)
             continue;
 
-        Sound* sound = &music->sound->asset;
-
         ArenaScope scratch = getScratch();
 
         u32 width = sizeof(f32);
 
-        u32 total = sound->frequency * width / 16;
+        u32 total = music->sound->frequency * width / 16;
         u32 queued = audioStreamQueuedSize(music->stream);
         if (queued >= total)
             continue;
@@ -4177,11 +4082,11 @@ void audioPlayerUpdate(AudioPlayer* player)
 
         while (queueSize < sizeToPush)
         {
-            if (music->pos == sound->size)
+            if (music->pos == music->sound->size)
                 music->pos = 0;
 
-            u32 sizeToQueue = std::min(sizeToPush - queueSize, static_cast<u32>(sound->size - music->pos));
-            memcpy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(sound->data) + music->pos, sizeToQueue);
+            u32 sizeToQueue = std::min(sizeToPush - queueSize, static_cast<u32>(music->sound->size - music->pos));
+            memcpy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(music->sound->data) + music->pos, sizeToQueue);
             queueSize += sizeToQueue;
             music->pos += sizeToQueue;
         }
@@ -4191,42 +4096,42 @@ void audioPlayerUpdate(AudioPlayer* player)
     }
 }
 
-void audioPlayerMusic(AudioPlayer* player, SoundAsset* music)
+void audioPlayerMusic(AudioPlayer* player, Asset<Sound>* music)
 {
     for (u32 i = 0; i < player->music.count; ++i)
     {
-        if (player->music[i].sound == music)
+        if (player->music[i].sound == *music)
         {
             player->music[i].playing = true;
             return;
         }
     }
 
-    AudioPlayerMusic* track = arrayPush(&player->music);
-    track->stream = audioStreamCreate(music->asset.frequency, music->asset.channels);
-    track->sound = music;
+    AudioPlayerMusic* track = player->music.push();
+    track->stream = audioStreamCreate((*music)->frequency, (*music)->channels);
+    track->sound = music->clone();
     track->pos = 0;
     track->playing = true;
 }
 
-void audioPlayerMusicKill(AudioPlayer* player, SoundAsset* music)
+void audioPlayerMusicKill(AudioPlayer* player, Asset<Sound>* music)
 {
     for (u32 i = 0; i < player->music.count; ++i)
     {
-        if (player->music[i].sound == music)
+        if (player->music[i].sound == *music)
         {
-            AudioPlayerMusic track = arrayRemove(&player->music, i);
+            AudioPlayerMusic track = player->music.removeShift(i);
             audioStreamDestroy(track.stream);
             return;
         }
     }
 }
 
-void audioPlayerMusicPause(AudioPlayer* player, SoundAsset* music)
+void audioPlayerMusicPause(AudioPlayer* player, Asset<Sound>* music)
 {
     for (u32 i = 0; i < player->music.count; ++i)
     {
-        if (player->music[i].sound == music)
+        if (player->music[i].sound == *music)
         {
             player->music[i].playing = false;
             return;
@@ -4234,11 +4139,11 @@ void audioPlayerMusicPause(AudioPlayer* player, SoundAsset* music)
     }
 }
 
-void audioPlayerSetMusicGain(AudioPlayer* player, SoundAsset* music, f32 gain)
+void audioPlayerSetMusicGain(AudioPlayer* player, Asset<Sound>* music, f32 gain)
 {
     for (u32 i = 0; i < player->music.count; ++i)
     {
-        if (player->music[i].sound == music)
+        if (player->music[i].sound == *music)
         {
             audioStreamSetGain(player->music[i].stream, gain);
             return;
@@ -4246,15 +4151,15 @@ void audioPlayerSetMusicGain(AudioPlayer* player, SoundAsset* music, f32 gain)
     }
 }
 
-void audioPlayerSound(AudioPlayer* player, SoundAsset* sound, f32 gain)
+void audioPlayerSound(AudioPlayer* player, Asset<Sound>* sound, f32 gain)
 {
-    AudioStream** stream = arrayPush(&player->sounds);
-    *stream = audioStreamCreate(sound->asset.frequency, sound->asset.channels);
+    AudioStream** stream = player->sounds.push();
+    *stream = audioStreamCreate((*sound)->frequency, (*sound)->channels);
     audioStreamSetGain(*stream, gain);
-    audioStreamPush(*stream, sound->asset.data, sound->asset.size);
+    audioStreamPush(*stream, (*sound)->data, (*sound)->size);
 }
 
-AudioSource* audioSourceAdd(Ecs* ecs, Entity e, SoundAsset* audio, bool repeat)
+AudioSource* audioSourceAdd(Ecs* ecs, Entity e, Asset<Sound>* audio, bool repeat)
 {
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(ecsAlive(ecs, e));
@@ -4262,7 +4167,7 @@ AudioSource* audioSourceAdd(Ecs* ecs, Entity e, SoundAsset* audio, bool repeat)
     AudioSource* src = ecsAdd<AudioSource>(ecs, e);
     *src = {};
     src->player = audioStreamCreate(8000, 1);
-    src->audio = audio;
+    src->audio = audio->clone();
     src->position = 0;
     src->repeat = repeat;
 
@@ -4270,7 +4175,7 @@ AudioSource* audioSourceAdd(Ecs* ecs, Entity e, SoundAsset* audio, bool repeat)
 }
 
 template<>
-void assetLoadImpl(Asset<TextureData>* data)
+void assetLoadImpl(AssetData<TextureData>* data)
 {
     ArenaScope scratch = getScratch();
     char* cpath = cString(scratch, data->path);
@@ -4289,7 +4194,7 @@ void assetLoadImpl(Asset<TextureData>* data)
 }
 
 template<>
-void assetUnloadImpl(Asset<TextureData>* data)
+void assetUnloadImpl(AssetData<TextureData>* data)
 {
     free(data->asset.pixels);
 }
@@ -4315,42 +4220,41 @@ bool textureStorePng(TextureData* texture, StringView path)
 }
 
 template<>
-void assetLoadImpl(Asset<Texture>* data)
+void assetLoadImpl(AssetData<Texture>* data)
 {
-    TextureDataAsset* tex = assetLoad<TextureData>(data->path);
-    HG_DEFER(assetUnload(tex));
-    if (tex->asset.pixels == nullptr)
+    Asset<TextureData> tex = load<TextureData>(data->path);
+    if (tex->pixels == nullptr)
         return;
 
     GpuImageCreateEx imageInfo{};
-    imageInfo.format = tex->asset.format;
-    imageInfo.width = tex->asset.width;
-    imageInfo.height = tex->asset.height;
-    imageInfo.depth = tex->asset.depth;
+    imageInfo.format = tex->format;
+    imageInfo.width = tex->width;
+    imageInfo.height = tex->height;
+    imageInfo.depth = tex->depth;
     imageInfo.usage = GpuImageUsage_transferDst | GpuImageUsage_sampled;
 
     data->asset.image = gpuImageCreateEx(&imageInfo);
     data->asset.view = gpuViewCreate(data->asset.image, GpuAspect_color, GpuFilter_nearest);
 
-    gpuImageWrite(data->asset.view, tex->asset.pixels);
+    gpuImageWrite(data->asset.view, tex->pixels);
 }
 
 template<>
-void assetUnloadImpl(Asset<Texture>* data)
+void assetUnloadImpl(AssetData<Texture>* data)
 {
     gpuViewDestroy(data->asset.view);
     gpuImageDestroy(data->asset.image);
 }
 
 template<>
-void assetLoadImpl(Asset<MeshData>* data)
+void assetLoadImpl(AssetData<MeshData>* data)
 {
     static_cast<void>(data);
     HG_PANIC("load gltf file : TODO\n");
 }
 
 template<>
-void assetUnloadImpl(Asset<MeshData>* data)
+void assetUnloadImpl(AssetData<MeshData>* data)
 {
     heapFree(data->asset.indices, data->asset.indexCount);
     heapFree(data->asset.vertices, data->asset.vertexCount);
@@ -4365,17 +4269,15 @@ void meshStoreGltf(MeshData* data, StringView path, Fence* fence)
 }
 
 template<>
-void assetLoadImpl(Asset<Mesh>* data)
+void assetLoadImpl(AssetData<Mesh>* data)
 {
-    MeshDataAsset* mesh = assetLoad<MeshData>(data->path);
-    HG_DEFER(assetUnload(mesh));
-
-    if (mesh->asset.vertices == nullptr || mesh->asset.indices == nullptr)
+    Asset<MeshData> mesh = load<MeshData>(data->path);
+    if (mesh->vertices == nullptr || mesh->indices == nullptr)
         return;
 
-    data->asset.vertexCount = mesh->asset.vertexCount;
-    data->asset.vertexWidth = mesh->asset.vertexWidth;
-    data->asset.indexCount = mesh->asset.indexCount;
+    data->asset.vertexCount = mesh->vertexCount;
+    data->asset.vertexWidth = mesh->vertexWidth;
+    data->asset.indexCount = mesh->indexCount;
 
     data->asset.vertexBuffer = gpuBufferCreate(
         data->asset.vertexCount * data->asset.vertexWidth,
@@ -4388,18 +4290,18 @@ void assetLoadImpl(Asset<Mesh>* data)
     gpuBufferWrite(
         data->asset.vertexBuffer,
         0,
-        mesh->asset.vertices,
+        mesh->vertices,
         data->asset.vertexCount * data->asset.vertexWidth);
 
     gpuBufferWrite(
         data->asset.indexBuffer,
         0,
-        mesh->asset.indices,
+        mesh->indices,
         data->asset.indexCount * sizeof(u32));
 }
 
 template<>
-void assetUnloadImpl(Asset<Mesh>* data)
+void assetUnloadImpl(AssetData<Mesh>* data)
 {
     gpuBufferDestroy(data->asset.vertexBuffer);
     gpuBufferDestroy(data->asset.indexBuffer);
@@ -4635,7 +4537,7 @@ Layer2D layerCreate2D()
 {
     Layer2D layer{};
 
-    layer.instances = arrayCreate<Render2DInstance>();
+    layer.instances = Array<Render2DInstance>{0, 1024};
     layer.instanceBuffer = gpuBufferCreate(layer.instances.capacity * sizeof(Render2DInstance),
         GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
     layer.instanceCapacity = layer.instances.capacity;
@@ -4650,7 +4552,7 @@ void layerDestroy2D(Layer2D* layer)
     HG_ASSERT(layer != nullptr);
 
     gpuBufferDestroy(layer->instanceBuffer);
-    arrayDestroy(&layer->instances);
+    layer->instances = {};
 }
 
 void layerClear2D(Layer2D* layer)
@@ -4716,7 +4618,7 @@ void drawRect2D(Layer2D* layer, Vec4 color, Rect dst)
     instance.rect.type = Render2DInstanceType_color;
     instance.rect.color = color;
 
-    *arrayPush(&layer->instances) = instance;
+    layer->instances.push(instance);
 
     layer->changed = true;
 }
@@ -4728,7 +4630,7 @@ void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst)
 
     Texture* texture = sprite->texture == nullptr
         ? &render2D.defaultTex
-        : &sprite->texture->asset;
+        : &*sprite->texture;
 
     Render2DInstance instance{};
     instance.sprite.pos = dst.begin;
@@ -4738,25 +4640,25 @@ void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst)
     instance.sprite.uvPos = sprite->uv.begin;
     instance.sprite.uvSize = sprite->uv.end - sprite->uv.begin;
 
-    *arrayPush(&layer->instances) = instance;
+    layer->instances.push(instance);
 
     layer->changed = true;
 }
 
-Atlas2D atlasCreate2D(TextureAsset* texture)
+Atlas2D atlasCreate2D(Asset<Texture>* texture)
 {
     HG_ASSERT(texture != nullptr);
 
     Atlas2D atlas{};
-    atlas.texture = texture;
-    atlas.sprites = arrayCreate<Rect>();
+    atlas.texture = texture->clone();
+    atlas.sprites = Array<Rect>{0, 1024};
     return atlas;
 }
 
 void atlasDestroy2D(Atlas2D* atlas)
 {
     HG_ASSERT(atlas != nullptr);
-    arrayDestroy(&atlas->sprites);
+    atlas->sprites = {};
 }
 
 u32 atlasAdd2D(Atlas2D* atlas, Rect sprite)
@@ -4764,7 +4666,7 @@ u32 atlasAdd2D(Atlas2D* atlas, Rect sprite)
     HG_ASSERT(atlas != nullptr);
 
     u32 idx = atlas->sprites.count;
-    *arrayPush(&atlas->sprites) = sprite;
+    atlas->sprites.push(sprite);
     return idx;
 }
 
@@ -4781,7 +4683,7 @@ u32 atlasAddGrid2D(Atlas2D* atlas, Rect grid, u32 width, u32 height)
         pos.x = grid.begin.x;
         for (u32 x = 0; x < width; ++x)
         {
-            *arrayPush(&atlas->sprites) = {pos, pos + spriteSize};
+            atlas->sprites.push({pos, pos + spriteSize});
             pos.x += spriteSize.x;
         }
         pos.y += spriteSize.y;
@@ -4794,7 +4696,7 @@ Sprite2D atlasGet2D(Atlas2D* atlas, u32 idx)
 {
     HG_ASSERT(atlas != nullptr);
 
-    return {atlas->texture, atlas->sprites[idx]};
+    return {atlas->texture.clone(), atlas->sprites[idx]};
 }
 
 Tilemap2D tilemapCreate2D(u32 width, u32 height)
@@ -4866,8 +4768,8 @@ void ecsDestroy(Ecs* ecs)
     ecs->components.forEach([&](u64*, Component* system)
     {
         arrayAnyDestroy(&system->components);
-        arrayDestroy(&system->entities);
-        arrayDestroy(&system->indices);
+        system->entities = {};
+        system->indices = {};
         system->name = {};
     });
 
@@ -4904,13 +4806,13 @@ void ecsRegisterComponent(Ecs* ecs, EcsRegisterComponent* config)
     Component* system = ecs->components.add(id, {});
 
     system->name = String::create(config->name);
-    system->indices = arrayCreate<u32>();
-    system->entities = arrayCreate<Entity>();
+    system->indices = Array<u32>{0, 1024};
+    system->entities = Array<Entity>{0, 1024};
     system->components = arrayAnyCreate(config->width, config->align);
     system->dtor = config->dtor;
     system->serialize = config->serialize;
 
-    arrayPush(&system->entities);
+    system->entities.push();
     arrayAnyPush(&system->components);
 }
 
@@ -4923,8 +4825,8 @@ void ecsUnregisterComponent(Ecs* ecs, u64 componentId)
         system->dtor(system->components[c]);
     }
     arrayAnyDestroy(&system->components);
-    arrayDestroy(&system->entities);
-    arrayDestroy(&system->indices);
+    system->entities = {};
+    system->indices = {};
     system->name = {};
 
     ecs->components.remove(componentId);
@@ -4977,12 +4879,12 @@ void* ecsAdd(Ecs* ecs, Entity e, u64 componentId)
     {
         u32 oldCount = system->indices.count;
         u32 newCount = idx * 2;
-        arrayResize(&system->indices, newCount);
+        system->indices.resize(newCount);
         for (u32 i = oldCount; i < newCount; ++i)
             system->indices[i] = 0;
     }
     system->indices[idx] = system->entities.count;
-    *arrayPush(&system->entities) = e;
+    system->entities.push(e);
     return arrayAnyPush(&system->components);
 }
 
@@ -4998,7 +4900,7 @@ void ecsRemove(Ecs* ecs, Entity e, u64 componentId)
     u32 idx = system->indices[handleIdx(e.handle)];
     system->dtor(system->components[idx]);
 
-    Entity last = arrayPop(&system->entities);
+    Entity last = system->entities.pop();
     if (e != last)
     {
         system->entities[idx] = last;
@@ -5491,7 +5393,7 @@ void transformUpdate(Ecs* ecs, Entity e)
 template<>
 void ecsDtor(AudioSource* src)
 {
-    assetUnload(src->audio);
+    src->audio = {};
     audioStreamDestroy(src->player);
 }
 
@@ -5499,7 +5401,7 @@ void audioUpdate(Ecs* ecs, Entity listener)
 {
     ecsForEach<AudioSource>(ecs, [&](Entity e, AudioSource* src)
     {
-        Sound* audio = &src->audio->asset;
+        Sound* audio = &*src->audio;
         if (src->position == audio->size && !src->repeat)
             return;
 
@@ -5630,14 +5532,14 @@ void serialize(Serializer* s, Sprite* sprite)
         &sprite->uvSize);
 }
 
-Sprite* spriteAdd(Ecs* ecs, Entity e, TextureAsset* texture, Vec2 uvPos, Vec2 uvSize)
+Sprite* spriteAdd(Ecs* ecs, Entity e, Asset<Texture>* texture, Vec2 uvPos, Vec2 uvSize)
 {
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(ecsAlive(ecs, e));
 
     Sprite* sprite = ecsAdd<Sprite>(ecs, e);
     *sprite = {};
-    sprite->texture = texture;
+    sprite->texture = texture->clone();
     sprite->uvPos = uvPos;
     sprite->uvSize = uvSize;
 
@@ -5647,7 +5549,7 @@ Sprite* spriteAdd(Ecs* ecs, Entity e, TextureAsset* texture, Vec2 uvPos, Vec2 uv
 template<>
 void ecsDtor(Sprite* sprite)
 {
-    assetUnload(sprite->texture);
+    *sprite = {};
 }
 
 void spritesDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
@@ -5661,7 +5563,7 @@ void spritesDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
     {
         Texture* texture = sprite->texture == nullptr
             ? &spritePipeline.defaultTex
-            : &sprite->texture->asset;
+            : &*sprite->texture;
 
         SpritePipelinePush push{};
         push.model = tf->mat;
@@ -5764,13 +5666,13 @@ void serialize(Serializer* s, Skybox* skybox)
         &skybox->texture);
 }
 
-Skybox* skyboxAdd(Ecs* ecs, Entity e, TextureAsset* texture)
+Skybox* skyboxAdd(Ecs* ecs, Entity e, Asset<Texture>* texture)
 {
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(ecsAlive(ecs, e));
 
     Skybox* skybox = ecsAdd<Skybox>(ecs, e);
-    *skybox = {texture};
+    *skybox = {texture->clone()};
 
     return skybox;
 }
@@ -5778,7 +5680,7 @@ Skybox* skyboxAdd(Ecs* ecs, Entity e, TextureAsset* texture)
 template<>
 void ecsDtor(Skybox* skybox)
 {
-    assetUnload(skybox->texture);
+    *skybox = {};
 }
 
 void skyboxDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
@@ -5789,7 +5691,7 @@ void skyboxDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
     {
         Texture* texture = skybox->texture == nullptr
             ? &skyboxPipeline.defaultTex
-            : &skybox->texture->asset;
+            : &*skybox->texture;
 
         SkyboxPipelinePush push{};
         push.viewProj = gpuBufferUniformDescriptor(ecsGet<Camera>(ecs, camera)->vpBuffer);
@@ -6024,18 +5926,18 @@ void serialize(Serializer* s, Model* model)
 Model* modelAdd(
     Ecs* ecs,
     Entity e,
-    MeshAsset* mesh,
-    TextureAsset* colorMap,
-    TextureAsset* normalMap)
+    Asset<Mesh>* mesh,
+    Asset<Texture>* colorMap,
+    Asset<Texture>* normalMap)
 {
     HG_ASSERT(ecs != nullptr);
     HG_ASSERT(ecsAlive(ecs, e));
 
     Model* model = ecsAdd<Model>(ecs, e);
     *model = {};
-    model->mesh = mesh;
-    model->colorMap = colorMap;
-    model->normalMap = normalMap;
+    model->mesh = mesh->clone();
+    model->colorMap = colorMap->clone();
+    model->normalMap = normalMap->clone();
 
     return model;
 }
@@ -6043,9 +5945,7 @@ Model* modelAdd(
 template<>
 void ecsDtor(Model* model)
 {
-    assetUnload(model->normalMap);
-    assetUnload(model->colorMap);
-    assetUnload(model->mesh);
+    *model = {};
 }
 
 void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
@@ -6130,15 +6030,15 @@ void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd)
     {
         Texture* colorMap = model->colorMap == nullptr
             ? &modelPipeline.defaultColorMap
-            : &model->colorMap->asset;
+            : &*model->colorMap;
 
         Texture* normalMap = model->normalMap == nullptr
             ? &modelPipeline.defaultNormalMap
-            : &model->normalMap->asset;
+            : &*model->normalMap;
 
         Mesh* gpuModel = model->mesh == nullptr
             ? &modelPipeline.defaultModel
-            : &model->mesh->asset;
+            : &*model->mesh;
 
         ModelPipelinePush push{};
         push.model = tf->mat;

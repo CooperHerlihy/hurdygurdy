@@ -31,7 +31,7 @@ static Transform* transform;
 static Camera* camera;
 
 static f32 audioData[4000];
-static SoundAsset* audio;
+static Asset<Sound> audio;
 
 static bool showEditor = true;
 static bool showRender = true;
@@ -76,11 +76,11 @@ void init(Arena* arena)
 
     initImGui(window, windowImageFormat(window));
 
-    audio = assetCreate<Sound>();
-    audio->asset.data = audioData;
-    audio->asset.size = sizeof(audioData);
-    audio->asset.frequency = 8000;
-    audio->asset.channels = 1;
+    audio = newAsset<Sound>();
+    audio->data = audioData;
+    audio->size = sizeof(audioData);
+    audio->frequency = 8000;
+    audio->channels = 1;
 
     spritesInit(Format_r8g8b8a8_srgb, Format_d32_sfloat);
     modelsInit(Format_r8g8b8a8_srgb, Format_d32_sfloat);
@@ -148,7 +148,7 @@ void init(Arena* arena)
     transformAdd(ecs, sound);
     ecsGet<Transform>(ecs, sound)->position = {0, 0, 1};
     transformUpdate(ecs, sound);
-    audioSourceAdd(ecs, sound, assetCopy(audio), true);
+    audioSourceAdd(ecs, sound, &audio, true);
 
     nodeAddChild(ecs, root, sound);
     nodeAddChild(ecs, root, cube);
@@ -527,7 +527,7 @@ void drawRender()
 void render()
 {
     GpuCmd* cmd = gpuFrameBegin(&window, 1);
-    clockTick(&cpuClock);
+    cpuClock.tick();
     if (windowImageView(window) != nullptr)
     {
         GpuRenderAttachment renderColorAttachment{};
@@ -571,9 +571,9 @@ void render()
 
         gpuRenderPassEnd(cmd);
     }
-    cpuDelta += clockTick(&cpuClock);
+    cpuDelta += cpuClock.tick();
     gpuFrameEnd(cmd);
-    clockTick(&cpuClock);
+    cpuClock.tick();
 }
 
 void drawUI(Arena* frame)
@@ -681,11 +681,10 @@ int main()
         }
     });
 
-    Clock gameClock;
-    clockTick(&gameClock);
+    Clock gameClock{};
     while (!quit)
     {
-        delta = clockTick(&gameClock);
+        delta = gameClock.tick();
 
         Arena* frame = getScratch(&arena, 1);
 
@@ -734,7 +733,7 @@ int main()
 
         drawUI(frame);
 
-        cpuDelta += clockTick(&cpuClock);
+        cpuDelta += cpuClock.tick();
         render();
     }
     gpuWaitIdle();

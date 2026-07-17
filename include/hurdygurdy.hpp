@@ -34,7 +34,6 @@
 #include <cstring>
 
 #include <algorithm>
-#include <concepts>
 #include <utility>
 #include <type_traits>
 
@@ -312,9 +311,8 @@ enum Subsystem : u32 {
     Subsystem_memory = 0x1,
     Subsystem_concurrency = 0x2,
     Subsystem_gpu = 0x4,
-    Subsystem_assets = 0x8,
-    Subsystem_windowing = 0x10,
-    Subsystem_audio = 0x20,
+    Subsystem_windowing = 0x8,
+    Subsystem_audio = 0x10,
     Subsystem_all = static_cast<u32>(-1),
 };
 using SubsystemFlags = u32;
@@ -927,7 +925,7 @@ struct Arena {
     /**
      * Returns whether the allocation can be extended, or if it must be moved
      */
-    bool canExtend(void* allocation, u64 size, u64 align);
+    bool canExtend(void* allocation, u64 size);
 
     /**
      * Returns whether the allocation can be extended, or if it must be moved
@@ -935,7 +933,27 @@ struct Arena {
     template<typename T>
     bool canExtend(T* allocation, u64 count)
     {
-        return canExtend(static_cast<void*>(allocation), count * sizeof(T), alignof(T));
+        return canExtend(static_cast<void*>(allocation), count * sizeof(T));
+    }
+
+    /**
+     * Extends the allocation from oldSize to newSize if possible
+     *
+     * Returns
+     * - Whether it could be extended
+     */
+    bool extend(void* allocation, u64 oldSize, u64 newSize);
+
+    /**
+     * Extends the allocation to newSize, canExtend must return true
+     *
+     * Returns
+     * - Whether it could be extended
+     */
+    template<typename T>
+    bool extend(T* allocation, u64 oldSize, u64 newSize)
+    {
+        return extend(static_cast<void*>(allocation), oldSize * sizeof(T), newSize * sizeof(T));
     }
 };
 
@@ -1055,9 +1073,9 @@ struct ArenaScope {
     /**
      * Returns whether the allocation can be extended, or if it must be moved
      */
-    bool canExtend(void* allocation, u64 size, u64 align)
+    bool canExtend(void* allocation, u64 size)
     {
-        return arena->canExtend(allocation, size, align);
+        return arena->canExtend(allocation, size);
     }
 
     /**
@@ -1067,6 +1085,29 @@ struct ArenaScope {
     bool canExtend(T* allocation, u64 count)
     {
         return arena->canExtend(allocation, count);
+    }
+
+    /**
+     * Extends the allocation from oldSize to newSize if possible
+     *
+     * Returns
+     * - Whether it could be extended
+     */
+    bool extend(void* allocation, u64 oldSize, u64 newSize)
+    {
+        return arena->extend(allocation, oldSize, newSize);
+    }
+
+    /**
+     * Extends the allocation to newSize, canExtend must return true
+     *
+     * Returns
+     * - Whether it could be extended
+     */
+    template<typename T>
+    bool extend(T* allocation, u64 oldSize, u64 newSize)
+    {
+        return arena->extend(allocation, oldSize, newSize);
     }
 
     /**
@@ -5275,15 +5316,38 @@ struct Array {
     /**
      * The values stored
      */
-    T* vals;
+    T* vals = nullptr;
     /**
      * The number of vals
      */
-    u32 count;
+    u32 count = 0;
     /**
      * The current max number of vals
      */
-    u32 capacity;
+    u32 capacity = 0;
+
+    /**
+     * Construct empty
+     */
+    Array() noexcept = default;
+
+    /**
+     * Construct with init size
+     */
+    Array(u32 countVal, u32 capacityVal);
+
+    /**
+     * Free the array
+     */
+    ~Array() noexcept;
+
+    /**
+     * Implicit convert to span
+     */
+    constexpr operator Span<T>() const
+    {
+        return {vals, count};
+    }
 
     /**
      * Convenience to index into the array with debug bounds checking
@@ -5294,6 +5358,76 @@ struct Array {
         HG_ASSERT(idx < count);
         return vals[idx];
     }
+
+    /**
+     * Remove all elements from the array
+     */
+    void reset();
+
+    /**
+     * Increase the size of the array, must be greater or equal to count
+     */
+    void resize(u32 newCount);
+
+    /**
+     * Increase the capacity of the array to at least newCapacity
+     */
+    void reserve(u32 newCapacity);
+
+    /**
+     * Push a value to the end of the array
+     */
+    T* push(T val = {});
+
+    /**
+     * Pop a value from the end of the array
+     */
+    T pop();
+
+    /**
+     * Insert a value at idx, shifting values over
+     */
+    T* insertShift(u32 idx, T val = {});
+
+    /**
+     * Remove the value from idx, shifting values over
+     */
+    T removeShift(u32 idx);
+
+    /**
+     * Insert a value at idx, moving the previous value to the end
+     */
+    T* insertSwap(u32 idx, T val = {});
+
+    /**
+     * Remove the value from idx, swapping with the last value
+     */
+    T removeSwap(u32 idx);
+
+    /**
+     * Move construct
+     */
+    Array(Array&& other) noexcept
+        : vals{std::exchange(other.vals, nullptr)}
+        , count{std::exchange(other.count, 0)}
+        , capacity{std::exchange(other.capacity, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    Array& operator=(Array&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Array();
+            new (this) Array{std::move(other)};
+        }
+        return *this;
+    }
+
+    Array(const Array&) = delete;
+    Array& operator=(const Array&) = delete;
 };
 
 /**
@@ -5303,64 +5437,131 @@ template<typename T>
 void serialize(Serializer* s, Array<T>* arr);
 
 /**
- * Create an array
+ * A dynamic array using arenas
  */
 template<typename T>
-Array<T> arrayCreate(u32 count = 0, u32 capacity = 1024);
+struct ArrayTemp {
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+    /**
+     * The values stored
+     */
+    T* vals = nullptr;
+    /**
+     * The number of vals
+     */
+    u32 count = 0;
+    /**
+     * The current max number of vals
+     */
+    u32 capacity = 0;
 
-/**
- * Destroy an array
- */
-template<typename T>
-void arrayDestroy(Array<T>* arr);
+    /**
+     * Construct empty
+     */
+    ArrayTemp() noexcept = default;
 
-/**
- * Create a temporary array which need not be destroyed, but cannot be resized
- */
-template<typename T>
-Array<T> arrayTemp(Arena* arena, u32 count = 0, u32 capacity = 1024);
+    /**
+     * Construct with init size
+     */
+    ArrayTemp(Arena* arenaVal, u32 countVal, u32 capacityVal);
 
-/**
- * Resize an array
- */
-template<typename T>
-void arrayResize(Array<T>* arr, u32 newCount);
+    /**
+     * Free the array
+     */
+    ~ArrayTemp() noexcept;
 
-/**
- * Resize an array using an arena
- */
-template<typename T>
-void arrayResizeTemp(Arena* arena, Array<T>* arr, u32 newCount);
+    /**
+     * Implicit convert to span
+     */
+    constexpr operator Span<T>() const
+    {
+        return {vals, count};
+    }
 
-/**
- * Push a value to the end of the array
- */
-template<typename T>
-T* arrayPush(Array<T>* arr);
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    constexpr T& operator[](u64 idx) const
+    {
+        HG_ASSERT(vals != nullptr);
+        HG_ASSERT(idx < count);
+        return vals[idx];
+    }
 
-/**
- * Push a value to the end of the array using an arena
- */
-template<typename T>
-T* arrayPushTemp(Arena* arena, Array<T>* arr);
+    /**
+     * Remove all elements from the array
+     */
+    void reset();
 
-/**
- * Remove the value at idx in the array, with stanle order
- */
-template<typename T>
-T arrayRemove(Array<T>* arr, u32 idx);
+    /**
+     * Increase the size of the array, must be greater or equal to count
+     */
+    void resize(u32 newCount);
 
-/**
- * Remove the value at idx in the array, without stable order
- */
-template<typename T>
-T arrayRemoveSwap(Array<T>* arr, u32 idx);
+    /**
+     * Increase the capacity of the array to at least newCapacity
+     */
+    void reserve(u32 newCapacity);
 
-/**
- * Pop a value from the end of the array
- */
-template<typename T>
-T arrayPop(Array<T>* arr);
+    /**
+     * Push a value to the end of the array
+     */
+    T* push(T val = {});
+
+    /**
+     * Pop a value from the end of the array
+     */
+    T pop();
+
+    /**
+     * Insert a value at idx, shifting values over
+     */
+    T* insertShift(u32 idx, T val = {});
+
+    /**
+     * Remove the value from idx, shifting values over
+     */
+    T removeShift(u32 idx);
+
+    /**
+     * Insert a value at idx, moving the previous value to the end
+     */
+    T* insertSwap(u32 idx, T val = {});
+
+    /**
+     * Remove the value from idx, swapping with the last value
+     */
+    T removeSwap(u32 idx);
+
+    /**
+     * Move construct
+     */
+    ArrayTemp(ArrayTemp&& other) noexcept
+        : arena{std::exchange(other.arena, nullptr)}
+        , vals{std::exchange(other.vals, nullptr)}
+        , count{std::exchange(other.count, 0)}
+        , capacity{std::exchange(other.capacity, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    ArrayTemp& operator=(ArrayTemp&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~ArrayTemp();
+            new (this) ArrayTemp{std::move(other)};
+        }
+        return *this;
+    }
+
+    ArrayTemp(const ArrayTemp&) = delete;
+    ArrayTemp& operator=(const ArrayTemp&) = delete;
+};
 
 /**
  * An array of values of unknown type
@@ -5462,60 +5663,190 @@ struct Queue {
     /**
      * The values in the queue
      */
-    T* vals;
+    T* vals = nullptr;
     /**
      * The index of the front
      */
-    u32 front;
+    u32 front = 0;
     /**
      * The index of the back
      */
-    u32 back;
+    u32 back = 0;
     /**
      * The number of vals in the queue
      */
-    u32 count;
+    u32 count = 0;
     /**
      * The max number of vals
      */
-    u32 capacity;
+    u32 capacity = 0;
+
+    /**
+     * Construct empty
+     */
+    Queue() noexcept = default;
+
+    /**
+     * Construct with init size
+     */
+    Queue(u32 capacityVal);
+
+    /**
+     * Free the queue
+     */
+    ~Queue() noexcept;
+
+    /**
+     * Increase the capacity of the queue to at least newCapacity
+     */
+    void reserve(u32 newCapacity);
+
+    /**
+     * Push a value to the front of the queue
+     */
+    void pushFront(T val);
+
+    /**
+     * Push a value to the back of the queue
+     */
+    void pushBack(T val);
+
+    /**
+     * Pop a value from the front of the queue
+     */
+    T popFront();
+
+    /**
+     * Pop a value from the back of the queue
+     */
+    T popBack();
+
+    /**
+     * Move construct
+     */
+    Queue(Queue&& other) noexcept
+        : vals{std::exchange(other.vals, nullptr)}
+        , front{std::exchange(other.front, 0)}
+        , back{std::exchange(other.back, 0)}
+        , count{std::exchange(other.count, 0)}
+        , capacity{std::exchange(other.capacity, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    Queue& operator=(Queue&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Queue();
+            new (this) Queue{std::move(other)};
+        }
+        return *this;
+    }
+
+    Queue(const Queue&) = delete;
+    Queue& operator=(const Queue&) = delete;
 };
 
 /**
- * Create a new empty queue
+ * A double ended ring buffer queue using an arena
  */
 template<typename T>
-Queue<T> queueCreate(u32 capacity = 1024);
+struct QueueTemp {
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+    /**
+     * The values in the queue
+     */
+    T* vals = nullptr;
+    /**
+     * The index of the front
+     */
+    u32 front = 0;
+    /**
+     * The index of the back
+     */
+    u32 back = 0;
+    /**
+     * The number of vals in the queue
+     */
+    u32 count = 0;
+    /**
+     * The max number of vals
+     */
+    u32 capacity = 0;
 
-/**
- * Destroy a queue
- */
-template<typename T>
-void queueDestroy(Queue<T>* queue);
+    /**
+     * Construct empty
+     */
+    QueueTemp() noexcept = default;
 
-/**
- * Push a value to the front of the queue
- */
-template<typename T, typename U = T> requires std::is_convertible_v<U, T>
-void queuePushFront(Queue<T>* queue, U val);
+    /**
+     * Construct with init size
+     */
+    QueueTemp(Arena* arenaVal, u32 capacityVal);
 
-/**
- * Push a value to the back of the queue
- */
-template<typename T, typename U = T> requires std::is_convertible_v<U, T>
-void queuePushBack(Queue<T>* queue, U val);
+    /**
+     * Free the queue
+     */
+    ~QueueTemp() noexcept;
 
-/**
- * Pop a value from the front of the queue
- */
-template<typename T>
-T queuePopFront(Queue<T>* queue);
+    /**
+     * Increase the capacity of the queue to at least newCapacity
+     */
+    void reserve(u32 newCapacity);
 
-/**
- * Pop a value from the back of the queue
- */
-template<typename T>
-T queuePopBack(Queue<T>* queue);
+    /**
+     * Push a value to the front of the queue
+     */
+    void pushFront(T val);
+
+    /**
+     * Push a value to the back of the queue
+     */
+    void pushBack(T val);
+
+    /**
+     * Pop a value from the front of the queue
+     */
+    T popFront();
+
+    /**
+     * Pop a value from the back of the queue
+     */
+    T popBack();
+
+    /**
+     * Move construct
+     */
+    QueueTemp(QueueTemp&& other) noexcept
+        : arena{std::exchange(other.arena, nullptr)}
+        , vals{std::exchange(other.vals, nullptr)}
+        , front{std::exchange(other.front, 0)}
+        , back{std::exchange(other.back, 0)}
+        , count{std::exchange(other.count, 0)}
+        , capacity{std::exchange(other.capacity, 0)}
+    {}
+
+    /**
+     * Move assign
+     */
+    QueueTemp& operator=(QueueTemp&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~QueueTemp();
+            new (this) QueueTemp{std::move(other)};
+        }
+        return *this;
+    }
+
+    QueueTemp(const QueueTemp&) = delete;
+    QueueTemp& operator=(const QueueTemp&) = delete;
+};
 
 /**
  * The hash template
@@ -6123,53 +6454,61 @@ constexpr u64 hash(StringBuilder str)
 /**
  * A pool of objects
  */
+template<typename T>
 struct Pool {
     /**
-     * The free list
+     * The size of each preallocated block
      */
-    Queue<void*> freeList = {};
+    static constexpr u32 blockCount = 1024;
     /**
-     * The items in the pool
+     * The uninitialized preallocated memory
      */
-    Array<void*> itemStores = {};
+    Array<T*> prealloc = {};
     /**
-     * The size of each item in bytes
+     * The freed objects
      */
-    u32 width = 0;
+    Array<T*> inactive = {};
+#ifdef HG_DEBUG_MODE
     /**
-     * The alignment of each item in bytes
+     * The currently allocated objects
      */
-    u32 align = 0;
+    Array<T*> active = {};
+#endif
+
+    /**
+     * Construct empty
+     */
+    Pool() noexcept = default;
+
+    /**
+     * Destroy the pool
+     */
+    ~Pool() noexcept;
+
+    /**
+     * Allocate an object from the pool
+     */
+    template<typename... Args>
+    T* alloc(Args&&... args);
+
+    /**
+     * Free an object to the pool
+     */
+    void free(T* object);
+
+    /**
+     * Move construct
+     */
+    Pool(Pool&& other) noexcept = default;
+
+    /**
+     * Move assign
+     */
+    Pool& operator=(Pool&& other) noexcept = default;
+
+    Pool(const Pool&) = delete;
+    Pool& operator=(const Pool&) = delete;
 };
-
-/**
- * Create an object pool
- */
-Pool poolCreate(u32 width, u32 align);
-
-/**
- * Create an object pool
- */
-template<typename T>
-Pool poolCreate()
-{
-    return poolCreate(sizeof(T), alignof(T));
-}
-
-/**
- * Destroy an object pool
- */
-void poolDestroy(Pool* pool);
-
-/**
- * Allocate an object from the pool
- */
-void* poolAlloc(Pool* pool);
-
-/**
- * Free an object from the pool
- */
-void poolFree(Pool* pool, void* item);
 
 /**
  * A generation counted handle
@@ -6294,19 +6633,19 @@ void handlePoolFree(HandlePool* pool, Handle handle);
  * The data associated with assets
  */
 template<typename T>
-struct Asset {
+struct AssetData {
     /**
      * The asset data
      */
-    T asset;
+    T asset{};
     /**
      * The reference count
      */
-    u32 refCount;
+    u32 refCount = 0;
     /**
      * The unique path for caching
      */
-    String path;
+    String path{};
 };
 
 /**
@@ -6317,11 +6656,11 @@ struct AssetManager {
     /**
      * The asset lookup
      */
-    Map<StringView, Asset<T>*> map;
+    Map<StringView, AssetData<T>*> map{};
     /**
      * The asset pool
      */
-    Pool pool;
+    Pool<AssetData<T>> pool{};
 };
 
 /**
@@ -6331,81 +6670,161 @@ template<typename T>
 inline AssetManager<T> assets{};
 
 /**
- * Initialize a type's asset manager
- */
-template<typename T>
-void assetInit();
-
-/**
- * Deinitialize an type's asset manager
- */
-template<typename T>
-void assetDeinit();
-
-/**
  * Load an asset, implemented per asset type, should be blocking
  */
 template<typename T>
-void assetLoadImpl(Asset<T>* data);
+void assetLoadImpl(AssetData<T>* data);
 
 /**
  * Unload an asset, implemented per asset type, should be blocking
  */
 template<typename T>
-void assetUnloadImpl(Asset<T>* data);
+void assetUnloadImpl(AssetData<T>* data);
+
+/**
+ * An asset reference
+ */
+template<typename T>
+struct Asset {
+    /**
+     * The asset data
+     */
+    AssetData<T>* data = nullptr;
+
+    /**
+     * Construct empty
+     */
+    Asset() noexcept = default;
+
+    /**
+     * Create a new asset reference
+     */
+    Asset(AssetData<T>* dataVal);
+
+    /**
+     * Destroy the asset reference
+     */
+    ~Asset() noexcept;
+
+    /**
+     * Dereference to access asset
+     */
+    T& operator*() const
+    {
+        return data->asset;
+    }
+
+    /**
+     * Dereference to access asset
+     */
+    T* operator->() const
+    {
+        return &data->asset;
+    }
+
+    /**
+     * Create a new asset reference
+     */
+    Asset clone() const
+    {
+        return Asset{data};
+    }
+
+    /**
+     * Move construct
+     */
+    Asset(Asset&& other) noexcept
+        : data{std::exchange(other.data, {})}
+    {}
+
+    /**
+     * Move assign
+     */
+    Asset& operator=(Asset&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Asset();
+            new (this) Asset{std::move(other)};
+        }
+        return *this;
+    }
+
+    Asset(const Asset&) = delete;
+    Asset& operator=(const Asset&) = delete;
+};
+
+/**
+ * Compare assets
+ */
+template<typename T>
+bool operator==(const Asset<T>& lhs, const Asset<T>& rhs)
+{
+    return lhs.data == rhs.data;
+}
+
+/**
+ * Compare assets
+ */
+template<typename T>
+bool operator!=(const Asset<T>& lhs, const Asset<T>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+/**
+ * Compare assets
+ */
+template<typename T>
+bool operator==(const Asset<T>& lhs, std::nullptr_t)
+{
+    return lhs.data == nullptr;
+}
+
+/**
+ * Compare assets
+ */
+template<typename T>
+bool operator!=(const Asset<T>& lhs, std::nullptr_t)
+{
+    return !(lhs == nullptr);
+}
 
 /**
  * Create a unique empty asset (does not load)
  */
 template<typename T>
-Asset<T>* assetCreate();
+Asset<T> newAsset();
 
 /**
- * Load an asset (or increment the ref count)
+ * Load an asset (or create a new reference)
  */
 template<typename T>
-Asset<T>* assetLoad(StringView path);
-
-/**
- * Destroy an asset and unload it (or decrement the ref count)
- */
-template<typename T>
-void assetUnload(Asset<T>* asset);
+Asset<T> load(StringView path);
 
 /**
  * Hot reload an asset
  */
 template<typename T>
-void assetReload(Asset<T>* asset);
-
-/**
- * Increment the asset's reference count
- */
-template<typename T>
-Asset<T>* assetCopy(Asset<T>* asset);
+void reload(const Asset<T>& asset);
 
 /**
  * Asset serialization
  */
 template<typename T>
-void serialize(Serializer* s, Asset<T>** asset);
-
-/**
- * A binary file asset handle
- */
-using BinaryAsset = Asset<Binary>;
+void serialize(Serializer* s, Asset<T>* asset);
 
 /**
  * Binary asset load implementation
  */
 template<>
-void assetLoadImpl(Asset<Binary>* data);
+void assetLoadImpl(AssetData<Binary>* data);
 
 /**
  * Binary asset unload implementation
  */
 template<>
-void assetUnloadImpl(Asset<Binary>* data);
+void assetUnloadImpl(AssetData<Binary>* data);
 
 /**
  * Store a binary file to disc
@@ -6427,15 +6846,20 @@ struct Clock {
      * The begin time
      */
     f64 time = 0.0;
-};
 
-/**
- * Resets the clock
- *
- * Returns
- * - The time in seconds since the last tick
- */
-f64 clockTick(Clock* clock);
+    /**
+     * Begin the clock;
+     */
+    Clock() noexcept
+    {
+        tick();
+    }
+
+    /**
+     * Resets the clock and returns the time in seconds since the last tick
+     */
+    f64 tick();
+};
 
 /**
  * Put this thread to sleep
@@ -6937,21 +7361,16 @@ struct Sound {
 };
 
 /**
- * A handle to an audio asset
- */
-using SoundAsset = Asset<Sound>;
-
-/**
  * AudioData asset load implementation
  */
 template<>
-void assetLoadImpl(Asset<Sound>* data);
+void assetLoadImpl(AssetData<Sound>* data);
 
 /**
  * AudioData asset unload implementation
  */
 template<>
-void assetUnloadImpl(Asset<Sound>* data);
+void assetUnloadImpl(AssetData<Sound>* data);
 
 /**
  * A music track in the audio player
@@ -6964,7 +7383,7 @@ struct AudioPlayerMusic {
     /**
      * The music sound to play
      */
-    SoundAsset* sound = nullptr;
+    Asset<Sound> sound = nullptr;
     /**
      * The current position in the sound
      */
@@ -7007,27 +7426,27 @@ void audioPlayerUpdate(AudioPlayer* player);
 /**
  * Start a new music track, or resume an existing one
  */
-void audioPlayerMusic(AudioPlayer* player, SoundAsset* music);
+void audioPlayerMusic(AudioPlayer* player, Asset<Sound>* music);
 
 /**
  * Remove a music track from the player
  */
-void audioPlayerMusicKill(AudioPlayer* player, SoundAsset* music);
+void audioPlayerMusicKill(AudioPlayer* player, Asset<Sound>* music);
 
 /**
  * Pause a music track
  */
-void audioPlayerMusicPause(AudioPlayer* player, SoundAsset* music);
+void audioPlayerMusicPause(AudioPlayer* player, Asset<Sound>* music);
 
 /**
  * Set the volume for a music track
  */
-void audioPlayerSetMusicGain(AudioPlayer* player, SoundAsset* music, f32 gain = 1.0f);
+void audioPlayerSetMusicGain(AudioPlayer* player, Asset<Sound>* music, f32 gain = 1.0f);
 
 /**
  * Play a sound once
  */
-void audioPlayerSound(AudioPlayer* player, SoundAsset* sound, f32 gain);
+void audioPlayerSound(AudioPlayer* player, Asset<Sound>* sound, f32 gain);
 
 // ============================================================================
 // Rendering
@@ -7060,21 +7479,16 @@ struct TextureData {
 };
 
 /**
- * A handle to a texture
- */
-using TextureDataAsset = Asset<TextureData>;
-
-/**
  * Texture asset load implementation
  */
 template<>
-void assetLoadImpl(Asset<TextureData>* data);
+void assetLoadImpl(AssetData<TextureData>* data);
 
 /**
  * Texture asset unload implementation
  */
 template<>
-void assetUnloadImpl(Asset<TextureData>* data);
+void assetUnloadImpl(AssetData<TextureData>* data);
 
 /**
  * Store an image to disc in the png format
@@ -7099,21 +7513,16 @@ struct Texture {
 };
 
 /**
- * A handle to a texture asset
- */
-using TextureAsset = Asset<Texture>;
-
-/**
  * GpuTexture asset load implementation
  */
 template<>
-void assetLoadImpl(Asset<Texture>* data);
+void assetLoadImpl(AssetData<Texture>* data);
 
 /**
  * GpuTexture asset unload implementation
  */
 template<>
-void assetUnloadImpl(Asset<Texture>* data);
+void assetUnloadImpl(AssetData<Texture>* data);
 
 /**
  * A vertex in a mesh
@@ -7178,21 +7587,16 @@ struct MeshData {
 };
 
 /**
- * A handle to a 3d mesh asset
- */
-using MeshDataAsset = Asset<MeshData>;
-
-/**
  * Mesh asset load implementation
  */
 template<>
-void assetLoadImpl(Asset<MeshData>* data);
+void assetLoadImpl(AssetData<MeshData>* data);
 
 /**
  * Mesh asset unload implementation
  */
 template<>
-void assetUnloadImpl(Asset<MeshData>* data);
+void assetUnloadImpl(AssetData<MeshData>* data);
 
 /**
  * Store the model data to disc in gltf format : TODO
@@ -7226,21 +7630,16 @@ struct Mesh {
 };
 
 /**
- * A gpu mesh asset handle
- */
-using MeshAsset = Asset<Mesh>;
-
-/**
  * GpuMesh asset load implementation
  */
 template<>
-void assetLoadImpl(Asset<Mesh>* data);
+void assetLoadImpl(AssetData<Mesh>* data);
 
 /**
  * GpuMesh asset unload implementation
  */
 template<>
-void assetUnloadImpl(Asset<Mesh>* data);
+void assetUnloadImpl(AssetData<Mesh>* data);
 
 /**
  * The types of camera projections
@@ -7520,7 +7919,7 @@ struct Sprite2D {
     /**
      * The sprite's texture
      */
-    TextureAsset* texture = nullptr;
+    Asset<Texture> texture = nullptr;
     /**
      * The uv coords in the texture
      */
@@ -7539,7 +7938,7 @@ struct Atlas2D {
     /**
      * The texture
      */
-    TextureAsset* texture = nullptr;
+    Asset<Texture> texture = nullptr;
     /**
      * The sprites
      */
@@ -7549,7 +7948,7 @@ struct Atlas2D {
 /**
  * Create a new texture atlas
  */
-Atlas2D atlasCreate2D(TextureAsset* texture);
+Atlas2D atlasCreate2D(Asset<Texture>* texture);
 
 /**
  * Destroy a texture atlas
@@ -8273,7 +8672,7 @@ struct AudioSource {
     /**
      * The audio to play from
      */
-    SoundAsset* audio = nullptr;
+    Asset<Sound> audio = nullptr;
     /**
      * The current position in the audio data
      */
@@ -8293,7 +8692,7 @@ void serialize(Serializer* s, AudioSource* src);
 /**
  * Add an audio source to an entity
  */
-AudioSource* audioSourceAdd(Ecs* ecs, Entity e, SoundAsset* audio, bool repeat);
+AudioSource* audioSourceAdd(Ecs* ecs, Entity e, Asset<Sound>* audio, bool repeat);
 
 /**
  * AudioSource ecs destructor
@@ -8343,7 +8742,7 @@ struct Sprite {
     /**
      * The texture to draw from
      */
-    TextureAsset* texture = nullptr;
+    Asset<Texture> texture = nullptr;
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
@@ -8371,7 +8770,7 @@ void serialize(Serializer* s, Sprite* sprite);
 Sprite* spriteAdd(
     Ecs* ecs,
     Entity e,
-    TextureAsset* texture,
+    Asset<Texture>* texture,
     Vec2 uvPos = Vec2{0.0f},
     Vec2 uvSize = Vec2{1.0f});
 
@@ -8412,7 +8811,7 @@ struct Skybox {
     /**
      * The cubemap texture
      */
-    TextureAsset* texture = nullptr;
+    Asset<Texture> texture = nullptr;
 };
 
 /**
@@ -8429,7 +8828,7 @@ void serialize(Serializer* s, Skybox* skybox);
  * - e The entity to add to
  * - texture A copy of the skybox's texture
  */
-Skybox* skyboxAdd(Ecs* ecs, Entity e, TextureAsset* texture);
+Skybox* skyboxAdd(Ecs* ecs, Entity e, Asset<Texture>* texture);
 
 /**
  * Skybox ecs destructor
@@ -8514,15 +8913,15 @@ struct Model {
     /**
      * The model to render
      */
-    MeshAsset* mesh = nullptr;
+    Asset<Mesh> mesh = nullptr;
     /**
      * The model's color map
      */
-    TextureAsset* colorMap = nullptr;
+    Asset<Texture> colorMap = nullptr;
     /**
      * The model's normal map
      */
-    TextureAsset* normalMap = nullptr;
+    Asset<Texture> normalMap = nullptr;
 };
 
 /**
@@ -8537,9 +8936,9 @@ void serialize(Serializer* s, Model* model);
 Model* modelAdd(
     Ecs* ecs,
     Entity e,
-    MeshAsset* mesh,
-    TextureAsset* colorMap,
-    TextureAsset* normalMap);
+    Asset<Mesh>* mesh,
+    Asset<Texture>* colorMap,
+    Asset<Texture>* normalMap);
 
 /**
  * Model ecs destructor
@@ -8691,228 +9090,529 @@ void serialize(Serializer* s, T (*arr)[N])
 }
 
 template<typename T>
+Array<T>::Array(u32 countVal, u32 capacityVal)
+    : vals{heapAlloc<T>(capacity)}
+    , count{countVal}
+    , capacity{capacityVal}
+{
+    HG_ASSERT(capacity >= count);
+    for (u32 i = 0; i < count; ++i)
+    {
+        new (vals + i) T{};
+    }
+}
+
+template<typename T>
+Array<T>::~Array() noexcept
+{
+    for (u32 i = 0; i < count; ++i)
+    {
+        vals[i].~T();
+    }
+    heapFree(vals, capacity);
+}
+
+template<typename T>
+void Array<T>::reset()
+{
+    for (u32 i = 0; i < count; ++i)
+    {
+        vals[i].~T();
+    }
+    count = 0;
+}
+
+template<typename T>
+void Array<T>::resize(u32 newCount)
+{
+    if (newCount > capacity)
+        reserve(newCount * 2);
+
+    for (u32 i = count; i < newCount; ++i)
+    {
+        new (vals + i) T{};
+    }
+    count = newCount;
+}
+
+template<typename T>
+void Array<T>::reserve(u32 newCapacity)
+{
+    if (newCapacity > capacity)
+    {
+        T* newVals = heapAlloc<T>(newCapacity);
+        for (u32 i = 0; i < count; ++i)
+        {
+            new (newVals + i) T{std::move(vals[i])};
+            vals[i].~T();
+        }
+        heapFree(vals, capacity);
+        vals = newVals;
+        capacity = newCapacity;
+    }
+}
+
+template<typename T>
+T* Array<T>::push(T val)
+{
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    new (vals + count) T{std::move(val)};
+    return vals + count++;
+}
+
+template<typename T>
+T Array<T>::pop()
+{
+    HG_ASSERT(count > 0);
+
+    --count;
+    T ret = std::move(vals[count]);
+    vals[count].~T();
+    return ret;
+}
+
+template<typename T>
+T* Array<T>::insertShift(u32 idx, T val)
+{
+    HG_ASSERT(idx <= count);
+
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    if (idx < count)
+    {
+        new (vals + count) T{std::move(vals[count - 1])};
+        for (u32 i = count - 1; i >= idx + 1; --i)
+        {
+            vals[i] = std::move(vals[i - 1]);
+        }
+        vals[idx] = std::move(val);
+    }
+    else
+    {
+        new (vals + count) T{std::move(val)};
+    }
+    return vals + count++;
+}
+
+template<typename T>
+T Array<T>::removeShift(u32 idx)
+{
+    HG_ASSERT(idx < count);
+
+    --count;
+    T ret = std::move(vals[idx]);
+    for (u32 i = idx; i < count; ++i)
+    {
+        vals[i] = std::move(vals[i + 1]);
+    }
+    vals[count].~T();
+    return ret;
+}
+
+template<typename T>
+T* Array<T>::insertSwap(u32 idx, T val)
+{
+    HG_ASSERT(idx <= count);
+
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    if (idx < count)
+    {
+        new (vals + count) T{std::move(vals[idx])};
+        vals[idx] = std::move(val);
+    }
+    else
+    {
+        new (vals + count) T{std::move(val)};
+    }
+    return vals + count++;
+}
+
+template<typename T>
+T Array<T>::removeSwap(u32 idx)
+{
+    HG_ASSERT(idx < count);
+
+    --count;
+    T ret = std::move(vals[idx]);
+    if (idx < count)
+    {
+        vals[idx] = std::move(vals[count]);
+    }
+    vals[count].~T();
+    return ret;
+}
+
+template<typename T>
 void serialize(Serializer* s, Array<T>* arr)
 {
     serializeBegin(s);
     serialize(s, &arr->count);
     serialize(s, &arr->capacity);
     if (!s->writing)
-        arr->vals = heapAlloc<T>(arr->capacity);
+        *arr = Array<T>{arr->count, arr->capacity};
     for (u32 i = 0; i < arr->count; ++i)
     {
-        serialize(s, &(*arr)[i]);
+        serialize(s, arr->vals + i);
     }
     serializeEnd(s);
 }
 
 template<typename T>
-Array<T> arrayCreate(u32 count, u32 capacity)
+ArrayTemp<T>::ArrayTemp(Arena* arenaVal, u32 countVal, u32 capacityVal)
+    : arena{arenaVal}
+    , vals{arenaVal->alloc<T>(capacity)}
+    , count{countVal}
+    , capacity{capacityVal}
 {
-    if (capacity < count)
-        capacity = count;
-
-    Array<T> arr{};
-    arr.vals = heapAlloc<T>(capacity);
-    arr.count = count;
-    arr.capacity = capacity;
-
-    return arr;
-}
-
-template<typename T>
-void arrayDestroy(Array<T>* arr)
-{
-    HG_ASSERT(arr != nullptr);
-    heapFree(arr->vals, arr->capacity);
-}
-
-template<typename T>
-Array<T> arrayTemp(Arena* arena, u32 count, u32 capacity)
-{
-    HG_ASSERT(arena != nullptr);
-    HG_ASSERT(count <= capacity);
-
-    Array<T> arr{};
-    arr.vals = arena->alloc<T>(capacity);
-    arr.count = count;
-    arr.capacity = capacity;
-
-    return arr;
-}
-
-template<typename T>
-void arrayResize(Array<T>* arr, u32 newCount)
-{
-    if (newCount > arr->capacity)
+    HG_ASSERT(capacity >= count);
+    for (u32 i = 0; i < count; ++i)
     {
-        arr->vals = heapRealloc(arr->vals, arr->capacity, newCount * 2);
-        arr->capacity = newCount * 2;
-    }
-    arr->count = newCount;
-}
-
-template<typename T>
-void arrayResizeTemp(Arena* arena, Array<T>* arr, u32 newCount)
-{
-    if (newCount > arr->capacity)
-    {
-        arr->vals = arena->realloc(arr->vals, arr->capacity, newCount * 2);
-        arr->capacity = newCount * 2;
-    }
-    arr->count = newCount;
-}
-
-template<typename T>
-T* arrayPush(Array<T>* arr)
-{
-    if (arr->count == arr->capacity)
-    {
-        u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = heapRealloc(arr->vals, arr->capacity, newCapacity);
-        arr->capacity = newCapacity;
-    }
-    return &arr->vals[arr->count++];
-}
-
-template<typename T>
-T* arrayPushTemp(Arena* arena, Array<T>* arr)
-{
-    if (arr->count == arr->capacity)
-    {
-        u32 newCapacity = arr->capacity == 0 ? 16 : arr->capacity * 2;
-        arr->vals = arena->realloc(arr->vals, arr->capacity, newCapacity);
-        arr->capacity = newCapacity;
-    }
-    return &arr->vals[arr->count++];
-}
-
-template<typename T>
-T arrayRemove(Array<T>* arr, u32 idx)
-{
-    HG_ASSERT(idx < arr->count);
-
-    T val = (*arr)[idx];
-    if (idx + 1 < arr->count)
-    {
-        memcpy(
-            &(*arr)[idx],
-            &(*arr)[idx + 1],
-            (arr->count - (idx + 1)) * sizeof(T));
-    }
-    --arr->count;
-    return val;
-}
-
-template<typename T>
-T arrayRemoveSwap(Array<T>* arr, u32 idx)
-{
-    T val = (*arr)[idx];
-    if (idx + 1 < arr->count)
-    {
-        memcpy(
-            &(*arr)[idx],
-            &(*arr)[arr->count - 1],
-            sizeof(T));
-    }
-    --arr->count;
-    return val;
-}
-
-template<typename T>
-T arrayPop(Array<T>* arr)
-{
-    HG_ASSERT(arr->count > 0);
-    return arr->vals[--arr->count];
-}
-
-template<typename T>
-Queue<T> queueCreate(u32 capacity)
-{
-    Queue<T> queue{};
-    queue.vals = heapAlloc<T>(capacity);
-    queue.front = 0;
-    queue.back = 0;
-    queue.count = 0;
-    queue.capacity = capacity;
-    return queue;
-}
-
-template<typename T>
-void queueDestroy(Queue<T>* queue)
-{
-    if (queue != nullptr)
-    {
-        heapFree(queue->vals, queue->capacity);
+        new (vals + i) T{};
     }
 }
 
-template<typename T, typename U> requires std::is_convertible_v<U, T>
-void queuePushFront(Queue<T>* queue, U val)
+template<typename T>
+ArrayTemp<T>::~ArrayTemp() noexcept
 {
-    HG_ASSERT(queue != nullptr);
-
-    ++queue->count;
-    if (queue->count == queue->capacity)
+    for (u32 i = 0; i < count; ++i)
     {
-        u32 newCapacity = queue->capacity * 2;
-        queue->vals = heapRealloc(queue->vals, queue->capacity, newCapacity);
+        vals[i].~T();
+    }
+}
 
-        if (queue->back < queue->front)
+template<typename T>
+void ArrayTemp<T>::reset()
+{
+    for (u32 i = 0; i < count; ++i)
+    {
+        vals[i].~T();
+    }
+    count = 0;
+}
+
+template<typename T>
+void ArrayTemp<T>::resize(u32 newCount)
+{
+    if (newCount > capacity)
+        reserve(newCount * 2);
+
+    for (u32 i = count; i < newCount; ++i)
+    {
+        new (vals + i) T{};
+    }
+    count = newCount;
+}
+
+template<typename T>
+void ArrayTemp<T>::reserve(u32 newCapacity)
+{
+    if (newCapacity > capacity)
+    {
+        if (!arena->extend(vals, capacity, newCapacity))
         {
-            memcpy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
-            queue->back += queue->capacity;
+            T* newVals = arena->alloc<T>(newCapacity);
+            for (u32 i = 0; i < count; ++i)
+            {
+                new (newVals + i) T{std::move(vals[i])};
+                vals[i].~T();
+            }
+            vals = newVals;
         }
-
-        queue->capacity = newCapacity;
+        capacity = newCapacity;
     }
-
-    queue->front = (queue->front == 0 ? queue->capacity : queue->front) - 1;
-    queue->vals[queue->front] = static_cast<T>(val);
-}
-
-template<typename T, typename U> requires std::is_convertible_v<U, T>
-void queuePushBack(Queue<T>* queue, U val)
-{
-    HG_ASSERT(queue != nullptr);
-
-    ++queue->count;
-    if (queue->count == queue->capacity)
-    {
-        u32 newCapacity = queue->capacity * 2;
-        queue->vals = heapRealloc(queue->vals, queue->capacity, newCapacity);
-
-        if (queue->back < queue->front)
-        {
-            memcpy(queue->vals + queue->capacity, queue->vals, queue->back * sizeof(T));
-            queue->back += queue->capacity;
-        }
-
-        queue->capacity = newCapacity;
-    }
-
-    queue->vals[queue->back] = static_cast<T>(val);
-    queue->back = (queue->back + 1) % queue->capacity;
 }
 
 template<typename T>
-T queuePopFront(Queue<T>* queue)
+T* ArrayTemp<T>::push(T val)
 {
-    HG_ASSERT(queue->count > 0);
-    --queue->count;
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
 
-    T ret = queue->vals[queue->front];
-    queue->front = (queue->front + 1) % queue->capacity;
+    new (vals + count) T{std::move(val)};
+    return vals + count++;
+}
+
+template<typename T>
+T ArrayTemp<T>::pop()
+{
+    HG_ASSERT(count > 0);
+
+    --count;
+    T ret = std::move(vals[count]);
+    vals[count].~T();
     return ret;
 }
 
 template<typename T>
-T queuePopBack(Queue<T>* queue)
+T* ArrayTemp<T>::insertShift(u32 idx, T val)
 {
-    HG_ASSERT(queue->count > 0);
-    --queue->count;
+    HG_ASSERT(idx <= count);
 
-    queue->back = (queue->back == 0 ? queue->capacity : queue->back) - 1;
-    return queue->vals[queue->back];
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    if (idx < count)
+    {
+        new (vals + count) T{std::move(vals[count - 1])};
+        for (u32 i = count - 1; i >= idx + 1; --i)
+        {
+            vals[i] = std::move(vals[i - 1]);
+        }
+        vals[idx] = std::move(val);
+    }
+    else
+    {
+        new (vals + count) T{std::move(val)};
+    }
+    return vals + count++;
+}
+
+template<typename T>
+T ArrayTemp<T>::removeShift(u32 idx)
+{
+    HG_ASSERT(idx < count);
+
+    --count;
+    T ret = std::move(vals[idx]);
+    for (u32 i = idx; i < count; ++i)
+    {
+        vals[i] = std::move(vals[i + 1]);
+    }
+    vals[count].~T();
+    return ret;
+}
+
+template<typename T>
+T* ArrayTemp<T>::insertSwap(u32 idx, T val)
+{
+    HG_ASSERT(idx <= count);
+
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    if (idx < count)
+    {
+        new (vals + count) T{std::move(vals[idx])};
+        vals[idx] = std::move(val);
+    }
+    else
+    {
+        new (vals + count) T{std::move(val)};
+    }
+    return vals + count++;
+}
+
+template<typename T>
+T ArrayTemp<T>::removeSwap(u32 idx)
+{
+    HG_ASSERT(idx < count);
+
+    --count;
+    T ret = std::move(vals[idx]);
+    if (idx < count)
+    {
+        vals[idx] = std::move(vals[count]);
+    }
+    vals[count].~T();
+    return ret;
+}
+
+template<typename T>
+Queue<T>::Queue(u32 capacityVal)
+    : vals{heapAlloc<T>(capacityVal)}
+    , front{0}
+    , back{0}
+    , count{0}
+    , capacity{capacityVal}
+{}
+
+template<typename T>
+Queue<T>::~Queue() noexcept
+{
+    if (back != front)
+        HG_WARN("Non-empty queue destroyed\n");
+
+    for (u32 i = front; i != back; i = (i + 1) % capacity)
+    {
+        vals[i].~T();
+    }
+    heapFree(vals, capacity);
+}
+
+template<typename T>
+void Queue<T>::reserve(u32 newCapacity)
+{
+    if (newCapacity > capacity)
+    {
+        T* newVals = heapAlloc<T>(newCapacity);
+
+        T* nextVal = newVals;
+        for (u32 i = front; i != back; i = (i + 1) % capacity)
+        {
+            new (nextVal++) T{std::move(vals[i])};
+            vals[i].~T();
+        }
+
+        heapFree(vals, capacity);
+        vals = newVals;
+        capacity = newCapacity;
+        front = 0;
+        back = count;
+    }
+}
+
+template<typename T>
+void Queue<T>::pushFront(T val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    front = (front == 0 ? capacity : front) - 1;
+    new (vals + front) T{std::move(val)};
+}
+
+template<typename T>
+void Queue<T>::pushBack(T val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    new (vals + back) T{std::move(val)};
+    back = (back + 1) % capacity;
+}
+
+template<typename T>
+T Queue<T>::popFront()
+{
+    HG_ASSERT(count > 0);
+    --count;
+
+    T ret = std::move(vals[front]);
+    vals[front].~T();
+    front = (front + 1) % capacity;
+    return ret;
+}
+
+template<typename T>
+T Queue<T>::popBack()
+{
+    HG_ASSERT(count > 0);
+    --count;
+
+    back = (back == 0 ? capacity : back) - 1;
+    T ret = std::move(vals[back]);
+    vals[back].~T();
+    return ret;
+}
+
+template<typename T>
+QueueTemp<T>::QueueTemp(Arena* arenaVal, u32 capacityVal)
+    : arena{arenaVal}
+    , vals{arenaVal->alloc<T>(capacityVal)}
+    , front{0}
+    , back{0}
+    , count{0}
+    , capacity{capacityVal}
+{}
+
+template<typename T>
+QueueTemp<T>::~QueueTemp() noexcept
+{
+    if (back != front)
+        HG_WARN("Non-empty queue destroyed\n");
+
+    for (u32 i = front; i != back; i = (i + 1) % capacity)
+    {
+        vals[i].~T();
+    }
+}
+
+template<typename T>
+void QueueTemp<T>::reserve(u32 newCapacity)
+{
+    HG_ASSERT(arena != nullptr);
+
+    if (newCapacity > capacity)
+    {
+        if (arena->extend(vals, capacity, newCapacity))
+        {
+            if (front > back)
+            {
+                for (u32 i = 0; i < front - back; ++i)
+                {
+                    new (vals + capacity + i) T{std::move(vals + back + i)};
+                    vals[back + i].~T();
+                }
+            }
+            back += capacity;
+        }
+        else
+        {
+            T* newVals = arena->alloc<T>(newCapacity);
+
+            T* nextVal = newVals;
+            for (u32 i = front; i != back; i = (i + 1) % capacity)
+            {
+                new (nextVal++) T{std::move(vals[i])};
+                vals[i].~T();
+            }
+
+            heapFree(vals, capacity);
+            vals = newVals;
+            front = 0;
+            back = count;
+        }
+        capacity = newCapacity;
+    }
+}
+
+template<typename T>
+void QueueTemp<T>::pushFront(T val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    front = (front == 0 ? capacity : front) - 1;
+    new (vals + front) T{std::move(val)};
+}
+
+template<typename T>
+void QueueTemp<T>::pushBack(T val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    new (vals = back) T{std::move(val)};
+    back = (back + 1) % capacity;
+}
+
+template<typename T>
+T QueueTemp<T>::popFront()
+{
+    HG_ASSERT(count > 0);
+    --count;
+
+    T ret = std::move(vals[front]);
+    vals[front].~T();
+    front = (front + 1) % capacity;
+    return ret;
+}
+
+template<typename T>
+T QueueTemp<T>::popBack()
+{
+    HG_ASSERT(count > 0);
+    --count;
+
+    back = (back == 0 ? capacity : back) - 1;
+    T ret = std::move(vals[back]);
+    vals[back].~T();
+    return ret;
 }
 
 template<typename V>
@@ -9528,59 +10228,115 @@ void MapTemp<K, V>::forEach(F fn)
 }
 
 template<typename T>
-void assetInit()
+Pool<T>::~Pool() noexcept
 {
-    assets<T>.map = Map<StringView, Asset<T>*>(128);
-    assets<T>.pool = poolCreate<Asset<T>>();
+#ifdef HG_DEBUG_MODE
+    if (active.count > 0)
+        HG_WARN("Memory leak, pool destroyed with active objects\n");
+    for (u32 i = 0; i < active.count; ++i)
+    {
+        active[i]->~T();
+    }
+#endif
+
+    for (u32 i = 0; i < prealloc.count; ++i)
+    {
+        heapFree(prealloc[i], blockCount);
+    }
 }
 
 template<typename T>
-void assetDeinit()
+template<typename... Args>
+T* Pool<T>::alloc(Args&&... args)
 {
-    poolDestroy(&assets<T>.pool);
-    assets<T>.map = {};
+    if (inactive.count == 0)
+    {
+        T* block = heapAlloc<T>(blockCount);
+        for (u32 i = 0; i < blockCount; ++i)
+        {
+            inactive.push(block + i);
+        }
+        prealloc.push(block);
+    }
+
+    return new (inactive.pop()) T{std::forward<Args>(args)...};
 }
 
 template<typename T>
-void assetLoadImpl(Asset<T>* data)
+void Pool<T>::free(T* object)
+{
+    if (object == nullptr)
+        return;
+
+    object->~T();
+#ifdef HG_DEBUG_MODE
+    for (u32 i = 0; i < active.count; ++i)
+    {
+        if (active[i] == object)
+        {
+            active.removeSwap(i);
+            goto found;
+        }
+    }
+    HG_WARN("Invalid attempt to free to pool, object not in pool, possible double free\n");
+    return;
+found:
+#endif
+    inactive.push(object);
+}
+
+template<typename T>
+void assetLoadImpl(AssetData<T>* data)
 {
     static_cast<void>(data);
     static_assert(false, "Asset type cannot be loaded without template specialization");
 }
 
 template<typename T>
-void assetUnloadImpl(Asset<T>* data)
+void assetUnloadImpl(AssetData<T>* data)
 {
     static_cast<void>(data);
     static_assert(false, "Asset type cannot be unloaded without template specialization");
 }
 
 template<typename T>
-Asset<T>* assetCreate()
+Asset<T>::Asset(AssetData<T>* dataVal)
+    : data{dataVal}
 {
-    Asset<T>* data = static_cast<Asset<T>*>(poolAlloc(&assets<T>.pool));
-    data->asset = {};
-    data->refCount = 1;
-    data->path = {};
-
-    return data;
+    if (data != nullptr)
+        ++data->refCount;
 }
 
 template<typename T>
-Asset<T>* assetLoad(StringView path)
+Asset<T>::~Asset() noexcept
 {
-    if (Asset<T>** asset = assets<T>.map.get(path);
-        asset != nullptr)
+    if (data != nullptr && --data->refCount == 0)
     {
-        ++(*asset)->refCount;
-        return *asset;
+        assetUnloadImpl(data);
+
+        if (data->path != "")
+            assets<T>.map.remove(data->path);
+
+        assets<T>.pool.free(data);
     }
+}
 
-    Asset<T>* data = static_cast<Asset<T>*>(poolAlloc(&assets<T>.pool));
-    data->asset = {};
-    data->refCount = 1;
+template<typename T>
+Asset<T> newAsset()
+{
+    return assets<T>.pool.alloc();
+}
+
+template<typename T>
+Asset<T> load(StringView path)
+{
+    AssetData<T>** asset = assets<T>.map.get(path);
+    if (asset != nullptr)
+        return *asset;
+
+    AssetData<T>* data = assets<T>.pool.alloc();
+
     data->path = String::create(path);
-
     assets<T>.map.add(data->path, data);
 
     assetLoadImpl(data);
@@ -9588,55 +10344,30 @@ Asset<T>* assetLoad(StringView path)
 }
 
 template<typename T>
-void assetUnload(Asset<T>* asset)
+void reload(const Asset<T>& asset)
 {
-    if (asset != nullptr && --asset->refCount == 0)
+    if (asset->data != nullptr)
     {
-        assetUnloadImpl(asset);
-
-        if (asset->path != nullptr)
-        {
-            assets<T>.map.remove(asset->path);
-            asset->path = {};
-        }
-        poolFree(&assets<T>.pool, asset);
+        assetUnloadImpl(asset.data);
+        assetLoadImpl(asset.data);
     }
 }
 
 template<typename T>
-void assetReload(Asset<T>* asset)
-{
-    HG_ASSERT(asset != nullptr);
-
-    assetUnloadImpl(asset);
-    assetLoadImpl(asset);
-}
-
-template<typename T>
-Asset<T>* assetCopy(Asset<T>* asset)
-{
-    HG_ASSERT(asset != nullptr);
-    ++asset->refCount;
-    return asset;
-}
-
-template<typename T>
-void serialize(Serializer* s, Asset<T>** asset)
+void serialize(Serializer* s, Asset<T>* asset)
 {
     if (s->writing)
     {
-        StringView path = (*asset)->path;
-        serialize(s, &path);
+        serialize(s, &asset->data->path);
     }
     else
     {
-        ArenaScope scope{s->arena};
-        StringBuilder path;
+        String path;
         serialize(s, &path);
         if (path != "")
-            *asset = assetLoad<T>(path);
+            *asset = load<T>(path);
         else
-            *asset = nullptr;
+            *asset = {};
     }
 }
 

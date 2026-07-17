@@ -84,8 +84,10 @@
     - BinaryBuilder
     - Binary (owning)
     - Array
+    - ArrayTemp
     - ArrayAny (void)
     - Queue
+    - QueueTemp
     - Set
     - SetTemp
     - Map
