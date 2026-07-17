@@ -26,16 +26,11 @@ On Nix, `nix develop` provides all dependencies.
 ### Compilation
 
 ```bash
-# Debug — fast build with debug info, prefers Clang
+# Debug — unoptimized with debug info
 cmake --workflow --preset debug
 
-# Release — optimized, prefers Clang
+# Release — optimized
 cmake --workflow --preset release
-
-# Release — explicit compiler for perf comparisons
-cmake --workflow --preset release-clang   # Clang only
-cmake --workflow --preset release-gcc     # GCC only (Linux)
-cmake --workflow --preset release-msvc    # MSVC only (Windows)
 ```
 
 On Nix, also use `nix build` to compile a standalone release build.
