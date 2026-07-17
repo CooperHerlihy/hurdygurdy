@@ -13,14 +13,16 @@
             pkgs = nixpkgs.legacyPackages.${system};
             pkgs-vvl = nixpkgs-vvl.legacyPackages.${system};
         in {
-            default = pkgs.mkShell {
+            default = pkgs.mkShell.override {
+                stdenv = pkgs.clang19Stdenv;
+            } {
                 name = "hurdygurdy";
 
                 packages = with pkgs; [
+                    clang-tools
                     cmake
                     ninja
 
-                    clang
                     mold
                     ccache
 
@@ -28,8 +30,9 @@
                     pkgs-vvl.vulkan-validation-layers
 
                     gdb
-                    sdl3
-                    vulkan-headers
+                    valgrind
+                    renderdoc
+                    perf
                 ];
 
                 buildInputs = with pkgs; [
@@ -54,15 +57,15 @@
             };
 
         in {
-            default = pkgs.stdenv.mkDerivation {
+            default = pkgs.clang19Stdenv.mkDerivation {
                 name = "hurdygurdy";
                 src = self;
 
                 nativeBuildInputs = with pkgs; [
+                    clang-tools
                     cmake
                     ninja
 
-                    clang
                     mold
                     ccache
 
