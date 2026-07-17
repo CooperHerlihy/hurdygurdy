@@ -14,8 +14,8 @@ No STL containers, no exceptions, no RTTI.
 ## Build & Verify
 
 ```
-build: cmake --build build -j$(nproc)
-test: ./build/test
+build: cmake --workflow --preset default
+test:  ./build/test
 ```
 
 Fix all warnings (`-Werror` is on). Run both after every change.

@@ -8,35 +8,34 @@ Hurdy Gurdy is a game engine written in C++ for fun.
 
 ### Dependencies
 
-#### Linux
+#### Required
 
-- C++23 compiler (GCC or Clang)
-- GLSL compiler (glslc)
-- CMake (3.16+)
-- Vulkan Validation Layers (only required in debug mode)
-- SDL3 (found on system, or downloaded automatically)
+- C++23 compiler — GCC 15+, Clang 19+, or MSVC
+- CMake (3.18+)
+- SDL3 — found on system, or downloaded automatically by CMake
+- glslc (SPIR-V compiler) + Vulkan Validation Layers (debug only):
+  - Windows: included in LunarG Vulkan SDK
+  - Linux: install glslc via `shaderc` package, validation layers via `vulkan-validation-layers` (or `nix develop`)
 
-On Nix, use `nix develop` to create a shell with all dependencies
+#### Preferred (auto-detected, speeds up builds)
 
-#### Windows
+- Ninja — faster build system generator (vs Make)
+- ccache — caches compilation results for instant rebuilds
+- mold — faster Linux linker (auto-detected on Linux)
 
-- C++23 compiler (MSVC)
-- CMake (3.16+)
-- LunarG Vulkan SDK
-- SDL3 (downloaded automatically)
+On Nix, `nix develop` provides all of the above.
 
 ### Compilation
 
 ```bash
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j$(nproc)
-```
+# Fastest — no debug flags or sanitizers
+cmake --workflow --preset default
 
-Release mode:
+# Debug — full debug info + UBSan
+cmake --workflow --preset debug
 
-```bash
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
+# Release — optimized
+cmake --workflow --preset release
 ```
 
 On Nix, also use `nix build` to compile a standalone release build

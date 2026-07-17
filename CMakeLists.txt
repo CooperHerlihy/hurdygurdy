@@ -1,14 +1,19 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.18)
 project(hurdygurdy VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/hg_test_dir)
+
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()
 
 if(MSVC)
     add_compile_options(/permissive- /GR- /D_CRT_SECURE_NO_WARNINGS)
@@ -17,6 +22,11 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -fsanitize=undefined -Wno-cpp")
     set(STRICT_FLAGS -Wall -Wextra -Wconversion -Wsign-conversion -pedantic -Werror)
+
+    find_program(MOLD_PROGRAM mold)
+    if(MOLD_PROGRAM)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
+    endif()
 endif()
 
 find_package(SDL3 QUIET)
@@ -93,40 +103,58 @@ set(CORE_SOURCES
     src/platform.cpp
 )
 
-set(VENDOR_SOURCES
+set(MISC_VENDOR_SOURCES
     src/vk_mem_alloc.cpp
     src/stb.c
-    ${IMGUI_SOURCES}
-    ${IMGUI_BACKEND_SOURCES}
 )
 
-add_library(hurdygurdy STATIC
-    ${CORE_SOURCES}
-    ${VENDOR_SOURCES}
-)
-
-add_dependencies(hurdygurdy shaders)
-
-target_include_directories(hurdygurdy
+# Core C++ library (with precompiled header for hurdygurdy.hpp)
+add_library(hurdygurdy_core OBJECT ${CORE_SOURCES})
+add_dependencies(hurdygurdy_core shaders)
+target_include_directories(hurdygurdy_core
     PUBLIC
         ${INCLUDE_DIRS}
         ${VulkanHeaders_INCLUDE_DIR}
 )
+target_link_libraries(hurdygurdy_core
+    PUBLIC ${SDL3_TARGET}
+)
+target_precompile_headers(hurdygurdy_core PRIVATE include/hurdygurdy.hpp)
+target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS})
 
-target_link_libraries(hurdygurdy
+# ImGui library (with precompiled header for imgui.h)
+add_library(hurdygurdy_imgui OBJECT ${IMGUI_SOURCES} ${IMGUI_BACKEND_SOURCES})
+target_include_directories(hurdygurdy_imgui
+    PUBLIC
+        ${INCLUDE_DIRS}
+        ${VulkanHeaders_INCLUDE_DIR}
+)
+target_link_libraries(hurdygurdy_imgui
+    PUBLIC ${SDL3_TARGET}
+)
+target_precompile_headers(hurdygurdy_imgui PRIVATE vendor/imgui/imgui.h)
+target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
+
+# Misc vendor (C files — no precompiled header)
+add_library(hurdygurdy_misc OBJECT ${MISC_VENDOR_SOURCES})
+target_include_directories(hurdygurdy_misc
+    PUBLIC
+        ${INCLUDE_DIRS}
+        ${VulkanHeaders_INCLUDE_DIR}
+)
+target_link_libraries(hurdygurdy_misc
     PUBLIC ${SDL3_TARGET}
 )
 
-set_property(SOURCE ${CORE_SOURCES}
-    APPEND PROPERTY COMPILE_OPTIONS ${STRICT_FLAGS}
-)
+# Combined library
+add_library(hurdygurdy STATIC)
+target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_misc)
 
 foreach(tgt test editor minimal)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
-    set_property(SOURCE src/${tgt}.cpp
-        APPEND PROPERTY COMPILE_OPTIONS ${STRICT_FLAGS}
-    )
+    target_precompile_headers(${tgt} REUSE_FROM hurdygurdy_core)
+    target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
 endforeach()
 
 install(TARGETS hurdygurdy

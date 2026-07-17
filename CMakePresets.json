@@ -1,0 +1,69 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "default",
+            "displayName": "Default (no config)",
+            "description": "Fastest build, no debug flags or sanitizers",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build"
+        },
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "description": "Debug build with sanitizers",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "description": "Optimized release build",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default"
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "default",
+            "steps": [
+                { "type": "configure", "name": "default" },
+                { "type": "build", "name": "default" }
+            ]
+        },
+        {
+            "name": "debug",
+            "steps": [
+                { "type": "configure", "name": "debug" },
+                { "type": "build", "name": "debug" }
+            ]
+        },
+        {
+            "name": "release",
+            "steps": [
+                { "type": "configure", "name": "release" },
+                { "type": "build", "name": "release" }
+            ]
+        }
+    ]
+}
