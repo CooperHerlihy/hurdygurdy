@@ -4,7 +4,7 @@
 
 - Config Macros
     - platform detection
-    - TODO: cpu feature detection
+    - TODO: cpu feature detection ???
     - library feature config
 - Core Types
     - i32, u8, f64, etc.
@@ -83,9 +83,11 @@
 - Containers
     - BinaryBuilder
     - Binary (owning)
+    - UniquePtr
+    - SharedPtr
     - Array
     - ArrayTemp
-    - ArrayAny (void)
+    - TODO: ArrayAny (void) ???
     - Queue
     - QueueTemp
     - Set
