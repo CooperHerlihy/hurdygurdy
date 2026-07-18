@@ -1086,68 +1086,58 @@ bool intersectRectCircle(Rect rect, Circle circle)
     return containsPointCircle(closestPointRect(circle.pos, rect), circle);
 }
 
-bool intersectRays2D(Ray2D ray, Ray2D other, Hit2D* hit)
+Maybe<Hit2D> intersectRays2D(Ray2D ray, Ray2D other)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     HG_ASSERT(other.dir != Vec2{0});
 
     f32 denom = vecCross2(ray.dir, other.dir);
     if (std::abs(denom) < FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
     Vec2 diff = other.pos - ray.pos;
 
     f32 t = vecCross2(diff, other.dir) / denom;
     if (t < -FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
     f32 tOther = vecCross2(diff, ray.dir) / denom;
     if (tOther < -FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = denom < 0
-            ? vecNorm2({other.dir.y, -other.dir.x})
-            : vecNorm2({-other.dir.y, other.dir.x});
-    }
-    return true;
+    return some<Hit2D>(t, denom < 0
+        ? vecNorm2({other.dir.y, -other.dir.x})
+        : vecNorm2({-other.dir.y, other.dir.x}));
 }
 
-bool intersectRayLine2D(Ray2D ray, Line2D line, Hit2D* hit)
+Maybe<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     if (vecEq2(line.begin, line.end))
-        return false;
+        return none<Hit2D>();
 
     Vec2 lineDir = line.end - line.begin;
 
     f32 denom = vecCross2(ray.dir, lineDir);
     if (std::abs(denom) < FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
     Vec2 diff = line.begin - ray.pos;
 
     f32 t = vecCross2(diff, lineDir) / denom;
     if (t < -FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
     f32 tOther = vecCross2(diff, ray.dir) / denom;
     if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = denom < 0
-            ? vecNorm2({lineDir.y, -lineDir.x})
-            : vecNorm2({-lineDir.y, lineDir.x});
-    }
-    return true;
+    return some<Hit2D>(t, denom < 0
+        ? vecNorm2({lineDir.y, -lineDir.x})
+        : vecNorm2({-lineDir.y, lineDir.x}));
 }
 
-bool intersectRayCircle(Ray2D ray, Circle circle, Hit2D* hit)
+Maybe<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
 {
     HG_ASSERT(ray.dir != Vec2{0});
 
@@ -1158,37 +1148,27 @@ bool intersectRayCircle(Ray2D ray, Circle circle, Hit2D* hit)
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
-        return false;
+        return none<Hit2D>();
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
     if (t < -FLT_EPSILON)
         t = (-b + rtdet) / (2 * a);
     if (t < -FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = (ray.pos + t * ray.dir - circle.pos) / circle.radius;
-    }
-    return true;
+    return some<Hit2D>(t, (ray.pos + t * ray.dir - circle.pos) / circle.radius);
 }
 
-bool intersectRayRect(Ray2D ray, Rect rect, Hit2D* hit)
+Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     if (vecEq2(rect.begin, rect.end))
-        return false;
+        return none<Hit2D>();
 
     if (containsPointRect(ray.pos, rect))
     {
-        if (hit != nullptr)
-        {
-            hit->dist = 0;
-            hit->normal = -ray.dir;
-        }
-        return true;
+        return some<Hit2D>(0, -ray.dir);
     }
 
     f32 hits[4] = {
@@ -1222,81 +1202,66 @@ bool intersectRayRect(Ray2D ray, Rect rect, Hit2D* hit)
         }
     }
     if (t == INFINITY)
-        return false;
+        return none<Hit2D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = norm;
-    }
-    return true;
+    return some<Hit2D>(t, norm);
 }
 
-bool intersectLines2D(Line2D line, Line2D other, Hit2D* hit)
+Maybe<Hit2D> intersectLines2D(Line2D line, Line2D other)
 {
     if (vecEq2(line.begin, line.end) || vecEq2(other.begin, other.end))
-        return false;
+        return none<Hit2D>();
 
     Vec2 lineDir = line.end - line.begin;
     Vec2 otherDir = other.end - other.begin;
 
     f32 denom = vecCross2(lineDir, otherDir);
     if (std::abs(denom) < FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
     Vec2 diff = other.begin - line.begin;
 
     f32 t = vecCross2(diff, otherDir) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
     f32 tOther = vecCross2(diff, lineDir) / denom;
     if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = denom < 0
-            ? vecNorm2({otherDir.y, -otherDir.x})
-            : vecNorm2({-otherDir.y, otherDir.x});
-    }
-    return true;
+    return some<Hit2D>(t, denom < 0
+        ? vecNorm2({otherDir.y, -otherDir.x})
+        : vecNorm2({-otherDir.y, otherDir.x}));
 }
 
-bool intersectLineRay2D(Line2D line, Ray2D ray, Hit2D* hit)
+Maybe<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray)
 {
     if (vecEq2(line.begin, line.end))
-        return false;
+        return none<Hit2D>();
     HG_ASSERT(ray.dir != Vec2{0});
 
     Vec2 lineDir = line.end - line.begin;
 
     f32 denom = vecCross2(lineDir, ray.dir);
     if (std::abs(denom) < FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
     Vec2 diff = ray.pos - line.begin;
 
     f32 t = vecCross2(diff, ray.dir) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
     f32 tRay = vecCross2(diff, lineDir) / denom;
     if (tRay < -FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = denom < 0
-            ? vecNorm2({ray.dir.y, -ray.dir.x})
-            : vecNorm2({-ray.dir.y, ray.dir.x});
-    }
-    return true;
+    return some<Hit2D>(t, denom < 0
+        ? vecNorm2({ray.dir.y, -ray.dir.x})
+        : vecNorm2({-ray.dir.y, ray.dir.x}));
 }
 
-bool intersectLineCircle(Line2D line, Circle circle, Hit2D* hit)
+Maybe<Hit2D> intersectLineCircle(Line2D line, Circle circle)
 {
     Vec2 dir = line.end - line.begin;
 
@@ -1307,29 +1272,24 @@ bool intersectLineCircle(Line2D line, Circle circle, Hit2D* hit)
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
-        return false;
+        return none<Hit2D>();
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
     if (t > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
     if (t < -FLT_EPSILON)
         t = (-b + rtdet) / (2 * a);
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit2D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = (line.begin + t * dir - circle.pos) / circle.radius;
-    }
-    return true;
+    return some<Hit2D>(t, (line.begin + t * dir - circle.pos) / circle.radius);
 }
 
-bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit)
+Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect)
 {
     if (vecEq2(line.begin, line.end) || vecEq2(rect.begin, rect.end))
-        return false;
+        return none<Hit2D>();
 
     f32 hits[4] = {
         (rect.begin.x - line.begin.x) / (line.end.x - line.begin.x),
@@ -1362,14 +1322,9 @@ bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit)
         }
     }
     if (t == INFINITY)
-        return false;
+        return none<Hit2D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = norm;
-    }
-    return true;
+    return some<Hit2D>(t, norm);
 }
 
 bool containsPointSphere(Vec3 point, Sphere sphere)
@@ -1464,7 +1419,7 @@ Plane planeFromTri(Tri tri)
     return plane;
 }
 
-bool intersectRaySphere(Ray3D ray, Sphere sphere, Hit3D* hit)
+Maybe<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere)
 {
     HG_ASSERT(ray.dir != Vec3{0});
 
@@ -1475,37 +1430,27 @@ bool intersectRaySphere(Ray3D ray, Sphere sphere, Hit3D* hit)
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
-        return false;
+        return none<Hit3D>();
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
     if (t < -FLT_EPSILON)
         t = (-b + rtdet) / (2 * a);
     if (t < -FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = (ray.pos + t * ray.dir - sphere.pos) / sphere.radius;
-    }
-    return true;
+    return some<Hit3D>(t, (ray.pos + t * ray.dir - sphere.pos) / sphere.radius);
 }
 
-bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit)
+Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box)
 {
     HG_ASSERT(ray.dir != Vec3{0});
     if (vecEq3(box.begin, box.end))
-        return false;
+        return none<Hit3D>();
 
     if (containsPointBox(ray.pos, box))
     {
-        if (hit != nullptr)
-        {
-            hit->dist = 0;
-            hit->normal = -ray.dir;
-        }
-        return true;
+        return some<Hit3D>(0, -ray.dir);
     }
 
     f32 hits[6] = {
@@ -1543,23 +1488,18 @@ bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit)
         }
     }
     if (t == INFINITY)
-        return false;
+        return none<Hit3D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = norm;
-    }
-    return true;
+    return some<Hit3D>(t, norm);
 }
 
 // Moller-Trumbore, Real Time Rendering 4th Edition
-bool intersectRayTri(Ray3D ray, Tri tri, Hit3D* hit)
+Maybe<Hit3D> intersectRayTri(Ray3D ray, Tri tri)
 {
     HG_ASSERT(ray.dir != Vec3{0});
 
     if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
-        return false;
+        return none<Hit3D>();
 
     Vec3 e1 = tri.b - tri.a;
     Vec3 e2 = tri.c - tri.a;
@@ -1567,58 +1507,48 @@ bool intersectRayTri(Ray3D ray, Tri tri, Hit3D* hit)
 
     f32 a = vecDot3(e1, q);
     if (std::abs(a) < FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
     Vec3 s = ray.pos - tri.a;
 
     f32 u = vecDot3(s, q) / a;
     if (u < -FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
     Vec3 r = vecCross3(s, e1);
 
     f32 v = vecDot3(ray.dir, r) / a;
     if (v < -FLT_EPSILON || u + v > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
     f32 t = vecDot3(e2, r) / a;
     if (t < -FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = a < 0
-            ? vecNorm3(vecCross3(e2, e1))
-            : vecNorm3(vecCross3(e1, e2));
-    }
-    return true;
+    return some<Hit3D>(t, a < 0
+        ? vecNorm3(vecCross3(e2, e1))
+        : vecNorm3(vecCross3(e1, e2)));
 }
 
-bool intersectRayPlane(Ray3D ray, Plane plane, Hit3D* hit)
+Maybe<Hit3D> intersectRayPlane(Ray3D ray, Plane plane)
 {
     HG_ASSERT(ray.dir != Vec3{0});
     HG_ASSERT(plane.normal != Vec3{0});
 
     f32 denom = vecDot3(ray.dir, plane.normal);
     if (std::abs(denom) < FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
     f32 t = (plane.dist - vecDot3(ray.pos, plane.normal)) / denom;
     if (t < -FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = denom < 0
-            ? plane.normal
-            : -plane.normal;
-    }
-    return true;
+    return some<Hit3D>(t, denom < 0
+        ? plane.normal
+        : -plane.normal);
 }
 
-bool intersectLineSphere(Line3D line, Sphere sphere, Hit3D* hit)
+Maybe<Hit3D> intersectLineSphere(Line3D line, Sphere sphere)
 {
     Vec3 dir = line.end - line.begin;
 
@@ -1629,29 +1559,24 @@ bool intersectLineSphere(Line3D line, Sphere sphere, Hit3D* hit)
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
-        return false;
+        return none<Hit3D>();
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
     if (t > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
     if (t < -FLT_EPSILON)
         t = (-b + rtdet) / (2 * a);
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = (line.begin + t * dir - sphere.pos) / sphere.radius;
-    }
-    return true;
+    return some<Hit3D>(t, (line.begin + t * dir - sphere.pos) / sphere.radius);
 }
 
-bool intersectLineBox(Line3D line, Box box, Hit3D* hit)
+Maybe<Hit3D> intersectLineBox(Line3D line, Box box)
 {
     if (vecEq3(line.begin, line.end) || vecEq3(box.begin, box.end))
-        return false;
+        return none<Hit3D>();
 
     f32 hits[6] = {
         (box.begin.x - line.begin.x) / (line.end.x - line.begin.x),
@@ -1688,24 +1613,19 @@ bool intersectLineBox(Line3D line, Box box, Hit3D* hit)
         }
     }
     if (t == INFINITY)
-        return false;
+        return none<Hit3D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = norm;
-    }
-    return true;
+    return some<Hit3D>(t, norm);
 }
 
 // Moller-Trumbore, Real Time Rendering 4th Edition
-bool intersectLineTri(Line3D line, Tri tri, Hit3D* hit)
+Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri)
 {
     if (vecEq3(line.begin, line.end))
-        return false;
+        return none<Hit3D>();
 
     if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
-        return false;
+        return none<Hit3D>();
 
     Vec3 lineDir = line.end - line.begin;
 
@@ -1715,38 +1635,33 @@ bool intersectLineTri(Line3D line, Tri tri, Hit3D* hit)
 
     f32 a = vecDot3(e1, q);
     if (std::abs(a) < FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
     Vec3 s = line.begin - tri.a;
 
     f32 u = vecDot3(s, q) / a;
     if (u < -FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
     Vec3 r = vecCross3(s, e1);
 
     f32 v = vecDot3(lineDir, r) / a;
     if (v < -FLT_EPSILON || u + v > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
     f32 t = vecDot3(e2, r) / a;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = a < 0
-            ? vecNorm3(vecCross3(e2, e1))
-            : vecNorm3(vecCross3(e1, e2));
-    }
-    return true;
+    return some<Hit3D>(t, a < 0
+        ? vecNorm3(vecCross3(e2, e1))
+        : vecNorm3(vecCross3(e1, e2)));
 }
 
-bool intersectLinePlane(Line3D line, Plane plane, Hit3D* hit)
+Maybe<Hit3D> intersectLinePlane(Line3D line, Plane plane)
 {
     if (line.begin == line.end)
-        return false;
+        return none<Hit3D>();
 
     HG_ASSERT(plane.normal != Vec3{0});
 
@@ -1754,20 +1669,15 @@ bool intersectLinePlane(Line3D line, Plane plane, Hit3D* hit)
 
     f32 denom = vecDot3(lineDir, plane.normal);
     if (std::abs(denom) < FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
     f32 t = (plane.dist - vecDot3(line.begin, plane.normal)) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return false;
+        return none<Hit3D>();
 
-    if (hit != nullptr)
-    {
-        hit->dist = t;
-        hit->normal = denom < 0
-            ? plane.normal
-            : -plane.normal;
-    }
-    return true;
+    return some<Hit3D>(t, denom < 0
+        ? plane.normal
+        : -plane.normal);
 }
 
 u32 noise(u32 seed, u32 pos)

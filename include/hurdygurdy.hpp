@@ -3987,107 +3987,43 @@ struct Line2D {
 
 /**
  * Intersect two rays
- *
- * Parameters
- * - ray The ray to cast
- * - other The other ray to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the rays intersect
  */
-bool intersectRays2D(Ray2D ray, Ray2D other, Hit2D* hit);
+Maybe<Hit2D> intersectRays2D(Ray2D ray, Ray2D other);
 
 /**
  * Intersect a ray and a line
- *
- * Parameters
- * - ray The ray to cast
- * - line The line to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the ray and line intersect
  */
-bool intersectRayLine2D(Ray2D ray, Line2D line, Hit2D* hit);
+Maybe<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line);
 
 /**
  * Intersect a ray and a circle
- *
- * Parameters
- * - ray The ray to cast
- * - circle The circle to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the ray and circle intersect
  */
-bool intersectRayCircle(Ray2D ray, Circle circle, Hit2D* hit);
+Maybe<Hit2D> intersectRayCircle(Ray2D ray, Circle circle);
 
 /**
  * Intersect a ray and a rect
- *
- * Parameters
- * - ray The ray to cast
- * - rect The rect to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the ray and rect intersect
  */
-bool intersectRayRect(Ray2D ray, Rect rect, Hit2D* hit);
+Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect);
 
 /**
  * Intersect two lines
- *
- * Parameters
- * - line The line to cast
- * - other The other line to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the lines intersect
  */
-bool intersectLines2D(Line2D line, Line2D other, Hit2D* hit);
+Maybe<Hit2D> intersectLines2D(Line2D line, Line2D other);
 
 /**
  * Intersect a line and a ray
- *
- * Parameters
- * - line The line to cast
- * - ray The ray to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and ray intersect
  */
-bool intersectLineRay2D(Line2D line, Ray2D ray, Hit2D* hit);
+Maybe<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray);
 
 /**
  * Intersect a line and a circle
- *
- * Parameters
- * - line The line to cast
- * - circle The circle to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and circle intersect
  */
-bool intersectLineCircle(Line2D line, Circle circle, Hit2D* hit);
+Maybe<Hit2D> intersectLineCircle(Line2D line, Circle circle);
 
 /**
  * Intersect a line and a rect
- *
- * Parameters
- * - line The line to cast
- * - rect The rect to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and rect intersect
  */
-bool intersectLineRect(Line2D line, Rect rect, Hit2D* hit);
+Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect);
 
 // ============================================================================
 // Geometry 3D
@@ -4268,107 +4204,43 @@ Plane planeFromTri(Tri tri);
 
 /**
  * Intersect a ray and a sphere
- *
- * Parameters
- * - ray The ray to cast
- * - sphere The sphere to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the ray and sphere intersect
  */
-bool intersectRaySphere(Ray3D ray, Sphere sphere, Hit3D* hit);
+Maybe<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere);
 
 /**
  * Intersect a ray and a box
- *
- * Parameters
- * - ray The ray to cast
- * - box The box to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the ray and box intersect
  */
-bool intersectRayBox(Ray3D ray, Box box, Hit3D* hit);
+Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box);
 
 /**
  * Intersect a ray and a triangle
- *
- * Parameters
- * - ray The ray to cast
- * - triangle The triangle to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the ray and triangle intersect
  */
-bool intersectRayTri(Ray3D ray, Tri tri, Hit3D* hit);
+Maybe<Hit3D> intersectRayTri(Ray3D ray, Tri tri);
 
 /**
  * Intersect a ray and a plane
- *
- * Parameters
- * - ray The ray to cast
- * - plane The plane to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the ray and plane intersect
  */
-bool intersectRayPlane(Ray3D ray, Plane plane, Hit3D* hit);
+Maybe<Hit3D> intersectRayPlane(Ray3D ray, Plane plane);
 
 /**
  * Intersect a line and a sphere
- *
- * Parameters
- * - line The line to cast
- * - sphere The sphere to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and sphere intersect
  */
-bool intersectLineSphere(Line3D line, Sphere sphere, Hit3D* hit);
+Maybe<Hit3D> intersectLineSphere(Line3D line, Sphere sphere);
 
 /**
  * Intersect a line and a box
- *
- * Parameters
- * - line The line to cast
- * - box The box to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and box intersect
  */
-bool intersectLineBox(Line3D line, Box box, Hit3D* hit);
+Maybe<Hit3D> intersectLineBox(Line3D line, Box box);
 
 /**
  * Intersect a line and a triangle
- *
- * Parameters
- * - line The line to cast
- * - triangle The triangle to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and triangle intersect
  */
-bool intersectLineTri(Line3D line, Tri tri, Hit3D* hit);
+Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri);
 
 /**
  * Intersect a line and a plane
- *
- * Parameters
- * - line The line to cast
- * - plane The plane to intersect
- * - hit A pointer to store the hit data, or nullptr
- *
- * Returns
- * - Whether the line and plane intersect
  */
-bool intersectLinePlane(Line3D line, Plane plane, Hit3D* hit);
+Maybe<Hit3D> intersectLinePlane(Line3D line, Plane plane);
 
 // ----------------------------------------------------------------------------
 // Noise & RNG
