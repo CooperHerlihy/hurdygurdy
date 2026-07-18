@@ -511,6 +511,14 @@ struct Span {
     {}
 
     /**
+     * Construct from array
+     */
+    template<u64 N>
+    constexpr Span(T (&arr)[N])
+        : vals{arr}, count{N}
+    {}
+
+    /**
      * Access by index
      */
     constexpr T& operator[](u64 idx) const
@@ -7497,7 +7505,7 @@ struct Window {
  * Returns
  * - The command buffer to record this frame
  */
-GpuCmd* gpuFrameBegin(Span<WindowData*> windows);
+GpuCmd* gpuFrameBegin(Span<Window*> windows);
 
 /**
  * Finishes recording the command buffer and presents the window images

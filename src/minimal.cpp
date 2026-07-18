@@ -173,7 +173,8 @@ int main()
         ImGui::Render();
 
         cpuTime += cpuClock.tick();
-        GpuCmd* cmd = gpuFrameBegin({&window.data, 1});
+        Window* windows[] = {&window};
+        GpuCmd* cmd = gpuFrameBegin(windows);
         cpuClock.tick();
         if (window.imageView() != nullptr)
         {
