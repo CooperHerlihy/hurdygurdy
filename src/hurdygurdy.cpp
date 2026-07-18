@@ -192,22 +192,18 @@ struct ThreadWork {
 };
 
 struct ThreadPoolState {
-    std::thread* threads = nullptr;
-    u32 threadCount = 0;
-    std::atomic_bool shouldClose = false;
-
-    std::mutex mtx{};
-    std::condition_variable cv{};
-
-    ThreadWork* work = nullptr;
-    std::atomic_bool* hasWork = nullptr;
-    u32 workCapacity = 0;
+    Array<ThreadWork> work{};
+    Array<std::atomic_bool> hasWork{};
 
     std::atomic<u32> workCount = 0;
     std::atomic<u32> tail = 0;
     std::atomic<u32> workingTail = 0;
     std::atomic<u32> head = 0;
     std::atomic<u32> workingHead = 0;
+
+    std::mutex mtx{};
+    std::condition_variable_any cv{};
+    Array<std::jthread> threads{};
 };
 
 static ThreadPoolState threadPool{};
@@ -218,7 +214,7 @@ static bool threadPoolExecute()
     do {
         if (idx == threadPool.head.load())
             return false;
-    } while (!threadPool.workingTail.compare_exchange_weak(idx, (idx + 1) & (threadPool.workCapacity - 1)));
+    } while (!threadPool.workingTail.compare_exchange_weak(idx, (idx + 1) & (threadPool.work.count - 1)));
 
     ThreadWork work = threadPool.work[idx];
     threadPool.hasWork[idx].store(false);
@@ -226,7 +222,7 @@ static bool threadPoolExecute()
     u32 t = threadPool.tail.load();
     while (t != threadPool.head.load() && !threadPool.hasWork[t].load())
     {
-        u32 next = (t + 1) & (threadPool.workCapacity - 1);
+        u32 next = (t + 1) & (threadPool.work.count - 1);
         threadPool.tail.compare_exchange_strong(t, next);
         t = next;
     }
@@ -243,13 +239,13 @@ static bool threadPoolExecute()
 
 void internal::initConcurrency()
 {
-    threadPool.shouldClose.store(false);
-    threadPool.threadCount = std::max((u32)1, std::thread::hardware_concurrency() - 1);
-    threadPool.threads = heapAlloc<std::thread>(threadPool.threadCount);
-
-    threadPool.workCapacity = 4096;
-    threadPool.work = heapAlloc<ThreadWork>(threadPool.workCapacity);
-    threadPool.hasWork = heapAlloc<std::atomic_bool>(threadPool.workCapacity);
+    u32 workCapacity = 4096;
+    threadPool.work = {workCapacity, workCapacity};
+    threadPool.hasWork = {workCapacity, workCapacity};
+    for (std::atomic_bool& hasWork : threadPool.hasWork)
+    {
+        hasWork.store(false);
+    }
 
     threadPool.workCount.store(0);
     threadPool.tail.store(0);
@@ -257,57 +253,35 @@ void internal::initConcurrency()
     threadPool.head.store(0);
     threadPool.workingHead.store(0);
 
-    for (u32 i = 0; i < threadPool.workCapacity; ++i)
-    {
-        threadPool.hasWork[i].store(false);
-    }
-
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        new (threadPool.threads + i) std::thread([] {
-            for (;;)
+    auto threadFn = [](std::stop_token st) {
+        while (!st.stop_requested())
+        {
+            static constexpr u32 spinCount = 128;
+            for (u32 j = 0; j < spinCount; ++j)
             {
-                std::unique_lock<std::mutex> lock{threadPool.mtx};
-                while (threadPool.workCount.load() == 0 && !threadPool.shouldClose.load())
-                {
-                    threadPool.cv.wait(lock);
-                }
-                lock.unlock();
-                if (threadPool.shouldClose.load())
-                    return;
-
-                static constexpr u32 spinCount = 128;
-                for (u32 j = 0; j < spinCount; ++j)
-                {
-                    if (!threadPoolExecute())
-                        _mm_pause();
-                }
+                if (!threadPoolExecute())
+                    _mm_pause();
             }
-        });
+
+            std::unique_lock lock{threadPool.mtx};
+            threadPool.cv.wait(lock, st, [&] {
+                return threadPool.workCount.load() > 0 || st.stop_requested();
+            });
+        }
+    };
+
+    u32 threadCount = std::max((u32)1, std::thread::hardware_concurrency() - 1);
+    threadPool.threads.reserve(threadCount);
+    for (u32 i = 0; i < threadCount; ++i)
+    {
+        threadPool.threads.push(std::jthread{threadFn});
     }
 }
 
 void internal::deinitConcurrency()
 {
-    threadPool.mtx.lock();
-    threadPool.shouldClose = true;
-    threadPool.mtx.unlock();
-    threadPool.cv.notify_all();
-
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        threadPool.threads[i].join();
-    }
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        threadPool.threads[i].~thread();
-    }
-    threadPool.cv.~condition_variable();
-    threadPool.mtx.~mutex();
-
-    heapFree(threadPool.hasWork, threadPool.workCapacity);
-    heapFree(threadPool.work, threadPool.workCapacity);
-    heapFree(threadPool.threads, threadPool.threadCount);
+    threadPool.~ThreadPoolState();
+    new (&threadPool) ThreadPoolState{};
 }
 
 void SpinLock::acquire()
@@ -382,7 +356,7 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     if (fence != nullptr)
         fence->add();
 
-    u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
+    u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.work.count - 1);
 
     threadPool.work[idx].fence = fence;
     threadPool.work[idx].data = data;
@@ -392,7 +366,7 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     u32 h = threadPool.head.load();
     while (threadPool.hasWork[h].load())
     {
-        u32 next = (h + 1) & (threadPool.workCapacity - 1);
+        u32 next = (h + 1) & (threadPool.work.count - 1);
         threadPool.head.compare_exchange_strong(h, next);
         h = next;
     }
@@ -410,7 +384,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
 
     ArenaScope scratch = getScratch();
 
-    u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f32>(end - begin) / (8.0f * static_cast<f32>(threadPool.threadCount))));
+    u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f64>(end - begin) / (8.0 * static_cast<f64>(threadPool.threads.count))));
 
     Fence fence{};
     for (u64 i = begin; i < end; i += chunkSize)
