@@ -119,8 +119,7 @@
 - Dynamic Library
 - TODO: Process
 - TODO: Console
-- Windowing
-- Input
+- Windowing & Input
     - state queries
     - event queue
 - Audio

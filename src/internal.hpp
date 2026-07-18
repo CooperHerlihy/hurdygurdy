@@ -10,12 +10,12 @@ namespace hg::internal {
  * Returns
  * - Whether init succeeded
  */
-bool platformInit();
+bool initPlatform();
 
 /**
  * Deinitialize the platform
  */
-void platformDeinit();
+void deinitPlatform();
 
 /**
  * Get the platform's required instance extensions for windowing
@@ -44,16 +44,6 @@ bool initGpu();
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources
  */
 void deinitGpu();
-
-/**
- * Initialize the windowing subsystem
- */
-void initWindowing();
-
-/**
- * Deinitialize the windowing subsystem
- */
-void deinitWindowing();
 
 /**
  * Initialize the audio subsystem

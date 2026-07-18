@@ -18,10 +18,7 @@ int main()
 {
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
-    Window* window = windowCreate("Hg Minimal Example", 1200, 800, nullptr);
-    if (window == nullptr)
-        HG_PANIC("Could not create window\n");
-    HG_DEFER(windowDestroy(window));
+    Window window = Window::create("Hg Minimal Example", 1200, 800, {}).expect("Could not create window\n");
 
     f32 musicData[2000];
     Asset<Sound> music = newAsset<Sound>();
@@ -59,14 +56,13 @@ int main()
     audioPlayerSetMusicGain(&audio, &music, 0.3f);
     audioPlayerMusicPause(&audio, &music);
 
-    rendererInit2D(windowImageFormat(window));
+    rendererInit2D(window.imageFormat());
     HG_DEFER(rendererDeinit2D());
 
-    u32 width = windowWidth(window);
-    u32 height = windowHeight(window);
+    u32 width = window.width();
+    u32 height = window.height();
 
     Camera camera = cameraCreate();
-    HG_DEFER(cameraDestroy(&camera));
 
     Layer2D backgroundLayer = layerCreate2D();
     HG_DEFER(layerDestroy2D(&backgroundLayer));
@@ -94,7 +90,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    initImGui(window, windowImageFormat(window));
+    initImGui(window, window.imageFormat());
     HG_DEFER(deinitImGui());
 
     // temporary, trick the OS into thinking we're important
@@ -113,7 +109,7 @@ int main()
         f64 delta = gameClock.tick();
 
         processEvents();
-        if (wasQuit() || windowWasClosed(window))
+        if (wasQuit() || window.wasClosed())
             goto quit;
 
         audioPlayerUpdate(&audio);
@@ -121,23 +117,23 @@ int main()
         beginImGuiFrame();
         ImGui::NewFrame();
 
-        width = windowWidth(window);
-        height = windowHeight(window);
+        width = window.width();
+        height = window.height();
 
         cameraSetOrthographic(&camera, static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
 
-        if (isButtonDown(window, Button_lmouse))
+        if (window.isButtonDown(Button_lmouse))
         {
             f32 moveSpeed = 1.0f;
-            camera.position.x -= mouseDeltaX(window) * moveSpeed;
-            camera.position.y -= mouseDeltaY(window) * moveSpeed;
+            camera.position.x -= window.mouseDX() * moveSpeed;
+            camera.position.y -= window.mouseDY() * moveSpeed;
         }
 
         cameraUpdate(&camera);
 
         Vec2 spriteMove = {
-            static_cast<f32>(isButtonDown(window, Button_d) - isButtonDown(window, Button_a)),
-            static_cast<f32>(isButtonDown(window, Button_s) - isButtonDown(window, Button_w)),
+            static_cast<f32>(window.isButtonDown(Button_d) - window.isButtonDown(Button_a)),
+            static_cast<f32>(window.isButtonDown(Button_s) - window.isButtonDown(Button_w)),
         };
         if (spriteMove != Vec2{0.0f})
         {
@@ -149,16 +145,15 @@ int main()
 
         drawSprite2D(&spriteLayer, &sprite, {spritePos, spritePos + spriteSize});
 
-        u32 eventCount;
-        WindowEvent* event = windowEvents(window, &eventCount);
-        for (u32 i = 0; i < eventCount; ++i, ++event)
+        Span<WindowEvent> events = window.events();
+        for (WindowEvent event : events)
         {
-            if (event->type == WindowEventType_buttonPress &&
-                event->button.button == Button_space)
+            if (event.type == WindowEventType_buttonPress &&
+                event.button.button == Button_space)
                 audioPlayerSound(&audio, &sound, 0.5f);
         }
 
-        if (isButtonDown(window, Button_m))
+        if (window.isButtonDown(Button_m))
             audioPlayerMusic(&audio, &music);
         else
             audioPlayerMusicPause(&audio, &music);
@@ -178,18 +173,18 @@ int main()
         ImGui::Render();
 
         cpuTime += cpuClock.tick();
-        GpuCmd* cmd = gpuFrameBegin(&window, 1);
+        GpuCmd* cmd = gpuFrameBegin({&window.data, 1});
         cpuClock.tick();
-        if (windowImageView(window) != nullptr)
+        if (window.imageView() != nullptr)
         {
             GpuRenderAttachment colorAttachment{};
-            colorAttachment.image = windowImageView(window);
+            colorAttachment.image = window.imageView();
 
             GpuRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
 
-            gpuRenderPassBegin(cmd, &pass);
+            gpuRenderPassBegin(cmd, pass);
 
             renderLayer2D(cmd, &camera, &backgroundLayer);
             renderLayer2D(cmd, &camera, &spriteLayer);

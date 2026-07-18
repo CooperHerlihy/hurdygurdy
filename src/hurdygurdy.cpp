@@ -5,7 +5,6 @@
 #include <cstring>
 #include <ctime>
 
-#include <chrono>
 #include <random>
 
 #include <emmintrin.h>
@@ -35,87 +34,47 @@ void logError()
     std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", (int)errorLength, errorData);
 }
 
-static SubsystemFlags initialized = 0;
+static bool initialized = false;
 
-Maybe<HurdyGurdy> init(SubsystemFlags init)
+Maybe<HurdyGurdy> init()
 {
-    if (init & Subsystem_concurrency)
-    {
-        internal::initConcurrency();
-        initialized |= Subsystem_concurrency;
-    }
+    internal::initConcurrency();
 
-    if (init & Subsystem_gpu ||
-        init & Subsystem_windowing ||
-        init & Subsystem_audio)
-    {
-        if (!internal::platformInit())
-            goto platformFailed;
-    }
+    if (!internal::initPlatform())
+        goto platformFailed;
 
-    if (init & Subsystem_gpu ||
-        init & Subsystem_windowing)
-    {
-        if (!internal::initGpu())
-            goto gpuFailed;
-        initialized |= Subsystem_gpu;
-    }
+    if (!internal::initGpu())
+        goto gpuFailed;
 
-    if (init & Subsystem_windowing)
-    {
-        internal::initWindowing();
-        initialized |= Subsystem_windowing;
-    }
+    if (!internal::initAudio())
+        goto audioFailed;
 
-    if (init & Subsystem_audio)
-    {
-        if (!internal::initAudio())
-            goto audioFailed;
-        initialized |= Subsystem_audio;
-    }
-
+    initialized = true;
     return some<HurdyGurdy>();
 
 audioFailed:
-    if (initialized & Subsystem_windowing)
-        internal::deinitWindowing();
-    if (initialized & Subsystem_gpu)
-        internal::deinitGpu();
+    internal::deinitGpu();
 gpuFailed:
-    if (initialized & Subsystem_gpu ||
-        initialized & Subsystem_windowing ||
-        initialized & Subsystem_audio)
-        internal::platformDeinit();
+    internal::deinitPlatform();
 platformFailed:
-    if (initialized & Subsystem_concurrency)
-        internal::deinitConcurrency();
-    initialized = 0;
+    internal::deinitConcurrency();
 
+    initialized = false;
     return none<HurdyGurdy>();
 }
 
 HurdyGurdy::~HurdyGurdy()
 {
+    HG_ASSERT(initialized);
+
     if (alive)
     {
-        if (initialized & Subsystem_audio)
-            internal::deinitAudio();
+        internal::deinitAudio();
+        internal::deinitGpu();
+        internal::deinitPlatform();
+        internal::deinitConcurrency();
 
-        if (initialized & Subsystem_windowing)
-            internal::deinitWindowing();
-
-        if (initialized & Subsystem_gpu)
-            internal::deinitGpu();
-
-        if (initialized & Subsystem_gpu ||
-            initialized & Subsystem_windowing ||
-            initialized & Subsystem_audio)
-            internal::platformDeinit();
-
-        if (initialized & Subsystem_concurrency)
-            internal::deinitConcurrency();
-
-        initialized = 0;
+        initialized = false;
     }
 }
 
@@ -3991,25 +3950,21 @@ void assetLoadImpl(AssetData<Texture>* data)
     if (tex->pixels == nullptr)
         return;
 
-    GpuImageCreateEx imageInfo{};
+    GpuImageCreateInfo imageInfo{};
     imageInfo.format = tex->format;
     imageInfo.width = tex->width;
     imageInfo.height = tex->height;
     imageInfo.depth = tex->depth;
     imageInfo.usage = GpuImageUsage_transferDst | GpuImageUsage_sampled;
 
-    data->asset.image = gpuImageCreateEx(&imageInfo);
-    data->asset.view = gpuViewCreate(data->asset.image, GpuAspect_color, GpuFilter_nearest);
+    data->asset.image = {imageInfo};
+    data->asset.view = {data->asset.image, GpuAspect_color, GpuFilter_nearest};
 
-    gpuImageWrite(data->asset.view, tex->pixels);
+    data->asset.view.write(tex->pixels);
 }
 
 template<>
-void assetUnloadImpl(AssetData<Texture>* data)
-{
-    gpuViewDestroy(data->asset.view);
-    gpuImageDestroy(data->asset.image);
-}
+void assetUnloadImpl(AssetData<Texture>*) {}
 
 template<>
 void assetLoadImpl(AssetData<MeshData>* data)
@@ -4044,32 +3999,14 @@ void assetLoadImpl(AssetData<Mesh>* data)
     data->asset.vertexWidth = mesh->vertexWidth;
     data->asset.indexCount = mesh->indexCount;
 
-    data->asset.vertexBuffer = gpuBufferCreate(
-        data->asset.vertexCount * data->asset.vertexWidth,
-        GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
+    data->asset.vertexBuffer = GpuBuffer{
+        data->asset.vertexCount * data->asset.vertexWidth, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst};
 
-    data->asset.indexBuffer = gpuBufferCreate(
-        data->asset.indexCount * sizeof(u32),
-        GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
+    data->asset.indexBuffer = GpuBuffer{
+        data->asset.indexCount * sizeof(u32), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst};
 
-    gpuBufferWrite(
-        data->asset.vertexBuffer,
-        0,
-        mesh->vertices,
-        data->asset.vertexCount * data->asset.vertexWidth);
-
-    gpuBufferWrite(
-        data->asset.indexBuffer,
-        0,
-        mesh->indices,
-        data->asset.indexCount * sizeof(u32));
-}
-
-template<>
-void assetUnloadImpl(AssetData<Mesh>* data)
-{
-    gpuBufferDestroy(data->asset.vertexBuffer);
-    gpuBufferDestroy(data->asset.indexBuffer);
+    data->asset.vertexBuffer.write(mesh->vertices, 0, data->asset.vertexCount * data->asset.vertexWidth);
+    data->asset.indexBuffer.write(mesh->indices, 0, data->asset.indexCount * sizeof(u32));
 }
 
 template<>
@@ -4109,20 +4046,15 @@ Camera cameraCreate()
 {
     Camera camera{};
 
-    camera.vpBuffer = gpuBufferCreate(
+    camera.vpBuffer = GpuBuffer{
         sizeof(VPUniform),
         GpuBufferUsage_uniformBuffer,
-        GpuMemoryUsage_frequentUpdate);
+        GpuMemoryUsage_frequentUpdate};
 
     camera.rotation = Quat{1.0f};
     camera.position = Vec3{0.0f};
 
     return camera;
-}
-
-void cameraDestroy(Camera* camera)
-{
-    gpuBufferDestroy(camera->vpBuffer);
 }
 
 void cameraSetPerspective(Camera* camera, f32 aspect, f32 fov, f32 near, f32 far)
@@ -4184,7 +4116,7 @@ void cameraUpdate(Camera* camera)
             camera->orthographic.far);
     }
 
-    gpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
+    camera->vpBuffer.write(&vp, 0, sizeof(vp));
 }
 
 // Camera* cameraAdd(Ecs* ecs, Entity e)
@@ -4235,9 +4167,9 @@ void cameraUpdate(Camera* camera)
 // }
 
 struct RenderState2D {
-    GpuPipeline* pipeline = nullptr;
-    GpuPipeline* debugPipeline = nullptr;
-    Texture defaultTex = {};
+    GpuPipeline pipeline{};
+    GpuPipeline debugPipeline{};
+    Texture defaultTex{};
 };
 
 static RenderState2D render2D;
@@ -4254,7 +4186,7 @@ struct RenderPush2D {
 
 void rendererInit2D(Format colorFormat)
 {
-    CreateGpuGraphicsPipeline pipelineConfig{};
+    GpuGraphicsPipelineCreateInfo pipelineConfig{};
     pipelineConfig.vertexShader = render2d_vert_spv;
     pipelineConfig.vertexShaderSize = sizeof(render2d_vert_spv);
     pipelineConfig.fragmentShader = render2d_frag_spv;
@@ -4265,13 +4197,13 @@ void rendererInit2D(Format colorFormat)
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
-    render2D.pipeline = gpuPipelineCreateGraphics(&pipelineConfig);
+    render2D.pipeline = GpuPipeline{pipelineConfig};
 
     pipelineConfig.fragmentShader = debug2d_frag_spv;
     pipelineConfig.fragmentShaderSize = sizeof(debug2d_frag_spv);
     pipelineConfig.topology = GpuTopology_lineStrip;
 
-    render2D.debugPipeline = gpuPipelineCreateGraphics(&pipelineConfig);
+    render2D.debugPipeline = GpuPipeline{pipelineConfig};
 
     struct Color {
         u8 r, g, b, a;
@@ -4281,21 +4213,14 @@ void rendererInit2D(Format colorFormat)
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    render2D.defaultTex.image = gpuImageCreate(2, 2, Format_r8g8b8a8_srgb,
-        GpuImageUsage_sampled | GpuImageUsage_transferDst);
-
-    render2D.defaultTex.view = gpuViewCreate(
-        render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
-
-    gpuImageWrite(render2D.defaultTex.view, defaultColors);
+    render2D.defaultTex.image = GpuImage{2, 2, Format_r8g8b8a8_srgb, GpuImageUsage_sampled | GpuImageUsage_transferDst};
+    render2D.defaultTex.view = GpuView{render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest};
+    render2D.defaultTex.view.write(defaultColors);
 }
 
 void rendererDeinit2D()
 {
-    gpuViewDestroy(render2D.defaultTex.view);
-    gpuImageDestroy(render2D.defaultTex.image);
-    gpuPipelineDestroy(render2D.debugPipeline);
-    gpuPipelineDestroy(render2D.pipeline);
+    render2D = {};
 }
 
 Layer2D layerCreate2D()
@@ -4303,8 +4228,8 @@ Layer2D layerCreate2D()
     Layer2D layer{};
 
     layer.instances = Array<Render2DInstance>{0, 1024};
-    layer.instanceBuffer = gpuBufferCreate(layer.instances.capacity * sizeof(Render2DInstance),
-        GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
+    layer.instanceBuffer = GpuBuffer{layer.instances.capacity * sizeof(Render2DInstance),
+        GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
     layer.instanceCapacity = layer.instances.capacity;
     layer.transform = Mat4{1.0f};
     layer.changed = true;
@@ -4316,8 +4241,7 @@ void layerDestroy2D(Layer2D* layer)
 {
     HG_ASSERT(layer != nullptr);
 
-    gpuBufferDestroy(layer->instanceBuffer);
-    layer->instances = {};
+    *layer = {};
 }
 
 void layerClear2D(Layer2D* layer)
@@ -4328,7 +4252,7 @@ void layerClear2D(Layer2D* layer)
     layer->changed = true;
 }
 
-static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, GpuPipeline* pipeline)
+static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, const GpuPipeline& pipeline)
 {
     HG_ASSERT(cmd != nullptr);
     HG_ASSERT(camera != nullptr);
@@ -4339,14 +4263,13 @@ static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, GpuPipeli
         if (layer->instances.capacity > layer->instanceCapacity)
         {
             gpuWaitIdle();
-            gpuBufferDestroy(layer->instanceBuffer);
 
-            layer->instanceBuffer = gpuBufferCreate(layer->instances.capacity * sizeof(Render2DInstance),
-                GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
+            layer->instanceBuffer = GpuBuffer{layer->instances.capacity * sizeof(Render2DInstance),
+                GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
             layer->instanceCapacity = layer->instances.capacity;
         }
 
-        gpuBufferWrite(layer->instanceBuffer, 0, layer->instances.vals, layer->instances.count * sizeof(Render2DInstance));
+        layer->instanceBuffer.write(layer->instances.vals, 0, layer->instances.count * sizeof(Render2DInstance));
 
         layer->changed = false;
     }
@@ -4355,8 +4278,8 @@ static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, GpuPipeli
 
     RenderPush2D push{};
     push.model = layer->transform;
-    push.vpIdx = gpuBufferUniformDescriptor(camera->vpBuffer);
-    push.instIdx = gpuBufferStorageDescriptor(layer->instanceBuffer);
+    push.vpIdx = camera->vpBuffer.uniformDescriptor();
+    push.instIdx = layer->instanceBuffer.storageDescriptor();
 
     gpuPushConstants(cmd, pipeline, &push, sizeof(push));
 
@@ -4401,7 +4324,7 @@ void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst)
     instance.sprite.pos = dst.begin;
     instance.sprite.size = dst.end - dst.begin;
     instance.sprite.type = Render2DInstanceType_sprite;
-    instance.sprite.tex = gpuImageSamplerDescriptor(texture->view);
+    instance.sprite.tex = texture->view.samplerDescriptor();
     instance.sprite.uvPos = sprite->uv.begin;
     instance.sprite.uvSize = sprite->uv.end - sprite->uv.begin;
 

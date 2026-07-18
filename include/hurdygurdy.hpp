@@ -42,8 +42,6 @@
 #include <mutex>
 #include <thread>
 
-#include <memory>
-
 namespace hg {
 
 // ============================================================================
@@ -307,18 +305,6 @@ struct Defer {
 // ============================================================================
 
 /**
- * The Hurdy Gurdy subsystems
- */
-enum Subsystem : u32 {
-    Subsystem_concurrency = 0x1,
-    Subsystem_gpu = 0x2,
-    Subsystem_windowing = 0x4,
-    Subsystem_audio = 0x8,
-    Subsystem_all = static_cast<u32>(-1),
-};
-using SubsystemFlags = u32;
-
-/**
  * A scope guard for library initialization
  */
 struct HurdyGurdy {
@@ -365,13 +351,10 @@ struct HurdyGurdy {
 /**
  * Initialize the Hurdy Gurdy library
  *
- * Parameters
- * - init Which subsystems to initialize, all are recommended
- *
  * Returns
  * - A HurdyGurdy scope guard, or nothing on failure
  */
-Maybe<HurdyGurdy> init(SubsystemFlags init = Subsystem_all);
+Maybe<HurdyGurdy> init();
 
 // ============================================================================
 // Core Types (Implementations)
@@ -1509,11 +1492,6 @@ enum GpuAccess : u32 {
 using GpuAccessFlags = u32;
 
 /**
- * A gpu buffer
- */
-struct GpuBuffer;
-
-/**
  * How a gpu buffer will be used
  */
 enum GpuBufferUsage : u32 {
@@ -1568,59 +1546,103 @@ enum GpuMemoryHostAccess : u32 {
 };
 
 /**
- * Create a gpu buffer
- *
- * Parameters
- * - size The size in bytes of the buffer
- * - usageFlags How the buffer will be used
- * - access How the buffer should be accessed
+ * GpuBuffer implementation data
  */
-GpuBuffer* gpuBufferCreate(
-    u64 size,
-    GpuBufferUsageFlags usageFlags,
-    GpuMemoryUsage access = GpuMemoryUsage_deviceOnly);
+struct GpuBufferData;
 
 /**
- * Destroy a gpu buffer
+ * A gpu buffer
  */
-void gpuBufferDestroy(GpuBuffer* buffer);
+struct GpuBuffer
+{
+    /**
+     * The implementation data
+     */
+    GpuBufferData* data = nullptr;
 
-/**
- * Get the uniform buffer descriptor index from the buffer
- */
-u32 gpuBufferUniformDescriptor(GpuBuffer* buffer);
+    /**
+     * Construct empty
+     */
+    GpuBuffer() noexcept = default;
 
-/**
- * Get the storage buffer descriptor index from the buffer
- */
-u32 gpuBufferStorageDescriptor(GpuBuffer* buffer);
+    /**
+     * Construct from data
+     */
+    GpuBuffer(GpuBufferData* dataVal)
+        : data{dataVal}
+    {}
 
-/**
- * Writes to a gpu buffer
- *
- * Parameters
- * - dst The buffer to write to, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - src The data to write, must not be nullptr
- * - size The size in bytes to write
- */
-void gpuBufferWrite(GpuBuffer* dst, u64 offset, const void* src, u64 size);
+    /**
+     * Create a gpu buffer
+     *
+     * Parameters
+     * - size The size in bytes of the buffer
+     * - usageFlags How the buffer will be used
+     * - access How the buffer should be accessed
+     */
+    GpuBuffer(
+        u64 size,
+        GpuBufferUsageFlags usageFlags,
+        GpuMemoryUsage access = GpuMemoryUsage_deviceOnly);
 
-/**
- * Reads from a Vulkan device local buffer through a staging buffer
- *
- * Parameters
- * - dst The location to write to, must not be nullptr
- * - src The buffer to read from, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - size The size in bytes to read
- */
-void gpuBufferRead(void* dst, GpuBuffer* src, u64 offset, u64 size);
+    /**
+     * Destroy the gpu buffer
+     */
+    ~GpuBuffer() noexcept;
 
-/**
- * A gpu image
- */
-struct GpuImage;
+    /**
+     * Get the uniform buffer descriptor index from the buffer
+     */
+    u32 uniformDescriptor();
+
+    /**
+     * Get the storage buffer descriptor index from the buffer
+     */
+    u32 storageDescriptor();
+
+    /**
+     * Writes to the gpu buffer
+     *
+     * Parameters
+     * - src The data to write, must not be nullptr
+     * - offset The offset in bytes into the gpu buffer
+     * - size The size in bytes to write
+     */
+    void write(const void* src, u64 offset, u64 size);
+
+    /**
+     * Reads from the gpu buffer
+     *
+     * Parameters
+     * - dst The location to write to, must not be nullptr
+     * - offset The offset in bytes into the gpu buffer
+     * - size The size in bytes to read
+     */
+    void read(void* dst, u64 offset, u64 size);
+
+    /**
+     * Move construct
+     */
+    GpuBuffer(GpuBuffer&& other) noexcept
+        : data{std::exchange(other.data, nullptr)}
+    {}
+
+    /**
+     * Move assign
+     */
+    GpuBuffer& operator=(GpuBuffer&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~GpuBuffer();
+            new (this) GpuBuffer{std::move(other)};
+        }
+        return *this;
+    }
+
+    GpuBuffer(const GpuBuffer&) = delete;
+    GpuBuffer& operator=(const GpuBuffer&) = delete;
+};
 
 /**
  * How an image will be used
@@ -1663,14 +1685,9 @@ enum GpuImageConfig : u32 {
 using GpuImageConfigFlags = u32;
 
 /**
- * Create a gpu image assuming most defaults
+ * Config for GpuImage
  */
-GpuImage* gpuImageCreate(u32 width, u32 height, Format format, GpuImageUsageFlags usage);
-
-/**
- * Config for gpuImageCreateEx
- */
-struct GpuImageCreateEx {
+struct GpuImageCreateInfo {
     /**
      * The dimensions of the image
      */
@@ -1714,29 +1731,79 @@ struct GpuImageCreateEx {
 };
 
 /**
- * Create a gpu image with extended options
+ * GpuImage implementation data
  */
-GpuImage* gpuImageCreateEx(const GpuImageCreateEx* create);
+struct GpuImageData;
 
 /**
- * Destroy a gpu image
+ * A gpu image
  */
-void gpuImageDestroy(GpuImage* image);
+struct GpuImage {
+    /**
+     * The implementation data
+     */
+    GpuImageData* data = nullptr;
 
-/**
- * Get the width of an image
- */
-u32 gpuImageWidth(GpuImage* image);
+    /**
+     * Construct empty
+     */
+    GpuImage() noexcept = default;
 
-/**
- * Get the height of an image
- */
-u32 gpuImageHeight(GpuImage* image);
+    /**
+     * Construct from data
+     */
+    GpuImage(GpuImageData* dataVal)
+        : data{dataVal}
+    {}
 
-/**
- * A gpu view
- */
-struct GpuView;
+    /**
+     * Create a gpu image assuming most defaults
+     */
+    GpuImage(u32 width, u32 height, Format format, GpuImageUsageFlags usage);
+
+    /**
+     * Create a gpu image with extended options
+     */
+    GpuImage(const GpuImageCreateInfo& config);
+
+    /**
+     * Destroy a gpu image
+     */
+    ~GpuImage() noexcept;
+
+    /**
+     * Get the width of an image
+     */
+    u32 width() const;
+
+    /**
+     * Get the height of an image
+     */
+    u32 height() const;
+
+    /**
+     * Move construct
+     */
+    GpuImage(GpuImage&& other) noexcept
+        : data{std::exchange(other.data, nullptr)}
+    {}
+
+    /**
+     * Move assign
+     */
+    GpuImage& operator=(GpuImage&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~GpuImage();
+            new (this) GpuImage{std::move(other)};
+        }
+        return *this;
+    }
+
+    GpuImage(const GpuImage&) = delete;
+    GpuImage& operator=(const GpuImage&) = delete;
+};
 
 /**
  * The dimensionality of an image
@@ -1801,110 +1868,173 @@ enum GpuSamplerBorder : u32 {
 };
 
 /**
- * Create a gpu image view
+ * Config for GpuView
  */
-GpuView* gpuViewCreate(
-    GpuImage* image,
-    GpuAspectFlags aspectFlags,
-    GpuFilter filter = GpuFilter_nearest);
-
-/**
- * Config for gpuViewCreateEx
- */
-struct GpuViewCreateEx {
+struct GpuViewCreateInfo {
+    /**
+     * The image to view
+     */
     GpuImage* image = nullptr;
+    /**
+     * The index of the base mipmap level
+     */
     u32 baseMipLevel = 0;
-    u32 levelCount = 0;
+    /**
+     * The number of mip levels after base
+     */
+    u32 levelCount = 1;
+    /**
+     * The index of the base array layer
+     */
     u32 baseArrayLayer = 0;
-    u32 layerCount = 0;
+    /**
+     * The numner of array layers after base
+     */
+    u32 layerCount = 1;
+    /**
+     * The aspect the image will be accessed in
+     */
     GpuAspectFlags aspectFlags = 0;
+    /**
+     * The dimensionality of the image
+     */
     GpuViewType type = {};
+    /**
+     * The sampler filter
+     */
     GpuFilter filter = {};
+    /**
+     * How the sampler handles edges
+     */
     GpuSamplerEdgeMode edgeMode = {};
+    /**
+     * The border color if edge mode uses it
+     */
     GpuSamplerBorder border = {};
 };
 
 /**
- * Create a gpu image view with extended config
+ * GpuView implemenation data
  */
-GpuView* gpuViewCreateEx(const GpuViewCreateEx* config);
+struct GpuViewData;
 
 /**
- * Destroy a gpu image view
+ * A gpu view
  */
-void gpuViewDestroy(GpuView* view);
+struct GpuView {
+    /**
+     * The implementation data
+     */
+    GpuViewData* data = nullptr;
 
-/**
- * Get the width of an image
- */
-u32 gpuViewWidth(GpuView* view);
+    /**
+     * Construct empty
+     */
+    GpuView() noexcept = default;
 
-/**
- * Get the height of an image
- */
-u32 gpuViewHeight(GpuView* view);
+    /**
+     * Construct from data
+     */
+    GpuView(GpuViewData* dataVal)
+        : data{dataVal}
+    {}
 
-/**
- * Get the image sampler descriptor index from the image view
- */
-u32 gpuImageSamplerDescriptor(GpuView* view);
+    /**
+     * Create a gpu image view
+     */
+    GpuView(
+        GpuImage& image,
+        GpuAspectFlags aspectFlags,
+        GpuFilter filter = GpuFilter_nearest);
 
-/**
- * Get the storage image descriptor index from the image view
- */
-u32 gpuImageStorageDescriptor(GpuView* view);
+    /**
+     * Create a gpu image view with extended config
+     */
+    GpuView(const GpuViewCreateInfo& config);
 
-/**
- * Write to a gpu image
- *
- * Note, only fills the base mip level
- *
- * Parameters
- * - dst The image to write to
- * - src The data to read from
- */
-void gpuImageWrite(GpuView* dst, const void* src);
+    /**
+     * Destroy the gpu view
+     */
+    ~GpuView() noexcept;
 
-/**
- * Write to a gpu image cubemap
- *
- * Note, dst must have at least 6 array layers to fill
- *
- * Only the base mip level is filled
- *
- * srcData is assumed to be layed out as:
- *  #
- * ####
- *  #
- *
- * Parameters
- * - dst The image to write to
- * - subresource The subresource of the image to write to
- * - src The data to read from
- */
-void gpuImageWriteCubemap(GpuView* dst, const void* src);
+    /**
+     * Get the width of an image
+     */
+    u32 width() const;
 
-/**
- * Read from a gpu image
- *
- * Note, only the base mip level is read
- *
- * Parameters
- * - src The pointer to write to
- * - dst The image to read from
- * - subresource The subresource of the image to read from
- */
-void gpuImageRead(void* dst, GpuView* src);
+    /**
+     * Get the height of an image
+     */
+    u32 height() const;
 
-/**
- * Generates mipmaps from the base level
- *
- * Note, dst should only have 1 array layer
- *
- * Parameters
- * - image The image to generate mipmaps for
- */
-void gpuImageGenMipmaps(GpuView* dst);
+    /**
+     * Get the image sampler descriptor index from the image view
+     */
+    u32 samplerDescriptor();
+
+    /**
+     * Get the storage image descriptor index from the image view
+     */
+    u32 storageDescriptor();
+
+    /**
+     * Write to a gpu image
+     *
+     * Note, only fills the base mip level
+     */
+    void write(const void* src);
+
+    /**
+     * Write to a gpu image cubemap
+     *
+     * Note, the view must have at least 6 array layers to fill
+     *
+     * Only the base mip level is filled
+     *
+     * src is assumed to be layed out as:
+     *  #
+     * ####
+     *  #
+     */
+    void writeCubemap(const void* src);
+
+    /**
+     * Read from a gpu image
+     *
+     * Note, only the base mip level is read
+     */
+    void read(void* dst);
+
+    /**
+     * Generates mipmaps from the base level
+     *
+     * Note, the view should only have 1 array layer
+     */
+    void genMipmaps();
+
+    /**
+     * Move construct
+     */
+    GpuView(GpuView&& other) noexcept
+        : data{std::exchange(other.data, nullptr)}
+    {}
+
+    /**
+     * Move assign
+     */
+    GpuView& operator=(GpuView&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~GpuView();
+            new (this) GpuView{std::move(other)};
+        }
+        return *this;
+    }
+
+    GpuView(const GpuView&) = delete;
+    GpuView& operator=(const GpuView&) = delete;
+};
 
 /**
  * Calculates the maximum number of mipmap levels that an image can have
@@ -1916,15 +2046,6 @@ void gpuImageGenMipmaps(GpuView* dst);
  */
 u32 getMaxMipmaps(u32 width, u32 height, u32 depth);
 
-// ----------------------------------------------------------------------------
-// Pipelines
-// ----------------------------------------------------------------------------
-
-/**
- * A gpu pipeline
- */
-struct GpuPipeline;
-
 /**
  * A push constant range in a pipeline
  */
@@ -1932,11 +2053,11 @@ struct GpuPushRange {
     /**
      * The offset in bytes
      */
-    u32 offset;
+    u32 offset = 0;
     /**
      * The size of the push in bytes
      */
-    u32 size;
+    u32 size = 0;
 };
 
 /**
@@ -1974,9 +2095,9 @@ enum GpuCull : u32 {
 using GpuCullFlags = u32;
 
 /**
- * Config for createGraphicsPipeline
+ * Config for GpuPipeline graphics
  */
-struct CreateGpuGraphicsPipeline {
+struct GpuGraphicsPipelineCreateInfo {
     /**
      * The vertex shader code
      */
@@ -2048,27 +2169,87 @@ struct CreateGpuGraphicsPipeline {
 };
 
 /**
- * Create a graphics pipeline
- *
- * Parameters
- * - config The pipeline configuration
+ * Config for GpuPipeline compute
  */
-GpuPipeline* gpuPipelineCreateGraphics(const CreateGpuGraphicsPipeline* config);
+struct GpuComputePipelineCreateInfo {
+    /**
+     * The spirv compute shader code, must not be nullptr
+     */
+    const u8* shaderCode = nullptr;
+    /**
+     * The size in bytes of the shader code, must be greater than 0
+     */
+    u64 shaderCodeSize = 0;
+    /**
+     * The size in bytes of the push constant, if any
+     */
+    u32 pushSize = 0;
+};
 
 /**
- * Create a compute pipeline
- *
- * Parameters
- * - pushSize The size of the push constant
- * - shaderCode The compute shader, must not be nullptr
- * - shaderCodeSize The size in bytes of shaderCode
+ * GpuPipeline implementation data
  */
-GpuPipeline* gpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
+struct GpuPipelineData;
 
 /**
- * Destroy a graphics or compute pipeline
+ * A gpu pipeline
  */
-void gpuPipelineDestroy(GpuPipeline* pipeline);
+struct GpuPipeline {
+    /**
+     * Implementation data
+     */
+    GpuPipelineData* data = nullptr;
+
+    /**
+     * Construct empty
+     */
+    GpuPipeline() noexcept = default;
+
+    /**
+     * Construct from data
+     */
+    GpuPipeline(GpuPipelineData* dataVal)
+        : data{dataVal}
+    {}
+
+    /**
+     * Create a graphics pipeline
+     */
+    GpuPipeline(const GpuGraphicsPipelineCreateInfo& config);
+
+    /**
+     * Create a compute pipeline
+     */
+    GpuPipeline(const GpuComputePipelineCreateInfo& config);
+
+    /**
+     * Destroy a graphics or compute pipeline
+     */
+    ~GpuPipeline() noexcept;
+
+    /**
+     * Move construct
+     */
+    GpuPipeline(GpuPipeline&& other) noexcept
+        : data{std::exchange(other.data, nullptr)}
+    {}
+
+    /**
+     * Move assign
+     */
+    GpuPipeline& operator=(GpuPipeline&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~GpuPipeline();
+            new (this) GpuPipeline{std::move(other)};
+        }
+        return *this;
+    }
+
+    GpuPipeline(const GpuPipeline&) = delete;
+    GpuPipeline& operator=(const GpuPipeline&) = delete;
+};
 
 /**
  * A gpu command buffer
@@ -2094,7 +2275,7 @@ void gpuCmdEnd(GpuCmd* cmd);
 /**
  * Bind a graphics or compute pipeline
  */
-void gpuBindPipeline(GpuCmd* cmd, GpuPipeline* pipeline);
+void gpuBindPipeline(GpuCmd* cmd, const GpuPipeline& pipeline);
 
 /**
  * Push constants to the shader
@@ -2106,7 +2287,7 @@ void gpuBindPipeline(GpuCmd* cmd, GpuPipeline* pipeline);
  * - size The size of the data
  * - push The data to push
  */
-void gpuPushConstants(GpuCmd* cmd, GpuPipeline* pipeline, void* push, u32 size);
+void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, void* push, u32 size);
 
 /**
  * Issue a draw call
@@ -2195,7 +2376,7 @@ struct GpuComputePass {
     /**
      * The uniforms buffer dependencies
      */
-    GpuBuffer* uniformBuffers = nullptr;
+    GpuBuffer** uniformBuffers = nullptr;
     /**
      * The number of uniform buffers
      */
@@ -2203,7 +2384,7 @@ struct GpuComputePass {
     /**
      * The storage buffer dependencies
      */
-    GpuBuffer* storageBuffers = nullptr;
+    GpuBuffer** storageBuffers = nullptr;
     /**
      * The number of storage buffers
      */
@@ -2211,7 +2392,7 @@ struct GpuComputePass {
     /**
      * The sampled image dependencies
      */
-    GpuView* sampledImages = nullptr;
+    GpuView** sampledImages = nullptr;
     /**
      * The number of sampled images
      */
@@ -2219,7 +2400,7 @@ struct GpuComputePass {
     /**
      * The storage image dependencies
      */
-    GpuView* storageImages = nullptr;
+    GpuView** storageImages = nullptr;
     /**
      * The number of storage images
      */
@@ -2233,7 +2414,7 @@ struct GpuComputePass {
  * - cmd The command buffer
  * - pass The compute pass description
  */
-void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass);
+void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass);
 
 /**
  * The operation to load a render attachment
@@ -2327,7 +2508,7 @@ struct GpuRenderPass {
     /**
      * The uniforms buffer dependencies
      */
-    GpuBuffer* uniformBuffers = nullptr;
+    GpuBuffer** uniformBuffers = nullptr;
     /**
      * The number of uniform buffers
      */
@@ -2335,7 +2516,7 @@ struct GpuRenderPass {
     /**
      * The storage buffer dependencies
      */
-    GpuBuffer* storageBuffers = nullptr;
+    GpuBuffer** storageBuffers = nullptr;
     /**
      * The number of storage buffers
      */
@@ -2343,7 +2524,7 @@ struct GpuRenderPass {
     /**
      * The sampled image dependencies
      */
-    GpuView* sampledImages = nullptr;
+    GpuView** sampledImages = nullptr;
     /**
      * The number of sampled images
      */
@@ -2351,7 +2532,7 @@ struct GpuRenderPass {
     /**
      * The storage image dependencies
      */
-    GpuView* storageImages = nullptr;
+    GpuView** storageImages = nullptr;
     /**
      * The number of storage images
      */
@@ -2385,7 +2566,7 @@ struct GpuRenderPass {
  * - cmd The command buffer
  * - pass The render pass description
  */
-void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass* pass);
+void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass);
 
 /**
  * Ends the render pass
@@ -6983,91 +7164,7 @@ void libraryUnload(Library* lib);
 void* libraryFindFunction(Library* lib, StringView symbol);
 
 // ============================================================================
-// Windowing
-// ============================================================================
-
-/**
- * The present mode for the swapchain
- */
-enum GpuPresentMode : u32 {
-    GpuPresentMode_immediate = 0,
-    GpuPresentMode_mailbox = 1,
-    GpuPresentMode_fifo = 2,
-    GpuPresentMode_fifoRelaxed = 3,
-};
-
-/**
- * Configuration for a window
- */
-struct WindowConfig {
-    /**
-     * Whether the window can be resized
-     */
-    bool fixedSize = false;
-    /**
-     * Whether the window should be windowed or fullscreen
-     */
-    bool fullscreen = false;
-    /**
-     * How the swapchain images will be presented
-     *
-     * Note, will fall back to FIFO if preferred is unavailable
-     */
-    GpuPresentMode preferredPresentMode = GpuPresentMode_fifo;
-    /**
-     * How the swapchain images will be used
-     */
-    GpuImageUsageFlags imageUsage = GpuImageUsage_colorAttachment;
-};
-
-/**
- * A window
- */
-struct Window;
-
-/**
- * Create a new window
- *
- * Note, width and height are ignored if fullscreen is enabled
- *
- * Returns
- * - The created window, or nullptr on failure
- */
-Window* windowCreate(StringView title, u32 width, u32 height, const WindowConfig* config);
-
-/**
- * Destroy a window
- */
-void windowDestroy(Window* window);
-
-/**
- * Acquire an image from each swapchain and begin a command buffer
- *
- * Returns
- * - The command buffer to record this frame
- */
-GpuCmd* gpuFrameBegin(Window** windows, u32 windowCount);
-
-/**
- * Finishes recording the command buffer and presents the window images
- *
- * Parameters
- * - cmd The command buffer given from beginFrame
- */
-void gpuFrameEnd(GpuCmd* cmd);
-
-/**
- * Returns the window's current image, or nullptr if unavailable this frame
- */
-GpuView* windowImageView(Window* window);
-
-/**
- * Returns the window's width in pixels
- */
-Format windowImageFormat(Window* window);
-
-// ============================================================================
-// Input
+// Windowing & Input
 // ============================================================================
 
 /**
@@ -7076,14 +7173,9 @@ Format windowImageFormat(Window* window);
 void processEvents();
 
 /**
- * The types of events
+ * Returns whether the application was quit
  */
-enum WindowEventType : u32 {
-    WindowEventType_none = 0,
-    WindowEventType_buttonPress,
-    WindowEventType_buttonRelease,
-    WindowEventType_count,
-};
+bool wasQuit();
 
 /**
  * The button inputs
@@ -7206,6 +7298,16 @@ enum Button : u32 {
 };
 
 /**
+ * The types of events
+ */
+enum WindowEventType : u32 {
+    WindowEventType_none = 0,
+    WindowEventType_buttonPress,
+    WindowEventType_buttonRelease,
+    WindowEventType_count,
+};
+
+/**
  * A button input event
  */
 struct WindowButtonEvent {
@@ -7234,59 +7336,176 @@ union WindowEvent {
 };
 
 /**
- * Returns whether the application was quit
+ * The present mode for the swapchain
  */
-bool wasQuit();
+enum GpuPresentMode : u32 {
+    GpuPresentMode_immediate = 0,
+    GpuPresentMode_mailbox = 1,
+    GpuPresentMode_fifo = 2,
+    GpuPresentMode_fifoRelaxed = 3,
+};
 
 /**
- * Returns whether the window was closed
+ * Configuration for a window
  */
-bool windowWasClosed(Window* window);
+struct WindowConfig {
+    /**
+     * Whether the window can be resized
+     */
+    bool fixedSize = false;
+    /**
+     * Whether the window should be windowed or fullscreen
+     */
+    bool fullscreen = false;
+    /**
+     * How the swapchain images will be presented
+     *
+     * Note, will fall back to FIFO if preferred is unavailable
+     */
+    GpuPresentMode preferredPresentMode = GpuPresentMode_fifo;
+    /**
+     * How the swapchain images will be used
+     */
+    GpuImageUsageFlags imageUsage = GpuImageUsage_colorAttachment;
+};
 
 /**
- * Returns whether the mouse is focused on the window
+ * Window implementation data
  */
-bool windowIsFocused(Window* window);
+struct WindowData;
 
 /**
- * Get the window's width in pixels
+ * A window
  */
-u32 windowWidth(Window* window);
+struct Window {
+    /**
+     * Implementation data
+     */
+    WindowData* data;
+
+    /**
+     * Construct empty
+     */
+    Window() noexcept = default;
+
+    /**
+     * Construct from data
+     */
+    Window(WindowData* dataVal)
+        : data{dataVal}
+    {}
+
+    /**
+     * Open a new window
+     *
+     * Note, width and height are ignored if fullscreen is enabled
+     */
+    static Maybe<Window> create(StringView title, u32 width, u32 height, const WindowConfig& config);
+
+    /**
+     * Close the window
+     */
+    ~Window() noexcept;
+
+    /**
+     * Returns the window's current image, or nullptr if unavailable this frame
+     */
+    GpuView* imageView();
+
+    /**
+     * Returns the window's pixel format
+     */
+    Format imageFormat();
+
+    /**
+     * Returns whether the window was closed
+     */
+    bool wasClosed();
+
+    /**
+     * Returns whether the mouse is focused on the window
+     */
+    bool isFocused();
+
+    /**
+     * Get the window's width in pixels
+     */
+    u32 width();
+
+    /**
+     * Get the window's width in pixels
+     */
+    u32 height();
+
+    /**
+     * Returns the current x position of the mouse relative to the window
+     */
+    f32 mouseX();
+
+    /**
+     * Returns the current y position of the mouse relative to the window
+     */
+    f32 mouseY();
+
+    /**
+     * Returns the change in mouse x position relative to the window height
+     */
+    f32 mouseDX();
+
+    /**
+     * Returns the change in mouse y position relative to the window height
+     */
+    f32 mouseDY();
+
+    /**
+     * Returns whether the key is currently down
+     */
+    bool isButtonDown(Button key);
+
+    /**
+     * Get the key events since last event processing
+     */
+    Span<WindowEvent> events();
+
+    /**
+     * Move construct
+     */
+    Window(Window&& other) noexcept
+        : data{std::exchange(other.data, nullptr)}
+    {}
+
+    /**
+     * Move assign
+     */
+    Window& operator=(Window&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Window();
+            new (this) Window{std::move(other)};
+        }
+        return *this;
+    }
+
+    Window(const Window&) = delete;
+    Window& operator=(const Window&) = delete;
+};
 
 /**
- * Get the window's width in pixels
+ * Acquire an image from each swapchain and begin a command buffer
+ *
+ * Returns
+ * - The command buffer to record this frame
  */
-u32 windowHeight(Window* window);
+GpuCmd* gpuFrameBegin(Span<WindowData*> windows);
 
 /**
- * Returns the current x position of the mouse relative to the window
+ * Finishes recording the command buffer and presents the window images
+ *
+ * Parameters
+ * - cmd The command buffer given from beginFrame
  */
-f32 mouseX(Window* window);
-
-/**
- * Returns the current y position of the mouse relative to the window
- */
-f32 mouseY(Window* window);
-
-/**
- * Returns the change in x position of the mouse relative to the window height
- */
-f32 mouseDeltaX(Window* window);
-
-/**
- * Returns the change in y position of the mouse relative to the window height
- */
-f32 mouseDeltaY(Window* window);
-
-/**
- * Returns whether the key is currently down
- */
-bool isButtonDown(Window* window, Button key);
-
-/**
- * Get the key events since last event processing
- */
-WindowEvent* windowEvents(Window* window, u32* count);
+void gpuFrameEnd(GpuCmd* cmd);
 
 // ============================================================================
 // Audio
@@ -7506,11 +7725,11 @@ struct Texture {
     /**
      * The image
      */
-    GpuImage* image = nullptr;
+    GpuImage image{};
     /**
      * The image view
      */
-    GpuView* view = nullptr;
+    GpuView view{};
 };
 
 /**
@@ -7518,12 +7737,6 @@ struct Texture {
  */
 template<>
 void assetLoadImpl(AssetData<Texture>* data);
-
-/**
- * GpuTexture asset unload implementation
- */
-template<>
-void assetUnloadImpl(AssetData<Texture>* data);
 
 /**
  * A vertex in a mesh
@@ -7611,11 +7824,11 @@ struct Mesh {
     /**
      * The vertex buffer
      */
-    GpuBuffer* vertexBuffer = nullptr;
+    GpuBuffer vertexBuffer = nullptr;
     /**
      * The index buffer
      **/
-    GpuBuffer* indexBuffer = nullptr;
+    GpuBuffer indexBuffer = nullptr;
     /**
      * The number of vertices
      */
@@ -7635,12 +7848,6 @@ struct Mesh {
  */
 template<>
 void assetLoadImpl(AssetData<Mesh>* data);
-
-/**
- * GpuMesh asset unload implementation
- */
-template<>
-void assetUnloadImpl(AssetData<Mesh>* data);
 
 /**
  * The types of camera projections
@@ -7689,7 +7896,7 @@ struct Camera {
     /**
      * The gpu view projection data
      */
-    GpuBuffer* vpBuffer = nullptr;
+    GpuBuffer vpBuffer = nullptr;
     /**
      * The current rotation
      */
@@ -7727,11 +7934,6 @@ void serialize(Serializer* s, Camera* camera);
  * Create a camera
  */
 Camera cameraCreate();
-
-/**
- * Destroy a camera
- */
-void cameraDestroy(Camera* camera);
 
 /**
  * The the camera to a perspective projection
@@ -7872,7 +8074,7 @@ struct Layer2D {
     /**
      * The gpu side instance buffer
      */
-    GpuBuffer* instanceBuffer = nullptr;
+    GpuBuffer instanceBuffer = nullptr;
     /**
      * The capacity of the instance buffer
      */
@@ -8033,7 +8235,7 @@ void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst)
  * - stencilFormat The format the stencil will be in, if used
  */
 void initImGui(
-    Window* window,
+    const Window& window,
     Format colorFormat,
     Format depthFormat = Format_undefined,
     Format stencilFormat = Format_undefined);
@@ -8046,7 +8248,7 @@ void deinitImGui();
 /**
  * Create an ImGui texture
  */
-void* createImGuiTexture(GpuView* view, GpuLayout layout);
+void* createImGuiTexture(const GpuView& view, GpuLayout layout);
 
 /**
  * Create an ImGui texture
@@ -10347,7 +10549,6 @@ template<typename T>
 void assetUnloadImpl(AssetData<T>* data)
 {
     static_cast<void>(data);
-    static_assert(false, "Asset type cannot be unloaded without template specialization");
 }
 
 template<typename T>
