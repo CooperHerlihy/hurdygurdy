@@ -3209,7 +3209,7 @@ static void resizeWindowSwapchain(WindowData* window)
 
         for (u32 i = 0; i < window->images.count; ++i)
         {
-            window->images[i] = {};
+            window->images[i].data = vk.images.alloc();
             window->images[i].data->image = swapImages[i];
             window->images[i].data->dimensions = 2;
             window->images[i].data->format = window->format;
@@ -3227,7 +3227,7 @@ static void resizeWindowSwapchain(WindowData* window)
             viewInfo.format = formatToVk(window->format);
             viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-            window->views[i] = {};
+            window->views[i].data = vk.views.alloc();
 
             [[maybe_unused]]
             VkResult viewResult = vkCreateImageView(vk.device, &viewInfo, nullptr, &window->views[i].data->view);
@@ -3495,32 +3495,28 @@ windowFailed:
 
 Window::~Window() noexcept
 {
-    data->events = {};
-
-    for (u32 i = 0; i < data->images.count; ++i)
+    if (data != nullptr)
     {
-        vkDestroySemaphore(vk.device, data->readyToPresent[i], nullptr);
-        vkDestroyImageView(vk.device, data->views[i].data->view, nullptr);
+        for (GpuImage& image : data->images)
+        {
+            image.data->image = nullptr;
+        }
+        for (VkSemaphore semaphore : data->readyToPresent)
+        {
+            vkDestroySemaphore(vk.device, semaphore, nullptr);
+        }
+        for (VkSemaphore semaphore : data->imageAvailable)
+        {
+            vkDestroySemaphore(vk.device, semaphore, nullptr);
+        }
+        vkDestroySwapchainKHR(vk.device, data->swapchain, nullptr);
+        vkDestroySurfaceKHR(vk.instance, data->surface, nullptr);
+
+        windowState.ids.remove(SDL_GetWindowID(data->sdlWindow));
+        SDL_DestroyWindow(data->sdlWindow);
+
+        windowState.pool.free(data);
     }
-
-    for (u32 i = 0; i < vk.frameCount; ++i)
-    {
-        vkDestroySemaphore(vk.device, data->imageAvailable[i], nullptr);
-    }
-
-    vkDestroySwapchainKHR(vk.device, data->swapchain, nullptr);
-
-    data->readyToPresent = {};
-    data->imageAvailable = {};
-    data->views = {};
-    data->images = {};
-
-    windowState.ids.remove(SDL_GetWindowID(data->sdlWindow));
-
-    vkDestroySurfaceKHR(vk.instance, data->surface, nullptr);
-    SDL_DestroyWindow(data->sdlWindow);
-
-    windowState.pool.free(data);
 }
 
 GpuView* Window::imageView()
@@ -3583,7 +3579,7 @@ Span<WindowEvent> Window::events()
     return data->events;
 }
 
-GpuCmd* gpuFrameBegin(Span<WindowData*> windows)
+GpuCmd* gpuFrameBegin(Span<Window*> windows)
 {
     Frame* frame = &vk.frames[vk.currentFrame];
 
@@ -3593,25 +3589,25 @@ GpuCmd* gpuFrameBegin(Span<WindowData*> windows)
     frame->windows.count = 0;
     for (u32 i = 0; i < windows.count; ++i)
     {
-        if (windows[i]->swapchain == nullptr)
+        if (windows[i]->data->swapchain == nullptr)
             continue;
 
         VkResult result = vkAcquireNextImageKHR(
             vk.device,
-            windows[i]->swapchain,
+            windows[i]->data->swapchain,
             UINT64_MAX,
-            windows[i]->imageAvailable[vk.currentFrame],
+            windows[i]->data->imageAvailable[vk.currentFrame],
             nullptr,
-            &windows[i]->imageIdx);
+            &windows[i]->data->imageIdx);
 
         if (result == VK_SUCCESS)
         {
-            frame->windows.push(windows[i]);
+            frame->windows.push(windows[i]->data);
         }
         else if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         {
-            resizeWindowSwapchain(windows[i]);
-            windows[i]->imageIdx = (u32)-1;
+            resizeWindowSwapchain(windows[i]->data);
+            windows[i]->data->imageIdx = (u32)-1;
         }
         else
         {

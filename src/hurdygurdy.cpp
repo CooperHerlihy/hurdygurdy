@@ -34,10 +34,13 @@ void logError()
     std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", (int)errorLength, errorData);
 }
 
-static bool initialized = false;
+static u32 initialized = 0;
 
 Maybe<HurdyGurdy> init()
 {
+    if (initialized > 0)
+        return some<HurdyGurdy>();
+
     internal::initConcurrency();
 
     if (!internal::initPlatform())
@@ -49,7 +52,6 @@ Maybe<HurdyGurdy> init()
     if (!internal::initAudio())
         goto audioFailed;
 
-    initialized = true;
     return some<HurdyGurdy>();
 
 audioFailed:
@@ -59,26 +61,48 @@ gpuFailed:
 platformFailed:
     internal::deinitConcurrency();
 
-    initialized = false;
     return none<HurdyGurdy>();
+}
+
+HurdyGurdy::HurdyGurdy() noexcept
+{
+    ++initialized;
+}
+
+HurdyGurdy::HurdyGurdy(const HurdyGurdy&)
+{
+    ++initialized;
+}
+
+HurdyGurdy& HurdyGurdy::operator=(const HurdyGurdy&)
+{
+    ++initialized;
+    return *this;
+}
+
+HurdyGurdy::HurdyGurdy(HurdyGurdy&&) noexcept
+{
+    ++initialized;
+}
+
+HurdyGurdy& HurdyGurdy::operator=(HurdyGurdy&&) noexcept
+{
+    ++initialized;
+    return *this;
 }
 
 HurdyGurdy::~HurdyGurdy()
 {
-    HG_ASSERT(initialized);
-
-    if (alive)
+    if (--initialized == 0)
     {
         internal::deinitAudio();
         internal::deinitGpu();
         internal::deinitPlatform();
         internal::deinitConcurrency();
-
-        initialized = false;
     }
 }
 
-void BinaryView::read(u64 idx, void* dst, u64 len)
+void BinaryView::read(u64 idx, void* dst, u64 len) const
 {
     HG_ASSERT(idx + len <= size);
     memcpy(dst, static_cast<const u8*>(data) + idx, len);
@@ -3649,13 +3673,6 @@ void assetLoadImpl(AssetData<Sound>* data)
 {
     static_cast<void>(data);
     HG_PANIC("Load audio file impl : TODO\n");
-}
-
-template<>
-void assetUnloadImpl(AssetData<Sound>* data)
-{
-    static_cast<void>(data);
-    HG_PANIC("Unload audio file impl : TODO\n");
 }
 
 AudioPlayer audioPlayerCreate()

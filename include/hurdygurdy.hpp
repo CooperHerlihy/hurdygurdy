@@ -308,15 +308,6 @@ struct Defer {
  * A scope guard for library initialization
  */
 struct HurdyGurdy {
-    /**
-     * Whether this scope guard needs to deinitialize the library
-     */
-    bool alive = true;
-
-    /**
-     * Default construct
-     */
-    HurdyGurdy() noexcept = default;
 
     /**
      * Deinitialize the library
@@ -324,28 +315,29 @@ struct HurdyGurdy {
     ~HurdyGurdy() noexcept;
 
     /**
-     * Move the library scope guard
+     * Construct the library scope guard
      */
-    HurdyGurdy(HurdyGurdy&& other) noexcept
-        : alive{other.alive}
-    {
-        if (this != &other)
-            other.alive = false;
-    }
+    HurdyGurdy() noexcept;
+
+    /**
+     * Copy the library scope guard
+     */
+    HurdyGurdy(const HurdyGurdy&);
+
+    /**
+     * Copy the library scope guard
+     */
+    HurdyGurdy& operator=(const HurdyGurdy&);
 
     /**
      * Move the library scope guard
      */
-    HurdyGurdy& operator=(HurdyGurdy&& other) noexcept
-    {
-        HG_ASSERT(!alive);
-        if (this != &other)
-            alive = std::exchange(other.alive, false);
-        return *this;
-    }
+    HurdyGurdy(HurdyGurdy&& other) noexcept;
 
-    HurdyGurdy(const HurdyGurdy&) = delete;
-    HurdyGurdy& operator=(const HurdyGurdy&) = delete;
+    /**
+     * Move the library scope guard
+     */
+    HurdyGurdy& operator=(HurdyGurdy&& other) noexcept;
 };
 
 /**
@@ -460,7 +452,7 @@ struct BinaryView {
      * - dst A pointer to store the read data
      * - size The size in bytes to read
      */
-    void read(u64 idx, void* dst, u64 len);
+    void read(u64 idx, void* dst, u64 len) const;
 
     /**
      * Read data of arbitrary type from the file
@@ -469,7 +461,7 @@ struct BinaryView {
      * - idx The index into the file in bytes to read from
      */
     template<typename T>
-    T read(u64 idx)
+    T read(u64 idx) const
     {
         T ret;
         read(idx, &ret, sizeof(T));
@@ -507,7 +499,7 @@ struct Span {
      * Construct from begin and end
      */
     constexpr Span(T* begin, T* end)
-        : vals{begin}, count{static_cast<u64>(begin - end)}
+        : vals{begin}, count{static_cast<u64>(end - begin)}
     {}
 
     /**
@@ -553,7 +545,7 @@ struct Span<void> {
     /**
      * The values viewed
      */
-    void* values = nullptr;
+    void* vals = nullptr;
     /**
      * The number of values
      */
@@ -567,24 +559,24 @@ struct Span<void> {
     /**
      * Construct from pointer and count
      */
-    constexpr Span(void* valuesVal, u64 countVal)
-        : values{valuesVal}, count{countVal}
+    constexpr Span(void* valsVal, u64 countVal)
+        : vals{valsVal}, count{countVal}
     {}
 
     /**
      * Construct from begin and end
      */
     constexpr Span(void* begin, void* end)
-        : values{begin}, count{static_cast<uptr>(static_cast<u8*>(begin) - static_cast<u8*>(end))}
+        : vals{begin}, count{static_cast<uptr>(static_cast<u8*>(end) - static_cast<u8*>(begin))}
     {}
 
     /**
      * Access by index
      */
-    constexpr void* operator[](u32 idx) const
+    constexpr void* operator[](u64 idx) const
     {
         HG_ASSERT(idx < count);
-        return static_cast<u8*>(values) + idx;
+        return static_cast<u8*>(vals) + idx;
     }
 };
 
@@ -7467,12 +7459,6 @@ template<>
 void assetLoadImpl(AssetData<Sound>* data);
 
 /**
- * AudioData asset unload implementation
- */
-template<>
-void assetUnloadImpl(AssetData<Sound>* data);
-
-/**
  * A music track in the audio player
  */
 struct AudioPlayerMusic {
@@ -9224,7 +9210,7 @@ SharedPtr<T> makeShared(Args&&... args)
 
 template<typename T>
 Array<T>::Array(u32 countVal, u32 capacityVal)
-    : vals{heapAlloc<T>(capacity)}
+    : vals{heapAlloc<T>(capacityVal)}
     , count{countVal}
     , capacity{capacityVal}
 {
@@ -9804,7 +9790,7 @@ void Set<V>::reset()
 template<typename V>
 void Set<V>::add(V val)
 {
-    if (capacity / 2 > count)
+    if (capacity / 2 >= count)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u32 idx = static_cast<u32>(hash(val) % capacity);
@@ -9964,7 +9950,7 @@ void SetTemp<V>::reset()
 template<typename V>
 void SetTemp<V>::add(V val)
 {
-    if (capacity / 2 > count)
+    if (capacity / 2 >= count)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u32 idx = static_cast<u32>(hash(val) % capacity);
@@ -10098,7 +10084,7 @@ void Map<K, V>::reset()
 template<typename K, typename V>
 V* Map<K, V>::add(K key, V val)
 {
-    if (capacity / 2 > count)
+    if (capacity / 2 >= count)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u32 idx = static_cast<u32>(hash(key) % capacity);
@@ -10274,7 +10260,7 @@ void MapTemp<K, V>::reset()
 template<typename K, typename V>
 V* MapTemp<K, V>::add(K key, V val)
 {
-    if (capacity / 2 > count)
+    if (capacity / 2 >= count)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u32 idx = static_cast<u32>(hash(key) % capacity);
@@ -10392,7 +10378,11 @@ T* Pool<T>::alloc(Args&&... args)
         prealloc.push(block);
     }
 
-    return new (inactive.pop()) T{std::forward<Args>(args)...};
+    T* object = new (inactive.pop()) T{std::forward<Args>(args)...};
+#ifdef HG_DEBUG_MODE
+    active.push(object);
+#endif
+    return object;
 }
 
 template<typename T>
