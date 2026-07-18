@@ -312,28 +312,22 @@ void internal::deinitConcurrency()
 
 void SpinLock::acquire()
 {
-    HG_ASSERT(!acquired);
-
     bool acquiredLocal = false;
     while (!acquired.compare_exchange_weak(acquiredLocal, true))
     {
         _mm_pause();
-        acquired = false;
+        acquiredLocal = false;
     }
 }
 
 bool SpinLock::tryAcquire()
 {
-    HG_ASSERT(!acquired);
-
     bool acquiredLocal = false;
     return acquired.compare_exchange_weak(acquiredLocal, true);
 }
 
 void SpinLock::release()
 {
-    HG_ASSERT(acquired);
-
     acquired.store(false);
 }
 
@@ -344,7 +338,8 @@ void Fence::add(u32 count)
 
 void Fence::signal(u32 count)
 {
-    counter.fetch_sub(count);
+    u32 prev = counter.fetch_sub(count);
+    HG_ASSERT(prev >= count);
 }
 
 bool Fence::isComplete()
@@ -3075,7 +3070,8 @@ char* cString(Arena* arena, StringView str)
         HG_ASSERT(str.chars != nullptr);
 
     char* cStr = arena->alloc<char>(str.length + 1);
-    memcpy(cStr, str.chars, str.length);
+    if (str.length > 0)
+        memcpy(cStr, str.chars, str.length);
     cStr[str.length] = 0;
     return cStr;
 }
@@ -3092,7 +3088,8 @@ void StringBuilder::insert(u64 idx, StringView src)
     if (!arena->extend(chars, length, newLength))
     {
         char* newChars = arena->alloc<char>(newLength);
-        memcpy(newChars, chars, length);
+        if (length > 0)
+            memcpy(newChars, chars, length);
         chars = newChars;
     }
 
@@ -3108,7 +3105,7 @@ String String::create(StringView data)
     String str;
     str.chars = heapAlloc<char>(data.length);
     str.length = data.length;
-    memcpy(&str.chars, &data.chars, data.length);
+    memcpy(str.chars, data.chars, data.length);
     return str;
 }
 
@@ -3154,7 +3151,13 @@ bool isInteger(StringView str)
     if (!isNumeral(str[head]) && str[head] != '+' && str[head] != '-')
         return false;
 
-    ++head;
+    if (str[head] == '+' || str[head] == '-')
+    {
+        ++head;
+        if (head >= str.length)
+            return false;
+    }
+
     while (head < str.length)
     {
         if (!isNumeral(str[head]))
@@ -3171,11 +3174,15 @@ bool isFloat(StringView str)
 
     bool hasDecimal = false;
     bool hasExponent = false;
+    bool hasDigit = false;
 
     u64 head = 0;
 
     if (!isNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
         return false;
+
+    if (isNumeral(str[head]))
+        hasDigit = true;
 
     if (str[head] == '.')
         hasDecimal = true;
@@ -3185,11 +3192,12 @@ bool isFloat(StringView str)
     {
         if (isNumeral(str[head]))
         {
+            hasDigit = true;
             ++head;
             continue;
         }
 
-        if (str[head] == '.' && !hasDecimal)
+        if (str[head] == '.' && !hasDecimal && !hasExponent)
         {
             hasDecimal = true;
             ++head;
@@ -3214,7 +3222,7 @@ bool isFloat(StringView str)
         return false;
     }
 
-    return hasDecimal || hasExponent;
+    return hasDigit && (hasDecimal || hasExponent);
 }
 
 i64 stringToInteger(StringView str)
@@ -3424,7 +3432,8 @@ Binary Binary::create(BinaryView data)
     Binary bin;
     bin.size = data.size;
     bin.data = heapAlloc(bin.size, 1);
-    memcpy(bin.data, data.data, bin.size);
+    if (bin.size > 0)
+        memcpy(bin.data, data.data, bin.size);
     return bin;
 }
 

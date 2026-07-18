@@ -388,7 +388,8 @@ struct StringView {
     /**
      * Implicit constexpr conversion from c string
      *
-     * Potentially dangerous, c string should be at most 4096 chars
+     * Calls strlen internally. The resulting StringView is only valid
+     * for the lifetime of the pointed-to string.
      */
     constexpr StringView(const char* cStr)
         : chars{cStr}, length{0}
@@ -396,11 +397,7 @@ struct StringView {
         if (cStr != nullptr)
         {
             while (cStr[length] != '\0')
-            {
                 ++length;
-                if (length > 4096)
-                    HG_PANIC("C string longer than 4096 chars cannot be implicitly converted");
-            }
         }
     }
 
@@ -1050,6 +1047,68 @@ struct SpinLock {
 };
 
 /**
+ * A scoped lock guard for SpinLock
+ *
+ * Acquires the lock on construction, releases on destruction.
+ */
+struct SpinLockScope {
+    /**
+     * The spinlock to manage
+     */
+    SpinLock* lock = nullptr;
+
+    /**
+     * Construct empty
+     */
+    SpinLockScope() noexcept = default;
+
+    /**
+     * Acquire the lock
+     *
+     * Parameters
+     * - lockVal The spinlock to acquire
+     */
+    SpinLockScope(SpinLock* lockVal)
+        : lock{lockVal}
+    {
+        if (lock != nullptr)
+            lock->acquire();
+    }
+
+    /**
+     * Release the lock
+     */
+    ~SpinLockScope() noexcept
+    {
+        if (lock != nullptr)
+            lock->release();
+    }
+
+    /**
+     * Move construct
+     */
+    SpinLockScope(SpinLockScope&& other) noexcept
+        : lock{std::exchange(other.lock, nullptr)}
+    {}
+
+    /**
+     * Move assign
+     */
+    SpinLockScope& operator=(SpinLockScope&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~SpinLockScope();
+            new (this) SpinLockScope{std::move(other)};
+        }
+        return *this;
+    }
+
+    SpinLockScope(const SpinLockScope&) = delete;
+    SpinLockScope& operator=(const SpinLockScope&) = delete;
+};
+
+/**
  * A spinlock fence for basic thread synchronization
  */
 struct Fence {
@@ -1062,7 +1121,6 @@ struct Fence {
      * Add more events for the fence to wait on
      *
      * Parameters
-     * - fence The fence to attach to
      * - count The number of added events
      */
     void add(u32 count = 1);
@@ -1071,7 +1129,6 @@ struct Fence {
      * Signal that events have completed
      *
      * Parameters
-     * - fence The fence to signal
      * - count The number of signaled events
      */
     void signal(u32 count = 1);
@@ -1085,7 +1142,6 @@ struct Fence {
      * Spin waits for all work submissions to be completed
      *
      * Parameters
-     * - fence The fence to wait on
      * - timeout The time in seconds to wait before timing out
      *
      * Returns
@@ -4750,7 +4806,7 @@ Json parseJson(Arena* arena, StringView text);
  */
 inline bool operator==(StringView lhs, StringView rhs)
 {
-    return lhs.length == rhs.length && memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
+    return lhs.length == rhs.length && (lhs.length == 0 || memcmp(lhs.chars, rhs.chars, lhs.length) == 0);
 }
 
 /**
@@ -4829,7 +4885,7 @@ struct StringBuilder {
      */
     void append(StringView src)
     {
-        insert(length - 1, src);
+        insert(length, src);
     }
 
     /**
@@ -4853,7 +4909,7 @@ struct StringBuilder {
      */
     void append(char c)
     {
-        insert(length - 1, c);
+        insert(length, c);
     }
 
     /**
@@ -9741,7 +9797,7 @@ Set<V>::Set(u32 initCapacity)
     , capacity{initCapacity}
     , count{0}
 {
-    reset();
+    memset(hasVal, 0, capacity);
 }
 
 template<typename V>
@@ -10032,7 +10088,7 @@ Map<K, V>::Map(u32 initCapacity)
     , capacity{initCapacity}
     , count{0}
 {
-    reset();
+    memset(hasVal, 0, capacity);
 }
 
 template<typename K, typename V>
@@ -10211,7 +10267,7 @@ MapTemp<K, V>::MapTemp(Arena* arenaVal, u32 initCapacity)
     , capacity{initCapacity}
     , count{0}
 {
-    reset();
+    memset(hasVal, 0, capacity);
 }
 
 template<typename K, typename V>

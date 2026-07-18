@@ -11,6 +11,82 @@
 
 using namespace hg;
 
+/**
+ * Tracks lifetime events for testing RAII correctness
+ *
+ * Each instance gets a unique ID.  Stats tracks aggregate counts
+ * (alive, default-constructed, copy-constructed, moved, destroyed).
+ * Call stats.reset() before a test block, then verify at scope exits.
+ *
+ * The Tag parameter enables independent counters per subsystem:
+ *   using MyTypeLifecycle = LifecycleT<struct MyTypeTag>;
+ */
+template<typename Tag = void>
+struct LifecycleT {
+    struct Stats {
+        i64 alive = 0;
+        i64 ctors = 0;
+        i64 copies = 0;
+        i64 moves = 0;
+        i64 dtors = 0;
+
+        void reset() { *this = Stats{}; }
+    };
+
+    static Stats stats;
+    static u64 s_nextId;
+
+    bool valid = false;
+    u64 id;
+
+    LifecycleT()
+        : valid(true)
+        , id(s_nextId++)
+    {
+        stats.alive++;
+        stats.ctors++;
+    }
+
+    LifecycleT(const LifecycleT& o)
+        : valid(o.valid)
+        , id(s_nextId++)
+    {
+        if (valid)
+        {
+            stats.alive++;
+            stats.copies++;
+        }
+    }
+
+    LifecycleT(LifecycleT&& o)
+        : valid(o.valid)
+        , id(o.id)
+    {
+        o.valid = false;
+        stats.moves++;
+    }
+
+    ~LifecycleT()
+    {
+        if (valid)
+        {
+            stats.alive--;
+            stats.dtors++;
+        }
+    }
+
+    LifecycleT& operator=(const LifecycleT&) = delete;
+    LifecycleT& operator=(LifecycleT&&) = delete;
+};
+
+template<typename Tag>
+typename LifecycleT<Tag>::Stats LifecycleT<Tag>::stats{};
+
+template<typename Tag>
+u64 LifecycleT<Tag>::s_nextId = 0;
+
+using Lifecycle = LifecycleT<>;
+
 int main()
 {
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
@@ -18,6 +94,3088 @@ int main()
     HG_LOG("Tests Begun\n");
 
     Clock timer{};
+
+    // ============================================================================
+    // Error Handling
+    // ============================================================================
+    //
+    // The error handling API provides thread-local error state using a
+    // 4096-byte buffer per thread. Errors are set via setError() (either
+    // a plain StringView or a printf-style format string) and retrieved
+    // via getError(). logError() prints the current error to stderr.
+    //
+    // The API is used throughout the engine for recoverable failures
+    // (e.g., init failures, file load failures) and pairs with Maybe<T>
+    // for functions that can fail.
+    //
+    // Functions covered:
+    // - setError(StringView): set a plain error string
+    // - setError(fmt, args...): set a formatted error string
+    // - getError(): retrieve the current error
+    // - logError(): log the error to stderr (smoke test only)
+    // - Maybe<T>: some(), none(), orElse(), expect(), copy/move
+    {
+        // ------------------------------------------------------------------
+        // setError / getError: plain string
+        // ------------------------------------------------------------------
+
+        // Setting an error and reading it back
+        {
+            setError("test error");
+            StringView err = getError();
+            TEST(err == "test error");
+        }
+
+        // Setting a new error replaces the previous one
+        {
+            setError("first error");
+            setError("second error");
+            StringView err = getError();
+            TEST(err == "second error");
+        }
+
+        // Clearing the error by setting an empty string
+        {
+            setError("something");
+            setError("");
+            StringView err = getError();
+            TEST(err.length == 0);
+        }
+
+        // An error exactly at the 4096-byte boundary
+        {
+            ArenaScope arena = getScratch();
+            StringBuilder longStr{arena};
+            for (u32 i = 0; i < 4096; ++i)
+                longStr.append('x');
+            TEST(longStr.length == 4096);
+
+            setError(longStr);
+            StringView err = getError();
+            TEST(err.length == 4096);
+        }
+
+        // An error exceeding 4096 bytes is truncated
+        {
+            ArenaScope arena = getScratch();
+            StringBuilder longStr{arena};
+            for (u32 i = 0; i < 5000; ++i)
+                longStr.append('x');
+            TEST(longStr.length == 5000);
+
+            setError(longStr);
+            StringView err = getError();
+            TEST(err.length == 4096);
+        }
+
+        // ------------------------------------------------------------------
+        // setError / getError: formatted string
+        // ------------------------------------------------------------------
+
+        // Basic formatting with integers
+        {
+            setError("error code %d", 42);
+            StringView err = getError();
+            TEST(err == "error code 42");
+        }
+
+        // Formatting with a string argument
+        {
+            setError("failed to load \"%s\"", "texture.png");
+            StringView err = getError();
+            TEST(err == "failed to load \"texture.png\"");
+        }
+
+        // Formatting with multiple arguments
+        {
+            setError("%s:%d: %s", "file.txt", 128, "unexpected token");
+            StringView err = getError();
+            TEST(err == "file.txt:128: unexpected token");
+        }
+
+        // Formatted error with a long message that gets truncated.
+        // snprintf truncates to 4095 bytes (sizeof(buf) - 1), then
+        // setError copies the result (at most 4096 bytes).
+        // Note: StringBuilder.chars is NOT null-terminated, so use %.*s.
+        {
+            ArenaScope arena = getScratch();
+            StringBuilder longStr{arena};
+            for (u32 i = 0; i < 4090; ++i)
+                longStr.append('x');
+
+            setError("%.*s", (int)longStr.length, longStr.chars);
+            StringView err = getError();
+            TEST(err.length == 4090);
+
+            StringBuilder tooLong{arena};
+            for (u32 i = 0; i < 5000; ++i)
+                tooLong.append('x');
+
+            setError("%.*s", (int)tooLong.length, tooLong.chars);
+            err = getError();
+            TEST(err.length == 4095);
+        }
+
+        // ------------------------------------------------------------------
+        // getError: default / initial state
+        // ------------------------------------------------------------------
+
+        // Fresh error state is empty
+        {
+            // Set and clear first to ensure clean state
+            setError("");
+            StringView err = getError();
+            TEST(err.length == 0);
+            TEST(err.chars != nullptr); // points to the buffer, not null
+        }
+
+        // ------------------------------------------------------------------
+        // logError: smoke test (just ensure it does not crash)
+        // ------------------------------------------------------------------
+
+        // logError with a normal error string
+        {
+            setError("log test message");
+            // No assertion — we just verify it doesn't crash or abort
+            logError();
+        }
+
+        // logError with empty error
+        {
+            setError("");
+            logError();
+        }
+
+        // logError with long error
+        {
+            ArenaScope arena = getScratch();
+            StringBuilder longStr{arena};
+            for (u32 i = 0; i < 512; ++i)
+                longStr.append('x');
+            setError(longStr);
+            logError();
+        }
+    }
+
+    // ============================================================================
+    // StringView operators
+    // ============================================================================
+    //
+    // StringView is a non-owning view into a string (chars + length).
+    // Equality compares length first, then memcmp.
+    //
+    // Functions covered:
+    // - operator==(StringView, StringView)
+    // - operator!=(StringView, StringView)
+
+    // Equal strings
+    {
+        StringView a{"hello"};
+        StringView b{"hello"};
+        TEST(a == b);
+        TEST(!(a != b));
+    }
+
+    // Different strings
+    {
+        StringView a{"hello"};
+        StringView b{"world"};
+        TEST(a != b);
+        TEST(!(a == b));
+    }
+
+    // Empty strings are equal
+    {
+        StringView a{};
+        StringView b{};
+        TEST(a == b);
+    }
+
+    // Empty vs non-empty
+    {
+        StringView a{};
+        StringView b{"x"};
+        TEST(a != b);
+    }
+
+    // Same content, different pointer (should still compare equal)
+    {
+        const char* s1 = "abcdef";
+        const char* s2 = "abcdef";
+        StringView a{s1, 3};
+        StringView b{s2, 3};
+        TEST(a == b);
+    }
+
+    // Different lengths, same prefix
+    {
+        StringView a{"hello", 5};
+        StringView b{"hello world", 5};
+        TEST(a == b);
+    }
+
+    // Different lengths, same prefix (one longer)
+    {
+        StringView a{"hello world", 11};
+        StringView b{"hello", 5};
+        TEST(a != b);
+    }
+
+    // nullptr handling — constructing from nullptr gives empty view
+    {
+        const char* nullStr = nullptr;
+        StringView sv{nullStr};
+        TEST(sv.chars == nullptr);
+        TEST(sv.length == 0);
+
+        StringView empty{};
+        TEST(sv == empty);
+    }
+
+    // StringView from (ptr, length) with zero length
+    {
+        const char* data = "hello";
+        StringView sv{data, u64{0}};
+        TEST(sv.length == 0);
+        TEST(StringView{} == sv);
+    }
+
+    // StringView from begin/end pointers
+    {
+        const char* data = "hello world";
+        StringView sv{data + 6, data + 11};
+        TEST(sv == "world");
+    }
+
+    // StringView from begin/end with equal pointers (empty range)
+    {
+        const char* data = "hello";
+        StringView sv{data, data};
+        TEST(sv.length == 0);
+    }
+
+    // StringView indexing
+    {
+        StringView sv{"hello"};
+        TEST(sv[0] == 'h');
+        TEST(sv[1] == 'e');
+        TEST(sv[2] == 'l');
+        TEST(sv[3] == 'l');
+        TEST(sv[4] == 'o');
+    }
+
+    // StringView range-for
+    {
+        StringView sv{"abc"};
+        char result[4]{};
+        u64 i = 0;
+        for (char c : sv)
+        {
+            result[i] = c;
+            ++i;
+        }
+        result[i] = '\0';
+        TEST(StringView{result} == "abc");
+    }
+
+    // StringView from const char* implicit conversion (long string)
+    {
+        StringView sv{"this is a fairly long string that should work fine"};
+        TEST(sv.length == 50);
+        TEST(sv == "this is a fairly long string that should work fine");
+    }
+
+    // ============================================================================
+    // BinaryView
+    // ============================================================================
+    //
+    // BinaryView is a non-owning view into binary data (data pointer + size).
+    // read() and read<T>() copy bytes out at an offset.
+    //
+    // Functions covered:
+    // - BinaryView() — default constructor
+    // - BinaryView(void*, u64) — ptr+size constructor
+    // - read(u64, void*, u64)
+    // - read<T>(u64)
+
+    // Default-constructed BinaryView is empty
+    {
+        BinaryView bv{};
+        TEST(bv.data == nullptr);
+        TEST(bv.size == 0);
+    }
+
+    // Create from pointer and size
+    {
+        u32 val = 42;
+        BinaryView bv{&val, sizeof(val)};
+        TEST(bv.data == &val);
+        TEST(bv.size == sizeof(val));
+    }
+
+    // read<T>() copies typed data
+    {
+        u32 val = 42;
+        BinaryView bv{&val, sizeof(val)};
+        u32 result = bv.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // read() copies raw data
+    {
+        u32 val = 42;
+        BinaryView bv{&val, sizeof(val)};
+        u32 result = 0;
+        bv.read(0, &result, sizeof(result));
+        TEST(result == 42);
+    }
+
+    // read<T>() at offset
+    {
+        u8 data[8] = {0, 0, 0, 0, 0xAA, 0xBB, 0xCC, 0xDD};
+        BinaryView bv{data, 8};
+        u32 result = bv.read<u32>(4);
+        TEST(result == 0xDDCCBBAA);
+    }
+
+    // ============================================================================
+    // Span<T>
+    // ============================================================================
+    //
+    // Span is a non-owning typed view (pointer + count). Supports array,
+    // ptr+count, begin+end constructors, indexing, and range-for.
+    //
+    // Functions covered:
+    // - Span() — default
+    // - Span(T*, u64) — ptr + count
+    // - Span(T*, T*) — begin + end
+    // - Span(T (&)[N]) — array constructor
+    // - operator[]
+    // - begin() / end()
+
+    // Default-constructed Span is empty
+    {
+        Span<i32> s;
+        TEST(s.vals == nullptr);
+        TEST(s.count == 0);
+    }
+
+    // Construct from pointer and count
+    {
+        i32 vals[3] = {10, 20, 30};
+        Span<i32> s{vals, 3};
+        TEST(s.vals == vals);
+        TEST(s.count == 3);
+        TEST(s[0] == 10);
+        TEST(s[2] == 30);
+    }
+
+    // Construct from begin and end
+    {
+        i32 vals[3] = {10, 20, 30};
+        Span<i32> s{vals, vals + 3};
+        TEST(s.count == 3);
+        TEST(s[0] == 10);
+        TEST(s[1] == 20);
+    }
+
+    // Construct from array
+    {
+        i32 vals[3] = {10, 20, 30};
+        Span<i32> s = vals;
+        TEST(s.count == 3);
+        TEST(s[0] == 10);
+    }
+
+    // Range-for over Span
+    {
+        i32 vals[4] = {1, 2, 3, 4};
+        Span<i32> s{vals, 4};
+        i32 sum = 0;
+        for (i32 v : s)
+            sum += v;
+        TEST(sum == 10);
+    }
+
+    // begin() / end() give correct boundaries
+    {
+        i32 vals[2] = {100, 200};
+        Span<i32> s{vals, 2};
+        TEST(s.begin() == vals);
+        TEST(s.end() == vals + 2);
+    }
+
+    // ============================================================================
+    // Span<void>
+    // ============================================================================
+    //
+    // Span<void> is a type-erased non-owning view. Same constructors as
+    // Span<T> but indexing returns void*.
+    //
+    // Functions covered:
+    // - Span<void>() — default
+    // - Span<void>(void*, u64) — ptr + count
+    // - Span<void>(void*, void*) — begin + end
+    // - operator[]
+
+    // Default-constructed Span<void> is empty
+    {
+        Span<void> s;
+        TEST(s.vals == nullptr);
+        TEST(s.count == 0);
+    }
+
+    // Construct from pointer and count
+    {
+        f32 vals[3] = {1.0f, 2.0f, 3.0f};
+        Span<void> s{static_cast<void*>(vals), 3};
+        TEST(s.vals == vals);
+        TEST(s.count == 3);
+    }
+
+    // Construct from begin and end
+    {
+        u8 data[4] = {10, 20, 30, 40};
+        Span<void> s{data, data + 4};
+        TEST(s.count == 4);
+        void* ptr = s[2];
+        TEST(ptr == static_cast<void*>(data + 2));
+    }
+
+    // ============================================================================
+    // Maybe
+    // ============================================================================
+    //
+    // Maybe<T> is a lightweight optional type used for recoverable error
+    // handling. It holds a boolean `has` and a union containing the value.
+    // some() creates a filled Maybe, none() creates an empty one.
+    // orElse(default) returns the value or a fallback; expect(msg) returns
+    // the value or panics.
+    //
+    // Functions covered:
+    // - some<T>(args...): create a filled Maybe
+    // - none<T>(): create an empty Maybe
+    // - has: check whether a value is present
+    // - val: access the value (direct union access)
+    // - orElse(T): unwrap or return default
+    // - expect(StringView): unwrap or panic
+    // - copy construction and assignment
+    // - move construction and assignment
+    {
+        // ------------------------------------------------------------------
+        // some() / none() with trivial types
+        // ------------------------------------------------------------------
+
+        // some() creates a filled Maybe
+        {
+            Maybe<i32> m = some<i32>(42);
+            TEST(m.has);
+            TEST(m.val == 42);
+        }
+
+        // none() creates an empty Maybe
+        {
+            Maybe<i32> m = none<i32>();
+            TEST(!m.has);
+        }
+
+        // some() with u32
+        {
+            Maybe<u32> m = some<u32>(100u);
+            TEST(m.has);
+            TEST(m.val == 100u);
+        }
+
+        // none() leaves the value uninitialized (but has is false)
+        {
+            Maybe<u32> m = none<u32>();
+            TEST(!m.has);
+        }
+
+        // some() with floating point
+        {
+            Maybe<f32> m = some<f32>(3.14f);
+            TEST(m.has);
+            TEST(std::abs(m.val - 3.14f) <= FLT_EPSILON);
+        }
+
+        // some() with a boolean
+        {
+            Maybe<bool> m = some<bool>(true);
+            TEST(m.has);
+            TEST(m.val == true);
+        }
+
+        // ------------------------------------------------------------------
+        // orElse()
+        // ------------------------------------------------------------------
+
+        // orElse returns the value when present
+        {
+            Maybe<i32> m = some<i32>(42);
+            i32 result = m.orElse(-1);
+            TEST(result == 42);
+            TEST(!m.has); // value was moved out
+        }
+
+        // orElse returns the default when empty
+        {
+            Maybe<i32> m = none<i32>();
+            i32 result = m.orElse(-1);
+            TEST(result == -1);
+            TEST(!m.has);
+        }
+
+        // orElse with floating point
+        {
+            Maybe<f32> m = none<f32>();
+            f32 result = m.orElse(1.0f);
+            TEST(std::abs(result - 1.0f) <= FLT_EPSILON);
+        }
+
+        // orElse can be called on an already-consumed Maybe (no-op)
+        {
+            Maybe<i32> m = some<i32>(42);
+            m.orElse(-1);
+            TEST(!m.has); // consumed
+
+            i32 result = m.orElse(-2);
+            TEST(result == -2);
+        }
+
+        // ------------------------------------------------------------------
+        // expect() (positive cases — negative case would panic/abort)
+        // ------------------------------------------------------------------
+
+        // expect returns the value when present
+        {
+            Maybe<i32> m = some<i32>(42);
+            i32 result = m.expect("should have value");
+            TEST(result == 42);
+            TEST(!m.has); // value was moved out
+        }
+
+        // expect with string type
+        {
+            ArenaScope arena = getScratch();
+            Maybe<StringBuilder> m = some<StringBuilder>(arena, "hello");
+            StringBuilder result = m.expect("string should exist");
+            TEST(result == "hello");
+            TEST(!m.has);
+        }
+
+        // ------------------------------------------------------------------
+        // Copy semantics
+        // ------------------------------------------------------------------
+
+        // Copy construct a filled Maybe
+        {
+            Maybe<i32> a = some<i32>(42);
+            Maybe<i32> b{a};
+
+            TEST(a.has);
+            TEST(a.val == 42);
+            TEST(b.has);
+            TEST(b.val == 42);
+        }
+
+        // Copy construct an empty Maybe
+        {
+            Maybe<i32> a = none<i32>();
+            Maybe<i32> b{a};
+
+            TEST(!a.has);
+            TEST(!b.has);
+        }
+
+        // Copy assign a filled Maybe
+        {
+            Maybe<i32> a = some<i32>(42);
+            Maybe<i32> b = none<i32>();
+            b = a;
+
+            TEST(a.has);
+            TEST(a.val == 42);
+            TEST(b.has);
+            TEST(b.val == 42);
+        }
+
+        // Copy assign an empty Maybe
+        {
+            Maybe<i32> a = none<i32>();
+            Maybe<i32> b = some<i32>(10);
+            b = a;
+
+            TEST(!a.has);
+            TEST(!b.has);
+        }
+
+        // Self-copy-assignment is a no-op
+        {
+            Maybe<i32> m = some<i32>(42);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-assign-overloaded"
+            m = m;
+#pragma clang diagnostic pop
+
+            TEST(m.has);
+            TEST(m.val == 42);
+        }
+
+        // Copy assign a filled Maybe onto another filled Maybe destroys old value
+        {
+            Maybe<i32> a = some<i32>(42);
+            Maybe<i32> b = some<i32>(10);
+
+            // Both alive before
+            TEST(a.has && a.val == 42);
+            TEST(b.has && b.val == 10);
+
+            b = a;
+
+            TEST(a.has && a.val == 42);
+            TEST(b.has && b.val == 42);
+        }
+
+        // ------------------------------------------------------------------
+        // Move semantics
+        // ------------------------------------------------------------------
+
+        // Move construct a filled Maybe
+        {
+            Maybe<i32> a = some<i32>(42);
+            Maybe<i32> b{std::move(a)};
+
+            TEST(!a.has); // moved-from is empty
+            TEST(b.has);
+            TEST(b.val == 42);
+        }
+
+        // Move construct an empty Maybe
+        {
+            Maybe<i32> a = none<i32>();
+            Maybe<i32> b{std::move(a)};
+
+            TEST(!a.has);
+            TEST(!b.has);
+        }
+
+        // Move assign a filled Maybe
+        {
+            Maybe<i32> a = some<i32>(42);
+            Maybe<i32> b = none<i32>();
+            b = std::move(a);
+
+            TEST(!a.has); // moved-from is empty
+            TEST(b.has);
+            TEST(b.val == 42);
+        }
+
+        // Move assign an empty Maybe
+        {
+            Maybe<i32> a = none<i32>();
+            Maybe<i32> b = some<i32>(10);
+            b = std::move(a);
+
+            TEST(!a.has);
+            TEST(!b.has);
+        }
+
+        // Self-move-assignment is a no-op
+        {
+            Maybe<i32> m = some<i32>(42);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-move"
+            m = std::move(m);
+#pragma clang diagnostic pop
+
+            TEST(m.has);
+            TEST(m.val == 42);
+        }
+
+        // ------------------------------------------------------------------
+        // Maybe with non-trivial types
+        // ------------------------------------------------------------------
+
+        // some() with String (non-trivial: has ~String(), copy deleted)
+        {
+            Maybe<String> m = some<String>(String::create("hello world"));
+            TEST(m.has);
+            TEST(m.val == "hello world");
+        }
+
+        // Move a Maybe<String>
+        {
+            Maybe<String> a = some<String>(String::create("move me"));
+            Maybe<String> b = std::move(a);
+
+            TEST(!a.has);
+            TEST(b.has);
+            TEST(b.val == "move me");
+        }
+
+        // Move-assign a Maybe<String>
+        {
+            Maybe<String> a = some<String>(String::create("first"));
+            Maybe<String> b = some<String>(String::create("second"));
+            b = std::move(a);
+
+            TEST(!a.has);
+            TEST(b.has);
+            TEST(b.val == "first");
+        }
+
+        // ------------------------------------------------------------------
+        // Maybe with custom struct
+        // ------------------------------------------------------------------
+
+        // some() with a plain-old-data struct
+        {
+            struct Pod {
+                i64 a;
+                f32 b;
+            };
+
+            Maybe<Pod> m = some<Pod>(Pod{-12, 3.14f});
+            TEST(m.has);
+            TEST(m.val.a == -12);
+            TEST(std::abs(m.val.b - 3.14f) <= FLT_EPSILON);
+        }
+
+        // none() with a struct type
+        {
+            struct Pod {
+                i64 a;
+                f32 b;
+            };
+
+            Maybe<Pod> m = none<Pod>();
+            TEST(!m.has);
+        }
+
+        // ------------------------------------------------------------------
+        // Maybe lifecycle: destruction tracking
+        // ------------------------------------------------------------------
+        //
+        // Use a tracked type to verify constructors and destructors are
+        // called exactly once per object across all Maybe operations.
+
+        // (Lifecycle struct defined at file scope above)
+
+        // none<T>() should not construct or destroy anything
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> m = none<Lifecycle>();
+                TEST(!m.has);
+                TEST(Lifecycle::stats.alive == 0);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // some<T>() constructs, Maybe destructor destroys
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> m = some<Lifecycle>();
+                TEST(m.has);
+                TEST(Lifecycle::stats.alive == 1);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Move construct from filled: value transferred, no extra construction
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> a = some<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 1);
+                {
+                    Maybe<Lifecycle> b = std::move(a);
+                    TEST(!a.has);
+                    TEST(b.has);
+                    TEST(Lifecycle::stats.alive == 1);
+                }
+                TEST(Lifecycle::stats.alive == 0);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Move construct from empty: no construction
+        {
+            Lifecycle::stats.reset();
+            Maybe<Lifecycle> a = none<Lifecycle>();
+            Maybe<Lifecycle> b = std::move(a);
+            TEST(!a.has);
+            TEST(!b.has);
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Move assign (filled → empty): value transferred
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> a = some<Lifecycle>();
+                Maybe<Lifecycle> b = none<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 1);
+                b = std::move(a);
+                TEST(!a.has);
+                TEST(b.has);
+                TEST(Lifecycle::stats.alive == 1);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Move assign (filled → filled): old dest destroyed
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> a = some<Lifecycle>();
+                Maybe<Lifecycle> b = some<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 2);
+                b = std::move(a);
+                TEST(!a.has);
+                TEST(b.has);
+                TEST(Lifecycle::stats.alive == 1);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Copy construct from filled: new copy constructed
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> a = some<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 1);
+                {
+                    Maybe<Lifecycle> b{a};
+                    TEST(a.has);
+                    TEST(b.has);
+                    TEST(Lifecycle::stats.alive == 2);
+                }
+                TEST(Lifecycle::stats.alive == 1);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Copy assign (filled → filled): old dest destroyed, new copy
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> a = some<Lifecycle>();
+                Maybe<Lifecycle> b = some<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 2);
+                b = a;
+                TEST(a.has);
+                TEST(b.has);
+                TEST(Lifecycle::stats.alive == 2);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Copy assign (empty → filled): dest destroyed, no construct
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> a = none<Lifecycle>();
+                Maybe<Lifecycle> b = some<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 1);
+                b = a;
+                TEST(!a.has);
+                TEST(!b.has);
+                TEST(Lifecycle::stats.alive == 0);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Copy assign (filled → empty): copy constructed into dest
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> a = some<Lifecycle>();
+                Maybe<Lifecycle> b = none<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 1);
+                b = a;
+                TEST(a.has);
+                TEST(b.has);
+                TEST(Lifecycle::stats.alive == 2);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Self-copy-assign: no-op
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> m = some<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 1);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-assign-overloaded"
+                m = m;
+#pragma clang diagnostic pop
+                TEST(m.has);
+                TEST(Lifecycle::stats.alive == 1);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Self-move-assign: no-op
+        {
+            Lifecycle::stats.reset();
+            {
+                Maybe<Lifecycle> m = some<Lifecycle>();
+                TEST(Lifecycle::stats.alive == 1);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-move"
+                m = std::move(m);
+#pragma clang diagnostic pop
+                TEST(m.has);
+                TEST(Lifecycle::stats.alive == 1);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Move assign (empty → empty): no-op
+        {
+            Lifecycle::stats.reset();
+            Maybe<Lifecycle> a = none<Lifecycle>();
+            Maybe<Lifecycle> b = none<Lifecycle>();
+            b = std::move(a);
+            TEST(!a.has);
+            TEST(!b.has);
+            TEST(Lifecycle::stats.alive == 0);
+        }
+    }
+
+    // ============================================================================
+    // Utility Functions
+    // ============================================================================
+    //
+    // isPowerOf2 checks whether a value is a power of two.
+    // align rounds a value up to the next alignment boundary.
+    // endianReverse16/32/64 swap byte order.
+    //
+    // Functions covered:
+    // - isPowerOf2(u64)
+    // - align(uptr, uptr)
+    // - endianReverse16(u16)
+    // - endianReverse32(u32)
+    // - endianReverse64(u64)
+
+    // isPowerOf2: powers of two
+    {
+        TEST(isPowerOf2(1));
+        TEST(isPowerOf2(2));
+        TEST(isPowerOf2(4));
+        TEST(isPowerOf2(1024));
+        TEST(isPowerOf2(0x80000000ull));
+    }
+
+    // isPowerOf2: not powers of two
+    {
+        TEST(!isPowerOf2(0));
+        TEST(!isPowerOf2(3));
+        TEST(!isPowerOf2(5));
+        TEST(!isPowerOf2(1023));
+        TEST(!isPowerOf2(0x80000001ull));
+    }
+
+    // align: already aligned
+    {
+        TEST(align(0, 4) == 0);
+        TEST(align(4, 4) == 4);
+        TEST(align(1024, 256) == 1024);
+    }
+
+    // align: needs rounding up
+    {
+        TEST(align(1, 4) == 4);
+        TEST(align(3, 4) == 4);
+        TEST(align(5, 4) == 8);
+        TEST(align(1025, 256) == 1280);
+    }
+
+    // align: alignment of 1 (no-op)
+    {
+        TEST(align(0, 1) == 0);
+        TEST(align(42, 1) == 42);
+    }
+
+    // endianReverse16
+    {
+        TEST(endianReverse16(0x1234) == 0x3412);
+        TEST(endianReverse16(endianReverse16(0x1234)) == 0x1234);
+        TEST(endianReverse16(0x0000) == 0x0000);
+        TEST(endianReverse16(0xFFFF) == 0xFFFF);
+    }
+
+    // endianReverse32
+    {
+        TEST(endianReverse32(0x12345678) == 0x78563412);
+        TEST(endianReverse32(endianReverse32(0x12345678)) == 0x12345678);
+        TEST(endianReverse32(0x00000000) == 0x00000000);
+        TEST(endianReverse32(0xFFFFFFFF) == 0xFFFFFFFF);
+    }
+
+    // endianReverse64
+    {
+        u64 val = 0x0102030405060708ull;
+        TEST(endianReverse64(val) == 0x0807060504030201ull);
+        TEST(endianReverse64(endianReverse64(val)) == val);
+        TEST(endianReverse64(0x0000000000000000ull) == 0x0000000000000000ull);
+        TEST(endianReverse64(0xFFFFFFFFFFFFFFFFull) == 0xFFFFFFFFFFFFFFFFull);
+    }
+
+    // ============================================================================
+    // Memory
+    // ============================================================================
+    //
+    // heapAlloc / heapFree allocate and free general-purpose memory.
+    // Arena is a bump allocator.  ArenaScope provides RAII head-restore.
+    // getScratch returns a thread-local arena that doesn't conflict with
+    // active arenas.
+    //
+    // Functions covered:
+    // - heapAlloc(u64, u64)
+    // - heapAlloc<T>(u64)
+    // - heapFree(void*, u64)
+    // - heapFree<T>(T*, u64)
+    // - Arena() — default
+    // - Arena(u64) — capacity constructor
+    // - ~Arena()
+    // - Arena::alloc(u64, u64)
+    // - Arena::alloc<T>(u64)
+    // - Arena::extend(void*, u64, u64)
+    // - Arena::extend<T>(T*, u64, u64)
+    // - Arena(Arena&&) — move construct
+    // - Arena& operator=(Arena&&) — move assign
+    // - ArenaScope() — default
+    // - ArenaScope(Arena*) — scope constructor
+    // - ~ArenaScope() — restores head
+    // - operator Arena*()
+    // - ArenaScope::alloc(u64, u64)
+    // - ArenaScope::alloc<T>(u64)
+    // - ArenaScope::extend(void*, u64, u64)
+    // - ArenaScope::extend<T>(T*, u64, u64)
+    // - ArenaScope(ArenaScope&&) — move construct
+    // - ArenaScope& operator=(ArenaScope&&) — move assign
+    // - getScratch(...)
+
+    // ------------------------------------------------------------------
+    // heapAlloc / heapFree
+    // ------------------------------------------------------------------
+
+    // heapAlloc returns non-null pointer
+    {
+        void* p = heapAlloc(64, 1);
+        TEST(p != nullptr);
+        heapFree(p, 64);
+    }
+
+    // heapAlloc zero size returns valid pointer (malloc(0) is non-null)
+    {
+        void* p = heapAlloc(0, 1);
+        TEST(p != nullptr);
+        heapFree(p, 0);
+    }
+
+    // heapAlloc<T> template — allocates typed array
+    {
+        u32* arr = heapAlloc<u32>(4);
+        TEST(arr != nullptr);
+        arr[0] = 10;
+        arr[3] = 40;
+        TEST(arr[0] == 10);
+        TEST(arr[3] == 40);
+        heapFree<u32>(arr, 4);
+    }
+
+    // ------------------------------------------------------------------
+    // Arena — default constructor
+    // ------------------------------------------------------------------
+
+    // Default-constructed Arena has null memory, zero capacity
+    {
+        Arena a{};
+        TEST(a.memory == nullptr);
+        TEST(a.capacity == 0);
+        TEST(a.head == 0);
+        // Double-destroy is safe (nullptr check in ~Arena)
+    }
+
+    // ------------------------------------------------------------------
+    // Arena — capacity constructor
+    // ------------------------------------------------------------------
+
+    // Capacity constructor allocates memory
+    {
+        Arena a{256};
+        TEST(a.memory != nullptr);
+        TEST(a.capacity == 256);
+        TEST(a.head == 0);
+    }
+
+    // ------------------------------------------------------------------
+    // Arena — alloc
+    // ------------------------------------------------------------------
+
+    // Allocate from arena
+    {
+        Arena a{256};
+        u32* p = static_cast<u32*>(a.alloc(4, 4));
+        TEST(p != nullptr);
+        TEST(a.head == 4);
+        *p = 42;
+        TEST(*p == 42);
+    }
+
+    // Allocate respects alignment (bumps to next aligned address)
+    {
+        Arena a{256};
+        // Allocate 1 byte at alignment 1 — head becomes 1
+        a.alloc(1, 1);
+        // Allocate 4 bytes at alignment 4 — head aligns from 1 to 4, then +4 = 8
+        void* p = a.alloc(4, 4);
+        TEST(p != nullptr);
+        TEST(a.head == 8);
+        // The pointer should be 4-byte aligned
+        TEST((reinterpret_cast<uptr>(p) & 3) == 0);
+    }
+
+    // Allocate exact capacity succeeds
+    {
+        Arena a{16};
+        void* p = a.alloc(16, 1);
+        TEST(p != nullptr);
+        TEST(a.head == 16);
+    }
+
+    // Allocate out of memory returns nullptr and sets error
+    {
+        setError("");
+        Arena a{16};
+        a.alloc(16, 1); // fills arena
+        void* p = a.alloc(1, 1); // overflows
+        TEST(p == nullptr);
+        TEST(getError().length > 0);
+        setError(""); // clear for subsequent tests
+    }
+
+    // alloc<T> template — typed convenience
+    {
+        Arena a{256};
+        u32* p = a.alloc<u32>(3);
+        TEST(p != nullptr);
+        p[0] = 10;
+        p[1] = 20;
+        p[2] = 30;
+        TEST(p[0] == 10);
+        TEST(p[2] == 30);
+    }
+
+    // ------------------------------------------------------------------
+    // Arena — extend
+    // ------------------------------------------------------------------
+
+    // Extend the last allocation — succeeds
+    {
+        Arena a{256};
+        u32* p = a.alloc<u32>(2);
+        TEST(p != nullptr);
+        TEST(a.head == 8);
+        bool ok = a.extend(p, 2, 4);
+        TEST(ok);
+        TEST(a.head == 16);
+    }
+
+    // Extend non-last allocation — fails
+    {
+        Arena a{256};
+        u32* first = a.alloc<u32>(2);
+        a.alloc<u32>(2);
+        bool ok = a.extend(first, 2, 4);
+        TEST(!ok);
+        // head unchanged
+        TEST(a.head == 16);
+    }
+
+    // Extend beyond capacity — fails
+    {
+        Arena a{16};
+        u8* p = static_cast<u8*>(a.alloc(4, 1));
+        bool ok = a.extend(p, 4, 20);
+        TEST(!ok);
+    }
+
+    // ------------------------------------------------------------------
+    // Arena — move semantics
+    // ------------------------------------------------------------------
+
+    // Move construct — transfers ownership
+    {
+        Arena a{256};
+        TEST(a.memory != nullptr);
+        Arena b{std::move(a)};
+        TEST(a.memory == nullptr); // moved-from is empty
+        TEST(a.capacity == 0);
+        TEST(a.head == 0);
+        TEST(b.memory != nullptr);
+        TEST(b.capacity == 256);
+    }
+
+    // Move assign — transfers ownership and frees old
+    {
+        Arena old{64};
+        Arena a{128};
+        old = std::move(a);
+        TEST(a.memory == nullptr);
+        TEST(old.memory != nullptr);
+        TEST(old.capacity == 128);
+    }
+
+    // Self-move-assign is a no-op (moved-from state but no double-free)
+    {
+        Arena a{64};
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-move"
+        a = std::move(a);
+#pragma clang diagnostic pop
+        // moved-from state is valid (memory == nullptr)
+        // no crash on destruction
+    }
+
+    // ------------------------------------------------------------------
+    // ArenaScope — default constructor
+    // ------------------------------------------------------------------
+
+    // Default-constructed ArenaScope has null arena
+    {
+        ArenaScope scope{};
+        TEST(scope.arena == nullptr);
+        TEST(scope.head == 0);
+    }
+
+    // ------------------------------------------------------------------
+    // ArenaScope — RAII head restoration
+    // ------------------------------------------------------------------
+
+    // Scope restores head on destruction
+    {
+        Arena a{256};
+        a.alloc(16, 1); // head = 16
+        {
+            ArenaScope scope{&a};
+            TEST(scope.arena == &a);
+            a.alloc(32, 1); // head = 48
+            TEST(a.head == 48);
+        }
+        TEST(a.head == 16); // restored
+    }
+
+    // Nested scopes restore correctly
+    {
+        Arena a{256};
+        a.alloc(8, 1); // head = 8
+        {
+            ArenaScope outer{&a};
+            a.alloc(8, 1); // head = 16
+            {
+                ArenaScope inner{&a};
+                a.alloc(8, 1); // head = 24
+                TEST(a.head == 24);
+            }
+            TEST(a.head == 16); // restored by inner
+        }
+        TEST(a.head == 8); // restored by outer
+    }
+
+    // Scope with null arena is safe
+    {
+        ArenaScope scope{};
+        // No crash on destruction
+    }
+
+    // ------------------------------------------------------------------
+    // ArenaScope — operator Arena*
+    // ------------------------------------------------------------------
+
+    // Implicit conversion to Arena* works
+    {
+        ArenaScope scope;
+        Arena* ap = scope; // implicit conversion
+        TEST(ap == scope.arena);
+    }
+
+    // ------------------------------------------------------------------
+    // ArenaScope — forward alloc/extend
+    // ------------------------------------------------------------------
+
+    // ArenaScope::alloc forwards to arena
+    {
+        Arena a{256};
+        ArenaScope scope{&a};
+        u32* p = static_cast<u32*>(scope.alloc(4, 4));
+        TEST(p != nullptr);
+        TEST(a.head == 4);
+    }
+
+    // ArenaScope::alloc<T> forwards to arena
+    {
+        Arena a{256};
+        ArenaScope scope{&a};
+        u32* p = scope.alloc<u32>(3);
+        TEST(p != nullptr);
+        p[0] = 10;
+        TEST(p[0] == 10);
+    }
+
+    // ArenaScope::extend forwards to arena
+    {
+        Arena a{256};
+        ArenaScope scope{&a};
+        u32* p = scope.alloc<u32>(2);
+        TEST(p != nullptr);
+        bool ok = scope.extend(p, 2, 4);
+        TEST(ok);
+        TEST(a.head == 16);
+    }
+
+    // ------------------------------------------------------------------
+    // ArenaScope — move semantics
+    // ------------------------------------------------------------------
+
+    // Move construct
+    {
+        Arena a{256};
+        ArenaScope scope{&a};
+        ArenaScope other{std::move(scope)};
+        TEST(scope.arena == nullptr); // moved-from
+        TEST(other.arena == &a);
+    }
+
+    // Move assign
+    {
+        Arena a{256};
+        Arena b{256};
+        ArenaScope x{&a};
+        ArenaScope y{&b};
+        x = std::move(y);
+        TEST(y.arena == nullptr); // moved-from
+        TEST(x.arena == &b);
+    }
+
+    // ------------------------------------------------------------------
+    // getScratch
+    // ------------------------------------------------------------------
+
+    // getScratch returns a valid arena with allocatable memory
+    {
+        ArenaScope scope = getScratch();
+        Arena* ap = scope;
+        TEST(ap != nullptr);
+        TEST(ap->memory != nullptr);
+        TEST(ap->capacity > 0);
+        void* p = ap->alloc(64, 4);
+        TEST(p != nullptr);
+    }
+
+    // Multiple getScratch calls without conflicts return the same arena
+    {
+        ArenaScope a = getScratch();
+        ArenaScope b = getScratch();
+        TEST(a.arena == b.arena);
+    }
+
+    // getScratch with conflict returns a different arena
+    {
+        ArenaScope a = getScratch();
+        u32* p = a.alloc<u32>(1);
+        TEST(p != nullptr);
+        // Passing a's arena as conflict forces getScratch to find another
+        Arena const* conflicts[] = {a.arena};
+        ArenaScope b = getScratch(conflicts, 1);
+        TEST(b.arena != a.arena);
+        // The second arena is also usable
+        u32* q = b.alloc<u32>(1);
+        TEST(q != nullptr);
+        *q = 42;
+        TEST(*q == 42);
+    }
+
+    // ============================================================================
+    // Concurrency
+    // ============================================================================
+    //
+    // SpinLock is a basic spinlock mutex.  Fence is a completion counter.
+    // callPar pushes work to a thread pool.  forPar iterates in parallel over
+    // a range.  helpThreads processes work items while waiting on a fence.
+    //
+    // Functions covered:
+    // - SpinLock::acquire()
+    // - SpinLock::tryAcquire()
+    // - SpinLock::release()
+    // - Fence::add(u32)
+    // - Fence::signal(u32)
+    // - Fence::isComplete()
+    // - Fence::wait(f64)
+    // - Fence::waitIndefinite()
+    // - helpThreads(Fence*, f64)
+    // - callPar(Fence*, void*, void (*)(void*))
+    // - forPar(u64, u64, void*, void (*)(void*, u64))
+    // - forPar(u64, u64, F)  [template lambda]
+
+    // Run the entire concurrency test suite multiple times to flush out
+    // rare race conditions
+    for (u32 concurrencyIter = 0; concurrencyIter < 20; ++concurrencyIter)
+    {
+
+    // ------------------------------------------------------------------
+    // SpinLock — single-threaded basics
+    // ------------------------------------------------------------------
+
+    // Acquire then release
+    {
+        SpinLock lock{};
+        lock.acquire();
+        lock.release();
+    }
+
+    // tryAcquire succeeds when lock is free
+    {
+        SpinLock lock{};
+        bool ok = lock.tryAcquire();
+        TEST(ok);
+        lock.release();
+    }
+
+    // tryAcquire fails when lock is already held
+    {
+        SpinLock lock{};
+        lock.acquire();
+        // In single-threaded context this is the only holder
+        // We're testing that calling tryAcquire while we hold it fails
+        // (The lock doesn't track thread identity, so it sees acquired==true)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-assign-overloaded"
+        bool ok = lock.tryAcquire();
+#pragma clang diagnostic pop
+        TEST(!ok);
+        lock.release();
+    }
+
+    // ------------------------------------------------------------------
+    // Fence — basics
+    // ------------------------------------------------------------------
+
+    // Default fence is complete
+    {
+        Fence fence{};
+        TEST(fence.isComplete());
+    }
+
+    // add() makes fence incomplete
+    {
+        Fence fence{};
+        fence.add();
+        TEST(!fence.isComplete());
+    }
+
+    // signal() makes fence complete again
+    {
+        Fence fence{};
+        fence.add();
+        fence.signal();
+        TEST(fence.isComplete());
+    }
+
+    // add(n) / signal(n) balanced
+    {
+        Fence fence{};
+        fence.add(5);
+        TEST(!fence.isComplete());
+        fence.signal(5);
+        TEST(fence.isComplete());
+    }
+
+    // add(3) / signal(1) still incomplete
+    {
+        Fence fence{};
+        fence.add(3);
+        fence.signal(1);
+        TEST(!fence.isComplete());
+        fence.signal(2);
+        TEST(fence.isComplete());
+    }
+
+    // wait() on already-complete fence returns immediately
+    {
+        Fence fence{};
+        bool ok = fence.wait(1.0);
+        TEST(ok);
+    }
+
+    // wait() with timeout when fence never completes returns false
+    {
+        Fence fence{};
+        fence.add();
+        bool ok = fence.wait(0.0001);
+        TEST(!ok);
+        fence.signal();
+    }
+
+    // waitIndefinite() blocks until complete
+    {
+        Fence fence{};
+        fence.add();
+        // Signal from another thread
+        std::thread t{[&fence] { fence.signal(); }};
+        fence.waitIndefinite();
+        TEST(fence.isComplete());
+        t.join();
+    }
+
+    // ------------------------------------------------------------------
+    // callPar — single worker
+    // ------------------------------------------------------------------
+
+    // Single work item via callPar
+    {
+        Fence fence{};
+        bool executed = false;
+        callPar(&fence, &executed, [](void* data)
+        {
+            *static_cast<bool*>(data) = true;
+        });
+        bool ok = fence.wait(2.0);
+        TEST(ok);
+        TEST(executed);
+    }
+
+    // Multiple work items
+    {
+        Fence fence{};
+        bool a = false, b = false, c = false;
+        callPar(&fence, &a, [](void* p) { *static_cast<bool*>(p) = true; });
+        callPar(&fence, &b, [](void* p) { *static_cast<bool*>(p) = true; });
+        callPar(&fence, &c, [](void* p) { *static_cast<bool*>(p) = true; });
+        bool ok = fence.wait(2.0);
+        TEST(ok);
+        TEST(a && b && c);
+    }
+
+    // callPar with null fence (fire-and-forget, no crash)
+    {
+        callPar(nullptr, nullptr, [](void*)
+        {
+            // just verify no crash with null fence
+        });
+        // Use a separate fence to verify work eventually completes
+        Fence fence{};
+        bool executed = false;
+        callPar(&fence, &executed, [](void* data)
+        {
+            *static_cast<bool*>(data) = true;
+        });
+        fence.wait(2.0);
+        TEST(executed);
+    }
+
+    // Many sequential work items
+    {
+        Fence fence{};
+        static constexpr u32 count = 100;
+        bool vals[count]{};
+        for (u32 i = 0; i < count; ++i)
+        {
+            callPar(&fence, &vals[i], [](void* p)
+            {
+                *static_cast<bool*>(p) = true;
+            });
+        }
+        bool ok = fence.wait(2.0);
+        TEST(ok);
+        for (u32 i = 0; i < count; ++i)
+            TEST(vals[i]);
+    }
+
+    // ------------------------------------------------------------------
+    // helpThreads
+    // ------------------------------------------------------------------
+
+    // helpThreads completes work and returns true
+    {
+        Fence fence{};
+        bool executed = false;
+        callPar(&fence, &executed, [](void* data)
+        {
+            *static_cast<bool*>(data) = true;
+        });
+        bool ok = helpThreads(&fence, 2.0);
+        TEST(ok);
+        TEST(executed);
+    }
+
+    // helpThreads with many items
+    {
+        Fence fence{};
+        static constexpr u32 count = 1000;
+        bool vals[count]{};
+        for (u32 i = 0; i < count; ++i)
+        {
+            callPar(&fence, &vals[i], [](void* p)
+            {
+                *static_cast<bool*>(p) = true;
+            });
+        }
+        bool ok = helpThreads(&fence, 2.0);
+        TEST(ok);
+        for (u32 i = 0; i < count; ++i)
+            TEST(vals[i]);
+    }
+
+    // ------------------------------------------------------------------
+    // forPar — C callback
+    // ------------------------------------------------------------------
+
+    // Process range with C callback
+    {
+        static constexpr u64 count = 100;
+        bool vals[count]{};
+        forPar(u64{0}, u64{count}, vals, [](void* data, u64 idx)
+        {
+            static_cast<bool*>(data)[idx] = true;
+        });
+        for (u64 i = 0; i < count; ++i)
+            TEST(vals[i]);
+    }
+
+    // Large range stress
+    {
+        static constexpr u64 count = 10000;
+        std::atomic<u32> atomicSum{0};
+        forPar(u64{0}, u64{count}, &atomicSum, [](void* data, u64)
+        {
+            static_cast<std::atomic<u32>*>(data)->fetch_add(1);
+        });
+        // The function adds 1 per iteration, regardless of which thread runs it
+        // Since each iteration is independent, the total should be count
+        // But since fetch_add is atomic, the sum is correct
+        // Actually no — the function's data pointer is shared, but the
+        // iterations are independent and each adds exactly 1.
+        // Since each callPar processes a chunk of iterations, each
+        // iteration calls fetch_add(1). With count=10000, the result
+        // should be count exactly.
+        // (The old thread pool test used a mutex; here we use atomic
+        // to avoid the SpinLock assertion issue.)
+        u32 total = atomicSum.load();
+        // Note: each iteration of forPar is not guaranteed to execute
+        // its own atomic add — the C callback form processes chunks
+        // internally. Each chunk calls fn(data, idx) for each idx,
+        // which calls fetch_add(1). So count == total.
+        TEST(total == count);
+    }
+
+    // ------------------------------------------------------------------
+    // forPar — template lambda
+    // ------------------------------------------------------------------
+
+    // Process range with lambda
+    {
+        static constexpr u64 count = 100;
+        bool vals[count]{};
+        forPar(u64{0}, u64{count}, [&](u64 idx)
+        {
+            vals[idx] = true;
+        });
+        for (u64 i = 0; i < count; ++i)
+            TEST(vals[i]);
+    }
+
+    // Large range with lambda
+    {
+        static constexpr u64 count = 10000;
+        std::atomic<u32> sum{0};
+        forPar(u64{0}, u64{count}, [&](u64)
+        {
+            sum.fetch_add(1);
+        });
+        TEST(sum.load() == count);
+    }
+
+    // ------------------------------------------------------------------
+    // Multi-threaded stress: concurrent producers
+    // ------------------------------------------------------------------
+    //
+    // Multiple threads call callPar concurrently, then the main thread
+    // waits on the fence with helpThreads.
+
+    // Two threads producing work
+    {
+        Fence fence{};
+        static constexpr u32 count = 50;
+        bool vals[count]{};
+
+        std::thread t1{[&]
+        {
+            for (u32 i = 0; i < count / 2; ++i)
+            {
+                callPar(&fence, &vals[i], [](void* p)
+                {
+                    *static_cast<bool*>(p) = true;
+                });
+            }
+        }};
+
+        std::thread t2{[&]
+        {
+            for (u32 i = count / 2; i < count; ++i)
+            {
+                callPar(&fence, &vals[i], [](void* p)
+                {
+                    *static_cast<bool*>(p) = true;
+                });
+            }
+        }};
+
+        t1.join();
+        t2.join();
+
+        bool ok = helpThreads(&fence, 2.0);
+        TEST(ok);
+        for (u32 i = 0; i < count; ++i)
+            TEST(vals[i]);
+    }
+
+    // Four threads producing work
+    {
+        Fence fence{};
+        static constexpr u32 count = 200;
+        bool vals[count]{};
+        static constexpr u32 threadCount = 4;
+
+        std::thread threads[threadCount];
+        for (u32 t = 0; t < threadCount; ++t)
+        {
+            threads[t] = std::thread{[&, t]
+            {
+                u32 begin = (count / threadCount) * t;
+                u32 end = (t == threadCount - 1) ? count : begin + count / threadCount;
+                for (u32 i = begin; i < end; ++i)
+                {
+                    callPar(&fence, &vals[i], [](void* p)
+                    {
+                        *static_cast<bool*>(p) = true;
+                    });
+                }
+            }};
+        }
+
+        for (u32 t = 0; t < threadCount; ++t)
+            threads[t].join();
+
+        bool ok = helpThreads(&fence, 2.0);
+        TEST(ok);
+        for (u32 i = 0; i < count; ++i)
+            TEST(vals[i]);
+    }
+
+    // ------------------------------------------------------------------
+    // Multi-threaded stress: concurrent fence add/signal
+    // ------------------------------------------------------------------
+
+    // Multiple threads signal the same fence, main thread waits
+    {
+        Fence fence{};
+        static constexpr u32 threadCount = 8;
+        static constexpr u32 signalsPerThread = 100;
+        fence.add(threadCount * signalsPerThread);
+
+        std::thread threads[threadCount];
+        for (u32 t = 0; t < threadCount; ++t)
+        {
+            threads[t] = std::thread{[&fence]
+            {
+                for (u32 i = 0; i < signalsPerThread; ++i)
+                    fence.signal();
+            }};
+        }
+
+        for (u32 t = 0; t < threadCount; ++t)
+            threads[t].join();
+
+        TEST(fence.isComplete());
+    }
+
+    // ------------------------------------------------------------------
+    // SpinLock stress test
+    // ------------------------------------------------------------------
+
+    // SpinLock: repeated acquire/release cycle
+    {
+        SpinLock lock{};
+        static constexpr u32 iterations = 1000;
+        for (u32 i = 0; i < iterations; ++i)
+        {
+            lock.acquire();
+            lock.release();
+        }
+    }
+
+    // SpinLock: tryAcquire/release cycle
+    {
+        SpinLock lock{};
+        static constexpr u32 iterations = 100;
+        for (u32 i = 0; i < iterations; ++i)
+        {
+            bool ok = lock.tryAcquire();
+            TEST(ok);
+            lock.release();
+        }
+    }
+
+    // SpinLock: multi-threaded mutual exclusion
+    {
+        SpinLock lock{};
+        u32 shared = 0;
+        static constexpr u32 threadCount = 4;
+        static constexpr u32 incrementsPerThread = 10000;
+
+        std::thread threads[threadCount];
+        for (u32 t = 0; t < threadCount; ++t)
+        {
+            threads[t] = std::thread{[&]
+            {
+                for (u32 i = 0; i < incrementsPerThread; ++i)
+                {
+                    lock.acquire();
+                    ++shared;
+                    lock.release();
+                }
+            }};
+        }
+
+        for (u32 t = 0; t < threadCount; ++t)
+            threads[t].join();
+
+        TEST(shared == threadCount * incrementsPerThread);
+    }
+
+    // SpinLockScope: basic acquire/release via RAII
+    {
+        SpinLock lock{};
+        {
+            SpinLockScope scope{&lock};
+            // lock is held
+        }
+        // lock is released — can re-acquire
+        lock.acquire();
+        lock.release();
+    }
+
+    // SpinLockScope: null lock is safe
+    {
+        SpinLockScope scope{};
+        TEST(scope.lock == nullptr);
+        // no crash on destruction
+    }
+
+    // SpinLockScope: move construct transfers ownership
+    {
+        SpinLock lock{};
+        {
+            SpinLockScope inner{&lock};
+            TEST(inner.lock == &lock);
+            SpinLockScope moved{std::move(inner)};
+            TEST(inner.lock == nullptr);  // moved-from is null
+            TEST(moved.lock == &lock);
+            // moved releases on destruction
+        }
+        // lock was released by moved's destructor
+        lock.acquire();
+        lock.release();
+    }
+
+    // SpinLockScope: move assign transfers ownership
+    {
+        SpinLock lock{};
+        SpinLockScope a{&lock};
+        SpinLockScope b{};
+        b = std::move(a);
+        TEST(a.lock == nullptr);
+        TEST(b.lock == &lock);
+        // b releases on scope exit
+    }
+
+    // SpinLockScope: self-move-assign is safe (no-op, no crash)
+    {
+        SpinLock lock{};
+        SpinLockScope scope{&lock};
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-move"
+        scope = std::move(scope);
+#pragma clang diagnostic pop
+        // self-move is no-op, scope still holds lock
+        // no crash on destruction
+    }
+
+    // SpinLockScope: multi-threaded with RAII guard
+    {
+        SpinLock lock{};
+        u32 shared = 0;
+        static constexpr u32 threadCount = 4;
+        static constexpr u32 incrementsPerThread = 5000;
+
+        std::thread threads[threadCount];
+        for (u32 t = 0; t < threadCount; ++t)
+        {
+            threads[t] = std::thread{[&]
+            {
+                for (u32 i = 0; i < incrementsPerThread; ++i)
+                {
+                    SpinLockScope scope{&lock};
+                    ++shared;
+                }
+            }};
+        }
+
+        for (u32 t = 0; t < threadCount; ++t)
+            threads[t].join();
+
+        TEST(shared == threadCount * incrementsPerThread);
+    }
+
+    // ------------------------------------------------------------------
+    // Edge cases
+    // ------------------------------------------------------------------
+
+    // Fence: add(0) and signal(0) are no-ops
+    {
+        Fence fence{};
+        fence.add(0);
+        TEST(fence.isComplete());
+        fence.add();
+        fence.signal(0);
+        TEST(!fence.isComplete());
+        fence.signal();
+        TEST(fence.isComplete());
+    }
+
+    // Fence: signal without matching add is caught by assertion (tested in debug)
+    // No explicit test — the assertion prevents silent underflow.
+
+    // callPar with function modifying caller's local through pointer
+    {
+        Fence fence{};
+        u32 result = 0;
+        callPar(&fence, &result, [](void* p)
+        {
+            *static_cast<u32*>(p) = 42;
+        });
+        fence.wait(2.0);
+        TEST(result == 42);
+    }
+
+    // forPar with contiguous array modification
+    {
+        static constexpr u64 count = 1000;
+        u32 vals[count]{};
+        forPar(u64{0}, u64{count}, vals, [](void* data, u64 idx)
+        {
+            static_cast<u32*>(data)[idx] = static_cast<u32>(idx + 1);
+        });
+        for (u64 i = 0; i < count; ++i)
+            TEST(vals[i] == i + 1);
+    }
+
+    // forPar lambda with reference capture — modifying array
+    {
+        static constexpr u64 count = 500;
+        u32 vals[count]{};
+        forPar(u64{0}, u64{count}, [&](u64 idx)
+        {
+            vals[idx] = static_cast<u32>(idx * 2);
+        });
+        for (u64 i = 0; i < count; ++i)
+            TEST(vals[i] == i * 2);
+    }
+
+    } // concurrencyIter
+
+    // ============================================================================
+    // cString
+    // ============================================================================
+    //
+    // Creates a null-terminated C string from a StringView by allocating
+    // from an arena.
+    //
+    // Functions covered:
+    // - cString(Arena*, StringView)
+
+    // Normal case
+    {
+        ArenaScope arena = getScratch();
+        char* c = cString(arena, "hello");
+        TEST(c != nullptr);
+        TEST(c[0] == 'h');
+        TEST(c[1] == 'e');
+        TEST(c[2] == 'l');
+        TEST(c[3] == 'l');
+        TEST(c[4] == 'o');
+        TEST(c[5] == '\0');
+    }
+
+    // Empty string
+    {
+        ArenaScope arena = getScratch();
+        char* c = cString(arena, "");
+        TEST(c != nullptr);
+        TEST(c[0] == '\0');
+    }
+
+    // String with null data and zero length
+    {
+        ArenaScope arena = getScratch();
+        StringView empty{};
+        char* c = cString(arena, empty);
+        TEST(c != nullptr);
+        TEST(c[0] == '\0');
+    }
+
+    // String with data and length (non-null-terminated input)
+    {
+        ArenaScope arena = getScratch();
+        StringView sv{"hello world", 5};
+        char* c = cString(arena, sv);
+        TEST(c != nullptr);
+        TEST(c[0] == 'h');
+        TEST(c[5] == '\0');
+        TEST(StringView{c} == "hello");
+    }
+
+    // ============================================================================
+    // StringBuilder
+    // ============================================================================
+    //
+    // StringBuilder is an arena-allocated mutable string. It supports insert,
+    // append, and prepend for both strings and individual characters.
+    // StringBuilder converts implicitly to StringView for comparison.
+    //
+    // Functions covered:
+    // - StringBuilder(Arena*, StringView) — construction
+    // - StringBuilder() — default construction (empty)
+    // - insert(u64 idx, StringView)
+    // - insert(u64 idx, char)
+    // - append(StringView)
+    // - append(char)
+    // - prepend(StringView)
+    // - prepend(char)
+    // - operator==(StringBuilder, StringBuilder)
+    // - operator==(StringBuilder, StringView)
+
+    // Default construction is empty
+    {
+        StringBuilder sb{};
+        TEST(sb.chars == nullptr);
+        TEST(sb.length == 0);
+        TEST(sb.arena == nullptr);
+    }
+
+    // Construction from a string
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        TEST(sb.length == 5);
+        TEST(sb == "hello");
+    }
+
+    // Construction with an empty string defaults to empty builder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        TEST(sb.length == 0);
+        TEST(sb == "");
+    }
+
+    // Construction from a StringView
+    {
+        ArenaScope arena = getScratch();
+        StringView sv{"world"};
+        StringBuilder sb{arena, sv};
+        TEST(sb == "world");
+    }
+
+    // Construction from partial StringView
+    {
+        ArenaScope arena = getScratch();
+        StringView sv{"hello world", 5};
+        StringBuilder sb{arena, sv};
+        TEST(sb == "hello");
+    }
+
+    // Append a string to a builder that already has content
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        sb.append(" world");
+        TEST(sb == "hello world");
+    }
+
+    // Append a string to an empty builder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        sb.append("hello");
+        TEST(sb == "hello");
+    }
+
+    // Append a char
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        sb.append('!');
+        TEST(sb == "hello!");
+    }
+
+    // Append a char to an empty builder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        sb.append('x');
+        TEST(sb == "x");
+    }
+
+    // Append multiple times (triggers reallocation)
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "a"};
+        sb.append("b");
+        sb.append("c");
+        sb.append("d");
+        sb.append("e");
+        TEST(sb == "abcde");
+    }
+
+    // Prepend a string
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "world"};
+        sb.prepend("hello ");
+        TEST(sb == "hello world");
+    }
+
+    // Prepend to an empty builder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        sb.prepend("hello");
+        TEST(sb == "hello");
+    }
+
+    // Prepend a char
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "ello"};
+        sb.prepend('h');
+        TEST(sb == "hello");
+    }
+
+    // Insert at the beginning
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "world"};
+        sb.insert(0, "hello ");
+        TEST(sb == "hello world");
+    }
+
+    // Insert in the middle
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello world"};
+        sb.insert(5, ",");
+        TEST(sb == "hello, world");
+    }
+
+    // Insert at the end (same as append)
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        sb.insert(5, " world");
+        TEST(sb == "hello world");
+    }
+
+    // Insert a char in the middle
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello world"};
+        sb.insert(5, ',');
+        TEST(sb == "hello, world");
+    }
+
+    // Insert with empty string (no-op)
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        sb.insert(3, "");
+        TEST(sb == "hello");
+    }
+
+    // StringBuilder equality with another StringBuilder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder a{arena, "hello"};
+        StringBuilder b{arena, "hello"};
+        StringBuilder c{arena, "world"};
+
+        TEST(a == b);
+        TEST(a != c);
+    }
+
+    // StringBuilder equality with StringView (via implicit conversion)
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        TEST(sb == StringView{"hello"});
+    }
+
+    // Index operator
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        TEST(sb[0] == 'h');
+        TEST(sb[4] == 'o');
+    }
+
+    // Large string with many appends
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        for (u32 i = 0; i < 100; ++i)
+            sb.append('x');
+        TEST(sb.length == 100);
+        for (u32 i = 0; i < 100; ++i)
+            TEST(sb[i] == 'x');
+    }
+
+    // ============================================================================
+    // String
+    // ============================================================================
+    //
+    // String is a heap-allocated owning string (move-only). Created via
+    // String::create().
+    //
+    // Functions covered:
+    // - String::create(StringView)
+    // - ~String()
+    // - String(String&&) — move construct
+    // - String& operator=(String&&) — move assign
+    // - operator==(String, String)
+    // - operator!=(String, String)
+    // - operator StringView()
+    // - operator[]
+
+    // Create from a string literal
+    {
+        String s = String::create("hello");
+        TEST(s.length == 5);
+        TEST(s == "hello");
+        TEST(s[0] == 'h');
+        TEST(s[4] == 'o');
+    }
+
+    // Create from empty string
+    {
+        String s = String::create("");
+        TEST(s.length == 0);
+        TEST(s == "");
+    }
+
+    // Create from partial StringView
+    {
+        StringView sv{"hello world", 5};
+        String s = String::create(sv);
+        TEST(s == "hello");
+    }
+
+    // Move construct
+    {
+        String a = String::create("hello");
+        String b{std::move(a)};
+        TEST(a.chars == nullptr);
+        TEST(a.length == 0);
+        TEST(b == "hello");
+    }
+
+    // Move assign
+    {
+        String a = String::create("hello");
+        String b = String::create("world");
+        b = std::move(a);
+        TEST(a.chars == nullptr);
+        TEST(a.length == 0);
+        TEST(b == "hello");
+    }
+
+    // String equality
+    {
+        String a = String::create("hello");
+        String b = String::create("hello");
+        String c = String::create("world");
+        TEST(a == b);
+        TEST(!(a == c));
+        TEST(a != c);
+    }
+
+    // String equality with StringView (via implicit conversion)
+    {
+        String s = String::create("hello");
+        TEST(s == StringView{"hello"});
+    }
+
+    // String equality with const char* (via implicit conversion to StringView)
+    {
+        String s = String::create("hello");
+        TEST(s == "hello");
+    }
+
+    // ------------------------------------------------------------------
+    // String destruction & lifecycle
+    // ------------------------------------------------------------------
+    //
+    // ~String() calls heapFree(chars, length).  free(nullptr) is a no-op,
+    // so moved-from Strings (chars == nullptr) are safe to destroy.
+    // These tests verify no double-free, no leak, and correct ownership
+    // transfer across every code path.
+
+    // Create, move, destroy in order (ownership transfer)
+    {
+        String a = String::create("hello");
+        {
+            String b = std::move(a);
+            TEST(a.chars == nullptr);
+            TEST(b == "hello");
+        }
+        // b destroyed — frees "hello"
+        TEST(a.chars == nullptr);
+        // a destroyed — no-op (chars == nullptr)
+    }
+
+    // Chain of moves through multiple Strings
+    {
+        String a = String::create("alpha");
+        String b = String::create("beta");
+        String c = std::move(a);    // c owns "alpha", a is null
+        b = std::move(c);           // b frees "beta", takes "alpha", c is null
+        TEST(b == "alpha");
+        TEST(a.chars == nullptr);
+        TEST(c.chars == nullptr);
+        // b destroyed — frees "alpha"
+        // a,c destroyed — no-op
+    }
+
+    // Self-move-assignment
+    {
+        String a = String::create("hello");
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-move"
+        a = std::move(a);
+#pragma clang diagnostic pop
+        TEST(a == "hello");
+    }
+
+    // Empty String create and move
+    {
+        String empty = String::create("");
+        TEST(empty == "");
+        String moved = std::move(empty);
+        TEST(empty.chars == nullptr);
+        TEST(moved == "");
+        // moved destroyed — frees (size 0 allocation if any)
+        // empty destroyed — no-op
+    }
+
+    // Move-assign onto self after a prior move (edge case: two moved-from Strings)
+    {
+        String a = String::create("hello");
+        String b = String::create("world");
+        a = std::move(b);  // a frees "hello", takes "world", b is null
+        TEST(a == "world");
+        TEST(b.chars == nullptr);
+        // Now assign b (moved-from) to a
+        b = std::move(a);  // b is null, so ~String() on b is no-op; b takes "world", a is null
+        TEST(b == "world");
+        TEST(a.chars == nullptr);
+        // b destroyed — frees "world"
+        // a destroyed — no-op
+    }
+
+    // ============================================================================
+    // isWhitespace / isNumeral
+    // ============================================================================
+    //
+    // Character classification functions.
+    //
+    // Functions covered:
+    // - isWhitespace(char)
+    // - isNumeral(char)
+
+    // isWhitespace: space
+    {
+        TEST(isWhitespace(' '));
+    }
+
+    // isWhitespace: tab
+    {
+        TEST(isWhitespace('\t'));
+    }
+
+    // isWhitespace: newline
+    {
+        TEST(isWhitespace('\n'));
+    }
+
+    // isWhitespace: carriage return
+    {
+        TEST(isWhitespace('\r'));
+    }
+
+    // isWhitespace: non-whitespace chars are false
+    {
+        TEST(!isWhitespace('a'));
+        TEST(!isWhitespace('0'));
+        TEST(!isWhitespace('.'));
+        TEST(!isWhitespace('\0'));
+        TEST(!isWhitespace('_'));
+    }
+
+    // isNumeral: digits 0-9
+    {
+        TEST(isNumeral('0'));
+        TEST(isNumeral('1'));
+        TEST(isNumeral('2'));
+        TEST(isNumeral('3'));
+        TEST(isNumeral('4'));
+        TEST(isNumeral('5'));
+        TEST(isNumeral('6'));
+        TEST(isNumeral('7'));
+        TEST(isNumeral('8'));
+        TEST(isNumeral('9'));
+    }
+
+    // isNumeral: non-digits
+    {
+        TEST(!isNumeral('a'));
+        TEST(!isNumeral('z'));
+        TEST(!isNumeral('A'));
+        TEST(!isNumeral('Z'));
+        TEST(!isNumeral('.'));
+        TEST(!isNumeral('-'));
+        TEST(!isNumeral('+'));
+        TEST(!isNumeral(' '));
+        TEST(!isNumeral('\0'));
+        TEST(!isNumeral('/'));  // before '0'
+        TEST(!isNumeral(':'));  // after '9'
+    }
+
+    // ============================================================================
+    // isInteger
+    // ============================================================================
+    //
+    // Checks whether a string is a valid base-10 integer, optionally with
+    // a leading + or - sign.
+    //
+    // Functions covered:
+    // - isInteger(StringView)
+
+    // Single digits
+    {
+        TEST(isInteger("0"));
+        TEST(isInteger("1"));
+        TEST(isInteger("2"));
+        TEST(isInteger("3"));
+        TEST(isInteger("4"));
+        TEST(isInteger("5"));
+        TEST(isInteger("6"));
+        TEST(isInteger("7"));
+        TEST(isInteger("8"));
+        TEST(isInteger("9"));
+    }
+
+    // Multi-digit numbers
+    {
+        TEST(isInteger("42"));
+        TEST(isInteger("100"));
+        TEST(isInteger("1234567890"));
+    }
+
+    // With leading sign
+    {
+        TEST(isInteger("+12"));
+        TEST(isInteger("-12"));
+        TEST(isInteger("+0"));
+        TEST(isInteger("-0"));
+    }
+
+    // Leading zeros
+    {
+        TEST(isInteger("00"));
+        TEST(isInteger("00042"));
+    }
+
+    // Empty string
+    {
+        TEST(!isInteger(""));
+    }
+
+    // Non-numeric characters
+    {
+        TEST(!isInteger("hello"));
+        TEST(!isInteger("12a"));
+        TEST(!isInteger("a12"));
+        TEST(!isInteger("1.0"));
+        TEST(!isInteger("--12"));
+        TEST(!isInteger("+-12"));
+        TEST(!isInteger("12-"));
+        TEST(!isInteger("12+"));
+    }
+
+    // Just a sign (no digits)
+    {
+        TEST(!isInteger("+"));
+        TEST(!isInteger("-"));
+    }
+
+    // ============================================================================
+    // isFloat
+    // ============================================================================
+    //
+    // Checks whether a string is a valid base-10 floating point number,
+    // optionally with decimal point, exponent (e), and trailing f suffix.
+    //
+    // Functions covered:
+    // - isFloat(StringView)
+
+    // Simple decimals
+    {
+        TEST(isFloat("0.0"));
+        TEST(isFloat("1.0"));
+        TEST(isFloat("2.5"));
+        TEST(isFloat("99.99"));
+    }
+
+    // Leading decimal point
+    {
+        TEST(isFloat(".1"));
+        TEST(isFloat(".5"));
+        TEST(isFloat(".12345"));
+    }
+
+    // Trailing decimal point
+    {
+        TEST(isFloat("1."));
+        TEST(isFloat("100."));
+    }
+
+    // With sign
+    {
+        TEST(isFloat("+1.0"));
+        TEST(isFloat("-1.0"));
+        TEST(isFloat("+.5"));
+        TEST(isFloat("-.5"));
+    }
+
+    // With exponent
+    {
+        TEST(isFloat("1e3"));
+        TEST(isFloat("1e+3"));
+        TEST(isFloat("1e-3"));
+        TEST(isFloat("1.5e3"));
+        TEST(isFloat(".5e3"));
+    }
+
+    // With f suffix
+    {
+        TEST(isFloat("1.0f"));
+        TEST(isFloat("+10.f"));
+        TEST(isFloat("-999.999f"));
+        TEST(isFloat("1e3f"));
+        TEST(isFloat("1.e3f"));
+        TEST(isFloat(".1e3"));
+    }
+
+    // Integer-only strings (no decimal or exponent) — isFloat returns true
+    // if there's a decimal or exponent, false for plain integers
+    {
+        TEST(!isFloat("1"));
+        TEST(!isFloat("42"));
+        TEST(!isFloat("+12"));
+        TEST(!isFloat("-12"));
+    }
+
+    // Empty string
+    {
+        TEST(!isFloat(""));
+    }
+
+    // Invalid strings
+    {
+        TEST(!isFloat("hello"));
+        TEST(!isFloat("1.0ff"));
+        TEST(!isFloat("1.0.0"));
+        TEST(!isFloat("1e3.0"));
+        TEST(!isFloat("--1.0"));
+        TEST(!isFloat("1ef"));
+        TEST(!isFloat("e1"));
+    }
+
+    // Just a decimal point
+    {
+        TEST(!isFloat("."));
+    }
+
+    // Just an exponent
+    {
+        TEST(!isFloat("e"));
+        TEST(!isFloat("e1"));
+    }
+
+    // ============================================================================
+    // stringToInteger
+    // ============================================================================
+    //
+    // Parses a base-10 integer string into an i64. Asserts the input is
+    // a valid integer (call isInteger first).
+    //
+    // Functions covered:
+    // - stringToInteger(StringView)
+
+    // Single digits
+    {
+        TEST(stringToInteger("0") == 0);
+        TEST(stringToInteger("1") == 1);
+        TEST(stringToInteger("2") == 2);
+        TEST(stringToInteger("3") == 3);
+        TEST(stringToInteger("4") == 4);
+        TEST(stringToInteger("5") == 5);
+        TEST(stringToInteger("6") == 6);
+        TEST(stringToInteger("7") == 7);
+        TEST(stringToInteger("8") == 8);
+        TEST(stringToInteger("9") == 9);
+    }
+
+    // Multi-digit
+    {
+        TEST(stringToInteger("42") == 42);
+        TEST(stringToInteger("100") == 100);
+        TEST(stringToInteger("1234567890") == 1234567890);
+    }
+
+    // With sign
+    {
+        TEST(stringToInteger("+12") == 12);
+        TEST(stringToInteger("-12") == -12);
+        TEST(stringToInteger("+0") == 0);
+        TEST(stringToInteger("-0") == 0);
+    }
+
+    // Leading zeros
+    {
+        TEST(stringToInteger("00") == 0);
+        TEST(stringToInteger("00042") == 42);
+    }
+
+    // Large values
+    {
+        TEST(stringToInteger("2147483647") == 2147483647);   // i32 max
+        TEST(stringToInteger("2147483648") == 2147483648);
+    }
+
+    // Negative large values
+    {
+        TEST(stringToInteger("-2147483648") == -2147483648);  // i32 min
+    }
+
+    // ============================================================================
+    // stringToFloat
+    // ============================================================================
+    //
+    // Parses a base-10 floating point string into an f64. Handles decimal
+    // points, exponents, signs, and f suffix.
+    //
+    // Functions covered:
+    // - stringToFloat(StringView)
+
+    // Basic decimals
+    {
+        TEST(std::abs(stringToFloat("0.0") - 0.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("1.0") - 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("2.5") - 2.5) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("99.99") - 99.99) <= 1e-10);
+    }
+
+    // Leading decimal
+    {
+        TEST(std::abs(stringToFloat(".1") - 0.1) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat(".5") - 0.5) <= FLT_EPSILON);
+    }
+
+    // Trailing decimal
+    {
+        TEST(std::abs(stringToFloat("1.") - 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("100.") - 100.0) <= FLT_EPSILON);
+    }
+
+    // With sign
+    {
+        TEST(std::abs(stringToFloat("+1.0") - 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("-1.0") + 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("+.5") - 0.5) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("-.5") + 0.5) <= FLT_EPSILON);
+    }
+
+    // With exponent
+    {
+        TEST(std::abs(stringToFloat("1e3") - 1000.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("1e+3") - 1000.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("1e-3") - 0.001) <= 1e-10);
+        TEST(std::abs(stringToFloat("1.5e3") - 1500.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat(".5e3") - 500.0) <= FLT_EPSILON);
+    }
+
+    // With f suffix
+    {
+        TEST(std::abs(stringToFloat("1.0f") - 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("+10.f") - 10.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("-999.999f") + 999.999) <= 1e-10);
+        TEST(std::abs(stringToFloat("1e3f") - 1000.0) <= FLT_EPSILON);
+    }
+
+    // Zero
+    {
+        TEST(std::abs(stringToFloat("0.0")) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat(".0")) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("0.")) <= FLT_EPSILON);
+    }
+
+    // ============================================================================
+    // integerToString
+    // ============================================================================
+    //
+    // Formats an i64 into a base-10 string allocated from an arena.
+    //
+    // Functions covered:
+    // - integerToString(Arena*, i64)
+
+    // Zero
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb = integerToString(arena, 0);
+        TEST(sb == "0");
+    }
+
+    // Positive single digit
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, 1) == "1");
+        TEST(integerToString(arena, 9) == "9");
+    }
+
+    // Negative single digit
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, -1) == "-1");
+        TEST(integerToString(arena, -9) == "-9");
+    }
+
+    // Multi-digit
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, 42) == "42");
+        TEST(integerToString(arena, 100) == "100");
+        TEST(integerToString(arena, 1234567890) == "1234567890");
+    }
+
+    // Negative multi-digit
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, -42) == "-42");
+        TEST(integerToString(arena, -1000000) == "-1000000");
+    }
+
+    // Large values (within f64 exact-representation range to avoid
+    // precision loss in the f64 division used by integerToString)
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, 9000000000000000LL) == "9000000000000000");
+    }
+
+    // ============================================================================
+    // floatToString
+    // ============================================================================
+    //
+    // Formats an f64 into a base-10 string with a specified number of
+    // decimal places, allocated from an arena.
+    //
+    // Functions covered:
+    // - floatToString(Arena*, f64, u32 decimalCount)
+
+    // Zero
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, 0.0, 1) == "0.0");
+    }
+
+    // Positive values with varying decimal places
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, 1.0, 0) == "1.");
+        TEST(floatToString(arena, 2.0, 1) == "2.0");
+        TEST(floatToString(arena, 3.0, 2) == "3.00");
+        TEST(floatToString(arena, 4.0, 3) == "4.000");
+    }
+
+    // Negative values
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, -1.0, 1) == "-1.0");
+        TEST(floatToString(arena, -2.0, 2) == "-2.00");
+    }
+
+    // Fractional values
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, 0.5, 1) == "0.5");
+        TEST(floatToString(arena, 3.14, 2) == "3.14");
+        TEST(floatToString(arena, -0.5, 1) == "-0.5");
+    }
+
+    // Zero decimal places (zero case returns "0.0" regardless)
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, 0.0, 0) == "0.0");
+        TEST(floatToString(arena, 100.0, 0) == "100.");
+    }
+
+    // ============================================================================
+    // BinaryBuilder
+    // ============================================================================
+    //
+    // BinaryBuilder is an arena-backed builder for binary data. Supports
+    // resize, append, overwrite, read, and implicit BinaryView conversion.
+    //
+    // Functions covered:
+    // - BinaryBuilder() — default
+    // - BinaryBuilder(Arena*, u64) — arena + optional initial size
+    // - operator BinaryView()
+    // - read(u64, void*, u64)
+    // - read<T>(u64)
+    // - resize(u64)
+    // - overwrite(u64, const void*, u64)
+    // - overwrite<T>(u64, const T&)
+    // - append(const void*, u64)
+    // - append<T>(const T&)
+
+    // Default-constructed builder has null arena
+    {
+        BinaryBuilder bb;
+        TEST(bb.arena == nullptr);
+        TEST(bb.data == nullptr);
+        TEST(bb.size == 0);
+    }
+
+    // Create with arena and initial size
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 8};
+        TEST(bb.arena == arena);
+        TEST(bb.data != nullptr);
+        TEST(bb.size == 8);
+    }
+
+    // Create with arena and zero size
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 0};
+        TEST(bb.arena == arena);
+        TEST(bb.data != nullptr); // alloc(0,1) returns a valid pointer
+        TEST(bb.size == 0);
+    }
+
+    // resize grows the builder
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        bb.resize(8);
+        TEST(bb.size == 8);
+    }
+
+    // append raw data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena};
+        u32 val = 42;
+        bb.append(&val, sizeof(val));
+        TEST(bb.size == sizeof(val));
+        u32 result = bb.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // append<T> typed data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena};
+        u32 val = 0xDEADBEEF;
+        bb.append(val);
+        TEST(bb.size == sizeof(val));
+        u32 result = bb.read<u32>(0);
+        TEST(result == 0xDEADBEEF);
+    }
+
+    // overwrite existing data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        u32 val = 123;
+        bb.overwrite(0, &val, sizeof(val));
+        u32 result = bb.read<u32>(0);
+        TEST(result == 123);
+    }
+
+    // overwrite<T> typed data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        bb.overwrite(0, static_cast<u32>(789));
+        u32 result = bb.read<u32>(0);
+        TEST(result == 789);
+    }
+
+    // Read raw data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        bb.overwrite(0, static_cast<u32>(0xAABBCCDD));
+        u32 result = 0;
+        bb.read(0, &result, sizeof(result));
+        TEST(result == 0xAABBCCDD);
+    }
+
+    // Implicit conversion to BinaryView
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        BinaryView bv = bb;
+        TEST(bv.data == bb.data);
+        TEST(bv.size == bb.size);
+    }
+
+    // Append multiple values
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena};
+        u8 a = 0xAA;
+        u8 b = 0xBB;
+        bb.append(a);
+        bb.append(b);
+        TEST(bb.size == 2);
+        u8 ra = bb.read<u8>(0);
+        u8 rb = bb.read<u8>(1);
+        TEST(ra == 0xAA);
+        TEST(rb == 0xBB);
+    }
+
+    // ============================================================================
+    // Binary
+    // ============================================================================
+    //
+    // Binary is an owning, heap-allocated, move-only binary data block.
+    //
+    // Functions covered:
+    // - Binary() — default
+    // - Binary::create(BinaryView) — factory
+    // - ~Binary() — destructor
+    // - Binary(Binary&&) — move construct
+    // - Binary& operator=(Binary&&) — move assign
+    // - read(u64, void*, u64)
+    // - read<T>(u64)
+    // - operator BinaryView()
+
+    // Default-constructed Binary is empty
+    {
+        Binary b;
+        TEST(b.data == nullptr);
+        TEST(b.size == 0);
+    }
+
+    // Create from BinaryView
+    {
+        u32 val = 42;
+        BinaryView bv{&val, sizeof(val)};
+        Binary b = Binary::create(bv);
+        TEST(b.size == sizeof(val));
+        u32 result = b.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // Create from empty BinaryView
+    {
+        BinaryView bv{};
+        Binary b = Binary::create(bv);
+        TEST(b.size == 0);
+        // data may be non-null (heapAlloc(0,1) returns valid pointer)
+    }
+
+    // Move construct
+    {
+        u32 val = 42;
+        BinaryView bv{&val, sizeof(val)};
+        Binary a = Binary::create(bv);
+        Binary b = std::move(a);
+        TEST(a.data == nullptr);
+        TEST(a.size == 0);
+        TEST(b.size == sizeof(val));
+        u32 result = b.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // Move assign
+    {
+        u32 val1 = 42;
+        u32 val2 = 99;
+        BinaryView bv1{&val1, sizeof(val1)};
+        BinaryView bv2{&val2, sizeof(val2)};
+        Binary a = Binary::create(bv1);
+        Binary b = Binary::create(bv2);
+        b = std::move(a);
+        TEST(a.data == nullptr);
+        TEST(a.size == 0);
+        TEST(b.size == sizeof(val1));
+        u32 result = b.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // Implicit conversion to BinaryView
+    {
+        u32 val = 0xCAFEBABE;
+        BinaryView bv{&val, sizeof(val)};
+        Binary b = Binary::create(bv);
+        BinaryView bv2 = b;
+        TEST(bv2.size == b.size);
+        u32 result = bv2.read<u32>(0);
+        TEST(result == 0xCAFEBABE);
+    }
+
+    // Create, scope-exit destroys (no double-free crash)
+    {
+        u32 val = 12345;
+        BinaryView bv{&val, sizeof(val)};
+        Binary b = Binary::create(bv);
+        TEST(b.read<u32>(0) == 12345);
+    }
+    // Allocate after — if heap is corrupt, we crash
+    {
+        Binary b2 = Binary::create(BinaryView{});
+        TEST(b2.size == 0);
+    }
 
 //     // Arena
 //     {
