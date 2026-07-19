@@ -55,7 +55,7 @@ else()
     set(SDL3_TARGET SDL3::SDL3)
 endif()
 
-find_path(VulkanHeaders_INCLUDE_DIR vulkan/vulkan.h REQUIRED)
+set(VulkanHeaders_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/Vulkan-Headers/include)
 
 set(INCLUDE_DIRS
     ${CMAKE_BINARY_DIR}

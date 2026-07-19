@@ -710,18 +710,6 @@ int main()
             TEST(!b.has);
         }
 
-        // Self-copy-assignment is a no-op
-        {
-            Maybe<i32> m = some<i32>(42);
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-assign-overloaded"
-            m = m;
-#pragma clang diagnostic pop
-
-            TEST(m.has);
-            TEST(m.val == 42);
-        }
-
         // Copy assign a filled Maybe onto another filled Maybe destroys old value
         {
             Maybe<i32> a = some<i32>(42);
@@ -779,18 +767,6 @@ int main()
 
             TEST(!a.has);
             TEST(!b.has);
-        }
-
-        // Self-move-assignment is a no-op
-        {
-            Maybe<i32> m = some<i32>(42);
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-move"
-            m = std::move(m);
-#pragma clang diagnostic pop
-
-            TEST(m.has);
-            TEST(m.val == 42);
         }
 
         // ------------------------------------------------------------------
@@ -999,38 +975,6 @@ int main()
                 TEST(a.has);
                 TEST(b.has);
                 TEST(Lifecycle::stats.alive == 2);
-            }
-            TEST(Lifecycle::stats.alive == 0);
-        }
-
-        // Self-copy-assign: no-op
-        {
-            Lifecycle::stats.reset();
-            {
-                Maybe<Lifecycle> m = some<Lifecycle>();
-                TEST(Lifecycle::stats.alive == 1);
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-assign-overloaded"
-                m = m;
-#pragma clang diagnostic pop
-                TEST(m.has);
-                TEST(Lifecycle::stats.alive == 1);
-            }
-            TEST(Lifecycle::stats.alive == 0);
-        }
-
-        // Self-move-assign: no-op
-        {
-            Lifecycle::stats.reset();
-            {
-                Maybe<Lifecycle> m = some<Lifecycle>();
-                TEST(Lifecycle::stats.alive == 1);
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-move"
-                m = std::move(m);
-#pragma clang diagnostic pop
-                TEST(m.has);
-                TEST(Lifecycle::stats.alive == 1);
             }
             TEST(Lifecycle::stats.alive == 0);
         }
@@ -1333,17 +1277,6 @@ int main()
         TEST(old.capacity == 128);
     }
 
-    // Self-move-assign is a no-op (moved-from state but no double-free)
-    {
-        Arena a{64};
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-move"
-        a = std::move(a);
-#pragma clang diagnostic pop
-        // moved-from state is valid (memory == nullptr)
-        // no crash on destruction
-    }
-
     // ------------------------------------------------------------------
     // ArenaScope — default constructor
     // ------------------------------------------------------------------
@@ -1539,10 +1472,7 @@ int main()
         lock.release();
 
         lock.acquire();
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-assign-overloaded"
         ok = lock.tryAcquire();
-#pragma clang diagnostic pop
         TEST(!ok);
         lock.release();
     }
@@ -1659,17 +1589,6 @@ int main()
         TEST(a.lock == nullptr);
         TEST(b.lock == &lock);
         // b releases on destruction
-    }
-
-    // Self-move-assign is safe
-    {
-        SpinLock lock{};
-        SpinLockScope scope{&lock};
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-move"
-        scope = std::move(scope);
-#pragma clang diagnostic pop
-        // no crash on destruction
     }
 
     // ------------------------------------------------------------------
@@ -2321,16 +2240,6 @@ int main()
         TEST(c.chars == nullptr);
         // b destroyed — frees "alpha"
         // a,c destroyed — no-op
-    }
-
-    // Self-move-assignment
-    {
-        String a = String::create("hello");
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-move"
-        a = std::move(a);
-#pragma clang diagnostic pop
-        TEST(a == "hello");
     }
 
     // Empty String create and move

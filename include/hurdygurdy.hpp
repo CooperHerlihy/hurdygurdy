@@ -7242,11 +7242,11 @@ struct WindowButtonEvent {
     /**
      * The type of event
      */
-    WindowEventType type = {};
+    WindowEventType type;
     /**
      * The button which was pressed or released
      */
-    Button button = {};
+    Button button;
 };
 
 /**
@@ -7914,23 +7914,23 @@ struct Rect2DInstance {
     /**
      * The instance position
      */
-    Vec2 pos = {};
+    Vec2 pos;
     /**
      * The instance size
      */
-    Vec2 size = {};
+    Vec2 size;
     /**
      * The instance type
      */
-    u32 type = 0;
+    u32 type;
     /**
      * Padding for 16 byte alignment
      */
-    u32 pad[3] = {};
+    u32 pad[3];
     /**
      * The rectangle fill color
      */
-    Vec4 color = {};
+    Vec4 color;
 };
 
 /**
@@ -7940,31 +7940,31 @@ struct Sprite2DInstance {
     /**
      * The instance position
      */
-    Vec2 pos = {};
+    Vec2 pos;
     /**
      * The instance size
      */
-    Vec2 size = {};
+    Vec2 size;
     /**
      * The instance type
      */
-    u32 type = 0;
+    u32 type;
     /**
      * Padding for 16 byte alignment
      */
-    u32 pad[2] = {};
+    u32 pad[2];
     /**
      * The texture index
      */
-    u32 tex = 0;
+    u32 tex;
     /**
      * The texture uv coordinates
      */
-    Vec2 uvPos = {};
+    Vec2 uvPos;
     /**
      * The texture uv coordinates
      */
-    Vec2 uvSize = {};
+    Vec2 uvSize;
 };
 
 /**

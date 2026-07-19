@@ -37,7 +37,6 @@
 
                 buildInputs = with pkgs; [
                     sdl3
-                    vulkan-headers
                 ];
 
                 LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
@@ -55,6 +54,16 @@
                 rev = "2af6dd9694288e6befe1edb7ce25510911693c22";
                 hash = "sha256-ocCgBM2uHDhdur81VKuKJNoa0TEvhfjhjfJlycC5YpI=";
             };
+
+            vulkan-headers-src = pkgs.fetchFromGitHub {
+                owner = "KhronosGroup";
+                repo = "Vulkan-Headers";
+                rev = "df274657d83f3bd8c77aef816c1cbf27352a948b";
+                hash = "sha256-0000000000000000000000000000000000000000000=";
+            };
+
+            # TODO: replace vulkan-headers-src hash above by running:
+            #   nix flake prefetch github:KhronosGroup/Vulkan-Headers/df274657d83f3bd8c77aef816c1cbf27352a948b
 
         in {
             default = pkgs.clang19Stdenv.mkDerivation {
@@ -74,7 +83,6 @@
 
                 buildInputs = with pkgs; [
                     sdl3
-                    vulkan-headers
                 ];
 
                 cmakeBuildType = "Release";
@@ -83,6 +91,9 @@
                     rm -rf vendor/imgui
                     cp -r ${imgui-src} vendor/imgui
                     chmod -R u+w vendor/imgui
+                    rm -rf vendor/Vulkan-Headers
+                    cp -r ${vulkan-headers-src} vendor/Vulkan-Headers
+                    chmod -R u+w vendor/Vulkan-Headers
                 '';
 
                 postFixup = ''
