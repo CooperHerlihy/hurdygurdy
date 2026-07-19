@@ -13,6 +13,30 @@ No STL containers, no exceptions, no RTTI.
 
 ## Build & Verify
 
+### Windows (x64)
+
+Open a **Visual Studio 2022 x64 developer shell** first:
+
+```
+"%VS2022INSTALLDIR%\VC\Auxiliary\Build\vcvars64.bat"
+```
+
+Or from PowerShell / cmd:
+```
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+```
+
+Then:
+
+```
+build:   cmake --workflow --preset debug
+test:    ./build/test
+```
+
+The VS dev shell provides `cmake`, `ninja`, and the MSVC compiler toolchain.
+
+### Linux / macOS
+
 ```
 build:   cmake --workflow --preset debug
 test:    ./build/test

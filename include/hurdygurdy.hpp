@@ -3226,7 +3226,7 @@ constexpr bool operator!=(Vec4 lhs, Vec4 rhs)
 /**
  * Compare vectors, treating values within epsilon as the same
  */
-constexpr bool vecEq2(Vec2 lhs, Vec2 rhs)
+inline bool vecEq2(Vec2 lhs, Vec2 rhs)
 {
     return std::abs(lhs.x - rhs.x) < 1e-6 &&
            std::abs(lhs.y - rhs.y) < 1e-6;
@@ -3235,7 +3235,7 @@ constexpr bool vecEq2(Vec2 lhs, Vec2 rhs)
 /**
  * Compare vectors, treating values within epsilon as the same
  */
-constexpr bool vecEq3(Vec3 lhs, Vec3 rhs)
+inline bool vecEq3(Vec3 lhs, Vec3 rhs)
 {
     return std::abs(lhs.x - rhs.x) < 1e-6 &&
            std::abs(lhs.y - rhs.y) < 1e-6 &&
@@ -3245,7 +3245,7 @@ constexpr bool vecEq3(Vec3 lhs, Vec3 rhs)
 /**
  * Compare vectors, treating values within epsilon as the same
  */
-constexpr bool vecEq4(Vec4 lhs, Vec4 rhs)
+inline bool vecEq4(Vec4 lhs, Vec4 rhs)
 {
     return std::abs(lhs.x - rhs.x) < 1e-6 &&
            std::abs(lhs.y - rhs.y) < 1e-6 &&
@@ -6931,12 +6931,6 @@ template<>
 void assetLoadImpl(AssetData<Binary>* data);
 
 /**
- * Binary asset unload implementation
- */
-template<>
-void assetUnloadImpl(AssetData<Binary>* data);
-
-/**
  * Store a binary file to disc
  *
  * Returns
@@ -9118,7 +9112,7 @@ T Maybe<T>::orElse(T defaultVal)
 }
 
 template<typename T>
-T Maybe<T>::expect(StringView errMsg)
+T Maybe<T>::expect([[maybe_unused]] StringView errMsg)
 {
     if (has)
     {

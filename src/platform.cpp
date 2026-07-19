@@ -5563,15 +5563,12 @@ void* libraryFindFunction(Library* lib, StringView symbol)
 
 Library* libraryLoad(StringView path)
 {
-    char* cstr = cString(scratch(), path);
+    ArenaScope scratch = getScratch();
+    char* cstr = cString(scratch, path);
 
-    Library* lib = static_cast<Library*>(LoadLibraryA(cstr));
+    Library* lib = reinterpret_cast<Library*>(LoadLibraryA(cstr));
     if (lib == nullptr)
-    {
-        errorSet("Could not load dynamic library \"");
-        errorAppend(path);
-        errorAppend("\"");
-    }
+        setError("Could not load dynamic library \"%s\"", cstr);
 
     return lib;
 }
@@ -5584,15 +5581,12 @@ void libraryUnload(Library* lib)
 
 void* libraryFindFunction(Library* lib, StringView symbol)
 {
-    char* cstr = cString(scratch(), symbol);
+    ArenaScope scratch = getScratch();
+    char* cstr = cString(scratch, symbol);
 
     void* fn = GetProcAddress(reinterpret_cast<HMODULE>(lib), cstr);
     if (fn == nullptr)
-    {
-        errorSet("Could not load function symbol \"");
-        errorAppend(symbol);
-        errorAppend("\"");
-    }
+        setError("Could not load function symbol \"%s\"", cstr);
 
     return fn;
 }

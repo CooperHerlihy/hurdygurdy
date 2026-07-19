@@ -48,7 +48,7 @@ int main()
     for (u32 i = 0; i < std::size(soundData); ++i)
     {
         f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
-        soundData[i] = noiseNorm(42.0f, t) / (t + 0.1f);
+        soundData[i] = noiseNorm(42u, t) / (t + 0.1f);
     }
 
     AudioPlayer audio = audioPlayerCreate();

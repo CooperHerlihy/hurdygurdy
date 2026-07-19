@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
+
 project(hurdygurdy VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
@@ -17,6 +18,10 @@ endif()
 
 if(MSVC)
     add_compile_options(/permissive- /GR- /D_CRT_SECURE_NO_WARNINGS)
+    # C4702 fires spuriously in the Asset<T>::Asset constructor initializer on
+    # optimized builds (MSVC proves pool.alloc() never returns null, then warns
+    # about the "unreachable" else-branch that doesn't exist)
+    add_compile_options(/wd4702)
     set(STRICT_FLAGS /W4 /WX)
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")

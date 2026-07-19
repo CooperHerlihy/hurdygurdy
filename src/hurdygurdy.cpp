@@ -312,6 +312,7 @@ void Fence::add(u32 count)
 
 void Fence::signal(u32 count)
 {
+    [[maybe_unused]]
     u32 prev = counter.fetch_sub(count);
     HG_ASSERT(prev >= count);
 }
@@ -1161,7 +1162,7 @@ Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 
     if (containsPointRect(ray.pos, rect))
     {
-        return some<Hit2D>(0, -ray.dir);
+        return some<Hit2D>(0.0f, -ray.dir);
     }
 
     f32 hits[4] = {
@@ -1443,7 +1444,7 @@ Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box)
 
     if (containsPointBox(ray.pos, box))
     {
-        return some<Hit3D>(0, -ray.dir);
+        return some<Hit3D>(0.0f, -ray.dir);
     }
 
     f32 hits[6] = {
@@ -2350,7 +2351,7 @@ static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialNode
         for (u32 i = 1; i < node->count; ++i)
         {
             str->append(",\n");
-            for (u32 i = 0; i < indentation + 1; ++i)
+            for (u32 j = 0; j < indentation + 1; ++j)
             {
                 str->append("    ");
             }
@@ -2360,7 +2361,7 @@ static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialNode
         }
 
         str->append( '\n');
-        for (u32 i = 0; i < indentation; ++i)
+        for (u32 k = 0; k < indentation; ++k)
         {
             str->append("    ");
         }
@@ -3531,12 +3532,6 @@ void assetLoadImpl(AssetData<Binary>* data)
     }
 }
 
-template<>
-void assetUnloadImpl(AssetData<Binary>* data)
-{
-    data->asset = {};
-}
-
 bool binaryStore(BinaryView bin, StringView path)
 {
     ArenaScope scratch = getScratch();
@@ -3872,9 +3867,6 @@ void assetLoadImpl(AssetData<Texture>* data)
 
     data->asset.view.write(tex->pixels);
 }
-
-template<>
-void assetUnloadImpl(AssetData<Texture>*) {}
 
 template<>
 void assetLoadImpl(AssetData<MeshData>* data)
