@@ -9434,7 +9434,7 @@ void serialize(Serializer* s, Array<T>* arr)
 template<typename T>
 ArrayTemp<T>::ArrayTemp(Arena* arenaVal, u32 countVal, u32 capacityVal)
     : arena{arenaVal}
-    , vals{arenaVal->alloc<T>(capacity)}
+    , vals{arenaVal->alloc<T>(capacityVal)}
     , count{countVal}
     , capacity{capacityVal}
 {

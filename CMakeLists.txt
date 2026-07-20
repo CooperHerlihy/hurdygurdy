@@ -130,7 +130,7 @@ target_include_directories(hurdygurdy_core
 target_link_libraries(hurdygurdy_core
     PUBLIC ${SDL3_TARGET}
 )
-target_precompile_headers(hurdygurdy_core PRIVATE include/hurdygurdy.hpp)
+# PCH disabled — ccache handles caching more efficiently
 target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_imgui OBJECT ${IMGUI_SOURCES} ${IMGUI_BACKEND_SOURCES})
@@ -142,7 +142,7 @@ target_include_directories(hurdygurdy_imgui
 target_link_libraries(hurdygurdy_imgui
     PUBLIC ${SDL3_TARGET}
 )
-target_precompile_headers(hurdygurdy_imgui PRIVATE vendor/imgui/imgui.h)
+# PCH disabled
 target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
 
@@ -163,7 +163,7 @@ target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygu
 foreach(tgt test editor minimal)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
-    target_precompile_headers(${tgt} REUSE_FROM hurdygurdy_core)
+    # PCH disabled
     target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
 endforeach()
 
