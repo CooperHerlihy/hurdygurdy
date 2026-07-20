@@ -22,7 +22,6 @@
                     clang-tools
                     cmake
                     ninja
-
                     mold
                     ccache
 
@@ -48,18 +47,18 @@
         packages = forAllSystems (system: let
             pkgs = nixpkgs.legacyPackages.${system};
 
+            vulkan-headers-src = pkgs.fetchFromGitHub {
+                owner = "KhronosGroup";
+                repo = "Vulkan-Headers";
+                rev = "e3b1eec08173d6b825cd3ac88c885a63b621504a";
+                hash = "sha256-tAYvYx/Mqvf/I177xmx7oLZVc7S7GK3MArY3i+FCYuw=";
+            };
+
             imgui-src = pkgs.fetchFromGitHub {
                 owner = "ocornut";
                 repo = "imgui";
                 rev = "2af6dd9694288e6befe1edb7ce25510911693c22";
                 hash = "sha256-ocCgBM2uHDhdur81VKuKJNoa0TEvhfjhjfJlycC5YpI=";
-            };
-
-            vulkan-headers-src = pkgs.fetchFromGitHub {
-                owner = "KhronosGroup";
-                repo = "Vulkan-Headers";
-                rev = "df274657d83f3bd8c77aef816c1cbf27352a948b";
-                hash = "sha256-/YXVD60zaSRgqkAFGZs0D0T2LoXRgMnYcO/RkQznW+I=";
             };
 
         in {
@@ -71,10 +70,7 @@
                     clang-tools
                     cmake
                     ninja
-
                     mold
-                    ccache
-
                     shaderc
                 ];
 
@@ -85,12 +81,11 @@
                 cmakeBuildType = "Release";
 
                 preConfigure = ''
-                    rm -rf vendor/imgui
-                    cp -r ${imgui-src} vendor/imgui
-                    chmod -R u+w vendor/imgui
-                    rm -rf vendor/Vulkan-Headers
+                    rm -rf vendor/imgui vendor/Vulkan-Headers
                     cp -r ${vulkan-headers-src} vendor/Vulkan-Headers
+                    cp -r ${imgui-src} vendor/imgui
                     chmod -R u+w vendor/Vulkan-Headers
+                    chmod -R u+w vendor/imgui
                 '';
 
                 postFixup = ''
