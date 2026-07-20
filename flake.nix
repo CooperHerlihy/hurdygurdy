@@ -59,11 +59,8 @@
                 owner = "KhronosGroup";
                 repo = "Vulkan-Headers";
                 rev = "df274657d83f3bd8c77aef816c1cbf27352a948b";
-                hash = "sha256-0000000000000000000000000000000000000000000=";
+                hash = "sha256-/YXVD60zaSRgqkAFGZs0D0T2LoXRgMnYcO/RkQznW+I=";
             };
-
-            # TODO: replace vulkan-headers-src hash above by running:
-            #   nix flake prefetch github:KhronosGroup/Vulkan-Headers/df274657d83f3bd8c77aef816c1cbf27352a948b
 
         in {
             default = pkgs.clang19Stdenv.mkDerivation {

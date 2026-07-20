@@ -13,6 +13,19 @@ No STL containers, no exceptions, no RTTI.
 
 ## Build & Verify
 
+### Linux / macOS
+
+```
+build:    cmake --workflow --preset debug
+test:     ./build/test
+san:      cmake --workflow --preset san && LSAN_OPTIONS=detect_leaks=0 ./build/san/test
+tsan:     cmake --workflow --preset tsan && TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/test
+valgrind: valgrind --leak-check=full ./build/test
+```
+
+LSAN_OPTIONS=detect_leaks=0 suppresses known driver library leaks (Vulkan/wayland).
+TSan shows a false-positive lock-order-inversion between SDL3 audio (`SDLAudioP*`) and PipeWire (`libspa`) — these are third-party driver threads, not project code.
+
 ### Windows (x64)
 
 Open a **Visual Studio 2022 x64 developer shell** first:
@@ -34,19 +47,6 @@ test:    ./build/test
 ```
 
 The VS dev shell provides `cmake`, `ninja`, and the MSVC compiler toolchain.
-
-### Linux / macOS
-
-```
-build:   cmake --workflow --preset debug
-test:    ./build/test
-san:     cmake --workflow --preset san && LSAN_OPTIONS=detect_leaks=0 ./build/san/test
-tsan:    cmake --workflow --preset tsan && TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/test
-valgrind: valgrind --leak-check=full ./build/test
-```
-
-LSAN_OPTIONS=detect_leaks=0 suppresses known driver library leaks (Vulkan/wayland).
-TSan shows a false-positive lock-order-inversion between SDL3 audio (`SDLAudioP*`) and PipeWire (`libspa`) — these are third-party driver threads, not project code.
 
 ## Navigation
 
