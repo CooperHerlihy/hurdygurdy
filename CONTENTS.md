@@ -1,5 +1,8 @@
 # Contents
 
+Implementation files use the same order as header files.
+Use `grep` to find specific symbols.
+
 ## hurdygurdy.hpp
 
 - Config Macros
