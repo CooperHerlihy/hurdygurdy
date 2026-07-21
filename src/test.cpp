@@ -2,7 +2,7 @@
 #define HG_LOGGING 1
 #include "hurdygurdy.hpp"
 
-#include <emmintrin.h>
+#include <thread>
 
 #define TEST(cond) do { \
     if (!(cond)) \
@@ -1872,6 +1872,638 @@ int main()
     } // concurrencyIter
 
     // ============================================================================
+    // GPU API
+    // ============================================================================
+    //
+    // Tests for the GPU abstraction layer (GpuBuffer, GpuImage, GpuView,
+    // GpuPipeline, command buffers, barriers, compute, offscreen rendering).
+    //
+    // All GPU tests use offscreen resources; no window is needed.
+    //
+    // Functions covered:
+    // - formatToSize, getMaxMipmaps
+    // - GpuBuffer/GpuImage/GpuView/GpuPipeline lifecycle (ctor, move, dtor)
+    // - GpuBuffer::write / GpuBuffer::read (host-visible + staging)
+    // - GpuView::write / GpuView::read
+    // - gpuCmdBegin / gpuCmdEnd
+    // - gpuMemoryBarrier (buffers + images)
+    // - gpuComputePass
+    // - gpuRenderPassBegin / gpuRenderPassEnd
+    // - gpuBindPipeline / gpuDraw / gpuDispatch
+    // - gpuPushConstants
+    // - gpuWaitIdle
+    // - Compute pipeline: SSBO input → push constant → SSBO output
+    // - Graphics pipeline: offscreen render + readback
+
+#include "test_compute.comp.spv.h"
+#include "test_tri.vert.spv.h"
+#include "test_tri.frag.spv.h"
+
+    // formatToSize
+    {
+        // Common 8-bit formats
+        TEST(formatToSize(Format_r8_unorm) == 1);
+        TEST(formatToSize(Format_r8_snorm) == 1);
+        TEST(formatToSize(Format_r8g8_unorm) == 2);
+        TEST(formatToSize(Format_r8g8b8a8_unorm) == 4);
+        TEST(formatToSize(Format_r8g8b8a8_snorm) == 4);
+        TEST(formatToSize(Format_r8g8b8a8_srgb) == 4);
+        // 16-bit float / depth formats
+        TEST(formatToSize(Format_r16_sfloat) == 2);
+        TEST(formatToSize(Format_r16g16_sfloat) == 4);
+        TEST(formatToSize(Format_r16g16b16a16_sfloat) == 8);
+        TEST(formatToSize(Format_d16_unorm) == 2);
+        // 32-bit float / int formats
+        TEST(formatToSize(Format_r32_sfloat) == 4);
+        TEST(formatToSize(Format_r32g32_sfloat) == 8);
+        TEST(formatToSize(Format_r32g32b32_sfloat) == 12);
+        TEST(formatToSize(Format_r32g32b32a32_sfloat) == 16);
+        TEST(formatToSize(Format_r32_sint) == 4);
+        TEST(formatToSize(Format_r32g32b32a32_uint) == 16);
+        // Depth-stencil
+        TEST(formatToSize(Format_d24_unorm_s8_uint) == 4);
+        TEST(formatToSize(Format_d32_sfloat) == 4);
+        TEST(formatToSize(Format_d32_sfloat_s8_uint) == 5);
+        // Block-compressed
+        TEST(formatToSize(Format_bc1_rgba_unorm_block) == 8);
+        TEST(formatToSize(Format_bc3_unorm_block) == 16);
+        TEST(formatToSize(Format_bc5_unorm_block) == 16);
+        TEST(formatToSize(Format_bc7_unorm_block) == 16);
+    }
+
+    // getMaxMipmaps
+    {
+        TEST(getMaxMipmaps(1, 1, 1) == 1);
+        TEST(getMaxMipmaps(2, 1, 1) == 2);
+        TEST(getMaxMipmaps(64, 64, 1) == 7);
+        TEST(getMaxMipmaps(128, 64, 1) == 8);
+        TEST(getMaxMipmaps(256, 256, 256) == 9);
+        TEST(getMaxMipmaps(0, 0, 0) == 0);
+        TEST(getMaxMipmaps(1, 0, 1) == 1);
+    }
+
+    // GpuBuffer lifecycle
+    {
+        // Default construction
+        GpuBuffer empty{};
+        TEST(empty.data == nullptr);
+
+        // Create a device-local buffer
+        GpuBuffer devBuf{256, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst};
+        TEST(devBuf.data != nullptr);
+
+        // Create a host-visible buffer
+        GpuBuffer hostBuf{128, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        TEST(hostBuf.data != nullptr);
+
+        // Move construction
+        GpuBuffer moved{std::move(devBuf)};
+        TEST(devBuf.data == nullptr);
+        TEST(moved.data != nullptr);
+
+        // Move assignment
+        GpuBuffer dest{};
+        dest = std::move(hostBuf);
+        TEST(hostBuf.data == nullptr);
+        TEST(dest.data != nullptr);
+
+        // Destruction via scope exit
+    }
+
+    // GpuBuffer write/read: host-visible
+    {
+        GpuBuffer buf{64, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst, GpuMemoryUsage_frequentUpdate};
+        u32 data = 0xDEADBEEF;
+        buf.write(&data, 0, sizeof(data));
+        u32 result = 0;
+        buf.read(&result, 0, sizeof(result));
+        TEST(result == 0xDEADBEEF);
+    }
+
+    // GpuBuffer write/read: staging (device-only)
+    {
+        GpuBuffer buf{64, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst};
+        u32 data = 0xCAFEBABE;
+        buf.write(&data, 0, sizeof(data));
+        u32 result = 0;
+        buf.read(&result, 0, sizeof(result));
+        TEST(result == 0xCAFEBABE);
+    }
+
+    // GpuBuffer write/read: multiple values
+    {
+        GpuBuffer buf{256, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst, GpuMemoryUsage_frequentUpdate};
+        u32 src[16] = {};
+        for (u32 i = 0; i < 16; ++i)
+            src[i] = i * 3 + 7;
+        buf.write(src, 0, sizeof(src));
+        u32 dst[16] = {};
+        buf.read(dst, 0, sizeof(dst));
+        for (u32 i = 0; i < 16; ++i)
+            TEST(dst[i] == i * 3 + 7);
+    }
+
+    // GpuImage lifecycle
+    {
+        GpuImage empty{};
+        TEST(empty.data == nullptr);
+
+        // Simple constructor
+        GpuImage img{16, 16, Format_r8g8b8a8_unorm, GpuImageUsage_transferSrc};
+        TEST(img.data != nullptr);
+        TEST(img.width() == 16);
+        TEST(img.height() == 16);
+
+        // Extended constructor with mip levels
+        GpuImageCreateInfo ci{};
+        ci.width = 64;
+        ci.height = 64;
+        ci.format = Format_r32_sfloat;
+        ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst;
+        ci.mipLevels = 4;
+        GpuImage mipImg{ci};
+        TEST(mipImg.data != nullptr);
+        TEST(mipImg.width() == 64);
+        TEST(mipImg.height() == 64);
+
+        // Move construction
+        GpuImage moved{std::move(img)};
+        TEST(img.data == nullptr);
+        TEST(moved.data != nullptr);
+
+        // Move assignment
+        GpuImage dest{};
+        dest = std::move(mipImg);
+        TEST(mipImg.data == nullptr);
+        TEST(dest.data != nullptr);
+    }
+
+    // GpuView lifecycle
+    {
+        GpuImage img{16, 16, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
+
+        GpuView view{img, GpuAspect_color};
+        TEST(view.data != nullptr);
+        TEST(view.width() == 16);
+        TEST(view.height() == 16);
+
+        // Move construction
+        GpuView moved{std::move(view)};
+        TEST(view.data == nullptr);
+        TEST(moved.data != nullptr);
+
+        // Move assignment
+        GpuView dest{};
+        dest = std::move(moved);
+        TEST(moved.data == nullptr);
+        TEST(dest.data != nullptr);
+    }
+
+    // GpuView write/read
+    {
+        GpuImage img{16, 16, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
+        GpuView view{img, GpuAspect_color};
+
+        u32 src[16 * 16] = {};
+        for (u32 i = 0; i < 16 * 16; ++i)
+            src[i] = 0x30405060;
+        view.write(src);
+        u32 dst[16 * 16] = {};
+        view.read(dst);
+        for (u32 i = 0; i < 16 * 16; ++i)
+            TEST(dst[i] == 0x30405060);
+    }
+
+    // GpuView extended create info
+    {
+        GpuImage img{32, 32, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
+        GpuViewCreateInfo vci{};
+        vci.image = &img;
+        vci.aspectFlags = GpuAspect_color;
+        vci.filter = GpuFilter_linear;
+        vci.type = GpuViewType_2D;
+        GpuView view{vci};
+        TEST(view.data != nullptr);
+        u32 idx = view.samplerDescriptor();
+        TEST(idx != ~0u);
+    }
+
+    // gpuCmdBegin / gpuCmdEnd
+    {
+        GpuCmd* cmd = gpuCmdBegin();
+        TEST(cmd != nullptr);
+        gpuCmdEnd(cmd);
+    }
+
+    // gpuMemoryBarrier: buffers
+    {
+        GpuBuffer buf{64, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
+            GpuMemoryUsage_frequentUpdate};
+        GpuCmd* cmd = gpuCmdBegin();
+        GpuBufferBarrier bb{};
+        bb.buffer = &buf;
+        bb.nextStage = GpuStage_computeShader;
+        bb.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        gpuMemoryBarrier(cmd, &bb, 1, nullptr, 0);
+        gpuCmdEnd(cmd);
+    }
+
+    // gpuMemoryBarrier: images
+    {
+        GpuImage img{8, 8, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
+        GpuView view{img, GpuAspect_color};
+        GpuCmd* cmd = gpuCmdBegin();
+        GpuImageBarrier ib{};
+        ib.image = &view;
+        ib.nextStage = GpuStage_transfer;
+        ib.nextAccess = GpuAccess_transferRead;
+        ib.nextLayout = GpuLayout_transferSrc;
+        gpuMemoryBarrier(cmd, nullptr, 0, &ib, 1);
+        gpuCmdEnd(cmd);
+    }
+
+    // gpuMemoryBarrier: buffers + images combined
+    {
+        GpuBuffer buf{64, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuImage img{8, 8, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
+        GpuView view{img, GpuAspect_color};
+        GpuCmd* cmd = gpuCmdBegin();
+        GpuBufferBarrier bb{};
+        bb.buffer = &buf;
+        bb.nextStage = GpuStage_computeShader;
+        bb.nextAccess = GpuAccess_shaderRead;
+        GpuImageBarrier ib{};
+        ib.image = &view;
+        ib.nextStage = GpuStage_transfer;
+        ib.nextAccess = GpuAccess_transferRead;
+        ib.nextLayout = GpuLayout_transferSrc;
+        gpuMemoryBarrier(cmd, &bb, 1, &ib, 1);
+        gpuCmdEnd(cmd);
+    }
+
+    // gpuComputePass
+    {
+        GpuBuffer buf{64, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuCmd* cmd = gpuCmdBegin();
+        GpuComputePass pass{};
+        GpuBuffer* storageBufs[] = {&buf};
+        pass.storageBuffers = storageBufs;
+        pass.storageBufferCount = 1;
+        gpuComputePass(cmd, pass);
+        gpuCmdEnd(cmd);
+    }
+
+    // GpuPipeline compute: lifecycle
+    {
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{
+            test_compute_comp_spv,
+            sizeof(test_compute_comp_spv),
+            12
+        }};
+        TEST(pipe.data != nullptr);
+
+        // Move construction
+        GpuPipeline moved{std::move(pipe)};
+        TEST(pipe.data == nullptr);
+        TEST(moved.data != nullptr);
+
+        // Move assignment
+        GpuPipeline dest{};
+        dest = std::move(moved);
+        TEST(moved.data == nullptr);
+        TEST(dest.data != nullptr);
+    }
+
+    // Compute dispatch: SSBO input → push constant → SSBO output
+    {
+        static constexpr u32 elemCount = 64;
+        static constexpr u32 bufSize = elemCount * sizeof(u32);
+        u32 addVal = 100;
+
+        GpuBuffer inBuf{bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuBuffer outBuf{bufSize, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc};
+
+        u32 input[elemCount] = {};
+        for (u32 i = 0; i < elemCount; ++i)
+            input[i] = i;
+        inBuf.write(input, 0, bufSize);
+
+        struct Push {
+            u32 addVal;
+            u32 inIdx;
+            u32 outIdx;
+        };
+        Push push{addVal, inBuf.storageDescriptor(), outBuf.storageDescriptor()};
+
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{
+            test_compute_comp_spv,
+            sizeof(test_compute_comp_spv),
+            sizeof(Push)
+        }};
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        GpuBufferBarrier barriers[2] = {};
+        barriers[0].buffer = &outBuf;
+        barriers[0].nextStage = GpuStage_computeShader;
+        barriers[0].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        barriers[1].buffer = &inBuf;
+        barriers[1].nextStage = GpuStage_computeShader;
+        barriers[1].nextAccess = GpuAccess_shaderRead;
+        gpuMemoryBarrier(cmd, barriers, 2, nullptr, 0);
+
+        gpuBindPipeline(cmd, pipe);
+        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuDispatch(cmd, elemCount, 1, 1);
+
+        gpuCmdEnd(cmd);
+
+        u32 output[elemCount] = {};
+        outBuf.read(output, 0, bufSize);
+
+        for (u32 i = 0; i < elemCount; ++i)
+            TEST(output[i] == input[i] + addVal);
+    }
+
+    // GpuPipeline graphics: lifecycle
+    {
+        GpuGraphicsPipelineCreateInfo ci{};
+        ci.vertexShader = test_tri_vert_spv;
+        ci.vertexShaderSize = sizeof(test_tri_vert_spv);
+        ci.fragmentShader = test_tri_frag_spv;
+        ci.fragmentShaderSize = sizeof(test_tri_frag_spv);
+        Format colorFmt = Format_r8g8b8a8_unorm;
+        ci.colorAttachmentFormats = &colorFmt;
+        ci.colorAttachmentCount = 1;
+
+        GpuPipeline pipe{ci};
+        TEST(pipe.data != nullptr);
+
+        GpuPipeline moved{std::move(pipe)};
+        TEST(pipe.data == nullptr);
+        TEST(moved.data != nullptr);
+
+        GpuPipeline dest{};
+        dest = std::move(moved);
+        TEST(moved.data == nullptr);
+        TEST(dest.data != nullptr);
+    }
+
+    // Offscreen render: render a full-screen triangle to an image, read it back
+    {
+        static constexpr u32 imgSize = 4;
+
+        GpuImage colorImg{
+            imgSize, imgSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc
+        };
+        GpuView colorView{colorImg, GpuAspect_color};
+
+        GpuGraphicsPipelineCreateInfo ci{};
+        ci.vertexShader = test_tri_vert_spv;
+        ci.vertexShaderSize = sizeof(test_tri_vert_spv);
+        ci.fragmentShader = test_tri_frag_spv;
+        ci.fragmentShaderSize = sizeof(test_tri_frag_spv);
+        Format colorFmt = Format_r8g8b8a8_unorm;
+        ci.colorAttachmentFormats = &colorFmt;
+        ci.colorAttachmentCount = 1;
+
+        GpuPipeline pipe{ci};
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        GpuRenderAttachment colorAtt{};
+        colorAtt.image = &colorView;
+        colorAtt.loadOp = GpuLoadOp_clear;
+        colorAtt.storeOp = GpuStoreOp_store;
+        colorAtt.clearValue.color.float32[0] = 1.0f;
+        colorAtt.clearValue.color.float32[1] = 0.0f;
+        colorAtt.clearValue.color.float32[2] = 0.0f;
+        colorAtt.clearValue.color.float32[3] = 1.0f;
+
+        GpuRenderPass pass{};
+        pass.colorAttachments = &colorAtt;
+        pass.colorAttachmentCount = 1;
+
+        gpuRenderPassBegin(cmd, pass);
+        gpuBindPipeline(cmd, pipe);
+        gpuDraw(cmd, 0, 3, 0, 1);
+        gpuRenderPassEnd(cmd);
+
+        gpuCmdEnd(cmd);
+
+        u32 pixelData[imgSize * imgSize] = {};
+        colorView.read(pixelData);
+
+        // Triangle covers the whole viewport; all pixels should be (0.2, 0.4, 0.6, 1.0)
+        // packed as r8g8b8a8_unorm = 0x99663399 or similar depending on float→byte
+        // 0.2f → 51 = 0x33, 0.4f → 102 = 0x66, 0.6f → 153 = 0x99, 1.0f → 255 = 0xFF
+        // packed RGBA → 0xFF996633
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            TEST(pixelData[i] == 0xFF996633);
+    }
+
+    // gpuWaitIdle
+    {
+        gpuWaitIdle();
+    }
+
+    // GpuBuffer::uniformDescriptor
+    {
+        GpuBuffer buf{64, GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate};
+        u32 desc = buf.uniformDescriptor();
+        TEST(desc != 0);
+        TEST(desc < 4096);
+    }
+
+    // GpuView::storageDescriptor
+    {
+        GpuImage img{8, 8, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_storage};
+        GpuView view{img, GpuAspect_color, GpuFilter_nearest};
+        u32 desc = view.storageDescriptor();
+        TEST(desc != 0);
+        TEST(desc < 4096);
+    }
+
+    // GpuView::writeCubemap
+    {
+        static constexpr u32 faceSize = 4;
+        static constexpr u32 bpp = 4;
+
+        GpuImageCreateInfo ci{};
+        ci.width = faceSize;
+        ci.height = faceSize;
+        ci.format = Format_r8g8b8a8_unorm;
+        ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled;
+        ci.arrayLayers = 6;
+        ci.flags = GpuImageConfig_cubeCompatible;
+        GpuImage cubeImg{ci};
+
+        GpuViewCreateInfo vci{};
+        vci.image = &cubeImg;
+        vci.aspectFlags = GpuAspect_color;
+        vci.type = GpuViewType_cube;
+        vci.layerCount = 6;
+        GpuView cubeView{vci};
+
+        // Build cubemap cross: 4 columns × 3 rows (each face is faceSize × faceSize)
+        u8 cross[faceSize * 4 * faceSize * 3 * bpp] = {};
+        u32 pitch = faceSize * 4 * bpp; // bytes per row of cross
+        u32 w = faceSize;
+        u32 h = faceSize;
+
+        auto fillFace = [&](u32 cx, u32 cy, u8 r, u8 g, u8 b, u8 a)
+        {
+            for (u32 y = 0; y < h; ++y)
+                for (u32 x = 0; x < w; ++x)
+                {
+                    u32 idx = (cy * h + y) * pitch + (cx * w + x) * bpp;
+                    cross[idx + 0] = r;
+                    cross[idx + 1] = g;
+                    cross[idx + 2] = b;
+                    cross[idx + 3] = a;
+                }
+        };
+
+        // Face cross coordinates (from writeCubemap regions):
+        //   layer 0 (+X) → src (2, 1)   layer 3 (+Y) → src (1, 0)
+        //   layer 1 (-X) → src (0, 1)   layer 4 (+Z) → src (1, 1)
+        //   layer 2 (-Y) → src (1, 2)   layer 5 (-Z) → src (3, 1)
+        fillFace(2, 1, 0xFF, 0x00, 0x00, 0xFF); // +X (layer 0): red
+        fillFace(0, 1, 0x00, 0xFF, 0x00, 0xFF); // -X (layer 1): green
+        fillFace(1, 2, 0x00, 0x00, 0xFF, 0xFF); // -Y (layer 2): blue
+        fillFace(1, 0, 0xFF, 0xFF, 0x00, 0xFF); // +Y (layer 3): yellow
+        fillFace(1, 1, 0xFF, 0x00, 0xFF, 0xFF); // +Z (layer 4): magenta
+        fillFace(3, 1, 0x00, 0xFF, 0xFF, 0xFF); // -Z (layer 5): cyan
+
+        cubeView.writeCubemap(cross);
+
+        // Read back layer 0 (+X) via a single-layer view
+        GpuViewCreateInfo readVci{};
+        readVci.image = &cubeImg;
+        readVci.aspectFlags = GpuAspect_color;
+        readVci.type = GpuViewType_2D;
+        readVci.baseArrayLayer = 0;
+        readVci.layerCount = 1;
+        GpuView readView{readVci};
+
+        GpuCmd* cmd = gpuCmdBegin();
+        GpuImageBarrier ib{};
+        ib.image = &readView;
+        ib.nextStage = GpuStage_transfer;
+        ib.nextAccess = GpuAccess_transferRead;
+        ib.nextLayout = GpuLayout_transferSrc;
+        gpuMemoryBarrier(cmd, nullptr, 0, &ib, 1);
+        gpuCmdEnd(cmd);
+
+        u32 face[faceSize * faceSize] = {};
+        readView.read(face);
+        for (u32 i = 0; i < faceSize * faceSize; ++i)
+            TEST(face[i] == 0xFF0000FF); // RGBA: R=0xFF, G=0x00, B=0x00, A=0xFF
+    }
+
+    // GpuView::genMipmaps — verify base level not corrupted
+    {
+        static constexpr u32 imgSize = 8;
+        static constexpr u32 mipLevels = 4;
+
+        GpuImageCreateInfo ci{};
+        ci.width = imgSize;
+        ci.height = imgSize;
+        ci.format = Format_r8g8b8a8_unorm;
+        ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled;
+        ci.mipLevels = mipLevels;
+        GpuImage mipImg{ci};
+
+        GpuViewCreateInfo vci{};
+        vci.image = &mipImg;
+        vci.aspectFlags = GpuAspect_color;
+        vci.type = GpuViewType_2D;
+        vci.levelCount = mipLevels;
+        GpuView mipView{vci};
+
+        u32 yellow = 0xFF00FFFF;
+        u32 src[imgSize * imgSize] = {};
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            src[i] = yellow;
+        mipView.write(src);
+
+        mipView.genMipmaps();
+
+        u32 dst[imgSize * imgSize] = {};
+        mipView.read(dst);
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            TEST(dst[i] == yellow);
+    }
+
+    // GpuView::genMipmaps — verify mip 1 content via read()
+    {
+        static constexpr u32 w = 4;
+        static constexpr u32 h = 4;
+        static constexpr u32 mipLevels = 3;
+
+        GpuImageCreateInfo ci{};
+        ci.width = w;
+        ci.height = h;
+        ci.format = Format_r8g8b8a8_unorm;
+        ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst
+                 | GpuImageUsage_sampled;
+        ci.mipLevels = mipLevels;
+        GpuImage img{ci};
+
+        GpuViewCreateInfo fullVci{};
+        fullVci.image = &img;
+        fullVci.aspectFlags = GpuAspect_color;
+        fullVci.type = GpuViewType_2D;
+        fullVci.levelCount = mipLevels;
+        GpuView fullView{fullVci};
+
+        u32 red   = 0xFF0000FF;
+        u32 green = 0xFF00FF00;
+        u32 src[w * h] = {};
+        for (u32 y = 0; y < h; ++y)
+            for (u32 x = 0; x < w; ++x)
+                src[y * w + x] = (x < 2 && y < 2) ? red : green;
+        fullView.write(src);
+
+        fullView.genMipmaps();
+
+        // Read mip 1 (2×2) via a view targeting only that level
+        GpuViewCreateInfo mip1Vci{};
+        mip1Vci.image = &img;
+        mip1Vci.aspectFlags = GpuAspect_color;
+        mip1Vci.type = GpuViewType_2D;
+        mip1Vci.baseMipLevel = 1;
+        mip1Vci.levelCount = 1;
+        GpuView mip1View{mip1Vci};
+
+        GpuCmd* cmd = gpuCmdBegin();
+        GpuImageBarrier ib{};
+        ib.image = &mip1View;
+        ib.nextStage = GpuStage_transfer;
+        ib.nextAccess = GpuAccess_transferRead;
+        ib.nextLayout = GpuLayout_transferSrc;
+        gpuMemoryBarrier(cmd, nullptr, 0, &ib, 1);
+        gpuCmdEnd(cmd);
+
+        u32 mip1[4] = {};
+        mip1View.read(mip1);
+
+        // Mip 1 (2×2): top-left averages the red 2×2 block → red;
+        // the other three average green quadrants → green
+        TEST(mip1[0] == red);
+        TEST(mip1[1] == green);
+        TEST(mip1[2] == green);
+        TEST(mip1[3] == green);
+    }
+
+    // ============================================================================
     // cString
     // ============================================================================
     //
@@ -2937,484 +3569,6 @@ int main()
         TEST(b2.size == 0);
     }
 
-//     // Arena
-//     {
-//         void* block = malloc(1024);
-//         HG_DEFER(free(block));
-//
-//         Arena arena{block, 1024, 0};
-//
-//         for (u32 i = 0; i < 3; ++i)
-//         {
-//             TEST(arena.memory != nullptr);
-//             TEST(arena.capacity == 1024);
-//             TEST(arena.head == 0);
-//
-//             u32* allocU32 = arena.alloc<u32>(1);
-//             TEST(allocU32 == arena.memory);
-//
-//             u64* allocU64 = arena.alloc<u64>(2);
-//             TEST(reinterpret_cast<u8*>(allocU64) == reinterpret_cast<u8*>(allocU32) + 8);
-//
-//             u8* allocU8 = arena.alloc<u8>(1);
-//             TEST(allocU8 == reinterpret_cast<u8*>(allocU32) + 24);
-//
-//             struct Big {
-//                 u8 data[32];
-//             };
-//             Big* allocBig = arena.alloc<Big>(1);
-//             TEST(reinterpret_cast<u8*>(allocBig) == reinterpret_cast<u8*>(allocU32) + 25);
-//
-//             Big* reallocBig = arena.realloc(allocBig, 1, 2);
-//             TEST(reallocBig == allocBig);
-//
-//             Big* reallocBigSame = arena.realloc(reallocBig, 2, 2);
-//             TEST(reallocBigSame == reallocBig);
-//
-//             memset(reallocBig, 2, 2 * sizeof(*reallocBig));
-//             u8* allocInterrupt = arena.alloc<u8>(1);
-//             static_cast<void>(allocInterrupt);
-//
-//             Big* reallocBig2 = arena.realloc(reallocBig, 2, 4);
-//             TEST(reallocBig2 != reallocBig);
-//             TEST(memcmp(reallocBig, reallocBig2, 2 * sizeof(*reallocBig)) == 0);
-//
-//             arena.head = 0;
-//         }
-//     }
-//
-//     // StringBuilder
-//     {
-//         ArenaScope arena = getScratch();
-//
-//         StringBuilder a{arena, "a"};
-//         TEST(a[0] == 'a');
-//         TEST(a.length == 1);
-//
-//         StringBuilder abc{arena, "abc"};
-//         TEST(abc[0] == 'a');
-//         TEST(abc[1] == 'b');
-//         TEST(abc[2] == 'c');
-//         TEST(abc.length == 3);
-//
-//         a.append("bc");
-//         TEST(a == abc);
-//
-//         StringBuilder str{};
-//
-//         str.append("hello");
-//         TEST(str == "hello");
-//
-//         str.append(" there");
-//         TEST(str == "hello there");
-//
-//         str.prepend("why ");
-//         TEST(str == "why hello there");
-//
-//         str.insert(3, ",");
-//         TEST(str == "why, hello there");
-//
-//         str.prepend("aaaaaaaaaaaaaaaaaaaaaaaa ");
-//         TEST(str == "aaaaaaaaaaaaaaaaaaaaaaaa why, hello there");
-//     }
-//
-//     // string utils
-//     {
-//         ArenaScope arena = getScratch();
-//
-//         TEST(isWhitespace(' '));
-//         TEST(isWhitespace('\t'));
-//         TEST(isWhitespace('\n'));
-//
-//         TEST(isNumeral('0'));
-//         TEST(isNumeral('1'));
-//         TEST(isNumeral('2'));
-//         TEST(isNumeral('3'));
-//         TEST(isNumeral('4'));
-//         TEST(isNumeral('5'));
-//         TEST(isNumeral('5'));
-//         TEST(isNumeral('6'));
-//         TEST(isNumeral('7'));
-//         TEST(isNumeral('8'));
-//         TEST(isNumeral('9'));
-//
-//         TEST(!isNumeral('0' - 1));
-//         TEST(!isNumeral('9' + 1));
-//
-//         TEST(!isNumeral('x'));
-//         TEST(!isNumeral('a'));
-//         TEST(!isNumeral('b'));
-//         TEST(!isNumeral('c'));
-//         TEST(!isNumeral('d'));
-//         TEST(!isNumeral('e'));
-//         TEST(!isNumeral('f'));
-//         TEST(!isNumeral('X'));
-//         TEST(!isNumeral('A'));
-//         TEST(!isNumeral('B'));
-//         TEST(!isNumeral('C'));
-//         TEST(!isNumeral('D'));
-//         TEST(!isNumeral('E'));
-//         TEST(!isNumeral('F'));
-//
-//         TEST(!isNumeral('.'));
-//         TEST(!isNumeral('+'));
-//         TEST(!isNumeral('-'));
-//         TEST(!isNumeral('*'));
-//         TEST(!isNumeral('/'));
-//         TEST(!isNumeral('='));
-//         TEST(!isNumeral('#'));
-//         TEST(!isNumeral('&'));
-//         TEST(!isNumeral('^'));
-//         TEST(!isNumeral('~'));
-//
-//         TEST(isInteger("0"));
-//         TEST(isInteger("1"));
-//         TEST(isInteger("2"));
-//         TEST(isInteger("3"));
-//         TEST(isInteger("4"));
-//         TEST(isInteger("5"));
-//         TEST(isInteger("6"));
-//         TEST(isInteger("7"));
-//         TEST(isInteger("8"));
-//         TEST(isInteger("9"));
-//         TEST(isInteger("10"));
-//
-//         TEST(isInteger("12"));
-//         TEST(isInteger("42"));
-//         TEST(isInteger("100"));
-//         TEST(isInteger("123456789"));
-//         TEST(isInteger("-12"));
-//         TEST(isInteger("-42"));
-//         TEST(isInteger("-100"));
-//         TEST(isInteger("-123456789"));
-//         TEST(isInteger("+12"));
-//         TEST(isInteger("+42"));
-//         TEST(isInteger("+100"));
-//         TEST(isInteger("+123456789"));
-//
-//         TEST(!isInteger("hello"));
-//         TEST(!isInteger("not a number"));
-//         TEST(!isInteger("number"));
-//         TEST(!isInteger("integer"));
-//         TEST(!isInteger("0.0"));
-//         TEST(!isInteger("1.0"));
-//         TEST(!isInteger(".10"));
-//         TEST(!isInteger("1e2"));
-//         TEST(!isInteger("1f"));
-//         TEST(!isInteger("0xff"));
-//         TEST(!isInteger("--42"));
-//         TEST(!isInteger("++42"));
-//         TEST(!isInteger("42-"));
-//         TEST(!isInteger("42+"));
-//         TEST(!isInteger("4 2"));
-//         TEST(!isInteger("4+2"));
-//
-//         TEST(isFloat("0.0"));
-//         TEST(isFloat("1."));
-//         TEST(isFloat("2.0"));
-//         TEST(isFloat("3."));
-//         TEST(isFloat("4.0"));
-//         TEST(isFloat("5."));
-//         TEST(isFloat("6.0"));
-//         TEST(isFloat("7."));
-//         TEST(isFloat("8.0"));
-//         TEST(isFloat("9."));
-//         TEST(isFloat("10.0"));
-//
-//         TEST(isFloat("0.0"));
-//         TEST(isFloat(".1"));
-//         TEST(isFloat("0.2"));
-//         TEST(isFloat(".3"));
-//         TEST(isFloat("0.4"));
-//         TEST(isFloat(".5"));
-//         TEST(isFloat("0.6"));
-//         TEST(isFloat(".7"));
-//         TEST(isFloat("0.8"));
-//         TEST(isFloat(".9"));
-//         TEST(isFloat("0.10"));
-//
-//         TEST(isFloat("1.0"));
-//         TEST(isFloat("+10.f"));
-//         TEST(isFloat(".10"));
-//         TEST(isFloat("-999.999f"));
-//         TEST(isFloat("1e3"));
-//         TEST(isFloat("1e3"));
-//         TEST(isFloat("+1.e3f"));
-//         TEST(isFloat(".1e3"));
-//
-//         TEST(!isFloat("hello"));
-//         TEST(!isFloat("not a number"));
-//         TEST(!isFloat("number"));
-//         TEST(!isFloat("float"));
-//         TEST(!isFloat("1.0ff"));
-//         TEST(!isFloat("0x1.0"));
-//         TEST(!isFloat("-0x1.0"));
-//
-//         TEST(stringToInteger("0") == 0);
-//         TEST(stringToInteger("1") == 1);
-//         TEST(stringToInteger("2") == 2);
-//         TEST(stringToInteger("3") == 3);
-//         TEST(stringToInteger("4") == 4);
-//         TEST(stringToInteger("5") == 5);
-//         TEST(stringToInteger("6") == 6);
-//         TEST(stringToInteger("7") == 7);
-//         TEST(stringToInteger("8") == 8);
-//         TEST(stringToInteger("9") == 9);
-//
-//         TEST(stringToInteger("0000000") == 0);
-//         TEST(stringToInteger("+0000001") == +1);
-//         TEST(stringToInteger("0000002") == 2);
-//         TEST(stringToInteger("-0000003") == -3);
-//         TEST(stringToInteger("0000004") == 4);
-//         TEST(stringToInteger("+0000005") == +5);
-//         TEST(stringToInteger("0000006") == 6);
-//         TEST(stringToInteger("-0000007") == -7);
-//         TEST(stringToInteger("0000008") == 8);
-//         TEST(stringToInteger("+0000009") == +9);
-//
-//         TEST(stringToInteger("0000000") == 0);
-//         TEST(stringToInteger("1000000") == 1000000);
-//         TEST(stringToInteger("2000000") == 2000000);
-//         TEST(stringToInteger("3000000") == 3000000);
-//         TEST(stringToInteger("4000000") == 4000000);
-//         TEST(stringToInteger("5000000") == 5000000);
-//         TEST(stringToInteger("6000000") == 6000000);
-//         TEST(stringToInteger("7000000") == 7000000);
-//         TEST(stringToInteger("8000000") == 8000000);
-//         TEST(stringToInteger("9000000") == 9000000);
-//         TEST(stringToInteger("1234567890") == 1234567890);
-//
-//         TEST(stringToFloat("0.0") == 0.0);
-//         TEST(stringToFloat("1.0f") == 1.0);
-//         TEST(stringToFloat("2.0") == 2.0);
-//         TEST(stringToFloat("3.0f") == 3.0);
-//         TEST(stringToFloat("4.0") == 4.0);
-//         TEST(stringToFloat("5.0f") == 5.0);
-//         TEST(stringToFloat("6.0") == 6.0);
-//         TEST(stringToFloat("7.0f") == 7.0);
-//         TEST(stringToFloat("8.0") == 8.0);
-//         TEST(stringToFloat("9.0f") == 9.0);
-//
-//         TEST(stringToFloat("0e1") == 0.0);
-//         TEST(stringToFloat("1e2f") == 1e2);
-//         TEST(stringToFloat("2e3") == 2e3);
-//         TEST(stringToFloat("3e4f") == 3e4);
-//         TEST(stringToFloat("4e5") == 4e5);
-//         TEST(stringToFloat("5e6f") == 5e6);
-//         TEST(stringToFloat("6e7") == 6e7);
-//         TEST(stringToFloat("7e8f") == 7e8);
-//         TEST(stringToFloat("8e9") == 8e9);
-//         TEST(stringToFloat("9e10f") == 9e10);
-//
-//         TEST(stringToFloat("0e1") == 0.0);
-//         TEST(stringToFloat("1e2f") == 1e2);
-//         TEST(stringToFloat("2e3") == 2e3);
-//         TEST(stringToFloat("3e4f") == 3e4);
-//         TEST(stringToFloat("4e5") == 4e5);
-//         TEST(stringToFloat("5e6f") == 5e6);
-//         TEST(stringToFloat("6e7") == 6e7);
-//         TEST(stringToFloat("7e8f") == 7e8);
-//         TEST(stringToFloat("8e9") == 8e9);
-//         TEST(stringToFloat("9e10f") == 9e10);
-//
-//         TEST(stringToFloat(".1") == .1);
-//         TEST(stringToFloat("+.1") == +.1);
-//         TEST(stringToFloat("-.1") == -.1);
-//         TEST(stringToFloat("+.1e5") == +.1e5);
-//
-//         TEST(integerToString(arena, 0) == "0");
-//         TEST(integerToString(arena, -1) == "-1");
-//         TEST(integerToString(arena, 2) == "2");
-//         TEST(integerToString(arena, -3) == "-3");
-//         TEST(integerToString(arena, 4) == "4");
-//         TEST(integerToString(arena, -5) == "-5");
-//         TEST(integerToString(arena, 6) == "6");
-//         TEST(integerToString(arena, -7) == "-7");
-//         TEST(integerToString(arena, 8) == "8");
-//         TEST(integerToString(arena, -9) == "-9");
-//
-//         TEST(integerToString(arena, 0000000) == "0");
-//         TEST(integerToString(arena, -1000000) == "-1000000");
-//         TEST(integerToString(arena, 2000000) == "2000000");
-//         TEST(integerToString(arena, -3000000) == "-3000000");
-//         TEST(integerToString(arena, 4000000) == "4000000");
-//         TEST(integerToString(arena, -5000000) == "-5000000");
-//         TEST(integerToString(arena, 6000000) == "6000000");
-//         TEST(integerToString(arena, -7000000) == "-7000000");
-//         TEST(integerToString(arena, 8000000) == "8000000");
-//         TEST(integerToString(arena, -9000000) == "-9000000");
-//         TEST(integerToString(arena, 1234567890) == "1234567890");
-//
-//         TEST(floatToString(arena, 0.0, 10) == "0.0");
-//         TEST(floatToString(arena, -1.0f, 1) == "-1.0");
-//         TEST(floatToString(arena, 2.0, 2) == "2.00");
-//         TEST(floatToString(arena, -3.0f, 3) == "-3.000");
-//         TEST(floatToString(arena, 4.0, 4) == "4.0000");
-//         TEST(floatToString(arena, -5.0f, 5) == "-5.00000");
-//         TEST(floatToString(arena, 6.0, 6) == "6.000000");
-//         TEST(floatToString(arena, -7.0f, 7) == "-7.0000000");
-//         TEST(floatToString(arena, 8.0, 8) == "8.00000000");
-//         TEST(floatToString(arena, -9.0f, 9) == "-9.000000000");
-//
-//         TEST(floatToString(arena, 0e0, 1) == "0.0");
-//         TEST(floatToString(arena, -1e1f, 0) == "-10.");
-//         TEST(floatToString(arena, 2e2, 1) == "200.0");
-//         TEST(floatToString(arena, -3e3f, 0) == "-3000.");
-//         TEST(floatToString(arena, 4e4, 1) == "40000.0");
-//         TEST(floatToString(arena, -5e5f, 0) == "-500000.");
-//         TEST(floatToString(arena, 6e6, 1) == "6000000.0");
-//         TEST(floatToString(arena, -7e7f, 0) == "-70000000.");
-//         TEST(floatToString(arena, 8e8, 1) == "800000000.0");
-//         TEST(floatToString(arena, -9e9f, 0) == "-8999999488.");
-//
-//         TEST(floatToString(arena, -0e-0, 3) == "0.0");
-//         TEST(floatToString(arena, 1e-1f, 3) == "0.100");
-//         TEST(floatToString(arena, -2e-2, 3) == "-0.020");
-//         TEST(floatToString(arena, 3e-3f, 3) == "0.003");
-//         TEST(floatToString(arena, -4e-0, 3) == "-4.000");
-//         TEST(floatToString(arena, 5e-1f, 3) == "0.500");
-//         TEST(floatToString(arena, -6e-2, 3) == "-0.060");
-//         TEST(floatToString(arena, 7e-3f, 3) == "0.007");
-//         TEST(floatToString(arena, -8e-0, 3) == "-8.000");
-//         TEST(floatToString(arena, 9e-1f, 3) == "0.899");
-//     }
-//
-//     // thread pool
-//     {
-//         {
-//             Fence* fence = fenceCreate();
-//             HG_DEFER(fenceDestroy(fence));
-//
-//             bool a = false;
-//             bool b = false;
-//
-//             callPar(fence, &a, [](void *pa)
-//             {
-//                 *static_cast<bool*>(pa) = true;
-//             });
-//             callPar(fence, &b, [](void *pb)
-//             {
-//                 *static_cast<bool*>(pb) = true;
-//             });
-//
-//             fenceWait(fence, 2.0);
-//
-//             TEST(fenceWait(fence, 2.0));
-//
-//             TEST(a == true);
-//             TEST(b == true);
-//         }
-//
-//         {
-//             Fence* fence = fenceCreate();
-//             HG_DEFER(fenceDestroy(fence));
-//
-//             bool vals[100]{};
-//             for (bool& val : vals)
-//             {
-//                 callPar(fence, &val, [](void* data)
-//                 {
-//                     *static_cast<bool*>(data) = true;
-//                 });
-//             }
-//
-//             TEST(helpThreads(fence, 2.0));
-//
-//             for (bool& val : vals)
-//             {
-//                 TEST(val == true);
-//             }
-//         }
-//
-//         {
-//             bool vals[100]{};
-//
-//             auto fn = [](void* pvals, u64 idx)
-//             {
-//                 (static_cast<bool*>(pvals))[idx] = true;
-//             };
-//             forPar(0, std::size(vals), vals, fn);
-//
-//             for (bool& val : vals)
-//             {
-//                 TEST(val == true);
-//             }
-//         }
-//
-//         {
-//             Fence* fence = fenceCreate();
-//             HG_DEFER(fenceDestroy(fence));
-//
-//             for (u32 n = 0; n < 3; ++n)
-//             {
-//                 std::atomic_bool start{false};
-//                 std::thread producers[4];
-//
-//                 bool vals[100]{};
-//
-//                 auto fn = [](void* pval)
-//                 {
-//                     *static_cast<bool*>(pval) = !*static_cast<bool*>(pval);
-//                 };
-//
-//                 auto prodFn = [&](u32 idx)
-//                 {
-//                     while (!start)
-//                     {
-//                         _mm_pause();
-//                     }
-//                     u32 begin = idx * 25;
-//                     u32 end = begin + 25;
-//                     for (u32 i = begin; i < end; ++i)
-//                     {
-//                         callPar(fence, vals + i, fn);
-//                     }
-//                 };
-//                 for (u32 j = 0; j < std::size(producers); ++j)
-//                 {
-//                     producers[j] = std::thread(prodFn, j);
-//                 }
-//
-//                 start.store(true);
-//                 for (auto& thread : producers)
-//                 {
-//                     thread.join();
-//                 }
-//
-//                 TEST(helpThreads(fence, 2.0));
-//                 for (auto val : vals)
-//                 {
-//                     TEST(val == true);
-//                 }
-//             }
-//         }
-//     }
-//
-//     // Mutex
-//     {
-//         struct Capture {
-//             Spinlock* mtx;
-//             u32 count;
-//         };
-//         Capture c{};
-//
-//         c.mtx = mutexCreate();
-//         HG_DEFER(mutexDestroy(c.mtx));
-//
-//         c.count = 0;
-//         forPar(0, 100, &c, [](void* pc, u64)
-//         {
-//             Capture* c = static_cast<Capture*>(pc);
-//             mutexAcquire(c->mtx);
-//             HG_DEFER(mutexRelease(c->mtx));
-//             for (u32 i = 0; i < 10000; ++i)
-//             {
-//                 ++c->count;
-//             }
-//         });
-//         TEST(c.count == 1000000);
-//     }
-//
 //     // Serialization
 //     {
 //         ArenaScope arena = getScratch();

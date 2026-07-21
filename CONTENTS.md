@@ -38,8 +38,7 @@ Use `grep` to find specific symbols.
     - thread pool
     - parallel for
 - GPU
-    - Format
-    - TODO: alloction ???
+    - Format enum
     - GpuBuffer
     - GpuImage
     - GpuView

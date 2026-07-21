@@ -5,8 +5,6 @@ using namespace hg;
 #define IM_ASSERT HG_ASSERT
 #include "imgui.h"
 
-#include <emmintrin.h>
-
 static volatile bool quit = false;
 
 static Clock cpuClock{};
@@ -92,15 +90,6 @@ int main()
 
     initImGui(window, window.imageFormat());
     HG_DEFER(deinitImGui());
-
-    // temporary, trick the OS into thinking we're important
-    callPar(nullptr, nullptr, [](void*)
-    {
-        while(!quit)
-        {
-            _mm_pause();
-        }
-    });
 
     Clock gameClock{};
     for (;;)

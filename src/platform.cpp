@@ -1,8 +1,6 @@
 #include "hurdygurdy.hpp"
 #include "internal.hpp"
 
-#include <cstdio>
-
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
@@ -1539,13 +1537,14 @@ void GpuBuffer::read(void* dst, u64 offset, u64 size)
 }
 
 GpuImage::GpuImage(u32 width, u32 height, Format format, GpuImageUsageFlags usage)
+    : GpuImage{}
 {
     GpuImageCreateInfo create{};
     create.width = width;
     create.height = height;
     create.format = format;
     create.usage = usage;
-    new (this) GpuImage{create};
+    *this = GpuImage{create};
 }
 
 GpuImage::GpuImage(const GpuImageCreateInfo& create)
@@ -1701,7 +1700,7 @@ GpuView::GpuView(const GpuViewCreateInfo& config)
 
     if (image->usage & GpuImageUsage_storage)
     {
-        data->samplerDesc = createImageDescriptor(
+        data->storageDesc = createImageDescriptor(
             DescriptorType_storageImage,
             *this,
             GpuLayout_general);
@@ -1952,10 +1951,14 @@ void GpuView::read(void* dst)
     HG_ASSERT(data->lastLayout != GpuLayout_undefined);
     HG_ASSERT(data != nullptr);
 
-    u64 size = data->image->width
-             * data->image->height
-             * data->image->depth
-             * formatToSize(data->image->format);
+    u32 mipW = data->image->width >> data->baseMipLevel;
+    u32 mipH = data->image->height >> data->baseMipLevel;
+    u32 mipD = data->image->depth >> data->baseMipLevel;
+    if (mipW < 1) mipW = 1;
+    if (mipH < 1) mipH = 1;
+    if (mipD < 1) mipD = 1;
+
+    u64 size = mipW * mipH * mipD * formatToSize(data->image->format);
 
     GpuBuffer stage{size, GpuBufferUsage_transferDst, GpuMemoryUsage_stagingRead};
 
@@ -1988,7 +1991,7 @@ void GpuView::read(void* dst)
     region.imageSubresource.mipLevel = data->baseMipLevel;
     region.imageSubresource.baseArrayLayer = data->baseArrayLayer;
     region.imageSubresource.layerCount = data->layerCount;
-    region.imageExtent = {data->image->width, data->image->height, data->image->depth};
+    region.imageExtent = {mipW, mipH, mipD};
 
     vkCmdCopyImageToBuffer(
         reinterpret_cast<VkCommandBuffer>(cmd),
@@ -2021,7 +2024,7 @@ void GpuView::genMipmaps()
     mipOffset.z = static_cast<i32>(data->image->depth);
 
     VkImageMemoryBarrier2 barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
     barrier.srcAccessMask = VK_ACCESS_NONE;
     barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -2433,7 +2436,7 @@ void gpuMemoryBarrier(
 {
     ArenaScope scratch = getScratch();
 
-    VkBufferMemoryBarrier2* vkBufferBarriers = scratch.alloc<VkBufferMemoryBarrier2>(imageBarrierCount);
+    VkBufferMemoryBarrier2* vkBufferBarriers = scratch.alloc<VkBufferMemoryBarrier2>(bufferBarrierCount);
     VkImageMemoryBarrier2* vkImageBarriers = scratch.alloc<VkImageMemoryBarrier2>(imageBarrierCount);
 
     for (u32 i = 0; i < bufferBarrierCount; ++i)
@@ -2499,17 +2502,17 @@ static VkAttachmentStoreOp gpuStoreOpToVk(GpuStoreOp op)
     return static_cast<VkAttachmentStoreOp>(op);
 }
 
-void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
+void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
 {
     ArenaScope scratch = getScratch();
 
     ArrayTemp<VkBufferMemoryBarrier2> bufferBarriers{scratch, 0, 32};
     ArrayTemp<VkImageMemoryBarrier2> imageBarriers{scratch, 0, 32};
 
-    for (u32 i = 0; i < pass->uniformBufferCount; ++i)
+    for (u32 i = 0; i < pass.uniformBufferCount; ++i)
     {
         VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
-        GpuBufferData* buffer = pass->uniformBuffers[i]->data;
+        GpuBufferData* buffer = pass.uniformBuffers[i]->data;
 
         barrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
         barrier->srcStageMask = gpuStageToVk(buffer->lastStage);
@@ -2523,10 +2526,10 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
         buffer->lastAccess = GpuAccess_uniformRead;
     }
 
-    for (u32 i = 0; i < pass->storageBufferCount; ++i)
+    for (u32 i = 0; i < pass.storageBufferCount; ++i)
     {
         VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
-        GpuBufferData* buffer = pass->storageBuffers[i]->data;
+        GpuBufferData* buffer = pass.storageBuffers[i]->data;
 
         barrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
         barrier->srcStageMask = gpuStageToVk(buffer->lastStage);
@@ -2540,10 +2543,10 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
         buffer->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
     }
 
-    for (u32 i = 0; i < pass->sampledImageCount; ++i)
+    for (u32 i = 0; i < pass.sampledImageCount; ++i)
     {
         VkImageMemoryBarrier2* barrier = imageBarriers.push();
-        GpuViewData* image = pass->sampledImages[i]->data;
+        GpuViewData* image = pass.sampledImages[i]->data;
 
         barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier->srcStageMask = gpuStageToVk(image->lastStage);
@@ -2566,10 +2569,10 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass* pass)
         image->lastLayout = GpuLayout_shaderReadOnly;
     }
 
-    for (u32 i = 0; i < pass->storageImageCount; ++i)
+    for (u32 i = 0; i < pass.storageImageCount; ++i)
     {
         VkImageMemoryBarrier2* barrier = imageBarriers.push();
-        GpuViewData* image = pass->storageImages[i]->data;
+        GpuViewData* image = pass.storageImages[i]->data;
 
         barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier->srcStageMask = gpuStageToVk(image->lastStage);
@@ -2648,7 +2651,6 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
         VkImageMemoryBarrier2* barrier = imageBarriers.push();
         GpuViewData* image = pass.sampledImages[i]->data;
 
-        imageBarriers[i] = {};
         barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier->srcStageMask = gpuStageToVk(image->lastStage);
         barrier->srcAccessMask = gpuAccessToVk(image->lastAccess);
@@ -2820,14 +2822,29 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
     {
         stencilAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         stencilAttachment.imageView = pass.stencilAttachment->image->data->view;
-        stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         stencilAttachment.loadOp = gpuLoadOpToVk(pass.stencilAttachment->loadOp);
         stencilAttachment.storeOp = gpuStoreOpToVk(pass.stencilAttachment->storeOp);
         memcpy(&stencilAttachment.clearValue, &pass.stencilAttachment->clearValue, sizeof(VkClearValue));
     }
 
-    u32 width = pass.colorAttachments[0].image->data->image->width;
-    u32 height = pass.colorAttachments[0].image->data->image->height;
+    u32 width, height;
+    if (pass.colorAttachmentCount > 0)
+    {
+        width = pass.colorAttachments[0].image->data->image->width;
+        height = pass.colorAttachments[0].image->data->image->height;
+    }
+    else if (pass.depthAttachment != nullptr)
+    {
+        width = pass.depthAttachment->image->data->image->width;
+        height = pass.depthAttachment->image->data->image->height;
+    }
+    else
+    {
+        HG_ASSERT(pass.stencilAttachment != nullptr);
+        width = pass.stencilAttachment->image->data->image->width;
+        height = pass.stencilAttachment->image->data->image->height;
+    }
 
     VkRenderingInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;

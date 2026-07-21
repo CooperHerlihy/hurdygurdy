@@ -34,13 +34,10 @@
 #include <cstring>
 
 #include <algorithm>
-#include <utility>
-#include <type_traits>
-
 #include <atomic>
-#include <condition_variable>
-#include <mutex>
 #include <thread>
+#include <type_traits>
+#include <utility>
 
 namespace hg {
 
@@ -1976,6 +1973,9 @@ struct GpuViewData;
 
 /**
  * A gpu view
+ *
+ * The view references the GpuImage it was created from internally.
+ * The GpuImage must outlive any GpuView that references it.
  */
 struct GpuView {
     /**
@@ -2103,20 +2103,6 @@ struct GpuView {
 u32 getMaxMipmaps(u32 width, u32 height, u32 depth);
 
 /**
- * A push constant range in a pipeline
- */
-struct GpuPushRange {
-    /**
-     * The offset in bytes
-     */
-    u32 offset = 0;
-    /**
-     * The size of the push in bytes
-     */
-    u32 size = 0;
-};
-
-/**
  * How the vertex list is interpreted
  */
 enum GpuTopology : u32 {
@@ -2188,6 +2174,8 @@ struct GpuGraphicsPipelineCreateInfo {
     Format depthAttachmentFormat = Format_undefined;
     /**
      * The format of the stencil attachment, no stencil attachment if UNDEFINED
+     *
+     * TODO: Stencil state is not yet implemented
      */
     Format stencilAttachmentFormat = Format_undefined;
     /**

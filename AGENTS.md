@@ -1,12 +1,11 @@
 # Hurdy Gurdy
 
-C++23 game engine. Vulkan 1.3, SDL3, Dear ImGui.
-No STL, exceptions, RTTI.
+C++20 game engine. Vulkan 1.3, SDL3, Dear ImGui.
 
 ## Hard Rules
 
 **Always inform. Never act without approval.**
-- No STL, exceptions, RTTI, third-party code, or reformatting
+- No exceptions, RTTI, third-party code, or reformatting
 - Never run scripts without backups and tests
 - When asked to write tests, load the write-tests skill first
 
@@ -54,8 +53,8 @@ src/minimal.cpp          — example minimal
 - 4-space indent. Braces: next line for code blocks, same line for types/init.
 - `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros.
 - Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`. No `int`/`size_t`/`std::*`.
-- RAII, no failing constructors, delete copy ctors, use clone().
-- Assert with `HG_ASSERT`. Recoverable errors: `Option<T>`. Unrecoverable: `HG_PANIC`.
-- Memory: scratch arena > containers > heapAlloc/heapFree.
+- RAII, no failing constructors, delete copy ctors, use foo.clone().
+- Assert with `HG_ASSERT`. Recoverable errors: `setError()` and `Option<T>`. Unrecoverable: `HG_PANIC`.
+- Memory: scratch arena > hg:: containers > heapAlloc/heapFree. Never std:: containers
 - Concurrency: forPar() > callPar() > std::*.
 

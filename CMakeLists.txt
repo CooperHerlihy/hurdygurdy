@@ -4,7 +4,7 @@ project(hurdygurdy VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -82,6 +82,9 @@ set(SHADERS
     sprite.frag
     model.vert
     model.frag
+    test_compute.comp
+    test_tri.vert
+    test_tri.frag
 )
 
 set(SHADER_HEADERS)
@@ -163,6 +166,7 @@ target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygu
 foreach(tgt test editor minimal)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
+    target_include_directories(${tgt} PRIVATE ${CMAKE_BINARY_DIR})
     # PCH disabled
     target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
 endforeach()

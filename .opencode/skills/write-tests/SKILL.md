@@ -3,9 +3,11 @@ name: write-tests
 description: Add/modify tests in src/test.cpp. Monolithic file, TEST() macro, scoped blocks, edge-case coverage.
 ---
 
-Write tests as scoped blocks matching header declaration order. Cover every function, parameter boundary, error path, and edge case.
+**Test the header, not the implementation**: Write tests against the *correct* behavior, not against any specific buggy behavior you happen to observe. If the implementation does anything unexpected, it should be documented or fixed.
 
 Tests are **living documentation**. Comment every scenario and edge case — the comments are as important as the assertions.
+
+Write tests as scoped blocks matching header declaration order. Cover every function, parameter boundary, error path, and edge case.
 
 ```cpp
 // SubsystemName
@@ -20,9 +22,9 @@ Tests are **living documentation**. Comment every scenario and edge case — the
 ## Patterns
 
 - **Cleanup**: Destructor or `HG_DEFER(functionCall());`
-- **Arena**: `ArenaScope scratch = getScratch();`
-- **Concurrency**: `Fence* f = fenceCreate(); HG_DEFER(fenceDestroy(f)); helpThreads(f, timeout);`
+- **Memory**: `ArenaScope scratch = getScratch();`
 - **Floats:** `TEST(std::abs(a - b) <= FLT_EPSILON)` or `vecEq2/3/4`.
+- **Lifetimes:** Use Lifecycle type defined at top of test.cpp
 
 ## Template
 

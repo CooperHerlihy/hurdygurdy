@@ -1,0 +1,23 @@
+#version 460
+
+#include "hurdygurdy.glsl"
+
+layout (push_constant) uniform Push {
+    uint addVal;
+    uint inIdx;
+    uint outIdx;
+} push;
+
+layout (HgStorageBuffer) buffer InBuf {
+    uint data[];
+} inBufs[];
+
+layout (HgStorageBuffer) buffer OutBuf {
+    uint data[];
+} outBufs[];
+
+void main()
+{
+    uint idx = gl_GlobalInvocationID.x;
+    outBufs[push.outIdx].data[idx] = inBufs[push.inIdx].data[idx] + push.addVal;
+}

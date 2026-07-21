@@ -1,10 +1,10 @@
 #include "hurdygurdy.hpp"
 #include "internal.hpp"
 
-#include <cstdio>
-#include <cstring>
 #include <ctime>
 
+#include <condition_variable>
+#include <mutex>
 #include <random>
 
 #include <emmintrin.h>
@@ -373,8 +373,6 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     }
 
     ++threadPool.workCount;
-    threadPool.mtx.lock();
-    threadPool.mtx.unlock();
     threadPool.cv.notify_one();
 }
 
