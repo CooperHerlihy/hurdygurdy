@@ -456,7 +456,7 @@ int main()
     // Default-constructed Span is empty
     {
         Span<i32> s;
-        TEST(s.vals == nullptr);
+        TEST(s.data == nullptr);
         TEST(s.count == 0);
     }
 
@@ -464,7 +464,7 @@ int main()
     {
         i32 vals[3] = {10, 20, 30};
         Span<i32> s{vals, 3};
-        TEST(s.vals == vals);
+        TEST(s.data == vals);
         TEST(s.count == 3);
         TEST(s[0] == 10);
         TEST(s[2] == 30);
@@ -2153,18 +2153,13 @@ int main()
         GpuComputePass pass{};
         GpuBuffer* storageBufs[] = {&buf};
         pass.storageBuffers = storageBufs;
-        pass.storageBufferCount = 1;
         gpuComputePass(cmd, pass);
         gpuCmdEnd(cmd);
     }
 
     // GpuPipeline compute: lifecycle
     {
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            test_compute_comp_spv,
-            sizeof(test_compute_comp_spv),
-            12
-        }};
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{{test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12}};
         TEST(pipe.data != nullptr);
 
         // Move construction
@@ -2200,11 +2195,7 @@ int main()
         };
         Push push{addVal, inBuf.storageDescriptor(), outBuf.storageDescriptor()};
 
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            test_compute_comp_spv,
-            sizeof(test_compute_comp_spv),
-            sizeof(Push)
-        }};
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{{test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push)}};
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -2233,13 +2224,10 @@ int main()
     // GpuPipeline graphics: lifecycle
     {
         GpuGraphicsPipelineCreateInfo ci{};
-        ci.vertexShader = test_tri_vert_spv;
-        ci.vertexShaderSize = sizeof(test_tri_vert_spv);
-        ci.fragmentShader = test_tri_frag_spv;
-        ci.fragmentShaderSize = sizeof(test_tri_frag_spv);
+        ci.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
+        ci.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
         Format colorFmt = Format_r8g8b8a8_unorm;
-        ci.colorAttachmentFormats = &colorFmt;
-        ci.colorAttachmentCount = 1;
+        ci.colorAttachmentFormats = {&colorFmt, 1};
 
         GpuPipeline pipe{ci};
         TEST(pipe.data != nullptr);
@@ -2265,13 +2253,10 @@ int main()
         GpuView colorView{colorImg, GpuAspect_color};
 
         GpuGraphicsPipelineCreateInfo ci{};
-        ci.vertexShader = test_tri_vert_spv;
-        ci.vertexShaderSize = sizeof(test_tri_vert_spv);
-        ci.fragmentShader = test_tri_frag_spv;
-        ci.fragmentShaderSize = sizeof(test_tri_frag_spv);
+        ci.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
+        ci.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
         Format colorFmt = Format_r8g8b8a8_unorm;
-        ci.colorAttachmentFormats = &colorFmt;
-        ci.colorAttachmentCount = 1;
+        ci.colorAttachmentFormats = {&colorFmt, 1};
 
         GpuPipeline pipe{ci};
 
@@ -2287,8 +2272,7 @@ int main()
         colorAtt.clearValue.color.float32[3] = 1.0f;
 
         GpuRenderPass pass{};
-        pass.colorAttachments = &colorAtt;
-        pass.colorAttachmentCount = 1;
+        pass.colorAttachments = {&colorAtt, 1};
 
         gpuRenderPassBegin(cmd, pass);
         gpuBindPipeline(cmd, pipe);

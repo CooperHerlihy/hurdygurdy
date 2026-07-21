@@ -811,7 +811,7 @@ static const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerInfo{
 static VkInstance createInstance(Span<StringView> extensions)
 {
     if (extensions.count > 0)
-        HG_ASSERT(extensions.vals != nullptr);
+        HG_ASSERT(extensions.data != nullptr);
 
     ArenaScope scratch = getScratch();
 
@@ -1130,7 +1130,7 @@ bool internal::initGpu()
     {
         Span<StringView> exts = internal::platformGetVulkanExtensions(scratch);
 #ifdef HG_VK_DEBUG_MESSENGER
-        scratch.extend(exts.vals, exts.count, exts.count + 1);
+        scratch.extend(exts.data, exts.count, exts.count + 1);
         ++exts.count;
         exts[exts.count - 1] = "VK_EXT_debug_utils";
 #endif
@@ -2123,10 +2123,10 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
 GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
     : data{vk.pipelines.alloc()}
 {
-    HG_ASSERT(config.vertexShader != nullptr);
-    HG_ASSERT(config.fragmentShader != nullptr);
-    if (config.colorAttachmentCount > 0)
-        HG_ASSERT(config.colorAttachmentFormats != nullptr);
+    HG_ASSERT(config.vertexShader.data != nullptr);
+    HG_ASSERT(config.fragmentShader.data != nullptr);
+    if (config.colorAttachmentFormats.count > 0)
+        HG_ASSERT(config.colorAttachmentFormats.data != nullptr);
 
     ArenaScope scratch = getScratch();
 
@@ -2146,8 +2146,8 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
     if (data->layout == nullptr)
         HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
-    VkShaderModule vertexShader = createShaderModule(config.vertexShader, config.vertexShaderSize);
-    VkShaderModule fragmentShader = createShaderModule(config.fragmentShader, config.fragmentShaderSize);
+    VkShaderModule vertexShader = createShaderModule(config.vertexShader.data, config.vertexShader.count);
+    VkShaderModule fragmentShader = createShaderModule(config.fragmentShader.data, config.fragmentShader.count);
     HG_DEFER(vkDestroyShaderModule(vk.device, vertexShader, nullptr));
     HG_DEFER(vkDestroyShaderModule(vk.device, fragmentShader, nullptr));
 
@@ -2212,21 +2212,21 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
     depthStencilState.minDepthBounds = 0.0f;
     depthStencilState.maxDepthBounds = 1.0f;
 
-    VkPipelineColorBlendAttachmentState* colorBlendAttachments
-        = scratch.alloc<VkPipelineColorBlendAttachmentState>(config.colorAttachmentCount);
+    ArrayTemp<VkPipelineColorBlendAttachmentState> colorBlendAttachments{scratch, 0, static_cast<u32>(config.colorAttachmentFormats.count)};
 
-    for (u32 i = 0; i < config.colorAttachmentCount; ++i)
+    for (u32 i = 0; i < config.colorAttachmentFormats.count; ++i)
     {
-        colorBlendAttachments[i].blendEnable = config.colorBlendEnables != nullptr
+        VkPipelineColorBlendAttachmentState* attachment = colorBlendAttachments.push();
+        attachment->blendEnable = config.colorBlendEnables.data != nullptr
             ? config.colorBlendEnables[i]
             : VK_FALSE;
-        colorBlendAttachments[i].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        colorBlendAttachments[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        colorBlendAttachments[i].colorBlendOp = VK_BLEND_OP_ADD;
-        colorBlendAttachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        colorBlendAttachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        colorBlendAttachments[i].alphaBlendOp = VK_BLEND_OP_ADD;
-        colorBlendAttachments[i].colorWriteMask
+        attachment->srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        attachment->dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        attachment->colorBlendOp = VK_BLEND_OP_ADD;
+        attachment->srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        attachment->dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        attachment->alphaBlendOp = VK_BLEND_OP_ADD;
+        attachment->colorWriteMask
             = VK_COLOR_COMPONENT_R_BIT
             | VK_COLOR_COMPONENT_G_BIT
             | VK_COLOR_COMPONENT_B_BIT
@@ -2237,8 +2237,8 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
     colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlendState.logicOpEnable = VK_FALSE;
     colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    colorBlendState.attachmentCount = config.colorAttachmentCount;
-    colorBlendState.pAttachments = colorBlendAttachments;
+    colorBlendState.attachmentCount = static_cast<u32>(colorBlendAttachments.count);
+    colorBlendState.pAttachments = colorBlendAttachments.vals;
     for (float& blendConstant : colorBlendState.blendConstants)
     {
         blendConstant = 1.0f;
@@ -2250,18 +2250,18 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
     dynamicState.dynamicStateCount = static_cast<u32>(std::size(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
-    VkFormat* colorFormats = scratch.alloc<VkFormat>(config.colorAttachmentCount);
-    for (u32 i = 0; i < config.colorAttachmentCount; ++i)
+    ArrayTemp<VkFormat> colorFormats{scratch, 0, static_cast<u32>(config.colorAttachmentFormats.count)};
+    for (u32 i = 0; i < config.colorAttachmentFormats.count; ++i)
     {
-        colorFormats[i] = formatToVk(config.colorAttachmentFormats[i]);
+        colorFormats.push(formatToVk(config.colorAttachmentFormats[i]));
     }
     VkFormat depthFormat = formatToVk(config.depthAttachmentFormat);
     VkFormat stencilFormat = formatToVk(config.stencilAttachmentFormat);
 
     VkPipelineRenderingCreateInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    renderingInfo.colorAttachmentCount = static_cast<u32>(config.colorAttachmentCount);
-    renderingInfo.pColorAttachmentFormats = colorFormats;
+    renderingInfo.colorAttachmentCount = colorFormats.count;
+    renderingInfo.pColorAttachmentFormats = colorFormats.vals;
     renderingInfo.depthAttachmentFormat = depthFormat;
     renderingInfo.stencilAttachmentFormat = stencilFormat;
 
@@ -2295,8 +2295,8 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
 GpuPipeline::GpuPipeline(const GpuComputePipelineCreateInfo& config)
     : data{vk.pipelines.alloc()}
 {
-    HG_ASSERT(config.shaderCode != nullptr);
-    HG_ASSERT(config.shaderCodeSize > 0);
+    HG_ASSERT(config.shaderCode.data != nullptr);
+    HG_ASSERT(config.shaderCode.count > 0);
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2312,7 +2312,7 @@ GpuPipeline::GpuPipeline(const GpuComputePipelineCreateInfo& config)
     if (data->layout == nullptr)
         HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
-    VkShaderModule computeShader = createShaderModule(config.shaderCode, config.shaderCodeSize);
+    VkShaderModule computeShader = createShaderModule(config.shaderCode.data, static_cast<u32>(config.shaderCode.count));
     HG_DEFER(vkDestroyShaderModule(vk.device, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
@@ -2509,7 +2509,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
     ArrayTemp<VkBufferMemoryBarrier2> bufferBarriers{scratch, 0, 32};
     ArrayTemp<VkImageMemoryBarrier2> imageBarriers{scratch, 0, 32};
 
-    for (u32 i = 0; i < pass.uniformBufferCount; ++i)
+    for (u32 i = 0; i < pass.uniformBuffers.count; ++i)
     {
         VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
         GpuBufferData* buffer = pass.uniformBuffers[i]->data;
@@ -2526,7 +2526,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
         buffer->lastAccess = GpuAccess_uniformRead;
     }
 
-    for (u32 i = 0; i < pass.storageBufferCount; ++i)
+    for (u32 i = 0; i < pass.storageBuffers.count; ++i)
     {
         VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
         GpuBufferData* buffer = pass.storageBuffers[i]->data;
@@ -2543,7 +2543,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
         buffer->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
     }
 
-    for (u32 i = 0; i < pass.sampledImageCount; ++i)
+    for (u32 i = 0; i < pass.sampledImages.count; ++i)
     {
         VkImageMemoryBarrier2* barrier = imageBarriers.push();
         GpuViewData* image = pass.sampledImages[i]->data;
@@ -2569,7 +2569,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
         image->lastLayout = GpuLayout_shaderReadOnly;
     }
 
-    for (u32 i = 0; i < pass.storageImageCount; ++i)
+    for (u32 i = 0; i < pass.storageImages.count; ++i)
     {
         VkImageMemoryBarrier2* barrier = imageBarriers.push();
         GpuViewData* image = pass.storageImages[i]->data;
@@ -2612,7 +2612,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
     ArrayTemp<VkBufferMemoryBarrier2> bufferBarriers{scratch, 0, 32};
     ArrayTemp<VkImageMemoryBarrier2> imageBarriers{scratch, 0, 32};
 
-    for (u32 i = 0; i < pass.uniformBufferCount; ++i)
+    for (u32 i = 0; i < pass.uniformBuffers.count; ++i)
     {
         VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
         GpuBufferData* buffer = pass.uniformBuffers[i]->data;
@@ -2629,7 +2629,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
         buffer->lastAccess = GpuAccess_uniformRead;
     }
 
-    for (u32 i = 0; i < pass.storageBufferCount; ++i)
+    for (u32 i = 0; i < pass.storageBuffers.count; ++i)
     {
         VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
         GpuBufferData* buffer = pass.storageBuffers[i]->data;
@@ -2646,7 +2646,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
         buffer->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
     }
 
-    for (u32 i = 0; i < pass.sampledImageCount; ++i)
+    for (u32 i = 0; i < pass.sampledImages.count; ++i)
     {
         VkImageMemoryBarrier2* barrier = imageBarriers.push();
         GpuViewData* image = pass.sampledImages[i]->data;
@@ -2672,7 +2672,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
         image->lastLayout = GpuLayout_shaderReadOnly;
     }
 
-    for (u32 i = 0; i < pass.storageImageCount; ++i)
+    for (u32 i = 0; i < pass.storageImages.count; ++i)
     {
         VkImageMemoryBarrier2* barrier = imageBarriers.push();
         GpuViewData* image = pass.storageImages[i]->data;
@@ -2698,7 +2698,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
         image->lastLayout = GpuLayout_general;
     }
 
-    for (u32 i = 0; i < pass.colorAttachmentCount; ++i)
+    for (u32 i = 0; i < pass.colorAttachments.count; ++i)
     {
         VkImageMemoryBarrier2* barrier = imageBarriers.push();
         GpuViewData* image = pass.colorAttachments[i].image->data;
@@ -2792,18 +2792,17 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 
-    VkRenderingAttachmentInfo* colorAttachments
-        = scratch.alloc<VkRenderingAttachmentInfo>(pass.colorAttachmentCount);
+    ArrayTemp<VkRenderingAttachmentInfo> colorAttachments{scratch, 0, static_cast<u32>(pass.colorAttachments.count)};
 
-    for (u32 i = 0; i < pass.colorAttachmentCount; ++i)
+    for (u32 i = 0; i < pass.colorAttachments.count; ++i)
     {
-        colorAttachments[i] = {};
-        colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        colorAttachments[i].imageView = pass.colorAttachments[i].image->data->view;
-        colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        colorAttachments[i].loadOp = gpuLoadOpToVk(pass.colorAttachments[i].loadOp);
-        colorAttachments[i].storeOp = gpuStoreOpToVk(pass.colorAttachments[i].storeOp);
-        memcpy(&colorAttachments[i].clearValue, &pass.colorAttachments[i].clearValue, sizeof(VkClearValue));
+        VkRenderingAttachmentInfo* attachment = colorAttachments.push();
+        attachment->sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        attachment->imageView = pass.colorAttachments[i].image->data->view;
+        attachment->imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachment->loadOp = gpuLoadOpToVk(pass.colorAttachments[i].loadOp);
+        attachment->storeOp = gpuStoreOpToVk(pass.colorAttachments[i].storeOp);
+        memcpy(&attachment->clearValue, &pass.colorAttachments[i].clearValue, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo depthAttachment{};
@@ -2829,7 +2828,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
     }
 
     u32 width, height;
-    if (pass.colorAttachmentCount > 0)
+    if (pass.colorAttachments.count > 0)
     {
         width = pass.colorAttachments[0].image->data->image->width;
         height = pass.colorAttachments[0].image->data->image->height;
@@ -2850,8 +2849,8 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderingInfo.renderArea.extent = {width, height};
     renderingInfo.layerCount = pass.layerCount;
-    renderingInfo.colorAttachmentCount = pass.colorAttachmentCount;
-    renderingInfo.pColorAttachments = colorAttachments;
+    renderingInfo.colorAttachmentCount = static_cast<u32>(pass.colorAttachments.count);
+    renderingInfo.pColorAttachments = colorAttachments.vals;
     renderingInfo.pDepthAttachment = pass.depthAttachment != nullptr
         ? &depthAttachment
         : nullptr;

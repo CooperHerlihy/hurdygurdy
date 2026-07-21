@@ -4087,20 +4087,16 @@ struct RenderPush2D {
 void rendererInit2D(Format colorFormat)
 {
     GpuGraphicsPipelineCreateInfo pipelineConfig{};
-    pipelineConfig.vertexShader = render2d_vert_spv;
-    pipelineConfig.vertexShaderSize = sizeof(render2d_vert_spv);
-    pipelineConfig.fragmentShader = render2d_frag_spv;
-    pipelineConfig.fragmentShaderSize = sizeof(render2d_frag_spv);
+    pipelineConfig.vertexShader = {render2d_vert_spv, sizeof(render2d_vert_spv)};
+    pipelineConfig.fragmentShader = {render2d_frag_spv, sizeof(render2d_frag_spv)};
     pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
-    pipelineConfig.colorAttachmentFormats = &colorFormat;
-    pipelineConfig.colorAttachmentCount = 1;
+    pipelineConfig.colorAttachmentFormats = {&colorFormat, 1};
     bool enableColorBlend = true;
-    pipelineConfig.colorBlendEnables = &enableColorBlend;
+    pipelineConfig.colorBlendEnables = {&enableColorBlend, 1};
 
     render2D.pipeline = GpuPipeline{pipelineConfig};
 
-    pipelineConfig.fragmentShader = debug2d_frag_spv;
-    pipelineConfig.fragmentShaderSize = sizeof(debug2d_frag_spv);
+    pipelineConfig.fragmentShader = {debug2d_frag_spv, sizeof(debug2d_frag_spv)};
     pipelineConfig.topology = GpuTopology_lineStrip;
 
     render2D.debugPipeline = GpuPipeline{pipelineConfig};

@@ -471,7 +471,7 @@ struct Span {
     /**
      * The values viewed
      */
-    T* vals = nullptr;
+    T* data = nullptr;
     /**
      * The number of values
      */
@@ -486,14 +486,14 @@ struct Span {
      * Construct from pointer and count
      */
     constexpr Span(T* valuesVal, u64 countVal)
-        : vals{valuesVal}, count{countVal}
+        : data{valuesVal}, count{countVal}
     {}
 
     /**
      * Construct from begin and end
      */
     constexpr Span(T* begin, T* end)
-        : vals{begin}, count{static_cast<u64>(end - begin)}
+        : data{begin}, count{static_cast<u64>(end - begin)}
     {}
 
     /**
@@ -501,7 +501,7 @@ struct Span {
      */
     template<u64 N>
     constexpr Span(T (&arr)[N])
-        : vals{arr}, count{N}
+        : data{arr}, count{N}
     {}
 
     /**
@@ -509,9 +509,9 @@ struct Span {
      */
     constexpr T& operator[](u64 idx) const
     {
-        HG_ASSERT(vals != nullptr);
+        HG_ASSERT(data != nullptr);
         HG_ASSERT(idx < count);
-        return vals[idx];
+        return data[idx];
     }
 
     /**
@@ -519,7 +519,7 @@ struct Span {
      */
     constexpr T* begin() const
     {
-        return vals;
+        return data;
     }
 
     /**
@@ -527,7 +527,7 @@ struct Span {
      */
     constexpr T* end() const
     {
-        return vals + count;
+        return data + count;
     }
 };
 
@@ -1631,12 +1631,12 @@ struct GpuBuffer
      * Parameters
      * - size The size in bytes of the buffer
      * - usageFlags How the buffer will be used
-     * - access How the buffer should be accessed
+     * - memoryUsage How the buffer should be accessed
      */
     GpuBuffer(
         u64 size,
         GpuBufferUsageFlags usageFlags,
-        GpuMemoryUsage access = GpuMemoryUsage_deviceOnly);
+        GpuMemoryUsage memoryUsage = GpuMemoryUsage_deviceOnly);
 
     /**
      * Destroy the gpu buffer
@@ -2143,19 +2143,11 @@ struct GpuGraphicsPipelineCreateInfo {
     /**
      * The vertex shader code
      */
-    const void* vertexShader = nullptr;
-    /**
-     * The size in bytes of the vertex shader code
-     */
-    u64 vertexShaderSize = 0;
+    Span<const u8> vertexShader{};
     /**
      * The fragment shader code
      */
-    const void* fragmentShader = nullptr;
-    /**
-     * The size in bytes of the fragment shader code
-     */
-    u64 fragmentShaderSize = 0;
+    Span<const u8> fragmentShader{};
     /**
      * The size of the push constant
      */
@@ -2163,11 +2155,7 @@ struct GpuGraphicsPipelineCreateInfo {
     /**
      * The format of the color attachments, none can be UNDEFINED
      */
-    const Format* colorAttachmentFormats = nullptr;
-    /**
-     * The number of color attachment formats
-     */
-    u32 colorAttachmentCount = 0;
+    Span<const Format> colorAttachmentFormats;
     /**
      * The format of the depth attachment, no depth attachment if UNDEFINED
      */
@@ -2208,8 +2196,10 @@ struct GpuGraphicsPipelineCreateInfo {
     bool enableDepthWrite = false;
     /**
      * Enables color blending using pixel alpha values for each color attachment
+     *
+     * Empty disables all blend
      */
-    const bool* colorBlendEnables = nullptr;
+    Span<const bool> colorBlendEnables{};
 };
 
 /**
@@ -2219,11 +2209,7 @@ struct GpuComputePipelineCreateInfo {
     /**
      * The spirv compute shader code, must not be nullptr
      */
-    const u8* shaderCode = nullptr;
-    /**
-     * The size in bytes of the shader code, must be greater than 0
-     */
-    u64 shaderCodeSize = 0;
+    Span<const u8> shaderCode{};
     /**
      * The size in bytes of the push constant, if any
      */
@@ -2420,35 +2406,19 @@ struct GpuComputePass {
     /**
      * The uniforms buffer dependencies
      */
-    GpuBuffer** uniformBuffers = nullptr;
-    /**
-     * The number of uniform buffers
-     */
-    u32 uniformBufferCount = 0;
+    Span<GpuBuffer*> uniformBuffers{};
     /**
      * The storage buffer dependencies
      */
-    GpuBuffer** storageBuffers = nullptr;
-    /**
-     * The number of storage buffers
-     */
-    u32 storageBufferCount = 0;
+    Span<GpuBuffer*> storageBuffers{};
     /**
      * The sampled image dependencies
      */
-    GpuView** sampledImages = nullptr;
-    /**
-     * The number of sampled images
-     */
-    u32 sampledImageCount = 0;
+    Span<GpuView*> sampledImages{};
     /**
      * The storage image dependencies
      */
-    GpuView** storageImages = nullptr;
-    /**
-     * The number of storage images
-     */
-    u32 storageImageCount = 0;
+    Span<GpuView*> storageImages{};
 };
 
 /**
@@ -2552,43 +2522,23 @@ struct GpuRenderPass {
     /**
      * The uniforms buffer dependencies
      */
-    GpuBuffer** uniformBuffers = nullptr;
-    /**
-     * The number of uniform buffers
-     */
-    u32 uniformBufferCount = 0;
+    Span<GpuBuffer*> uniformBuffers{};
     /**
      * The storage buffer dependencies
      */
-    GpuBuffer** storageBuffers = nullptr;
-    /**
-     * The number of storage buffers
-     */
-    u32 storageBufferCount = 0;
+    Span<GpuBuffer*> storageBuffers{};
     /**
      * The sampled image dependencies
      */
-    GpuView** sampledImages = nullptr;
-    /**
-     * The number of sampled images
-     */
-    u32 sampledImageCount = 0;
+    Span<GpuView*> sampledImages{};
     /**
      * The storage image dependencies
      */
-    GpuView** storageImages = nullptr;
-    /**
-     * The number of storage images
-     */
-    u32 storageImageCount = 0;
+    Span<GpuView*> storageImages{};
     /**
      * The color images to write to
      */
-    const GpuRenderAttachment* colorAttachments = nullptr;
-    /**
-     * The number of color attachments
-     */
-    u32 colorAttachmentCount = 0;
+    Span<const GpuRenderAttachment> colorAttachments{};
     /**
      * The number of layers in each color attachment to write to
      */

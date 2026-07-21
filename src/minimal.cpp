@@ -171,8 +171,7 @@ int main()
             colorAttachment.image = window.imageView();
 
             GpuRenderPass pass{};
-            pass.colorAttachments = &colorAttachment;
-            pass.colorAttachmentCount = 1;
+            pass.colorAttachments = {&colorAttachment, 1};
 
             gpuRenderPassBegin(cmd, pass);
 
