@@ -1771,25 +1771,6 @@ u64 rngNext64(Rng* rng)
     return (static_cast<u64>(rngNext(rng)) << 32) | static_cast<u64>(rngNext(rng));
 }
 
-const char* serialTypeToString(SerialType s)
-{
-    switch (s)
-    {
-        case SerialType_object:
-            return "SerialType_object";
-        case SerialType_string:
-            return "SerialType_string";
-        case SerialType_integer:
-            return "SerialType_integer";
-        case SerialType_floating:
-            return "SerialType_floating";
-        case SerialType_boolean:
-            return "SerialType_boolean";
-        default:
-            return "invalid SerialType";
-    }
-}
-
 Serializer serialWriter(Arena* arena)
 {
     Serializer s{};
@@ -1830,7 +1811,7 @@ void serializeNodeStart(Serializer* s)
             if (s->parent != nullptr)
             {
                 s->current = s->arena->alloc<SerialNode>(1);
-                s->parent->children = s->current;
+                s->parent->data.get<SerialObject>().firstChild = s->current;
                 s->current->parent = s->parent;
                 s->current->next = nullptr;
             }
@@ -1842,7 +1823,7 @@ void serializeNodeStart(Serializer* s)
         }
 
         if (s->parent != nullptr)
-            ++s->parent->count;
+            ++s->parent->data.get<SerialObject>().childCount;
     }
     else
     {
@@ -1854,7 +1835,7 @@ void serializeNodeStart(Serializer* s)
         {
             if (s->parent != nullptr)
             {
-                s->current = s->parent->children;
+                s->current = s->parent->data.get<SerialObject>().firstChild;
             }
             else
             {
@@ -1871,14 +1852,12 @@ void serializeBegin(Serializer* s, u32* size)
 
     if (s->writing)
     {
-        s->current->type = SerialType_object;
-        s->current->count = 0;
-        s->current->children = nullptr;
+        s->current->data = SerialObject{};
     }
     else
     {
         if (size != nullptr)
-            *size = s->current->count;
+            *size = s->current->data.get<SerialObject>().childCount;
     }
 
     s->parent = s->current;
@@ -1899,14 +1878,13 @@ void serializeVoid(Serializer* s, Span<void> data)
 
     if (s->writing)
     {
-        s->current->type = SerialType_string;
-        s->current->string = StringBuilder{s->arena, {static_cast<char*>(data.data), data.size}};
+        s->current->data = StringView{StringBuilder{s->arena, {static_cast<char*>(data.data), data.size}}};
     }
     else
     {
-        HG_ASSERT(s->current->type == SerialType_string);
-        HG_ASSERT(s->current->string.length == data.size);
-        memcpy(data.data, s->current->string.chars, data.size);
+        HG_ASSERT(s->current->data.is<StringView>());
+        HG_ASSERT(s->current->data.get<StringView>().length == data.size);
+        memcpy(data.data, s->current->data.get<StringView>().chars, data.size);
     }
 }
 
@@ -1917,13 +1895,12 @@ void serialize(Serializer* s, bool* val)
 
     if (s->writing)
     {
-        s->current->type = SerialType_boolean;
-        s->current->boolean = *val;
+        s->current->data = bool{*val};
     }
     else
     {
-        HG_ASSERT(s->current->type == SerialType_boolean);
-        *val = s->current->boolean;
+        HG_ASSERT(s->current->data.is<bool>());
+        *val = s->current->data.get<bool>();
     }
 }
 
@@ -2024,7 +2001,7 @@ struct SerialBinString {
 };
 
 struct SerialBinNode {
-    SerialType type = {};
+    u32 type = {};
     union {
         SerialBinObject object;
         SerialBinString string;
@@ -2039,7 +2016,7 @@ static void serialBinWriteNode(BinaryBuilder* bin, u32 idx, SerialNode* node);
 static void serialBinWriteString(BinaryBuilder* bin, u32 idx, StringView string)
 {
     SerialBinNode node{};
-    node.type = SerialType_string;
+    node.type = SerialData::typeIdx<StringView>;
     node.string.length = static_cast<u32>(string.length);
     node.string.begin = static_cast<u32>(bin->size);
 
@@ -2050,7 +2027,7 @@ static void serialBinWriteString(BinaryBuilder* bin, u32 idx, StringView string)
 static void serialBinWriteInteger(BinaryBuilder* bin, u32 idx, i64 integer)
 {
     SerialBinNode node{};
-    node.type = SerialType_integer;
+    node.type = SerialData::typeIdx<i64>;
     node.integer = integer;
     bin->overwrite(idx, node);
 }
@@ -2058,7 +2035,7 @@ static void serialBinWriteInteger(BinaryBuilder* bin, u32 idx, i64 integer)
 static void serialBinWriteFloating(BinaryBuilder* bin, u32 idx, f64 floating)
 {
     SerialBinNode node{};
-    node.type = SerialType_floating;
+    node.type = SerialData::typeIdx<f64>;
     node.floating = floating;
     bin->overwrite(idx, node);
 }
@@ -2066,24 +2043,24 @@ static void serialBinWriteFloating(BinaryBuilder* bin, u32 idx, f64 floating)
 static void serialBinWriteBoolean(BinaryBuilder* bin, u32 idx, bool boolean)
 {
     SerialBinNode node{};
-    node.type = SerialType_boolean;
+    node.type = SerialData::typeIdx<bool>;
     node.boolean = boolean;
     bin->overwrite(idx, node);
 }
 
-static void serialBinWriteObject(BinaryBuilder* bin, u32 idx, SerialNode* object)
+static void serialBinWriteObject(BinaryBuilder* bin, u32 idx, SerialObject object)
 {
     SerialBinNode node{};
-    node.type = SerialType_object;
-    node.object.fieldCount = object->count;
+    node.type = SerialData::typeIdx<SerialObject>;
+    node.object.fieldCount = object.childCount;
 
     node.object.fieldsBegin = static_cast<u32>(bin->size);
-    bin->resize(bin->size + object->count * sizeof(SerialBinNode));
+    bin->resize(bin->size + object.childCount * sizeof(SerialBinNode));
 
     bin->overwrite(idx, node);
 
-    SerialNode* data = object->children;
-    for (u32 i = 0; i < object->count; ++i)
+    SerialNode* data = object.firstChild;
+    for (u32 i = 0; i < object.childCount; ++i)
     {
         serialBinWriteNode(bin, node.object.fieldsBegin + i * static_cast<u32>(sizeof(SerialBinNode)), data);
         data = data->next;
@@ -2092,26 +2069,13 @@ static void serialBinWriteObject(BinaryBuilder* bin, u32 idx, SerialNode* object
 
 static void serialBinWriteNode(BinaryBuilder* bin, u32 idx, SerialNode* node)
 {
-    switch (node->type)
-    {
-        case SerialType_object:
-            serialBinWriteObject(bin, idx, node);
-            return;
-        case SerialType_string:
-            serialBinWriteString(bin, idx, node->string);
-            return;
-        case SerialType_integer:
-            serialBinWriteInteger(bin, idx, node->integer);
-            return;
-        case SerialType_floating:
-            serialBinWriteFloating(bin, idx, node->floating);
-            return;
-        case SerialType_boolean:
-            serialBinWriteBoolean(bin, idx, node->boolean);
-            return;
-        default:
-            HG_PANIC("Invalid SerialType: %s\n", serialTypeToString(node->type));
-    }
+    node->data.match(
+        [&](SerialObject& obj) { serialBinWriteObject(bin, idx, obj); },
+        [&](StringView& str) { serialBinWriteString(bin, idx, str); },
+        [&](i64& i) { serialBinWriteInteger(bin, idx, i); },
+        [&](f64& f) { serialBinWriteFloating(bin, idx, f); },
+        [&](bool& b) { serialBinWriteBoolean(bin, idx, b); }
+    );
 }
 
 BinaryView binaryWriteSerial(Arena* arena, Serializer* serial)
@@ -2154,23 +2118,23 @@ static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s)
     SerialBinNode node = bin.read<SerialBinNode>(idx);
     switch (node.type)
     {
-        case SerialType_object:
+        case SerialData::typeIdx<SerialObject>:
             serialBinReadObject(bin, node.object, s);
             return;
-        case SerialType_string:
+        case SerialData::typeIdx<StringView>:
             serialBinReadString(bin, node.string, s);
             return;
-        case SerialType_integer:
+        case SerialData::typeIdx<i64>:
             serialize(s, &node.integer);
             return;
-        case SerialType_floating:
+        case SerialData::typeIdx<f64>:
             serialize(s, &node.floating);
             return;
-        case SerialType_boolean:
+        case SerialData::typeIdx<bool>:
             serialize(s, &node.boolean);
             return;
         default:
-            HG_PANIC("Invalid SerialType: %s\n", serialTypeToString(node.type));
+            HG_PANIC("Invalid SerialType: %d\n", node.type);
     }
 }
 
@@ -2236,13 +2200,13 @@ static void serialJsonWriteString(StringBuilder* str, StringView string)
     str->append('"');
 }
 
-static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialNode* node)
+static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialObject object)
 {
-    if (node->count > 0)
+    if (object.childCount > 0)
     {
         str->append("[\n");
 
-        SerialNode* elem = node->children;
+        SerialNode* elem = object.firstChild;
 
         for (u32 i = 0; i < indentation + 1; ++i)
         {
@@ -2252,7 +2216,7 @@ static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialNode
 
         elem = elem->next;
 
-        for (u32 i = 1; i < node->count; ++i)
+        for (u32 i = 1; i < object.childCount; ++i)
         {
             str->append(",\n");
             for (u32 j = 0; j < indentation + 1; ++j)
@@ -2324,29 +2288,13 @@ static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialNode
 
 static void serialJsonWriteNode(StringBuilder* str, u32 indentation, SerialNode* node)
 {
-    switch (node->type)
-    {
-        case SerialType_object:
-            serialJsonWriteArray(str, indentation, node);
-            return;
-        case SerialType_string:
-            serialJsonWriteString(str, node->string);
-            return;
-        case SerialType_integer:
-            str->append(integerToString(getScratch(), node->integer));
-            return;
-        case SerialType_floating:
-            str->append(floatToString(getScratch(), node->floating, 6));
-            return;
-        case SerialType_boolean:
-            if (node->boolean)
-                str->append("true");
-            else
-                str->append("false");
-            return;
-        default:
-            HG_PANIC("Invalid SerialType: %s\n", serialTypeToString(node->type));
-    }
+    node->data.match(
+        [&](SerialObject& obj) { serialJsonWriteArray(str, indentation, obj); },
+        [&](StringView& strData) { serialJsonWriteString(str, strData); },
+        [&](i64& i) { str->append(integerToString(getScratch(), i)); },
+        [&](f64& f) { str->append(floatToString(getScratch(), f, 6)); },
+        [&](bool& b) { str->append(b ? "true" : "false"); }
+    );
 }
 
 StringView jsonWriteSerial(Arena* arena, Serializer* serial)
@@ -3001,13 +2949,12 @@ void serialize(Serializer* s, String* val)
 
     if (s->writing)
     {
-        s->current->type = SerialType_string;
-        s->current->string = StringBuilder{s->arena, *val};
+        s->current->data = StringView{StringBuilder{s->arena, *val}};
     }
     else
     {
-        HG_ASSERT(s->current->type == SerialType_string);
-        *val = String::create(s->current->string);
+        HG_ASSERT(s->current->data.is<StringView>());
+        *val = String::create(s->current->data.get<StringView>());
     }
 }
 
@@ -3329,13 +3276,13 @@ void serialize(Serializer* s, Binary* val)
 
     if (s->writing)
     {
-        s->current->type = SerialType_string;
-        s->current->string = StringBuilder{s->arena, {static_cast<char*>(val->data), val->size}};
+        s->current->data = StringView{StringBuilder{s->arena, {static_cast<char*>(val->data), val->size}}};
     }
     else
     {
-        HG_ASSERT(s->current->type == SerialType_string);
-        *val = Binary::create({s->current->string.chars, s->current->string.length});
+        HG_ASSERT(s->current->data.is<StringView>());
+        StringView str = s->current->data.get<StringView>();
+        *val = Binary::create({str.chars, str.length});
     }
 }
 

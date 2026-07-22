@@ -4766,81 +4766,45 @@ u64 rngNext64(Rng* rng);
 // ============================================================================
 
 /**
- * The primitive serializable types
+ * A serialized data node
  */
-enum SerialType : u32 {
+struct SerialNode;
+
+/**
+ * A serialized data node's children
+ */
+struct SerialObject {
     /**
-     * An object with fields
+     * The number of children
      */
-    SerialType_object,
+    u32 childCount = 0;
     /**
-     * String data
+     * The first child in the list
      */
-    SerialType_string,
-    /**
-     * An integer value
-     */
-    SerialType_integer,
-    /**
-     * A floating point value
-     */
-    SerialType_floating,
-    /**
-     * A boolean value
-     */
-    SerialType_boolean,
+    SerialNode* firstChild = nullptr;
 };
 
 /**
- * Stringify SerialType
+ * The data in a serial node
  */
-const char* serialTypeToString(SerialType s);
+using SerialData = Sum<SerialObject, StringView, i64, f64, bool>;
 
 /**
  * A serialized data node
  */
 struct SerialNode {
     /**
-     * The parent object or array
+     * The parent object
      */
     SerialNode* parent = nullptr;
     /**
-     * The next node in the object or array
+     * The next node in the parent object
      */
     SerialNode* next = nullptr;
     /**
-     * The type of data
+     * The serialized data
      */
-    SerialType type = {};
-    /**
-     * The number of fields, if an object
-     */
-    u32 count = 0;
-    /**
-     * The data
-     */
-    union {
-        /**
-         * The fields of an object
-         */
-        SerialNode* children;
-        /**
-         * String data
-         */
-        StringView string;
-        /**
-         * Integer value
-         */
-        i64 integer;
-        /**
-         * Floating point value
-         */
-        f64 floating;
-        /**
-         * Boolean value
-         */
-        bool boolean;
-    };
+    SerialData data{};
 };
 
 /**
@@ -7106,28 +7070,14 @@ void handlePoolFree(HandlePool* pool, Handle handle);
 
 // JSON
 
-enum JsonType {
-    JsonType_null,
-    JsonType_boolean,
-    JsonType_number,
-    JsonType_string,
-    JsonType_array,
-    JsonType_object,
-};
-
 struct JsonValue;
-
-using JsonArray = ArrayTemp<JsonValue>;
 
 using JsonObject = MapTemp<StringView, JsonValue>;
 
-struct JsonValue {
-    JsonType type;
-    bool boolean;
-    f64 number;
-    StringView string;
-    JsonArray array;
-    JsonObject object;
+using JsonArray = ArrayTemp<JsonValue>;
+
+struct JsonValue : Sum<JsonObject, JsonArray, StringView, f64, bool> {
+    using Sum::Sum;
 };
 
 StringView writeJson(Arena* arena, const JsonObject& json);
@@ -9614,13 +9564,12 @@ void serialize(Serializer* s, T* val)
 
     if (s->writing)
     {
-        s->current->type = SerialType_integer;
-        s->current->integer = static_cast<i64>(*val);
+        s->current->data = i64{*val};
     }
     else
     {
-        HG_ASSERT(s->current->type == SerialType_integer);
-        *val = static_cast<T>(s->current->integer);
+        HG_ASSERT(s->current->data.is<i64>());
+        *val = static_cast<T>(s->current->data.get<i64>());
     }
 }
 
@@ -9631,13 +9580,12 @@ void serialize(Serializer* s, T* val)
 
     if (s->writing)
     {
-        s->current->type = SerialType_floating;
-        s->current->floating = static_cast<f64>(*val);
+        s->current->data = f64{*val};
     }
     else
     {
-        HG_ASSERT(s->current->type == SerialType_floating);
-        *val = static_cast<T>(s->current->floating);
+        HG_ASSERT(s->current->data.is<f64>());
+        *val = static_cast<T>(s->current->data.get<f64>());
     }
 }
 
