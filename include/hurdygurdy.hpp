@@ -6964,12 +6964,26 @@ struct Pool {
     /**
      * Move construct
      */
-    Pool(Pool&& other) noexcept = default;
+    Pool(Pool&& other) noexcept
+        : prealloc{std::exchange(other.prealloc, {})}
+        , inactive{std::exchange(other.inactive, {})}
+#ifdef HG_DEBUG_MODE
+        , active{std::exchange(other.active, {})}
+#endif
+    {}
 
     /**
      * Move assign
      */
-    Pool& operator=(Pool&& other) noexcept = default;
+    Pool& operator=(Pool&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Pool();
+            new (this) Pool{std::move(other)};
+        }
+        return *this;
+    }
 
     Pool(const Pool&) = delete;
     Pool& operator=(const Pool&) = delete;
