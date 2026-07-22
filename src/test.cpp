@@ -543,6 +543,340 @@ int main()
     }
 
     // ============================================================================
+    // Product
+    // ============================================================================
+    //
+    // Product<Ts...> is a heterogeneous compile-time tuple (unnamed struct).
+    // Provides index-based access via get<N>() and set<N>().
+    // count() returns the number of elements at compile time.
+
+    // Default-constructed Product<> is empty
+    {
+        Product<> p;
+        (void)p;
+    }
+
+    // Product with a single element
+    {
+        Product<i32> p;
+        TEST(p.count == 1);
+    }
+
+    // Product with multiple elements of different types
+    {
+        Product<i32, f64, u64> p;
+        TEST(p.count == 3);
+        TEST(p.first == 0);
+        TEST(p.rest.first == 0.0);
+        TEST(p.rest.rest.first == 0u);
+    }
+
+    // Value construction with one element
+    {
+        Product<i32> p{42};
+        TEST(p.first == 42);
+    }
+
+    // Value construction with multiple elements
+    {
+        Product<i32, f64, u64> p{1, 2.0, 3u};
+        TEST(p.first == 1);
+        TEST(p.rest.first == 2.0);
+        TEST(p.rest.rest.first == 3u);
+    }
+
+    // get<N>() returns a mutable reference to the Nth element
+    {
+        Product<i32, f64, u64> p{10, 20.0, 30u};
+        TEST(p.get<0>() == 10);
+        TEST(p.get<1>() == 20.0);
+        TEST(p.get<2>() == 30u);
+
+        p.get<0>() = 100;
+        TEST(p.get<0>() == 100);
+        TEST(p.first == 100);
+
+        p.get<1>() = 200.0;
+        TEST(p.get<1>() == 200.0);
+        TEST(p.rest.first == 200.0);
+    }
+
+    // set<N>(val) assigns and returns a reference to the element
+    {
+        Product<i32, f64> p{1, 2.0};
+        i32& ref = p.set<0>(99);
+        TEST(ref == 99);
+        TEST(p.first == 99);
+        TEST(&ref == &p.first);
+
+        f64& ref2 = p.set<1>(3.0);
+        TEST(ref2 == 3.0);
+        TEST(p.rest.first == 3.0);
+    }
+
+    // Edge case: get and set at the first and last index
+    {
+        Product<i32, f64, u64, bool> p{1, 2.0, 3u, true};
+        TEST(p.get<0>() == 1);
+        TEST(p.get<3>() == true);
+        p.set<3>(false);
+        TEST(p.get<3>() == false);
+    }
+
+    // Edge case: single-element Product access
+    {
+        Product<f64> p{3.14};
+        TEST(p.get<0>() == 3.14);
+        p.set<0>(2.71);
+        TEST(p.get<0>() == 2.71);
+    }
+
+    // count() is a static constexpr member on non-empty products
+    {
+        static_assert(Product<i32>::count == 1);
+        static_assert(Product<i32, f64, u64>::count == 3);
+    }
+
+    // ============================================================================
+    // Sum
+    // ============================================================================
+    //
+    // Sum<Ts...> is a tagged union (discriminated union). It holds a tag
+    // indicating which variant is active, and an untagged union for storage.
+    // Supports construction from any variant type, emplacement, visitor-style
+    // matching via call/match, and copy/move semantics.
+
+    // Default-constructed Sum has no active variant (tag == count)
+    {
+        Sum<i32, f64> s;
+        TEST(s.tag == s.count);
+    }
+
+    // Construction from the first variant type
+    {
+        Sum<i32, f64> s{42};
+        TEST(s.is<i32>());
+        TEST(!s.is<f64>());
+        TEST(s.get<i32>() == 42);
+    }
+
+    // Construction from the second variant type
+    {
+        Sum<i32, f64> s{3.14};
+        TEST(!s.is<i32>());
+        TEST(s.is<f64>());
+        TEST(s.get<f64>() == 3.14);
+    }
+
+    // Sum with three variants
+    {
+        Sum<i32, f64, char> s{'A'};
+        TEST(s.is<char>());
+        TEST(s.get<char>() == 'A');
+    }
+
+    // hasN<N>() checks the active variant by index
+    {
+        Sum<i32, f64> s{42};
+        TEST(s.isN<0>());
+        TEST(!s.isN<1>());
+    }
+
+    // getN<N>() accesses the active variant by index
+    {
+        Sum<i32, f64> s{3.14};
+        TEST(s.getN<1>() == 3.14);
+    }
+
+    // emplaceN<N>() switches the variant and constructs the new value in place
+    {
+        Sum<i32, f64> s{42};
+        TEST(s.is<i32>());
+
+        f64& ref = s.emplaceN<1>(3.14);
+        TEST(!s.is<i32>());
+        TEST(s.is<f64>());
+        TEST(s.get<f64>() == 3.14);
+        TEST(ref == 3.14);
+    }
+
+    // emplaceN<N>() at the first index
+    {
+        Sum<i32, f64> s{3.14};
+        i32& ref = s.emplaceN<0>(99);
+        TEST(s.is<i32>());
+        TEST(s.get<i32>() == 99);
+        TEST(ref == 99);
+    }
+
+    // call(F) dispatches a generic lambda to the active variant
+    {
+        Sum<i32, f64> s{42};
+        bool called = false;
+        s.call([&](auto& val)
+        {
+            called = true;
+            using T = std::remove_cvref_t<decltype(val)>;
+            TEST((std::same_as<T, i32>));
+            TEST(val == 42);
+        });
+        TEST(called);
+    }
+
+    // call(F) dispatches for the second variant
+    {
+        Sum<i32, f64> s{3.14};
+        bool called = false;
+        s.call([&](auto& val)
+        {
+            called = true;
+            using T = std::remove_cvref_t<decltype(val)>;
+            TEST((std::same_as<T, f64>));
+            TEST(val == 3.14);
+        });
+        TEST(called);
+    }
+
+    // match(Fs...) dispatches an overload set to the active variant
+    {
+        Sum<i32, f64> s{3.14};
+        bool matched = false;
+        s.match(
+            [&](i32) { TEST(false); },
+            [&](f64 v)
+            {
+                matched = true;
+                TEST(v == 3.14);
+            }
+        );
+        TEST(matched);
+    }
+
+    // Copy construction preserves the active variant and value
+    {
+        Sum<i32, f64> a{42};
+        Sum<i32, f64> b{a};
+        TEST(b.is<i32>());
+        TEST(b.get<i32>() == 42);
+        TEST(a.is<i32>());
+        TEST(a.get<i32>() == 42);
+    }
+
+    // Copy assignment from a different variant
+    {
+        Sum<i32, f64> a{42};
+        Sum<i32, f64> b{3.14};
+        b = a;
+        TEST(b.is<i32>());
+        TEST(b.get<i32>() == 42);
+        TEST(a.is<i32>());
+    }
+
+    // Move construction transfers ownership; source tag is reset to count
+    {
+        Sum<i32, f64> a{42};
+        Sum<i32, f64> b{std::move(a)};
+        TEST(b.is<i32>());
+        TEST(b.get<i32>() == 42);
+        TEST(a.tag == a.count);
+    }
+
+    // Move assignment from a different variant
+    {
+        Sum<i32, f64> a{42};
+        Sum<i32, f64> b{3.14};
+        b = std::move(a);
+        TEST(b.is<i32>());
+        TEST(b.get<i32>() == 42);
+        TEST(a.tag == a.count);
+    }
+
+    // typeToTag maps each type to its variant index at compile time
+    {
+        static_assert(Sum<i32, f64, u64>::typeIdx<i32> == 0);
+        static_assert(Sum<i32, f64, u64>::typeIdx<f64> == 1);
+        static_assert(Sum<i32, f64, u64>::typeIdx<u64> == 2);
+    }
+
+    // Sum with a single variant type
+    {
+        Sum<i32> s{42};
+        TEST(s.is<i32>());
+        TEST(s.get<i32>() == 42);
+        TEST(s.count == 1);
+    }
+
+    // Non-trivial type: Sum destructor destroys the active variant
+    {
+        Lifecycle::stats.reset();
+        {
+            Sum<Lifecycle, i32> s{Lifecycle{}};
+            TEST(s.is<Lifecycle>());
+            TEST(Lifecycle::stats.alive == 1);
+        }
+        TEST(Lifecycle::stats.dtors == 1);
+        TEST(Lifecycle::stats.alive == 0);
+    }
+
+    // Non-trivial type: emplaceN to a different variant destroys the old value
+    {
+        Lifecycle::stats.reset();
+        {
+            Sum<Lifecycle, i32> s{Lifecycle{}};
+            TEST(Lifecycle::stats.alive == 1);
+            s.template emplaceN<1>(42);
+            TEST(s.is<i32>());
+            TEST(Lifecycle::stats.alive == 0);
+        }
+        // No extra destruction from ~Sum (i32 variant active)
+        TEST(Lifecycle::stats.dtors == 1);
+    }
+
+    // Non-trivial type: emplaceN back to the non-trivial variant
+    {
+        Lifecycle::stats.reset();
+        {
+            Sum<Lifecycle, i32> s{i32{42}};
+            TEST(s.is<i32>());
+            s.template emplaceN<0>();
+            TEST(s.is<Lifecycle>());
+            TEST(Lifecycle::stats.alive == 1);
+        }
+        TEST(Lifecycle::stats.dtors == 1);
+        TEST(Lifecycle::stats.alive == 0);
+    }
+
+    // Non-trivial type: copy construction preserves the value
+    {
+        Lifecycle::stats.reset();
+        {
+            Sum<Lifecycle, i32> a{Lifecycle{}};
+            Sum<Lifecycle, i32> b{a};
+            TEST(a.is<Lifecycle>());
+            TEST(b.is<Lifecycle>());
+            TEST(Lifecycle::stats.alive == 2); // a and b each own a Lifecycle
+        }
+        // Both destroyed when scope exits
+        TEST(Lifecycle::stats.alive == 0);
+        TEST(Lifecycle::stats.dtors == 2);
+    }
+
+    // Non-trivial type: move construction transfers ownership; source is empty
+    {
+        Lifecycle::stats.reset();
+        {
+            Sum<Lifecycle, i32> a{Lifecycle{}};
+            Sum<Lifecycle, i32> b{std::move(a)};
+            TEST(b.is<Lifecycle>());
+            TEST(a.tag == a.count);
+            TEST(Lifecycle::stats.alive == 1);
+        }
+        // b destroyed, a was empty
+        TEST(Lifecycle::stats.alive == 0);
+        TEST(Lifecycle::stats.dtors == 1);
+    }
+
+    // ============================================================================
     // Maybe
     // ============================================================================
     //

@@ -3,11 +3,13 @@ name: write-tests
 description: Add/modify tests in src/test.cpp. Monolithic file, TEST() macro, scoped blocks, edge-case coverage.
 ---
 
-**Test the header, not the implementation**: Write tests against the *correct* behavior, not against any specific buggy behavior you happen to observe. If the implementation does anything unexpected, it should be documented or fixed.
+Test like TDD: Write tests for the ideal behavior, not the current buggy behavior. Failing tests is good. Templates may not even compile.
 
-Tests are **living documentation**. Comment every scenario and edge case — the comments are as important as the assertions.
+Plan out all use cases, and edge cases in advance. Finish with end-to-end integration tests.
 
-Write tests as scoped blocks matching header declaration order. Cover every function, parameter boundary, error path, and edge case.
+Tests are documentation. Comment every scenario and edge case.
+
+Write tests as scoped blocks matching header declaration order.
 
 ```cpp
 // SubsystemName

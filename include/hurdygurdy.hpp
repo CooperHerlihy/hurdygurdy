@@ -35,6 +35,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <concepts>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -178,6 +179,18 @@ struct BinaryView;
  */
 template<typename T>
 struct Span;
+
+/**
+ * A product type, or unnamed struct
+ */
+template<typename... Ts>
+struct Product;
+
+/**
+ * A sum type, or tagged union
+ */
+template<typename... Ts>
+struct Sum;
 
 /**
  * An object which may or may not exist
@@ -571,6 +584,446 @@ struct Span<void> {
     {
         HG_ASSERT(idx < size);
         return static_cast<u8*>(data) + idx;
+    }
+};
+
+/**
+ * A product type, or unnamed struct
+ */
+template<typename... Ts>
+struct Product;
+
+/**
+ * The product type base case
+ */
+template<>
+struct Product<> {};
+
+/**
+ * A product type, or unnamed struct
+ */
+template<typename T, typename... Ts>
+struct Product<T, Ts...> {
+    /**
+     * The first element in the product
+     */
+    T first{};
+    /**
+     * The rest of the elements, expanded recursively
+     */
+    Product<Ts...> rest{};
+
+    /**
+     * The number of elements in the product
+     */
+    static constexpr u64 count = 1 + sizeof...(Ts);
+
+    /**
+     * Construct empty
+     */
+    Product() noexcept = default;
+
+    /**
+     * Construct as a list
+     */
+    template<typename... Rest>
+    Product(T x, Rest&&... xs)
+        : first{std::move(x)}
+        , rest{std::forward<Rest>(xs)...}
+    {}
+
+    /**
+     * Get an element by index
+     */
+    template<u64 N> requires (N < count)
+    auto& get()
+    {
+        if constexpr (N == 0)
+            return first;
+        else
+            return rest.template get<N - 1>();
+    }
+
+    /**
+     * Set an element by index
+     */
+    template<u64 N, typename U> requires (N < count)
+    auto& set(U&& val)
+    {
+        if constexpr (N == 0)
+            return first = std::forward<U>(val);
+        else
+            return rest.template set<N - 1>(std::forward<U>(val));
+    }
+};
+
+/**
+ * An untagged union used in Sum
+ */
+template<typename... Ts>
+union SumUntagged;
+
+/**
+ * An untagged union used in Sum
+ */
+template<>
+union SumUntagged<> {};
+
+/**
+ * An untagged union used in Sum
+ */
+template<typename T, typename... Ts>
+union SumUntagged<T, Ts...> {
+    /**
+     * The first element in the sum
+     */
+    T first;
+    /**
+     * The rest of the elements, expanded recursively
+     */
+    SumUntagged<Ts...> rest;
+
+    /**
+     * The number of elements in the sum
+     */
+    static constexpr u32 count = 1 + sizeof...(Ts);
+
+    /**
+     * Construct empty
+     */
+    SumUntagged() noexcept {}
+
+    /**
+     * Destructor does nothing
+     */
+    ~SumUntagged() noexcept {}
+
+    /**
+     * Construct an element, base case
+     */
+    SumUntagged(T val)
+        : first{std::move(val)}
+    {}
+
+    /**
+     * Construct an element, expanding recursively
+     */
+    template<typename U> requires (std::same_as<std::remove_cvref_t<U>, Ts> || ...)
+    SumUntagged(U&& val)
+        : rest{std::forward<U>(val)}
+    {}
+
+    /**
+     * Get an element by type
+     */
+    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    auto& get()
+    {
+        if constexpr (std::same_as<U, T>)
+            return first;
+        else
+            return rest.template get<U>();
+    }
+
+    /**
+     * Get an element by type, as const
+     */
+    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    const auto& get() const
+    {
+        if constexpr (std::same_as<U, T>)
+            return first;
+        else
+            return rest.template get<U>();
+    }
+
+    /**
+     * Get an element by index
+     */
+    template<u64 N> requires (N < count)
+    auto& getN()
+    {
+        if constexpr (N == 0)
+            return first;
+        else
+            return rest.template getN<N - 1>();
+    }
+
+    /**
+     * Get an element by index, as const
+     */
+    template<u64 N> requires (N < count)
+    const auto& getN() const
+    {
+        if constexpr (N == 0)
+            return first;
+        else
+            return rest.template getN<N - 1>();
+    }
+
+    /**
+     * Construct an element in place
+     */
+    template<typename U, typename... Args> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    auto& emplace(Args&&... args)
+    {
+        if constexpr (std::same_as<U, T>)
+            return *(new (&first) T{std::forward<Args>(args)...});
+        else
+            return rest.template emplace<U>(std::forward<Args>(args)...);
+    }
+
+    /**
+     * Construct an element in place by index
+     */
+    template<u64 N, typename... Args> requires (N < count)
+    auto& emplaceN(Args&&... args)
+    {
+        if constexpr (N == 0)
+            return *(new (&first) T{std::forward<Args>(args)...});
+        else
+            return rest.template emplaceN<N - 1>(std::forward<Args>(args)...);
+    }
+};
+
+/**
+ * A function overload dispatcher for sum
+ */
+template<typename... Fs>
+struct Overload : Fs... {
+    using Fs::operator()...;
+};
+
+/**
+ * A function overload dispatcher for sum
+ */
+template<typename... Fs>
+Overload(Fs...) -> Overload<Fs...>;
+
+/**
+ * A sum type, or tagged union
+ */
+template<typename... Ts>
+struct Sum;
+
+/**
+ * The sum type base case
+ */
+template<>
+struct Sum<> {};
+
+/**
+ * A sum type, or tagged union
+ */
+template<typename T, typename... Ts>
+struct Sum<T, Ts...> {
+    /**
+     * The current active element, or count for none
+     */
+    u32 tag = count;
+    /**
+     * The union data
+     */
+    SumUntagged<T, Ts...> data;
+
+    /**
+     * The number of elements in the sum
+     */
+    static constexpr u64 count = 1 + sizeof...(Ts);
+
+    /**
+     * Construct empty
+     */
+    Sum() noexcept = default;
+
+    /**
+     * Construct an element by type
+     */
+    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    Sum(U&& val)
+        : tag{typeIdx<std::remove_cvref_t<U>>}
+        , data{std::forward<U>(val)}
+    {}
+
+    /**
+     * Call a function with the current active element
+     */
+    template<u64 N = 0, typename F>
+    auto call(F&& f)
+    {
+        if constexpr (N < count)
+        {
+            if (N == tag)
+                return f(data.template getN<N>());
+            else
+                return call<N + 1>(std::forward<F>(f));
+        }
+    }
+
+    /**
+     * Match a list of function to the elements, and call the active one
+     */
+    template<typename... Fs>
+    auto match(Fs&&... fs)
+    {
+        return call(Overload{std::forward<Fs>(fs)...});
+    }
+
+    /**
+     * Destroy the active element
+     */
+    ~Sum() noexcept
+    {
+        if (tag < count)
+            call([](auto& val)
+            {
+                std::destroy_at(&val);
+            });
+    }
+
+    /**
+     * Get the index of the type
+     */
+    template<typename U>
+    static constexpr u32 typeIdx = []() constexpr
+    {
+        if constexpr (std::same_as<U, T>)
+            return 0;
+        else
+            return 1 + Sum<Ts...>::template typeIdx<U>;
+    }();
+
+    /**
+     * Return whether the type is active
+     */
+    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    bool is() const
+    {
+        return tag == typeIdx<U>;
+    }
+
+    /**
+     * Returns whether the type at index is active
+     */
+    template<u64 N> requires (N < count)
+    bool isN() const
+    {
+        return tag == N;
+    }
+
+    /**
+     * Returns the data for the type, assuming it is active
+     */
+    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    auto& get()
+    {
+        HG_ASSERT(tag == typeIdx<U>);
+        return data.template get<U>();
+    }
+
+    /**
+     * Returns the data for the type, assuming it is active, as const
+     */
+    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    auto& get() const
+    {
+        HG_ASSERT(tag == typeIdx<U>);
+        return data.template get<U>();
+    }
+
+    /**
+     * Returns the data for the index, assuming it is active
+     */
+    template<u64 N> requires (N < count)
+    auto& getN()
+    {
+        HG_ASSERT(tag == N);
+        return data.template getN<N>();
+    }
+
+    /**
+     * Returns the data for the index, assuming it is active, as const
+     */
+    template<u64 N> requires (N < count)
+    auto& getN() const
+    {
+        HG_ASSERT(tag == N);
+        return data.template getN<N>();
+    }
+
+    /**
+     * Construct an element in place
+     */
+    template<typename U, typename... Args> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    auto& emplace(Args&&... args)
+    {
+        this->~Sum();
+        tag = typeIdx<U>;
+        return data.template emplace<U>(std::forward<Args>(args)...);
+    }
+
+    /**
+     * Construct an element in place, by index
+     */
+    template<u64 N, typename... Args> requires (N < count)
+    auto& emplaceN(Args&&... args)
+    {
+        this->~Sum();
+        tag = N;
+        return data.template emplaceN<N>(std::forward<Args>(args)...);
+    }
+
+    /**
+     * Copy construct
+     */
+    Sum(const Sum& other)
+        : tag{other.tag}
+    {
+        call([&](auto& val)
+        {
+            using U = std::remove_cvref_t<decltype(val)>;
+            data.template emplace<U>(other.get<U>());
+        });
+    }
+
+    /**
+     * Copy assign
+     */
+    Sum& operator=(const Sum& other)
+    {
+        if (this != &other)
+        {
+            this->~Sum();
+            new (this) Sum{other};
+        }
+        return *this;
+    }
+
+    /**
+     * Move construct
+     */
+    Sum(Sum&& other) noexcept
+        : tag{other.tag}
+    {
+        call([&](auto& val)
+        {
+            using U = std::remove_cvref_t<decltype(val)>;
+            data.template emplace<U>(std::move(other.get<U>()));
+        });
+        other.tag = other.count;
+    }
+
+    /**
+     * Move Assign
+     */
+    Sum& operator=(Sum&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Sum();
+            new (this) Sum{std::move(other)};
+        }
+        return *this;
     }
 };
 
@@ -4550,138 +5003,138 @@ StringView jsonWriteSerial(Arena* arena, Serializer* data);
 //  */
 // Serializer jsonReadSerial(Arena* arena, StringView json);
 
-/**
- * An error contained in the json
- */
-struct JsonError {
-    /**
-     * The next error
-     */
-    JsonError* next = nullptr;
-    /**
-     * The error message
-     */
-    StringView msg = {};
-};
-
-/**
- * A node in the json file
- */
-struct JsonNode;
-
-/**
- * The types contained in nodes
- */
-enum JsonType : u32 {
-    JsonType_none = 0,
-    JsonType_struct,
-    JsonType_field,
-    JsonType_array,
-    JsonType_string,
-    JsonType_float,
-    JsonType_integer,
-    JsonType_bool,
-};
-
-/**
- * A field in a struct
- */
-struct JsonField {
-    /**
-     * The next field
-     */
-    JsonField* next = nullptr;
-    /**
-     * The name of the field
-     */
-    StringView name = {};
-    /**
-     * The value stored in the field
-     */
-    JsonNode* value = nullptr;
-};
-
-/**
- * A struct contained in the json
- */
-struct JsonStruct {
-    /**
-     * The first field
-     */
-    JsonField* fields = nullptr;
-};
-
-/**
- * An element in an array
- */
-struct JsonElem {
-    /**
-     * The next element
-     */
-    JsonElem* next = nullptr;
-    /**
-     * The value stored in the element
-     */
-    JsonNode* value = nullptr;
-};
-
-/**
- * An array contained in the json
- */
-struct JsonArray {
-    /**
-     * The first element
-     */
-    JsonElem* elems = nullptr;
-};
-
-/**
- * A node in the json file
- */
-struct JsonNode {
-    /**
-     * The node's type
-     */
-    JsonType type = {};
-    /**
-     * The value in the node
-     */
-    union {
-        JsonStruct jstruct;
-        JsonField field;
-        JsonArray array;
-        StringView string;
-        f64 floating;
-        i64 integer;
-        bool boolean;
-    };
-};
-
-/**
- * A parsed Json file
- */
-struct Json {
-    /**
-     * The successfully parsed nodes
-     */
-    JsonNode* file = nullptr;
-    /**
-     * The errors found
-     */
-    JsonError* errors = nullptr;
-};
-
-/**
- * Parses json text into a tree
- *
- * Parameters
- * - arena The arena to allocate from
- * - text The json text to parse
- *
- * Returns
- * - The parsed json, errors contained inside
- */
-Json parseJson(Arena* arena, StringView text);
+// /**
+//  * An error contained in the json
+//  */
+// struct JsonError {
+//     /**
+//      * The next error
+//      */
+//     JsonError* next = nullptr;
+//     /**
+//      * The error message
+//      */
+//     StringView msg = {};
+// };
+//
+// /**
+//  * A node in the json file
+//  */
+// struct JsonNode;
+//
+// /**
+//  * The types contained in nodes
+//  */
+// enum JsonType : u32 {
+//     JsonType_none = 0,
+//     JsonType_struct,
+//     JsonType_field,
+//     JsonType_array,
+//     JsonType_string,
+//     JsonType_float,
+//     JsonType_integer,
+//     JsonType_bool,
+// };
+//
+// /**
+//  * A field in a struct
+//  */
+// struct JsonField {
+//     /**
+//      * The next field
+//      */
+//     JsonField* next = nullptr;
+//     /**
+//      * The name of the field
+//      */
+//     StringView name = {};
+//     /**
+//      * The value stored in the field
+//      */
+//     JsonNode* value = nullptr;
+// };
+//
+// /**
+//  * A struct contained in the json
+//  */
+// struct JsonStruct {
+//     /**
+//      * The first field
+//      */
+//     JsonField* fields = nullptr;
+// };
+//
+// /**
+//  * An element in an array
+//  */
+// struct JsonElem {
+//     /**
+//      * The next element
+//      */
+//     JsonElem* next = nullptr;
+//     /**
+//      * The value stored in the element
+//      */
+//     JsonNode* value = nullptr;
+// };
+//
+// /**
+//  * An array contained in the json
+//  */
+// struct JsonArray {
+//     /**
+//      * The first element
+//      */
+//     JsonElem* elems = nullptr;
+// };
+//
+// /**
+//  * A node in the json file
+//  */
+// struct JsonNode {
+//     /**
+//      * The node's type
+//      */
+//     JsonType type = {};
+//     /**
+//      * The value in the node
+//      */
+//     union {
+//         JsonStruct jstruct;
+//         JsonField field;
+//         JsonArray array;
+//         StringView string;
+//         f64 floating;
+//         i64 integer;
+//         bool boolean;
+//     };
+// };
+//
+// /**
+//  * A parsed Json file
+//  */
+// struct Json {
+//     /**
+//      * The successfully parsed nodes
+//      */
+//     JsonNode* file = nullptr;
+//     /**
+//      * The errors found
+//      */
+//     JsonError* errors = nullptr;
+// };
+//
+// /**
+//  * Parses json text into a tree
+//  *
+//  * Parameters
+//  * - arena The arena to allocate from
+//  * - text The json text to parse
+//  *
+//  * Returns
+//  * - The parsed json, errors contained inside
+//  */
+// Json parseJson(Arena* arena, StringView text);
 
 // ============================================================================
 // Strings
@@ -6636,6 +7089,36 @@ bool handlePoolAlive(HandlePool* pool, Handle handle);
  * Note, the object handle must be valid and alive
  */
 void handlePoolFree(HandlePool* pool, Handle handle);
+
+// JSON
+
+enum JsonType {
+    JsonType_null,
+    JsonType_boolean,
+    JsonType_number,
+    JsonType_string,
+    JsonType_array,
+    JsonType_object,
+};
+
+struct JsonValue;
+
+using JsonArray = ArrayTemp<JsonValue>;
+
+using JsonObject = MapTemp<StringView, JsonValue>;
+
+struct JsonValue {
+    JsonType type;
+    bool boolean;
+    f64 number;
+    StringView string;
+    JsonArray array;
+    JsonObject object;
+};
+
+StringView writeJson(Arena* arena, const JsonObject& json);
+
+JsonObject readJson(Arena* arena, StringView json);
 
 // ============================================================================
 // Asset System

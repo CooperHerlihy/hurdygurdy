@@ -14,6 +14,8 @@ Use `grep` to find specific symbols.
     - StringView
     - BinaryView
     - Span
+    - Product
+    - Sum
     - Maybe
 - Error Handling
 - Utility Macros

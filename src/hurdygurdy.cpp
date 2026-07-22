@@ -2361,586 +2361,586 @@ StringView jsonWriteSerial(Arena* arena, Serializer* serial)
 // {
 // }
 
-struct JsonParseState {
-    StringView text = {};
-    u64 head = 0;
-    u64 line = 0;
-};
-
-static Json jsonParseNext(Arena* arena, JsonParseState* state);
-static Json jsonParseStruct(Arena* arena, JsonParseState* state);
-static Json jsonParseArray(Arena* arena, JsonParseState* state);
-static Json jsonParseString(Arena* arena, JsonParseState* state);
-static Json jsonParseNumber(Arena* arena, JsonParseState* state);
-static Json jsonParseBoolean(Arena* arena, JsonParseState* state);
-
-static Json jsonParseNext(Arena* arena, JsonParseState* state)
-{
-    while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-    {
-        if (state->text[state->head] == '\n')
-            ++state->line;
-        ++state->head;
-    }
-    if (state->head >= state->text.length)
-        return {};
-
-    switch (state->text[state->head])
-    {
-        case '{':
-            ++state->head;
-            return jsonParseStruct(arena, state);
-        case '[':
-            ++state->head;
-            return jsonParseArray(arena, state);
-        case '\'': [[fallthrough]];
-        case '"':
-            ++state->head;
-            return jsonParseString(arena, state);
-        case '.': [[fallthrough]];
-        case '+': [[fallthrough]];
-        case '-':
-            return jsonParseNumber(arena, state);
-        case 't': [[fallthrough]];
-        case 'f':
-            return jsonParseBoolean(arena, state);
-        case '}': {
-            JsonError* error = arena->alloc<JsonError>(1);
-            error->next = nullptr;
-            StringBuilder msg{arena};
-            msg.append("on line ");
-            msg.append(integerToString(arena, static_cast<i64>(state->line)));
-            msg.append(", found unexpected token \"}\"\n");
-            error->msg = msg;
-            return {nullptr, error};
-        }
-        case ']': {
-            JsonError* error = arena->alloc<JsonError>(1);
-            error->next = nullptr;
-            StringBuilder msg{arena};
-            msg.append("on line ");
-            msg.append(integerToString(arena, static_cast<i64>(state->line)));
-            msg.append(", found unexpected token \"]\"\n");
-            error->msg = msg;
-            return {nullptr, error};
-        }
-    }
-    if (isNumeral(state->text[state->head]))
-    {
-        return jsonParseNumber(arena, state);
-    }
-
-    JsonError* error = arena->alloc<JsonError>(1);
-    error->next = nullptr;
-
-    u64 begin = state->head;
-    while (state->head < state->text.length && !isWhitespace(state->text[state->head]))
-    {
-        if (state->text[state->head] == '\n')
-            ++state->line;
-        ++state->head;
-    }
-    StringBuilder msg{arena};
-    msg.append("on line ");
-    msg.append(integerToString(arena, static_cast<i64>(state->line)));
-    msg.append(", found unexpected token \"");
-    msg.append({&state->text[begin], &state->text[state->head]});
-    msg.append("\"\n");
-    error->msg = msg;
-
-    return {nullptr, error};
-}
-
-static Json jsonParseStruct(Arena* arena, JsonParseState* state)
-{
-    Json json{};
-    json.file = arena->alloc<JsonNode>(1);
-    json.file->type = JsonType::JsonType_struct;
-    json.file->jstruct.fields = nullptr;
-
-    JsonField* lastField = nullptr;
-    JsonError* lastError = nullptr;
-
-    for (;;)
-    {
-        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-        {
-            if (state->text[state->head] == '\n')
-                ++state->line;
-            ++state->head;
-        }
-        if (state->head >= state->text.length)
-        {
-            JsonError* error = arena->alloc<JsonError>(1);
-            error->next = nullptr;
-            StringBuilder msg{arena};
-            msg.append("on line ");
-            msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
-            msg.append(", expected struct to terminate\n");
-            error->msg = msg;
-            if (lastError == nullptr)
-                json.errors = lastError = error;
-            else
-                lastError->next = error;
-            lastError = error;
-            break;
-        }
-        if (state->text[state->head] == ']')
-        {
-            JsonError* error = arena->alloc<JsonError>(1);
-            error->next = nullptr;
-            StringBuilder msg{arena};
-            msg.append("on line ");
-            msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
-            msg.append(", struct ends with \"]\" instead of \"}\"\n");
-            error->msg = msg;
-            if (lastError == nullptr)
-                json.errors = lastError = error;
-            else
-                lastError->next = error;
-            lastError = error;
-            ++state->head;
-            while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-            {
-                if (state->text[state->head] == '\n')
-                    ++state->line;
-                ++state->head;
-            }
-            if (state->head < state->text.length && state->text[state->head] == ',')
-                ++state->head;
-            break;
-        }
-        if (state->text[state->head] == '}')
-        {
-            ++state->head;
-            while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-            {
-                if (state->text[state->head] == '\n')
-                    ++state->line;
-                ++state->head;
-            }
-            if (state->head < state->text.length && state->text[state->head] == ',')
-                ++state->head;
-            break;
-        }
-
-        Json value = jsonParseNext(arena, state);
-
-        if (value.file != nullptr)
-        {
-            if (value.file->type != JsonType::JsonType_field)
-            {
-                JsonError* error = arena->alloc<JsonError>(1);
-                error->next = nullptr;
-                StringBuilder msg{arena};
-                msg.append("on line ");
-                msg.append(integerToString(arena, static_cast<i64>(state->line)));
-                msg.append(", struct has a literal instead of a field\n");
-                error->msg = msg;
-                if (lastError == nullptr)
-                    json.errors = lastError = error;
-                else
-                    lastError->next = error;
-                lastError = error;
-            } else if (value.file->field.value == nullptr)
-            {
-                JsonError* error = arena->alloc<JsonError>(1);
-                error->next = nullptr;
-                StringBuilder msg{arena};
-                msg.append("on line ");
-                msg.append(integerToString(arena, static_cast<i64>(state->line)));
-                msg.append(", struct has a field named \"");
-                msg.append(value.file->field.name);
-                msg.append("\" which has no value\n");
-                error->msg = msg;
-                if (lastError == nullptr)
-                    json.errors = lastError = error;
-                else
-                    lastError->next = error;
-                lastError = error;
-            } else {
-                if (lastField == nullptr)
-                    json.file->jstruct.fields = &value.file->field;
-                else
-                    lastField->next = &value.file->field;
-                lastField = &value.file->field;
-            }
-        }
-        if (value.errors != nullptr)
-        {
-            if (lastError == nullptr)
-                json.errors = lastError = value.errors;
-            else
-                lastError->next = value.errors;
-            lastError = value.errors;
-        }
-    }
-
-    return json;
-}
-
-static Json jsonParseArray(Arena* arena, JsonParseState* state)
-{
-    Json json{};
-    json.file = arena->alloc<JsonNode>(1);
-    json.file->type = JsonType::JsonType_array;
-
-    JsonType type = JsonType::JsonType_none;
-    JsonElem* lastElem = nullptr;
-    JsonError* lastError = nullptr;
-
-    for (;;)
-    {
-        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-        {
-            if (state->text[state->head] == '\n')
-                ++state->line;
-            ++state->head;
-        }
-        if (state->head >= state->text.length)
-        {
-            JsonError* error = arena->alloc<JsonError>(1);
-            error->next = nullptr;
-            StringBuilder msg{arena};
-            msg.append("on line ");
-            msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
-            msg.append(", expected struct to terminate\n");
-            error->msg = msg;
-            if (lastError == nullptr)
-                json.errors = lastError = error;
-            else
-                lastError->next = error;
-            lastError = error;
-            break;
-        }
-        if (state->text[state->head] == '}')
-        {
-            JsonError* error = arena->alloc<JsonError>(1);
-            error->next = nullptr;
-            StringBuilder msg{arena};
-            msg.append("on line ");
-            msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
-            msg.append(", array ends with \"}\" instead of \"]\"\n");
-            error->msg = msg;
-            if (lastError == nullptr)
-                json.errors = lastError = error;
-            else
-                lastError->next = error;
-            lastError = error;
-            ++state->head;
-            while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-            {
-                if (state->text[state->head] == '\n')
-                    ++state->line;
-                ++state->head;
-            }
-            if (state->head < state->text.length && state->text[state->head] == ',')
-                ++state->head;
-            break;
-        }
-        if (state->text[state->head] == ']')
-        {
-            ++state->head;
-            while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-            {
-                if (state->text[state->head] == '\n')
-                    ++state->line;
-                ++state->head;
-            }
-            if (state->head < state->text.length && state->text[state->head] == ',')
-                ++state->head;
-            break;
-        }
-
-        JsonElem* elem = arena->alloc<JsonElem>(1);
-        elem->next = nullptr;
-
-        Json value = jsonParseNext(arena, state);
-        elem->value = value.file;
-
-        if (value.file != nullptr)
-        {
-            if (type == JsonType::JsonType_none)
-            {
-                if (value.file->type != JsonType::JsonType_field)
-                {
-                    type = value.file->type;
-                } else {
-                    JsonError* error = arena->alloc<JsonError>(1);
-                    error->next = nullptr;
-                    StringBuilder msg{arena};
-                    msg.append("on line ");
-                    msg.append(integerToString(arena, static_cast<i64>(state->line)));
-                    msg.append(", array has a field as an element\n");
-                    error->msg = msg;
-                    if (lastError == nullptr)
-                        json.errors = lastError = error;
-                    else
-                        lastError->next = error;
-                    lastError = error;
-                }
-            }
-            if (value.file->type != type)
-            {
-                JsonError* error = arena->alloc<JsonError>(1);
-                error->next = nullptr;
-                StringBuilder msg{arena};
-                msg.append("on line ");
-                msg.append(integerToString(arena, static_cast<i64>(state->line)));
-                msg.append(", array has element which is not the same type as the first valid element\n");
-                error->msg = msg;
-                if (lastError == nullptr)
-                    json.errors = lastError = error;
-                else
-                    lastError->next = error;
-                lastError = error;
-            } else {
-                if (lastElem == nullptr)
-                    json.file->array.elems = elem;
-                else
-                    lastElem->next = elem;
-                lastElem = elem;
-            }
-        }
-        if (value.errors != nullptr)
-        {
-            if (lastError == nullptr)
-                json.errors = lastError = value.errors;
-            else
-                lastError->next = value.errors;
-            lastError = value.errors;
-        }
-    }
-
-    return json;
-}
-
-static Json jsonParseString(Arena* arena, JsonParseState* state)
-{
-    u64 begin = state->head;
-    while (state->head < state->text.length && state->text[state->head] != '"')
-    {
-        if (state->text[state->head] == '\n')
-            ++state->line;
-        ++state->head;
-    }
-    u64 end = state->head;
-    if (state->head < state->text.length)
-    {
-        ++state->head;
-        StringBuilder str{};
-        for (u64 i = begin; i < end; ++i)
-        {
-            char c = state->text[i];
-            if (c == '\\')
-            {
-                // escape sequences : TODO
-            }
-            str.append(c);
-        }
-
-        Json json{};
-        json.file = arena->alloc<JsonNode>(1);
-
-        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-        {
-            if (state->text[state->head] == '\n')
-                ++state->line;
-            ++state->head;
-        }
-        if (state->head < state->text.length && state->text[state->head] == ':')
-        {
-            ++state->head;
-            json.file->type = JsonType::JsonType_field;
-            json.file->field.next = nullptr;
-            json.file->field.name = str;
-            Json next = jsonParseNext(arena, state);
-            json.file->field.value = next.file;
-            json.errors = next.errors;
-        } else {
-            json.file->type = JsonType::JsonType_string;
-            json.file->string = str;
-        }
-        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-        {
-            if (state->text[state->head] == '\n')
-                ++state->line;
-            ++state->head;
-        }
-        if (state->head < state->text.length && state->text[state->head] == ',')
-            ++state->head;
-        return json;
-    }
-
-    JsonError* error = arena->alloc<JsonError>(1);
-    StringBuilder msg{arena};
-    msg.append("on line ");
-    msg.append(integerToString(arena, static_cast<i64>(state->line)));
-    msg.append(", expected string to terminate\n");
-    error->msg = msg;
-    return {nullptr, error};
-}
-
-static Json jsonParseNumber(Arena* arena, JsonParseState* state)
-{
-    bool isNumFloat = false;
-    u64 begin = state->head;
-    while (state->head < state->text.length && (
-        isNumeral(state->text[state->head]) ||
-        state->text[state->head] == '-' ||
-        state->text[state->head] == '+' ||
-        state->text[state->head] == '.' ||
-        state->text[state->head] == 'e'
-    ))
-    {
-        if (state->text[state->head] == '.' || state->text[state->head] == 'e')
-            isNumFloat = true;
-        ++state->head;
-    }
-    StringView num{&state->text[begin], &state->text[state->head]};
-    while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-    {
-        if (state->text[state->head] == '\n')
-            ++state->line;
-        ++state->head;
-    }
-    if (state->head < state->text.length && state->text[state->head] == ',')
-        ++state->head;
-
-    if (isNumFloat)
-    {
-        if (isFloat(num))
-        {
-            JsonNode* node = arena->alloc<JsonNode>(1);
-            node->type = JsonType::JsonType_float;
-            node->floating = stringToFloat(num);
-            return {node, nullptr};
-        }
-    } else {
-        if (isInteger(num))
-        {
-            JsonNode* node = arena->alloc<JsonNode>(1);
-            node->type = JsonType::JsonType_integer;
-            node->integer = stringToInteger(num);
-            return {node, nullptr};
-        }
-    }
-
-    JsonError* error = arena->alloc<JsonError>(1);
-
-    StringBuilder msg{arena};
-    msg.append("on line ");
-    msg.append(integerToString(arena, static_cast<i64>(state->line)));
-    msg.append(", expected numeral value, found \"");
-    msg.append(num);
-    msg.append("\"\n");
-    error->msg = msg;
-
-    while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-    {
-        if (state->text[state->head] == '\n')
-            ++state->line;
-        ++state->head;
-    }
-    if (state->text[state->head] == '}' || state->text[state->head] == ']')
-    {
-        return {nullptr, error};
-    } else {
-        Json next = jsonParseNext(arena, state);
-        error->next = next.errors;
-        return {next.file, error};
-    }
-}
-
-static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
-{
-    if (state->head + 4 <= state->text.length && StringView{&state->text[state->head], 4} == "true")
-    {
-        state->head += 4;
-        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-        {
-            if (state->text[state->head] == '\n')
-                ++state->line;
-            ++state->head;
-        }
-        if (state->head < state->text.length && state->text[state->head] == ',')
-            ++state->head;
-
-        JsonNode* node = arena->alloc<JsonNode>(1);
-        node->type = JsonType::JsonType_bool;
-        node->boolean = true;
-        return {node, nullptr};
-    }
-    if (state->head + 5 <= state->text.length && StringView{&state->text[state->head], 5} == "false")
-    {
-        state->head += 5;
-        while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-        {
-            if (state->text[state->head] == '\n')
-                ++state->line;
-            ++state->head;
-        }
-        if (state->head < state->text.length && state->text[state->head] == ',')
-            ++state->head;
-
-        JsonNode* node = arena->alloc<JsonNode>(1);
-        node->type = JsonType::JsonType_bool;
-        node->boolean = false;
-        return {node, nullptr};
-    }
-
-    JsonError* error = arena->alloc<JsonError>(1);
-
-    u64 begin = state->head;
-    while (state->head < state->text.length && !isWhitespace(state->text[state->head])
-        && state->text[state->head] != ','
-        && state->text[state->head] != '}'
-        && state->text[state->head] != ']'
-    )
-    {
-        if (state->text[state->head] == '\n')
-            ++state->line;
-        ++state->head;
-    }
-    StringBuilder msg{arena};
-    msg.append("on line ");
-    msg.append(integerToString(arena, static_cast<i64>(state->line)));
-    msg.append(", expected boolean value, found \"");
-    msg.append({&state->text[begin], &state->text[state->head]});
-    msg.append("\"\n");
-    error->msg = msg;
-
-    if (state->text[state->head] == ',')
-        ++state->head;
-
-    while (state->head < state->text.length && isWhitespace(state->text[state->head]))
-    {
-        if (state->text[state->head] == '\n')
-            ++state->line;
-        ++state->head;
-    }
-    if (state->text[state->head] == '}' || state->text[state->head] == ']')
-    {
-        return {nullptr, error};
-    } else {
-        Json next = jsonParseNext(arena, state);
-        error->next = next.errors;
-        return {next.file, error};
-    }
-}
-
-Json parseJson(Arena* arena, StringView text)
-{
-    HG_ASSERT(arena != nullptr);
-    if (text.length > 0)
-        HG_ASSERT(text.chars != nullptr);
-
-    JsonParseState parseState{};
-    parseState.text = text;
-    parseState.head = 0;
-    parseState.line = 1;
-    return jsonParseNext(arena, &parseState);
-}
+// struct JsonParseState {
+//     StringView text = {};
+//     u64 head = 0;
+//     u64 line = 0;
+// };
+//
+// static Json jsonParseNext(Arena* arena, JsonParseState* state);
+// static Json jsonParseStruct(Arena* arena, JsonParseState* state);
+// static Json jsonParseArray(Arena* arena, JsonParseState* state);
+// static Json jsonParseString(Arena* arena, JsonParseState* state);
+// static Json jsonParseNumber(Arena* arena, JsonParseState* state);
+// static Json jsonParseBoolean(Arena* arena, JsonParseState* state);
+//
+// static Json jsonParseNext(Arena* arena, JsonParseState* state)
+// {
+//     while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//     {
+//         if (state->text[state->head] == '\n')
+//             ++state->line;
+//         ++state->head;
+//     }
+//     if (state->head >= state->text.length)
+//         return {};
+//
+//     switch (state->text[state->head])
+//     {
+//         case '{':
+//             ++state->head;
+//             return jsonParseStruct(arena, state);
+//         case '[':
+//             ++state->head;
+//             return jsonParseArray(arena, state);
+//         case '\'': [[fallthrough]];
+//         case '"':
+//             ++state->head;
+//             return jsonParseString(arena, state);
+//         case '.': [[fallthrough]];
+//         case '+': [[fallthrough]];
+//         case '-':
+//             return jsonParseNumber(arena, state);
+//         case 't': [[fallthrough]];
+//         case 'f':
+//             return jsonParseBoolean(arena, state);
+//         case '}': {
+//             JsonError* error = arena->alloc<JsonError>(1);
+//             error->next = nullptr;
+//             StringBuilder msg{arena};
+//             msg.append("on line ");
+//             msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//             msg.append(", found unexpected token \"}\"\n");
+//             error->msg = msg;
+//             return {nullptr, error};
+//         }
+//         case ']': {
+//             JsonError* error = arena->alloc<JsonError>(1);
+//             error->next = nullptr;
+//             StringBuilder msg{arena};
+//             msg.append("on line ");
+//             msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//             msg.append(", found unexpected token \"]\"\n");
+//             error->msg = msg;
+//             return {nullptr, error};
+//         }
+//     }
+//     if (isNumeral(state->text[state->head]))
+//     {
+//         return jsonParseNumber(arena, state);
+//     }
+//
+//     JsonError* error = arena->alloc<JsonError>(1);
+//     error->next = nullptr;
+//
+//     u64 begin = state->head;
+//     while (state->head < state->text.length && !isWhitespace(state->text[state->head]))
+//     {
+//         if (state->text[state->head] == '\n')
+//             ++state->line;
+//         ++state->head;
+//     }
+//     StringBuilder msg{arena};
+//     msg.append("on line ");
+//     msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//     msg.append(", found unexpected token \"");
+//     msg.append({&state->text[begin], &state->text[state->head]});
+//     msg.append("\"\n");
+//     error->msg = msg;
+//
+//     return {nullptr, error};
+// }
+//
+// static Json jsonParseStruct(Arena* arena, JsonParseState* state)
+// {
+//     Json json{};
+//     json.file = arena->alloc<JsonNode>(1);
+//     json.file->type = JsonType::JsonType_struct;
+//     json.file->jstruct.fields = nullptr;
+//
+//     JsonField* lastField = nullptr;
+//     JsonError* lastError = nullptr;
+//
+//     for (;;)
+//     {
+//         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//         {
+//             if (state->text[state->head] == '\n')
+//                 ++state->line;
+//             ++state->head;
+//         }
+//         if (state->head >= state->text.length)
+//         {
+//             JsonError* error = arena->alloc<JsonError>(1);
+//             error->next = nullptr;
+//             StringBuilder msg{arena};
+//             msg.append("on line ");
+//             msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
+//             msg.append(", expected struct to terminate\n");
+//             error->msg = msg;
+//             if (lastError == nullptr)
+//                 json.errors = lastError = error;
+//             else
+//                 lastError->next = error;
+//             lastError = error;
+//             break;
+//         }
+//         if (state->text[state->head] == ']')
+//         {
+//             JsonError* error = arena->alloc<JsonError>(1);
+//             error->next = nullptr;
+//             StringBuilder msg{arena};
+//             msg.append("on line ");
+//             msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
+//             msg.append(", struct ends with \"]\" instead of \"}\"\n");
+//             error->msg = msg;
+//             if (lastError == nullptr)
+//                 json.errors = lastError = error;
+//             else
+//                 lastError->next = error;
+//             lastError = error;
+//             ++state->head;
+//             while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//             {
+//                 if (state->text[state->head] == '\n')
+//                     ++state->line;
+//                 ++state->head;
+//             }
+//             if (state->head < state->text.length && state->text[state->head] == ',')
+//                 ++state->head;
+//             break;
+//         }
+//         if (state->text[state->head] == '}')
+//         {
+//             ++state->head;
+//             while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//             {
+//                 if (state->text[state->head] == '\n')
+//                     ++state->line;
+//                 ++state->head;
+//             }
+//             if (state->head < state->text.length && state->text[state->head] == ',')
+//                 ++state->head;
+//             break;
+//         }
+//
+//         Json value = jsonParseNext(arena, state);
+//
+//         if (value.file != nullptr)
+//         {
+//             if (value.file->type != JsonType::JsonType_field)
+//             {
+//                 JsonError* error = arena->alloc<JsonError>(1);
+//                 error->next = nullptr;
+//                 StringBuilder msg{arena};
+//                 msg.append("on line ");
+//                 msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//                 msg.append(", struct has a literal instead of a field\n");
+//                 error->msg = msg;
+//                 if (lastError == nullptr)
+//                     json.errors = lastError = error;
+//                 else
+//                     lastError->next = error;
+//                 lastError = error;
+//             } else if (value.file->field.value == nullptr)
+//             {
+//                 JsonError* error = arena->alloc<JsonError>(1);
+//                 error->next = nullptr;
+//                 StringBuilder msg{arena};
+//                 msg.append("on line ");
+//                 msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//                 msg.append(", struct has a field named \"");
+//                 msg.append(value.file->field.name);
+//                 msg.append("\" which has no value\n");
+//                 error->msg = msg;
+//                 if (lastError == nullptr)
+//                     json.errors = lastError = error;
+//                 else
+//                     lastError->next = error;
+//                 lastError = error;
+//             } else {
+//                 if (lastField == nullptr)
+//                     json.file->jstruct.fields = &value.file->field;
+//                 else
+//                     lastField->next = &value.file->field;
+//                 lastField = &value.file->field;
+//             }
+//         }
+//         if (value.errors != nullptr)
+//         {
+//             if (lastError == nullptr)
+//                 json.errors = lastError = value.errors;
+//             else
+//                 lastError->next = value.errors;
+//             lastError = value.errors;
+//         }
+//     }
+//
+//     return json;
+// }
+//
+// static Json jsonParseArray(Arena* arena, JsonParseState* state)
+// {
+//     Json json{};
+//     json.file = arena->alloc<JsonNode>(1);
+//     json.file->type = JsonType::JsonType_array;
+//
+//     JsonType type = JsonType::JsonType_none;
+//     JsonElem* lastElem = nullptr;
+//     JsonError* lastError = nullptr;
+//
+//     for (;;)
+//     {
+//         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//         {
+//             if (state->text[state->head] == '\n')
+//                 ++state->line;
+//             ++state->head;
+//         }
+//         if (state->head >= state->text.length)
+//         {
+//             JsonError* error = arena->alloc<JsonError>(1);
+//             error->next = nullptr;
+//             StringBuilder msg{arena};
+//             msg.append("on line ");
+//             msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
+//             msg.append(", expected struct to terminate\n");
+//             error->msg = msg;
+//             if (lastError == nullptr)
+//                 json.errors = lastError = error;
+//             else
+//                 lastError->next = error;
+//             lastError = error;
+//             break;
+//         }
+//         if (state->text[state->head] == '}')
+//         {
+//             JsonError* error = arena->alloc<JsonError>(1);
+//             error->next = nullptr;
+//             StringBuilder msg{arena};
+//             msg.append("on line ");
+//             msg.append(integerToString(getScratch(), static_cast<i64>(state->line)));
+//             msg.append(", array ends with \"}\" instead of \"]\"\n");
+//             error->msg = msg;
+//             if (lastError == nullptr)
+//                 json.errors = lastError = error;
+//             else
+//                 lastError->next = error;
+//             lastError = error;
+//             ++state->head;
+//             while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//             {
+//                 if (state->text[state->head] == '\n')
+//                     ++state->line;
+//                 ++state->head;
+//             }
+//             if (state->head < state->text.length && state->text[state->head] == ',')
+//                 ++state->head;
+//             break;
+//         }
+//         if (state->text[state->head] == ']')
+//         {
+//             ++state->head;
+//             while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//             {
+//                 if (state->text[state->head] == '\n')
+//                     ++state->line;
+//                 ++state->head;
+//             }
+//             if (state->head < state->text.length && state->text[state->head] == ',')
+//                 ++state->head;
+//             break;
+//         }
+//
+//         JsonElem* elem = arena->alloc<JsonElem>(1);
+//         elem->next = nullptr;
+//
+//         Json value = jsonParseNext(arena, state);
+//         elem->value = value.file;
+//
+//         if (value.file != nullptr)
+//         {
+//             if (type == JsonType::JsonType_none)
+//             {
+//                 if (value.file->type != JsonType::JsonType_field)
+//                 {
+//                     type = value.file->type;
+//                 } else {
+//                     JsonError* error = arena->alloc<JsonError>(1);
+//                     error->next = nullptr;
+//                     StringBuilder msg{arena};
+//                     msg.append("on line ");
+//                     msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//                     msg.append(", array has a field as an element\n");
+//                     error->msg = msg;
+//                     if (lastError == nullptr)
+//                         json.errors = lastError = error;
+//                     else
+//                         lastError->next = error;
+//                     lastError = error;
+//                 }
+//             }
+//             if (value.file->type != type)
+//             {
+//                 JsonError* error = arena->alloc<JsonError>(1);
+//                 error->next = nullptr;
+//                 StringBuilder msg{arena};
+//                 msg.append("on line ");
+//                 msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//                 msg.append(", array has element which is not the same type as the first valid element\n");
+//                 error->msg = msg;
+//                 if (lastError == nullptr)
+//                     json.errors = lastError = error;
+//                 else
+//                     lastError->next = error;
+//                 lastError = error;
+//             } else {
+//                 if (lastElem == nullptr)
+//                     json.file->array.elems = elem;
+//                 else
+//                     lastElem->next = elem;
+//                 lastElem = elem;
+//             }
+//         }
+//         if (value.errors != nullptr)
+//         {
+//             if (lastError == nullptr)
+//                 json.errors = lastError = value.errors;
+//             else
+//                 lastError->next = value.errors;
+//             lastError = value.errors;
+//         }
+//     }
+//
+//     return json;
+// }
+//
+// static Json jsonParseString(Arena* arena, JsonParseState* state)
+// {
+//     u64 begin = state->head;
+//     while (state->head < state->text.length && state->text[state->head] != '"')
+//     {
+//         if (state->text[state->head] == '\n')
+//             ++state->line;
+//         ++state->head;
+//     }
+//     u64 end = state->head;
+//     if (state->head < state->text.length)
+//     {
+//         ++state->head;
+//         StringBuilder str{};
+//         for (u64 i = begin; i < end; ++i)
+//         {
+//             char c = state->text[i];
+//             if (c == '\\')
+//             {
+//                 // escape sequences : TODO
+//             }
+//             str.append(c);
+//         }
+//
+//         Json json{};
+//         json.file = arena->alloc<JsonNode>(1);
+//
+//         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//         {
+//             if (state->text[state->head] == '\n')
+//                 ++state->line;
+//             ++state->head;
+//         }
+//         if (state->head < state->text.length && state->text[state->head] == ':')
+//         {
+//             ++state->head;
+//             json.file->type = JsonType::JsonType_field;
+//             json.file->field.next = nullptr;
+//             json.file->field.name = str;
+//             Json next = jsonParseNext(arena, state);
+//             json.file->field.value = next.file;
+//             json.errors = next.errors;
+//         } else {
+//             json.file->type = JsonType::JsonType_string;
+//             json.file->string = str;
+//         }
+//         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//         {
+//             if (state->text[state->head] == '\n')
+//                 ++state->line;
+//             ++state->head;
+//         }
+//         if (state->head < state->text.length && state->text[state->head] == ',')
+//             ++state->head;
+//         return json;
+//     }
+//
+//     JsonError* error = arena->alloc<JsonError>(1);
+//     StringBuilder msg{arena};
+//     msg.append("on line ");
+//     msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//     msg.append(", expected string to terminate\n");
+//     error->msg = msg;
+//     return {nullptr, error};
+// }
+//
+// static Json jsonParseNumber(Arena* arena, JsonParseState* state)
+// {
+//     bool isNumFloat = false;
+//     u64 begin = state->head;
+//     while (state->head < state->text.length && (
+//         isNumeral(state->text[state->head]) ||
+//         state->text[state->head] == '-' ||
+//         state->text[state->head] == '+' ||
+//         state->text[state->head] == '.' ||
+//         state->text[state->head] == 'e'
+//     ))
+//     {
+//         if (state->text[state->head] == '.' || state->text[state->head] == 'e')
+//             isNumFloat = true;
+//         ++state->head;
+//     }
+//     StringView num{&state->text[begin], &state->text[state->head]};
+//     while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//     {
+//         if (state->text[state->head] == '\n')
+//             ++state->line;
+//         ++state->head;
+//     }
+//     if (state->head < state->text.length && state->text[state->head] == ',')
+//         ++state->head;
+//
+//     if (isNumFloat)
+//     {
+//         if (isFloat(num))
+//         {
+//             JsonNode* node = arena->alloc<JsonNode>(1);
+//             node->type = JsonType::JsonType_float;
+//             node->floating = stringToFloat(num);
+//             return {node, nullptr};
+//         }
+//     } else {
+//         if (isInteger(num))
+//         {
+//             JsonNode* node = arena->alloc<JsonNode>(1);
+//             node->type = JsonType::JsonType_integer;
+//             node->integer = stringToInteger(num);
+//             return {node, nullptr};
+//         }
+//     }
+//
+//     JsonError* error = arena->alloc<JsonError>(1);
+//
+//     StringBuilder msg{arena};
+//     msg.append("on line ");
+//     msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//     msg.append(", expected numeral value, found \"");
+//     msg.append(num);
+//     msg.append("\"\n");
+//     error->msg = msg;
+//
+//     while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//     {
+//         if (state->text[state->head] == '\n')
+//             ++state->line;
+//         ++state->head;
+//     }
+//     if (state->text[state->head] == '}' || state->text[state->head] == ']')
+//     {
+//         return {nullptr, error};
+//     } else {
+//         Json next = jsonParseNext(arena, state);
+//         error->next = next.errors;
+//         return {next.file, error};
+//     }
+// }
+//
+// static Json jsonParseBoolean(Arena* arena, JsonParseState* state)
+// {
+//     if (state->head + 4 <= state->text.length && StringView{&state->text[state->head], 4} == "true")
+//     {
+//         state->head += 4;
+//         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//         {
+//             if (state->text[state->head] == '\n')
+//                 ++state->line;
+//             ++state->head;
+//         }
+//         if (state->head < state->text.length && state->text[state->head] == ',')
+//             ++state->head;
+//
+//         JsonNode* node = arena->alloc<JsonNode>(1);
+//         node->type = JsonType::JsonType_bool;
+//         node->boolean = true;
+//         return {node, nullptr};
+//     }
+//     if (state->head + 5 <= state->text.length && StringView{&state->text[state->head], 5} == "false")
+//     {
+//         state->head += 5;
+//         while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//         {
+//             if (state->text[state->head] == '\n')
+//                 ++state->line;
+//             ++state->head;
+//         }
+//         if (state->head < state->text.length && state->text[state->head] == ',')
+//             ++state->head;
+//
+//         JsonNode* node = arena->alloc<JsonNode>(1);
+//         node->type = JsonType::JsonType_bool;
+//         node->boolean = false;
+//         return {node, nullptr};
+//     }
+//
+//     JsonError* error = arena->alloc<JsonError>(1);
+//
+//     u64 begin = state->head;
+//     while (state->head < state->text.length && !isWhitespace(state->text[state->head])
+//         && state->text[state->head] != ','
+//         && state->text[state->head] != '}'
+//         && state->text[state->head] != ']'
+//     )
+//     {
+//         if (state->text[state->head] == '\n')
+//             ++state->line;
+//         ++state->head;
+//     }
+//     StringBuilder msg{arena};
+//     msg.append("on line ");
+//     msg.append(integerToString(arena, static_cast<i64>(state->line)));
+//     msg.append(", expected boolean value, found \"");
+//     msg.append({&state->text[begin], &state->text[state->head]});
+//     msg.append("\"\n");
+//     error->msg = msg;
+//
+//     if (state->text[state->head] == ',')
+//         ++state->head;
+//
+//     while (state->head < state->text.length && isWhitespace(state->text[state->head]))
+//     {
+//         if (state->text[state->head] == '\n')
+//             ++state->line;
+//         ++state->head;
+//     }
+//     if (state->text[state->head] == '}' || state->text[state->head] == ']')
+//     {
+//         return {nullptr, error};
+//     } else {
+//         Json next = jsonParseNext(arena, state);
+//         error->next = next.errors;
+//         return {next.file, error};
+//     }
+// }
+//
+// Json parseJson(Arena* arena, StringView text)
+// {
+//     HG_ASSERT(arena != nullptr);
+//     if (text.length > 0)
+//         HG_ASSERT(text.chars != nullptr);
+//
+//     JsonParseState parseState{};
+//     parseState.text = text;
+//     parseState.head = 0;
+//     parseState.line = 1;
+//     return jsonParseNext(arena, &parseState);
+// }
 
 char* cString(Arena* arena, StringView str)
 {
