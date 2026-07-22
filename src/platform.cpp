@@ -2429,65 +2429,61 @@ void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
 
 void gpuMemoryBarrier(
     GpuCmd* cmd,
-    const GpuBufferBarrier* bufferBarriers,
-    u32 bufferBarrierCount,
-    const GpuImageBarrier* imageBarriers,
-    u32 imageBarrierCount)
+    Span<const GpuBufferBarrier> bufferBarriers,
+    Span<const GpuImageBarrier> imageBarriers)
 {
     ArenaScope scratch = getScratch();
 
-    VkBufferMemoryBarrier2* vkBufferBarriers = scratch.alloc<VkBufferMemoryBarrier2>(bufferBarrierCount);
-    VkImageMemoryBarrier2* vkImageBarriers = scratch.alloc<VkImageMemoryBarrier2>(imageBarrierCount);
+    ArrayTemp<VkBufferMemoryBarrier2> vkBufferBarriers{scratch, 0, static_cast<u32>(bufferBarriers.count)};
+    ArrayTemp<VkImageMemoryBarrier2> vkImageBarriers{scratch, 0, static_cast<u32>(imageBarriers.count)};
 
-    for (u32 i = 0; i < bufferBarrierCount; ++i)
+    for (const GpuBufferBarrier& barrier : bufferBarriers)
     {
-        GpuBufferData* buffer = bufferBarriers[i].buffer->data;
+        VkBufferMemoryBarrier2* vkBarrier = vkBufferBarriers.push();
 
-        vkBufferBarriers[i] = {};
-        vkBufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        vkBufferBarriers[i].srcStageMask = gpuStageToVk(buffer->lastStage);
-        vkBufferBarriers[i].srcAccessMask = gpuAccessToVk(buffer->lastAccess);
-        vkBufferBarriers[i].dstStageMask = gpuStageToVk(bufferBarriers[i].nextStage);
-        vkBufferBarriers[i].dstAccessMask = gpuAccessToVk(bufferBarriers[i].nextAccess);
-        vkBufferBarriers[i].buffer = buffer->buffer;
-        vkBufferBarriers[i].size = buffer->size;
+        vkBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        vkBarrier->srcStageMask = gpuStageToVk(barrier.buffer->data->lastStage);
+        vkBarrier->srcAccessMask = gpuAccessToVk(barrier.buffer->data->lastAccess);
+        vkBarrier->dstStageMask = gpuStageToVk(barrier.nextStage);
+        vkBarrier->dstAccessMask = gpuAccessToVk(barrier.nextAccess);
+        vkBarrier->buffer = barrier.buffer->data->buffer;
+        vkBarrier->size = barrier.buffer->data->size;
 
-        buffer->lastStage = bufferBarriers[i].nextStage;
-        buffer->lastAccess = bufferBarriers[i].nextAccess;
+        barrier.buffer->data->lastStage = barrier.nextStage;
+        barrier.buffer->data->lastAccess = barrier.nextAccess;
     }
 
-    for (u32 i = 0; i < imageBarrierCount; ++i)
+    for (const GpuImageBarrier& barrier : imageBarriers)
     {
-        GpuViewData* image = imageBarriers[i].image->data;
+        VkImageMemoryBarrier2* vkBarrier = vkImageBarriers.push();
 
-        vkImageBarriers[i] = {};
-        vkImageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        vkImageBarriers[i].srcStageMask = gpuStageToVk(image->lastStage);
-        vkImageBarriers[i].srcAccessMask = gpuAccessToVk(image->lastAccess);
-        vkImageBarriers[i].dstStageMask = gpuStageToVk(imageBarriers[i].nextStage);
-        vkImageBarriers[i].dstAccessMask = gpuAccessToVk(imageBarriers[i].nextAccess);
-        vkImageBarriers[i].oldLayout = gpuLayoutToVk(image->lastLayout);
-        vkImageBarriers[i].newLayout = gpuLayoutToVk(imageBarriers[i].nextLayout);
-        vkImageBarriers[i].image = image->image->image;
-        vkImageBarriers[i].subresourceRange = {
-            gpuAspectToVk(image->aspectFlags),
-            image->baseMipLevel,
-            image->levelCount,
-            image->baseArrayLayer,
-            image->layerCount,
+        vkBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        vkBarrier->srcStageMask = gpuStageToVk(barrier.image->data->lastStage);
+        vkBarrier->srcAccessMask = gpuAccessToVk(barrier.image->data->lastAccess);
+        vkBarrier->dstStageMask = gpuStageToVk(barrier.nextStage);
+        vkBarrier->dstAccessMask = gpuAccessToVk(barrier.nextAccess);
+        vkBarrier->oldLayout = gpuLayoutToVk(barrier.image->data->lastLayout);
+        vkBarrier->newLayout = gpuLayoutToVk(barrier.nextLayout);
+        vkBarrier->image = barrier.image->data->image->image;
+        vkBarrier->subresourceRange = {
+            gpuAspectToVk(barrier.image->data->aspectFlags),
+            barrier.image->data->baseMipLevel,
+            barrier.image->data->levelCount,
+            barrier.image->data->baseArrayLayer,
+            barrier.image->data->layerCount,
         };
 
-        image->lastStage = imageBarriers[i].nextStage;
-        image->lastAccess = imageBarriers[i].nextAccess;
-        image->lastLayout = imageBarriers[i].nextLayout;
+        barrier.image->data->lastStage = barrier.nextStage;
+        barrier.image->data->lastAccess = barrier.nextAccess;
+        barrier.image->data->lastLayout = barrier.nextLayout;
     }
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = bufferBarrierCount;
-    dep.pBufferMemoryBarriers = vkBufferBarriers;
-    dep.imageMemoryBarrierCount = imageBarrierCount;
-    dep.pImageMemoryBarriers = vkImageBarriers;
+    dep.bufferMemoryBarrierCount = static_cast<u32>(vkBufferBarriers.count);
+    dep.pBufferMemoryBarriers = vkBufferBarriers.vals;
+    dep.imageMemoryBarrierCount = static_cast<u32>(vkImageBarriers.count);
+    dep.pImageMemoryBarriers = vkImageBarriers.vals;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 }
@@ -3665,7 +3661,7 @@ void gpuFrameEnd(GpuCmd* cmd)
         barrier->image = &frame->windows[i]->views[frame->windows[i]->imageIdx];
         barrier->nextLayout = GpuLayout_presentSrc;
     }
-    gpuMemoryBarrier(cmd, nullptr, 0, presentBarriers.vals, presentBarriers.count);
+    gpuMemoryBarrier(cmd, {}, presentBarriers);
 
     vkEndCommandBuffer(reinterpret_cast<VkCommandBuffer>(cmd));
 

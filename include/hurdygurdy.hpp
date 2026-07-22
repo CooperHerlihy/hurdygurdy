@@ -539,11 +539,11 @@ struct Span<void> {
     /**
      * The values viewed
      */
-    void* vals = nullptr;
+    void* data = nullptr;
     /**
      * The number of values
      */
-    u64 count = 0;
+    u64 size = 0;
 
     /**
      * Construct empty
@@ -554,14 +554,14 @@ struct Span<void> {
      * Construct from pointer and count
      */
     constexpr Span(void* valsVal, u64 countVal)
-        : vals{valsVal}, count{countVal}
+        : data{valsVal}, size{countVal}
     {}
 
     /**
      * Construct from begin and end
      */
     constexpr Span(void* begin, void* end)
-        : vals{begin}, count{static_cast<uptr>(static_cast<u8*>(end) - static_cast<u8*>(begin))}
+        : data{begin}, size{static_cast<uptr>(static_cast<u8*>(end) - static_cast<u8*>(begin))}
     {}
 
     /**
@@ -569,8 +569,8 @@ struct Span<void> {
      */
     constexpr void* operator[](u64 idx) const
     {
-        HG_ASSERT(idx < count);
-        return static_cast<u8*>(vals) + idx;
+        HG_ASSERT(idx < size);
+        return static_cast<u8*>(data) + idx;
     }
 };
 
@@ -2388,16 +2388,12 @@ struct GpuBufferBarrier {
  * Parameters
  * - cmd The command buffer
  * - bufferBarriers The buffer barriers
- * - bufferBarrierCount The number of buffer barriers
  * - imageBarriers The image barriers
- * - imageBarrierCount The number of image barriers
  */
 void gpuMemoryBarrier(
     GpuCmd* cmd,
-    const GpuBufferBarrier* bufferBarriers,
-    u32 bufferBarrierCount,
-    const GpuImageBarrier* imageBarriers,
-    u32 imageBarrierCount);
+    Span<const GpuBufferBarrier> bufferBarriers,
+    Span<const GpuImageBarrier> imageBarriers);
 
 /**
  * A compute pass description
@@ -4431,7 +4427,7 @@ Serializer serialWriter(Arena* arena);
 Serializer serialReader(Arena* arena, SerialNode* begin);
 
 /**
- * The preamble to serializing a node, generally not needed
+ * The preamble to serializing a primitive node, generally only used internally
  */
 void serializeNodeStart(Serializer* s);
 
@@ -4448,7 +4444,7 @@ void serializeEnd(Serializer* s);
 /**
  * Serialize a value of unknown type
  */
-void serializeVoid(Serializer* s, void* val, u32 size);
+void serializeVoid(Serializer* s, Span<void> data);
 
 /**
  * Serialize a value, should be overridden
@@ -4469,64 +4465,16 @@ template<typename T, u64 N>
 void serialize(Serializer* s, T (*arr)[N]);
 
 /**
- * u8 serialization
+ * Integer serialization
  */
-template<>
-void serialize(Serializer* s, u8* val);
+template<std::integral T>
+void serialize(Serializer* s, T* val);
 
 /**
- * u16 serialization
+ * Float serialization
  */
-template<>
-void serialize(Serializer* s, u16* val);
-
-/**
- * u32 serialization
- */
-template<>
-void serialize(Serializer* s, u32* val);
-
-/**
- * u64 serialization
- */
-template<>
-void serialize(Serializer* s, u64* val);
-
-/**
- * i8 serialization
- */
-template<>
-void serialize(Serializer* s, i8* val);
-
-/**
- * i16 serialization
- */
-template<>
-void serialize(Serializer* s, i16* val);
-
-/**
- * i32 serialization
- */
-template<>
-void serialize(Serializer* s, i32* val);
-
-/**
- * i64 serialization
- */
-template<>
-void serialize(Serializer* s, i64* val);
-
-/**
- * f32 serialization
- */
-template<>
-void serialize(Serializer* s, f32* val);
-
-/**
- * f64 serialization
- */
-template<>
-void serialize(Serializer* s, f64* val);
+template<std::floating_point T>
+void serialize(Serializer* s, T* val);
 
 /**
  * bool serialization
@@ -5426,6 +5374,14 @@ struct Array {
     }
 
     /**
+     * Implicit convert to const span
+     */
+    constexpr operator Span<const T>() const
+    {
+        return {vals, count};
+    }
+
+    /**
      * Convenience to index into the array with debug bounds checking
      */
     constexpr T& operator[](u64 idx) const
@@ -5585,6 +5541,14 @@ struct ArrayTemp {
      * Implicit convert to span
      */
     constexpr operator Span<T>() const
+    {
+        return {vals, count};
+    }
+
+    /**
+     * Implicit convert to const span
+     */
+    constexpr operator Span<const T>() const
     {
         return {vals, count};
     }
@@ -9124,7 +9088,7 @@ void forPar(u64 begin, u64 end, F fn)
 template<typename T>
 void serialize(Serializer* s, T* val)
 {
-    serializeVoid(s, val, sizeof(*val));
+    serializeVoid(s, {val, sizeof(*val)});
 }
 
 template<typename... Ts>
@@ -9144,6 +9108,40 @@ void serialize(Serializer* s, T (*arr)[N])
         serialize(s, &(*arr)[i]);
     }
     serializeEnd(s);
+}
+
+template<std::integral T>
+void serialize(Serializer* s, T* val)
+{
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->type = SerialType_integer;
+        s->current->integer = static_cast<i64>(*val);
+    }
+    else
+    {
+        HG_ASSERT(s->current->type == SerialType_integer);
+        *val = static_cast<T>(s->current->integer);
+    }
+}
+
+template<std::floating_point T>
+void serialize(Serializer* s, T* val)
+{
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->type = SerialType_floating;
+        s->current->floating = static_cast<f64>(*val);
+    }
+    else
+    {
+        HG_ASSERT(s->current->type == SerialType_floating);
+        *val = static_cast<T>(s->current->floating);
+    }
 }
 
 template<typename T>

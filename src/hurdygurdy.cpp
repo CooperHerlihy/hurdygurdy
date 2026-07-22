@@ -1893,115 +1893,21 @@ void serializeEnd(Serializer* s)
     s->parent = s->parent->parent;
 }
 
-void serializeVoid(Serializer* s, void* val, u32 size)
+void serializeVoid(Serializer* s, Span<void> data)
 {
     serializeNodeStart(s);
 
     if (s->writing)
     {
         s->current->type = SerialType_string;
-        s->current->string = StringBuilder{s->arena, {static_cast<char*>(val), size}};
+        s->current->string = StringBuilder{s->arena, {static_cast<char*>(data.data), data.size}};
     }
     else
     {
         HG_ASSERT(s->current->type == SerialType_string);
-        HG_ASSERT(s->current->string.length == size);
-        memcpy(val, s->current->string.chars, size);
+        HG_ASSERT(s->current->string.length == data.size);
+        memcpy(data.data, s->current->string.chars, data.size);
     }
-}
-
-template<typename T>
-static void serializeInt(Serializer* s, T* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->type = SerialType_integer;
-        s->current->integer = static_cast<i64>(*val);
-    }
-    else
-    {
-        HG_ASSERT(s->current->type == SerialType_integer);
-        *val = static_cast<T>(s->current->integer);
-    }
-}
-
-template<>
-void serialize(Serializer* s, u8* val)
-{
-    serializeInt(s, val);
-}
-
-template<>
-void serialize(Serializer* s, u16* val)
-{
-    serializeInt(s, val);
-}
-
-template<>
-void serialize(Serializer* s, u32* val)
-{
-    serializeInt(s, val);
-}
-
-template<>
-void serialize(Serializer* s, u64* val)
-{
-    serializeInt(s, val);
-}
-
-template<>
-void serialize(Serializer* s, i8* val)
-{
-    serializeInt(s, val);
-}
-
-template<>
-void serialize(Serializer* s, i16* val)
-{
-    serializeInt(s, val);
-}
-
-template<>
-void serialize(Serializer* s, i32* val)
-{
-    serializeInt(s, val);
-}
-
-template<>
-void serialize(Serializer* s, i64* val)
-{
-    serializeInt(s, val);
-}
-
-template<typename T>
-static void serializeFloat(Serializer* s, T* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->type = SerialType_floating;
-        s->current->floating = static_cast<f64>(*val);
-    }
-    else
-    {
-        HG_ASSERT(s->current->type == SerialType_floating);
-        *val = static_cast<T>(s->current->floating);
-    }
-}
-
-template<>
-void serialize(Serializer* s, f32* val)
-{
-    serializeFloat(s, val);
-}
-
-template<>
-void serialize(Serializer* s, f64* val)
-{
-    serializeFloat(s, val);
 }
 
 template<>

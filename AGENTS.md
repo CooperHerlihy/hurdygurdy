@@ -13,6 +13,8 @@ C++20 game engine. Vulkan 1.3, SDL3, Dear ImGui.
 
 ### Linux / macOS
 
+On NixOS, build and test are aliased as: `debug`, `release`, `san`, and `tsan`
+
 ```
 cmake --workflow --preset debug
 ./build/test

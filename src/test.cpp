@@ -521,23 +521,23 @@ int main()
     // Default-constructed Span<void> is empty
     {
         Span<void> s;
-        TEST(s.vals == nullptr);
-        TEST(s.count == 0);
+        TEST(s.data == nullptr);
+        TEST(s.size == 0);
     }
 
     // Construct from pointer and count
     {
         f32 vals[3] = {1.0f, 2.0f, 3.0f};
         Span<void> s{static_cast<void*>(vals), 3};
-        TEST(s.vals == vals);
-        TEST(s.count == 3);
+        TEST(s.data == vals);
+        TEST(s.size == 3);
     }
 
     // Construct from begin and end
     {
         u8 data[4] = {10, 20, 30, 40};
         Span<void> s{data, data + 4};
-        TEST(s.count == 4);
+        TEST(s.size == 4);
         void* ptr = s[2];
         TEST(ptr == static_cast<void*>(data + 2));
     }
@@ -2107,7 +2107,7 @@ int main()
         bb.buffer = &buf;
         bb.nextStage = GpuStage_computeShader;
         bb.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
-        gpuMemoryBarrier(cmd, &bb, 1, nullptr, 0);
+        gpuMemoryBarrier(cmd, {&bb, 1}, {});
         gpuCmdEnd(cmd);
     }
 
@@ -2122,7 +2122,7 @@ int main()
         ib.nextStage = GpuStage_transfer;
         ib.nextAccess = GpuAccess_transferRead;
         ib.nextLayout = GpuLayout_transferSrc;
-        gpuMemoryBarrier(cmd, nullptr, 0, &ib, 1);
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
         gpuCmdEnd(cmd);
     }
 
@@ -2142,7 +2142,7 @@ int main()
         ib.nextStage = GpuStage_transfer;
         ib.nextAccess = GpuAccess_transferRead;
         ib.nextLayout = GpuLayout_transferSrc;
-        gpuMemoryBarrier(cmd, &bb, 1, &ib, 1);
+        gpuMemoryBarrier(cmd, {&bb, 1}, {&ib, 1});
         gpuCmdEnd(cmd);
     }
 
@@ -2206,7 +2206,7 @@ int main()
         barriers[1].buffer = &inBuf;
         barriers[1].nextStage = GpuStage_computeShader;
         barriers[1].nextAccess = GpuAccess_shaderRead;
-        gpuMemoryBarrier(cmd, barriers, 2, nullptr, 0);
+        gpuMemoryBarrier(cmd, {barriers, 2}, {});
 
         gpuBindPipeline(cmd, pipe);
         gpuPushConstants(cmd, pipe, &push, sizeof(push));
@@ -2383,7 +2383,7 @@ int main()
         ib.nextStage = GpuStage_transfer;
         ib.nextAccess = GpuAccess_transferRead;
         ib.nextLayout = GpuLayout_transferSrc;
-        gpuMemoryBarrier(cmd, nullptr, 0, &ib, 1);
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
         gpuCmdEnd(cmd);
 
         u32 face[faceSize * faceSize] = {};
@@ -2473,7 +2473,7 @@ int main()
         ib.nextStage = GpuStage_transfer;
         ib.nextAccess = GpuAccess_transferRead;
         ib.nextLayout = GpuLayout_transferSrc;
-        gpuMemoryBarrier(cmd, nullptr, 0, &ib, 1);
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
         gpuCmdEnd(cmd);
 
         u32 mip1[4] = {};
