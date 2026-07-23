@@ -61,7 +61,7 @@ gpuFailed:
 platformFailed:
     internal::deinitConcurrency();
 
-    return none<HurdyGurdy>();
+    return {};
 }
 
 HurdyGurdy::HurdyGurdy() noexcept
@@ -1085,17 +1085,17 @@ Maybe<Hit2D> intersectRays2D(Ray2D ray, Ray2D other)
 
     f32 denom = vecCross2(ray.dir, other.dir);
     if (std::abs(denom) < FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     Vec2 diff = other.pos - ray.pos;
 
     f32 t = vecCross2(diff, other.dir) / denom;
     if (t < -FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     f32 tOther = vecCross2(diff, ray.dir) / denom;
     if (tOther < -FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     return some<Hit2D>(t, denom < 0
         ? vecNorm2({other.dir.y, -other.dir.x})
@@ -1106,23 +1106,23 @@ Maybe<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     if (vecEq2(line.begin, line.end))
-        return none<Hit2D>();
+        return {};
 
     Vec2 lineDir = line.end - line.begin;
 
     f32 denom = vecCross2(ray.dir, lineDir);
     if (std::abs(denom) < FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     Vec2 diff = line.begin - ray.pos;
 
     f32 t = vecCross2(diff, lineDir) / denom;
     if (t < -FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     f32 tOther = vecCross2(diff, ray.dir) / denom;
     if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     return some<Hit2D>(t, denom < 0
         ? vecNorm2({lineDir.y, -lineDir.x})
@@ -1140,14 +1140,14 @@ Maybe<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
-        return none<Hit2D>();
+        return {};
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
     if (t < -FLT_EPSILON)
         t = (-b + rtdet) / (2 * a);
     if (t < -FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     return some<Hit2D>(t, (ray.pos + t * ray.dir - circle.pos) / circle.radius);
 }
@@ -1156,7 +1156,7 @@ Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     if (vecEq2(rect.begin, rect.end))
-        return none<Hit2D>();
+        return {};
 
     if (containsPointRect(ray.pos, rect))
     {
@@ -1194,7 +1194,7 @@ Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
         }
     }
     if (t == INFINITY)
-        return none<Hit2D>();
+        return {};
 
     return some<Hit2D>(t, norm);
 }
@@ -1202,24 +1202,24 @@ Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 Maybe<Hit2D> intersectLines2D(Line2D line, Line2D other)
 {
     if (vecEq2(line.begin, line.end) || vecEq2(other.begin, other.end))
-        return none<Hit2D>();
+        return {};
 
     Vec2 lineDir = line.end - line.begin;
     Vec2 otherDir = other.end - other.begin;
 
     f32 denom = vecCross2(lineDir, otherDir);
     if (std::abs(denom) < FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     Vec2 diff = other.begin - line.begin;
 
     f32 t = vecCross2(diff, otherDir) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     f32 tOther = vecCross2(diff, lineDir) / denom;
     if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     return some<Hit2D>(t, denom < 0
         ? vecNorm2({otherDir.y, -otherDir.x})
@@ -1229,24 +1229,24 @@ Maybe<Hit2D> intersectLines2D(Line2D line, Line2D other)
 Maybe<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray)
 {
     if (vecEq2(line.begin, line.end))
-        return none<Hit2D>();
+        return {};
     HG_ASSERT(ray.dir != Vec2{0});
 
     Vec2 lineDir = line.end - line.begin;
 
     f32 denom = vecCross2(lineDir, ray.dir);
     if (std::abs(denom) < FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     Vec2 diff = ray.pos - line.begin;
 
     f32 t = vecCross2(diff, ray.dir) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     f32 tRay = vecCross2(diff, lineDir) / denom;
     if (tRay < -FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     return some<Hit2D>(t, denom < 0
         ? vecNorm2({ray.dir.y, -ray.dir.x})
@@ -1264,16 +1264,16 @@ Maybe<Hit2D> intersectLineCircle(Line2D line, Circle circle)
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
-        return none<Hit2D>();
+        return {};
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
     if (t > 1 + FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
     if (t < -FLT_EPSILON)
         t = (-b + rtdet) / (2 * a);
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return none<Hit2D>();
+        return {};
 
     return some<Hit2D>(t, (line.begin + t * dir - circle.pos) / circle.radius);
 }
@@ -1281,7 +1281,7 @@ Maybe<Hit2D> intersectLineCircle(Line2D line, Circle circle)
 Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect)
 {
     if (vecEq2(line.begin, line.end) || vecEq2(rect.begin, rect.end))
-        return none<Hit2D>();
+        return {};
 
     f32 hits[4] = {
         (rect.begin.x - line.begin.x) / (line.end.x - line.begin.x),
@@ -1314,7 +1314,7 @@ Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect)
         }
     }
     if (t == INFINITY)
-        return none<Hit2D>();
+        return {};
 
     return some<Hit2D>(t, norm);
 }
@@ -1422,14 +1422,14 @@ Maybe<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere)
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
-        return none<Hit3D>();
+        return {};
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
     if (t < -FLT_EPSILON)
         t = (-b + rtdet) / (2 * a);
     if (t < -FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     return some<Hit3D>(t, (ray.pos + t * ray.dir - sphere.pos) / sphere.radius);
 }
@@ -1438,7 +1438,7 @@ Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box)
 {
     HG_ASSERT(ray.dir != Vec3{0});
     if (vecEq3(box.begin, box.end))
-        return none<Hit3D>();
+        return {};
 
     if (containsPointBox(ray.pos, box))
     {
@@ -1480,7 +1480,7 @@ Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box)
         }
     }
     if (t == INFINITY)
-        return none<Hit3D>();
+        return {};
 
     return some<Hit3D>(t, norm);
 }
@@ -1491,7 +1491,7 @@ Maybe<Hit3D> intersectRayTri(Ray3D ray, Tri tri)
     HG_ASSERT(ray.dir != Vec3{0});
 
     if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
-        return none<Hit3D>();
+        return {};
 
     Vec3 e1 = tri.b - tri.a;
     Vec3 e2 = tri.c - tri.a;
@@ -1499,23 +1499,23 @@ Maybe<Hit3D> intersectRayTri(Ray3D ray, Tri tri)
 
     f32 a = vecDot3(e1, q);
     if (std::abs(a) < FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     Vec3 s = ray.pos - tri.a;
 
     f32 u = vecDot3(s, q) / a;
     if (u < -FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     Vec3 r = vecCross3(s, e1);
 
     f32 v = vecDot3(ray.dir, r) / a;
     if (v < -FLT_EPSILON || u + v > 1 + FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     f32 t = vecDot3(e2, r) / a;
     if (t < -FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     return some<Hit3D>(t, a < 0
         ? vecNorm3(vecCross3(e2, e1))
@@ -1529,11 +1529,11 @@ Maybe<Hit3D> intersectRayPlane(Ray3D ray, Plane plane)
 
     f32 denom = vecDot3(ray.dir, plane.normal);
     if (std::abs(denom) < FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     f32 t = (plane.dist - vecDot3(ray.pos, plane.normal)) / denom;
     if (t < -FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     return some<Hit3D>(t, denom < 0
         ? plane.normal
@@ -1551,16 +1551,16 @@ Maybe<Hit3D> intersectLineSphere(Line3D line, Sphere sphere)
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
-        return none<Hit3D>();
+        return {};
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
     if (t > 1 + FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
     if (t < -FLT_EPSILON)
         t = (-b + rtdet) / (2 * a);
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     return some<Hit3D>(t, (line.begin + t * dir - sphere.pos) / sphere.radius);
 }
@@ -1568,7 +1568,7 @@ Maybe<Hit3D> intersectLineSphere(Line3D line, Sphere sphere)
 Maybe<Hit3D> intersectLineBox(Line3D line, Box box)
 {
     if (vecEq3(line.begin, line.end) || vecEq3(box.begin, box.end))
-        return none<Hit3D>();
+        return {};
 
     f32 hits[6] = {
         (box.begin.x - line.begin.x) / (line.end.x - line.begin.x),
@@ -1605,7 +1605,7 @@ Maybe<Hit3D> intersectLineBox(Line3D line, Box box)
         }
     }
     if (t == INFINITY)
-        return none<Hit3D>();
+        return {};
 
     return some<Hit3D>(t, norm);
 }
@@ -1614,10 +1614,10 @@ Maybe<Hit3D> intersectLineBox(Line3D line, Box box)
 Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri)
 {
     if (vecEq3(line.begin, line.end))
-        return none<Hit3D>();
+        return {};
 
     if (tri.a == tri.b || tri.a == tri.c || tri.b == tri.c)
-        return none<Hit3D>();
+        return {};
 
     Vec3 lineDir = line.end - line.begin;
 
@@ -1627,23 +1627,23 @@ Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri)
 
     f32 a = vecDot3(e1, q);
     if (std::abs(a) < FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     Vec3 s = line.begin - tri.a;
 
     f32 u = vecDot3(s, q) / a;
     if (u < -FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     Vec3 r = vecCross3(s, e1);
 
     f32 v = vecDot3(lineDir, r) / a;
     if (v < -FLT_EPSILON || u + v > 1 + FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     f32 t = vecDot3(e2, r) / a;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     return some<Hit3D>(t, a < 0
         ? vecNorm3(vecCross3(e2, e1))
@@ -1653,7 +1653,7 @@ Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri)
 Maybe<Hit3D> intersectLinePlane(Line3D line, Plane plane)
 {
     if (line.begin == line.end)
-        return none<Hit3D>();
+        return {};
 
     HG_ASSERT(plane.normal != Vec3{0});
 
@@ -1661,11 +1661,11 @@ Maybe<Hit3D> intersectLinePlane(Line3D line, Plane plane)
 
     f32 denom = vecDot3(lineDir, plane.normal);
     if (std::abs(denom) < FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     f32 t = (plane.dist - vecDot3(line.begin, plane.normal)) / denom;
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
-        return none<Hit3D>();
+        return {};
 
     return some<Hit3D>(t, denom < 0
         ? plane.normal
@@ -3974,21 +3974,18 @@ void rendererDeinit2D()
 Layer2D layerCreate2D()
 {
     Layer2D layer{};
-
     layer.instances = Array<Render2DInstance>{0, 1024};
     layer.instanceBuffer = GpuBuffer{layer.instances.capacity * sizeof(Render2DInstance),
         GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
     layer.instanceCapacity = layer.instances.capacity;
     layer.transform = Mat4{1.0f};
     layer.changed = true;
-
     return layer;
 }
 
 void layerDestroy2D(Layer2D* layer)
 {
     HG_ASSERT(layer != nullptr);
-
     *layer = {};
 }
 

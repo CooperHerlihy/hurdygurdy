@@ -1047,7 +1047,17 @@ struct Maybe
     /**
      * Construct empty
      */
-    Maybe() noexcept {};
+    Maybe() noexcept
+        : has{false}
+    {};
+
+    /**
+     * Construct with a value
+     */
+    Maybe(T val)
+        : has{true}
+        , val{std::move(val)}
+    {}
 
     /**
      * Destroy the value, if it exists
@@ -1116,17 +1126,6 @@ Maybe<T> some(Args&&... args)
     Maybe<T> maybe;
     new (&maybe.val) T{std::forward<Args>(args)...};
     maybe.has = true;
-    return maybe;
-}
-
-/**
- * Create an empty Maybe
- */
-template<typename T>
-Maybe<T> none()
-{
-    Maybe<T> maybe;
-    maybe.has = false;
     return maybe;
 }
 
@@ -6083,6 +6082,11 @@ struct Library {
     ~Library() noexcept;
 
     /**
+     * Load a dynamic library
+     */
+    static Maybe<Library> load(StringView path);
+
+    /**
      * Find a function pointer in the library
      */
     Maybe<void*> findFunction(StringView name);
@@ -6110,11 +6114,6 @@ struct Library {
     Library(const Library&) = delete;
     Library& operator=(const Library&) = delete;
 };
-
-/**
- * Load a dynamic library
- */
-Maybe<Library> loadDynamicLibrary(StringView path);
 
 // ============================================================================
 // GPU
@@ -7629,19 +7628,12 @@ struct Window {
     /**
      * Implementation data
      */
-    WindowData* data;
+    UniquePtr<WindowData> data;
 
     /**
      * Construct empty
      */
-    Window() noexcept = default;
-
-    /**
-     * Construct from data
-     */
-    Window(WindowData* dataVal)
-        : data{dataVal}
-    {}
+    Window() noexcept;
 
     /**
      * Open a new window
@@ -7718,22 +7710,12 @@ struct Window {
     /**
      * Move construct
      */
-    Window(Window&& other) noexcept
-        : data{std::exchange(other.data, nullptr)}
-    {}
+    Window(Window&& other) noexcept;
 
     /**
      * Move assign
      */
-    Window& operator=(Window&& other) noexcept
-    {
-        if (this != &other)
-        {
-            this->~Window();
-            new (this) Window{std::move(other)};
-        }
-        return *this;
-    }
+    Window& operator=(Window&& other) noexcept;
 
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;

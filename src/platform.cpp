@@ -2904,7 +2904,6 @@ struct WindowData {
 };
 
 struct WindowState {
-    Pool<WindowData> pool{};
     Map<SDL_WindowID, WindowData*> ids{};
 
     f32 mouseDX = 0.0f;
@@ -3443,7 +3442,8 @@ static GpuPresentMode findSwapchainPresentMode(
 
 Maybe<Window> Window::create(StringView title, u32 width, u32 height, const WindowConfig& config)
 {
-    WindowData* window = windowState.pool.alloc();
+    Maybe<Window> window = some<Window>();
+    window->data = makeUnique<WindowData>();
 
     if (title == "")
         title = "Hurdy Gurdy";
@@ -3465,44 +3465,44 @@ Maybe<Window> Window::create(StringView title, u32 width, u32 height, const Wind
 
     ArenaScope scratch = getScratch();
 
-    window->sdlWindow = SDL_CreateWindow(cString(scratch, title), static_cast<int>(width), static_cast<int>(height), flags);
-    if (window->sdlWindow == nullptr)
+    window->data->sdlWindow = SDL_CreateWindow(cString(scratch, title), static_cast<int>(width), static_cast<int>(height), flags);
+    if (window->data->sdlWindow == nullptr)
     {
         setError(SDL_GetError());
         goto windowFailed;
     }
 
-    if (!SDL_Vulkan_CreateSurface(window->sdlWindow, vk.instance, nullptr, &window->surface))
+    if (!SDL_Vulkan_CreateSurface(window->data->sdlWindow, vk.instance, nullptr, &window->data->surface))
     {
         setError(SDL_GetError());
         goto surfaceFailed;
     }
 
-    windowState.ids.add(SDL_GetWindowID(window->sdlWindow), window);
+    windowState.ids.add(SDL_GetWindowID(window->data->sdlWindow), window->data);
 
-    SDL_GetWindowSize(window->sdlWindow, reinterpret_cast<int*>(&window->width), reinterpret_cast<int*>(&window->height));
+    SDL_GetWindowSize(window->data->sdlWindow, reinterpret_cast<int*>(&window->data->width), reinterpret_cast<int*>(&window->data->height));
 
-    window->format = findSwapchainFormat(window->surface);
-    window->presentMode = findSwapchainPresentMode(window->surface, config.preferredPresentMode);
-    window->imageUsage = config.imageUsage;
+    window->data->format = findSwapchainFormat(window->data->surface);
+    window->data->presentMode = findSwapchainPresentMode(window->data->surface, config.preferredPresentMode);
+    window->data->imageUsage = config.imageUsage;
 
-    window->imageAvailable = Array<VkSemaphore>{vk.frameCount, vk.frameCount};
+    window->data->imageAvailable = Array<VkSemaphore>{vk.frameCount, vk.frameCount};
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
-        window->imageAvailable[i] = nullptr;
+        window->data->imageAvailable[i] = nullptr;
     }
 
-    resizeWindowSwapchain(window);
+    resizeWindowSwapchain(window->data);
 
-    window->events = Array<WindowEvent>(0, 1024);
+    window->data->events = Array<WindowEvent>(0, 1024);
 
-    return some<Window>(window);
+    return window;
 
 surfaceFailed:
-    SDL_DestroyWindow(window->sdlWindow);
+    SDL_DestroyWindow(window->data->sdlWindow);
 windowFailed:
-    windowState.pool.free(window);
-    return none<Window>();
+    window->data = {};
+    return {};
 }
 
 Window::~Window() noexcept
@@ -3526,10 +3526,12 @@ Window::~Window() noexcept
 
         windowState.ids.remove(SDL_GetWindowID(data->sdlWindow));
         SDL_DestroyWindow(data->sdlWindow);
-
-        windowState.pool.free(data);
     }
 }
+
+Window::Window() noexcept = default;
+Window::Window(Window&& other) noexcept = default;
+Window& Window::operator=(Window&& other) noexcept = default;
 
 GpuView* Window::imageView()
 {
@@ -4045,7 +4047,7 @@ static Library libvulkan{};
 
 static bool loadVulkan()
 {
-    Maybe<Library> lib = loadDynamicLibrary(
+    Maybe<Library> lib = Library::load(
 #if defined(HG_PLATFORM_LINUX)
         "libvulkan.so.1"
 #elif defined(HG_PLATFORM_WINDOWS)
@@ -5532,22 +5534,20 @@ namespace hg {
 
 #include <dlfcn.h>
 
-Maybe<Library> loadDynamicLibrary(StringView path)
+Maybe<Library> Library::load(StringView path)
 {
     ArenaScope scratch = getScratch();
-
     char* cstr = cString(scratch, path);
 
-    void* lib = dlopen(cstr, RTLD_LAZY);
-    if (lib == nullptr)
+    Maybe<Library> lib = some<Library>();
+    lib->lib = dlopen(cstr, RTLD_LAZY);
+    if (lib->lib == nullptr)
     {
         setError("Could not load dynamic library \"%s\": %s", cstr, dlerror());
-        return none<Library>();
+        return {};
     }
 
-    Maybe<Library> ret = some<Library>();
-    ret->lib = lib;
-    return ret;
+    return lib;
 }
 
 Library::~Library() noexcept
@@ -5565,7 +5565,7 @@ Maybe<void*> Library::findFunction(StringView name)
     if (fn == nullptr)
     {
         setError("Could not load function symbol \"%s\": %s", cstr, dlerror());
-        return none<void*>();
+        return {};
     }
 
     return some<void*>(fn);
@@ -5576,20 +5576,19 @@ Maybe<void*> Library::findFunction(StringView name)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-Maybe<Library> loadDynamicLibrary(StringView path)
+Maybe<Library> Library::load(StringView path)
 {
     ArenaScope scratch = getScratch();
     char* cstr = cString(scratch, path);
 
-    void* lib = static_cast<void*>(LoadLibraryA(cstr));
+    Maybe<Library> lib = some<Library>();
+    lib->lib = static_cast<void*>(LoadLibraryA(cstr));
     if (lib == nullptr)
     {
         setError("Could not load dynamic library \"%s\"", cstr);
-        return none<Library>();
+        return {};
     }
 
-    Maybe<Library> ret = some<Library>();
-    ret->lib = lib;
     return lib;
 }
 
@@ -5608,7 +5607,7 @@ Maybe<void*> Library::findFunction(StringView name)
     if (fn == nullptr)
     {
         setError("Could not load function symbol \"%s\"", cstr);
-        return none<void*>();
+        return {};
     }
 
     return some<void*>(fn);

@@ -128,7 +128,7 @@ int main()
     // - setError(fmt, args...): set a formatted error string
     // - getError(): retrieve the current error
     // - logError(): log the error to stderr (smoke test only)
-    // - Maybe<T>: some(), none(), orElse(), expect(), copy/move
+    // - Maybe<T>: some(), orElse(), expect(), copy/move
     {
         // ------------------------------------------------------------------
         // setError / getError: plain string
@@ -897,13 +897,11 @@ int main()
     //
     // Maybe<T> is a lightweight optional type used for recoverable error
     // handling. It holds a boolean `has` and a union containing the value.
-    // some() creates a filled Maybe, none() creates an empty one.
     // orElse(default) returns the value or a fallback; expect(msg) returns
     // the value or panics.
     //
     // Functions covered:
     // - some<T>(args...): create a filled Maybe
-    // - none<T>(): create an empty Maybe
     // - has: check whether a value is present
     // - val: access the value (direct union access)
     // - orElse(T): unwrap or return default
@@ -912,47 +910,34 @@ int main()
     // - move construction and assignment
     {
         // ------------------------------------------------------------------
-        // some() / none() with trivial types
+        // with trivial types
         // ------------------------------------------------------------------
 
-        // some() creates a filled Maybe
+        // create a filled Maybe
         {
-            Maybe<i32> m = some<i32>(42);
+            Maybe<u32> m = 42;
             TEST(m.has);
             TEST(m.val == 42);
         }
 
-        // none() creates an empty Maybe
+        // empty Maybe
         {
-            Maybe<i32> m = none<i32>();
+            Maybe<i64> m = {};
             TEST(!m.has);
         }
 
-        // some() with u32
+        // with floating point
         {
-            Maybe<u32> m = some<u32>(100u);
-            TEST(m.has);
-            TEST(m.val == 100u);
-        }
-
-        // none() leaves the value uninitialized (but has is false)
-        {
-            Maybe<u32> m = none<u32>();
-            TEST(!m.has);
-        }
-
-        // some() with floating point
-        {
-            Maybe<f32> m = some<f32>(3.14f);
+            Maybe<f32> m = 3.14f;
             TEST(m.has);
             TEST(std::abs(m.val - 3.14f) <= FLT_EPSILON);
         }
 
-        // some() with a boolean
+        // default constructed with some
         {
-            Maybe<bool> m = some<bool>(true);
+            Maybe<bool> m = some<bool>();
             TEST(m.has);
-            TEST(m.val == true);
+            TEST(m.val == bool{});
         }
 
         // ------------------------------------------------------------------
@@ -961,7 +946,7 @@ int main()
 
         // orElse returns the value when present
         {
-            Maybe<i32> m = some<i32>(42);
+            Maybe<i32> m = 42;
             i32 result = m.orElse(-1);
             TEST(result == 42);
             TEST(!m.has); // value was moved out
@@ -969,7 +954,7 @@ int main()
 
         // orElse returns the default when empty
         {
-            Maybe<i32> m = none<i32>();
+            Maybe<i32> m = {};
             i32 result = m.orElse(-1);
             TEST(result == -1);
             TEST(!m.has);
@@ -977,14 +962,14 @@ int main()
 
         // orElse with floating point
         {
-            Maybe<f32> m = none<f32>();
+            Maybe<f32> m = {};
             f32 result = m.orElse(1.0f);
             TEST(std::abs(result - 1.0f) <= FLT_EPSILON);
         }
 
         // orElse can be called on an already-consumed Maybe (no-op)
         {
-            Maybe<i32> m = some<i32>(42);
+            Maybe<i32> m = 42;
             m.orElse(-1);
             TEST(!m.has); // consumed
 
@@ -998,7 +983,7 @@ int main()
 
         // expect returns the value when present
         {
-            Maybe<i32> m = some<i32>(42);
+            Maybe<i32> m = 42;
             i32 result = m.expect("should have value");
             TEST(result == 42);
             TEST(!m.has); // value was moved out
@@ -1019,7 +1004,7 @@ int main()
 
         // Copy construct a filled Maybe
         {
-            Maybe<i32> a = some<i32>(42);
+            Maybe<i32> a = 42;
             Maybe<i32> b{a};
 
             TEST(a.has);
@@ -1030,7 +1015,7 @@ int main()
 
         // Copy construct an empty Maybe
         {
-            Maybe<i32> a = none<i32>();
+            Maybe<i32> a = {};
             Maybe<i32> b{a};
 
             TEST(!a.has);
@@ -1039,8 +1024,8 @@ int main()
 
         // Copy assign a filled Maybe
         {
-            Maybe<i32> a = some<i32>(42);
-            Maybe<i32> b = none<i32>();
+            Maybe<i32> a = 42;
+            Maybe<i32> b = {};
             b = a;
 
             TEST(a.has);
@@ -1051,8 +1036,8 @@ int main()
 
         // Copy assign an empty Maybe
         {
-            Maybe<i32> a = none<i32>();
-            Maybe<i32> b = some<i32>(10);
+            Maybe<i32> a = {};
+            Maybe<i32> b = 10;
             b = a;
 
             TEST(!a.has);
@@ -1061,8 +1046,8 @@ int main()
 
         // Copy assign a filled Maybe onto another filled Maybe destroys old value
         {
-            Maybe<i32> a = some<i32>(42);
-            Maybe<i32> b = some<i32>(10);
+            Maybe<i32> a = 42;
+            Maybe<i32> b = 10;
 
             // Both alive before
             TEST(a.has && a.val == 42);
@@ -1080,7 +1065,7 @@ int main()
 
         // Move construct a filled Maybe
         {
-            Maybe<i32> a = some<i32>(42);
+            Maybe<i32> a = 42;
             Maybe<i32> b{std::move(a)};
 
             TEST(!a.has); // moved-from is empty
@@ -1090,7 +1075,7 @@ int main()
 
         // Move construct an empty Maybe
         {
-            Maybe<i32> a = none<i32>();
+            Maybe<i32> a = {};
             Maybe<i32> b{std::move(a)};
 
             TEST(!a.has);
@@ -1099,8 +1084,8 @@ int main()
 
         // Move assign a filled Maybe
         {
-            Maybe<i32> a = some<i32>(42);
-            Maybe<i32> b = none<i32>();
+            Maybe<i32> a = 42;
+            Maybe<i32> b = {};
             b = std::move(a);
 
             TEST(!a.has); // moved-from is empty
@@ -1110,8 +1095,8 @@ int main()
 
         // Move assign an empty Maybe
         {
-            Maybe<i32> a = none<i32>();
-            Maybe<i32> b = some<i32>(10);
+            Maybe<i32> a = {};
+            Maybe<i32> b = 10;
             b = std::move(a);
 
             TEST(!a.has);
@@ -1124,14 +1109,14 @@ int main()
 
         // some() with String (non-trivial: has ~String(), copy deleted)
         {
-            Maybe<String> m = some<String>(String::create("hello world"));
+            Maybe<String> m = String::create("hello world");
             TEST(m.has);
             TEST(m.val == "hello world");
         }
 
         // Move a Maybe<String>
         {
-            Maybe<String> a = some<String>(String::create("move me"));
+            Maybe<String> a = String::create("move me");
             Maybe<String> b = std::move(a);
 
             TEST(!a.has);
@@ -1141,8 +1126,8 @@ int main()
 
         // Move-assign a Maybe<String>
         {
-            Maybe<String> a = some<String>(String::create("first"));
-            Maybe<String> b = some<String>(String::create("second"));
+            Maybe<String> a = String::create("first");
+            Maybe<String> b = String::create("second");
             b = std::move(a);
 
             TEST(!a.has);
@@ -1154,27 +1139,40 @@ int main()
         // Maybe with custom struct
         // ------------------------------------------------------------------
 
-        // some() with a plain-old-data struct
+        // construct with a plain-old-data struct
         {
             struct Pod {
                 i64 a;
                 f32 b;
             };
 
-            Maybe<Pod> m = some<Pod>(Pod{-12, 3.14f});
+            Maybe<Pod> m = Pod{-12, 3.14f};
             TEST(m.has);
             TEST(m.val.a == -12);
             TEST(std::abs(m.val.b - 3.14f) <= FLT_EPSILON);
         }
 
-        // none() with a struct type
+        // some() to construct in place
         {
             struct Pod {
                 i64 a;
                 f32 b;
             };
 
-            Maybe<Pod> m = none<Pod>();
+            Maybe<Pod> m = some<Pod>(-12, 3.14f);
+            TEST(m.has);
+            TEST(m.val.a == -12);
+            TEST(std::abs(m.val.b - 3.14f) <= FLT_EPSILON);
+        }
+
+        // Empty with a struct type
+        {
+            struct Pod {
+                i64 a;
+                f32 b;
+            };
+
+            Maybe<Pod> m = {};
             TEST(!m.has);
         }
 
@@ -1187,11 +1185,11 @@ int main()
 
         // (Lifecycle struct defined at file scope above)
 
-        // none<T>() should not construct or destroy anything
+        // Empty should not construct or destroy anything
         {
             Lifecycle::stats.reset();
             {
-                Maybe<Lifecycle> m = none<Lifecycle>();
+                Maybe<Lifecycle> m = {};
                 TEST(!m.has);
                 TEST(Lifecycle::stats.alive == 0);
             }
@@ -1229,7 +1227,7 @@ int main()
         // Move construct from empty: no construction
         {
             Lifecycle::stats.reset();
-            Maybe<Lifecycle> a = none<Lifecycle>();
+            Maybe<Lifecycle> a = {};
             Maybe<Lifecycle> b = std::move(a);
             TEST(!a.has);
             TEST(!b.has);
@@ -1241,7 +1239,7 @@ int main()
             Lifecycle::stats.reset();
             {
                 Maybe<Lifecycle> a = some<Lifecycle>();
-                Maybe<Lifecycle> b = none<Lifecycle>();
+                Maybe<Lifecycle> b = {};
                 TEST(Lifecycle::stats.alive == 1);
                 b = std::move(a);
                 TEST(!a.has);
@@ -1302,7 +1300,7 @@ int main()
         {
             Lifecycle::stats.reset();
             {
-                Maybe<Lifecycle> a = none<Lifecycle>();
+                Maybe<Lifecycle> a = {};
                 Maybe<Lifecycle> b = some<Lifecycle>();
                 TEST(Lifecycle::stats.alive == 1);
                 b = a;
@@ -1318,7 +1316,7 @@ int main()
             Lifecycle::stats.reset();
             {
                 Maybe<Lifecycle> a = some<Lifecycle>();
-                Maybe<Lifecycle> b = none<Lifecycle>();
+                Maybe<Lifecycle> b = {};
                 TEST(Lifecycle::stats.alive == 1);
                 b = a;
                 TEST(a.has);
@@ -1331,8 +1329,8 @@ int main()
         // Move assign (empty → empty): no-op
         {
             Lifecycle::stats.reset();
-            Maybe<Lifecycle> a = none<Lifecycle>();
-            Maybe<Lifecycle> b = none<Lifecycle>();
+            Maybe<Lifecycle> a = {};
+            Maybe<Lifecycle> b = {};
             b = std::move(a);
             TEST(!a.has);
             TEST(!b.has);
