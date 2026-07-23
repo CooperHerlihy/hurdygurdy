@@ -2221,6 +2221,2529 @@ int main()
     } // concurrencyIter
 
     // ============================================================================
+    // Math
+    // ============================================================================
+
+    // Scalar functions
+    {
+        // pow
+        {
+            TEST(pow(2.0f, 0) == 1.0f);
+            TEST(pow(2.0f, 1) == 2.0f);
+            TEST(pow(3.0f, 2) == 9.0f);
+            TEST(pow(0.0f, 5) == 0.0f);
+            TEST(pow(1.0f, 100) == 1.0f);
+            TEST(pow(-2.0f, 3) == -8.0f);
+            TEST(pow(-2.0f, 2) == 4.0f);
+        }
+
+        // square
+        {
+            TEST(square(0.0f) == 0.0f);
+            TEST(square(1.0f) == 1.0f);
+            TEST(square(-1.0f) == 1.0f);
+            TEST(square(2.5f) == 6.25f);
+        }
+
+        // lerp
+        {
+            TEST(lerp(0.0f, 10.0f, 0.0f) == 0.0f);
+            TEST(lerp(0.0f, 10.0f, 1.0f) == 10.0f);
+            TEST(lerp(0.0f, 10.0f, 0.5f) == 5.0f);
+            TEST(lerp(5.0f, 5.0f, 0.3f) == 5.0f);
+        }
+
+        // smooth / smoothQuintic
+        {
+            TEST(smooth(0.0f) == 0.0f);
+            TEST(smooth(1.0f) == 1.0f);
+            TEST(std::abs(smooth(0.5f) - 0.5f) < FLT_EPSILON);
+            TEST(smoothQuintic(0.0f) == 0.0f);
+            TEST(smoothQuintic(1.0f) == 1.0f);
+            TEST(std::abs(smoothQuintic(0.5f) - 0.5f) < FLT_EPSILON);
+        }
+    }
+
+    // Vec2
+    {
+        // Construction and operator[]
+        {
+            Vec2 v{1.0f, 2.0f};
+            TEST(v.x == 1.0f && v.y == 2.0f);
+            Vec2 s{5.0f};
+            TEST(s.x == 5.0f && s.y == 5.0f);
+            TEST(v[0] == 1.0f && v[1] == 2.0f);
+        }
+
+        // Negation
+        {
+            Vec2 n = -Vec2{1.0f, -2.0f};
+            TEST(n.x == -1.0f && n.y == 2.0f);
+        }
+
+        // Arithmetic
+        {
+            Vec2 a{1.0f, 2.0f};
+            Vec2 b{3.0f, 4.0f};
+            TEST((a + b == Vec2{4.0f, 6.0f}));
+            TEST((b - a == Vec2{2.0f, 2.0f}));
+            TEST((a * b == Vec2{3.0f, 8.0f}));
+            TEST((b / a == Vec2{3.0f, 2.0f}));
+        }
+
+        // Scalar multiply / divide
+        {
+            Vec2 v{2.0f, 3.0f};
+            TEST((5.0f * v == Vec2{10.0f, 15.0f}));
+            TEST((v * 5.0f == Vec2{10.0f, 15.0f}));
+            TEST((v / 2.0f == Vec2{1.0f, 1.5f}));
+        }
+
+        // In-place
+        {
+            Vec2 v{1.0f, 2.0f};
+            v += Vec2{3.0f, 4.0f};
+            TEST(v.x == 4.0f && v.y == 6.0f);
+            v -= Vec2{1.0f, 1.0f};
+            TEST(v.x == 3.0f && v.y == 5.0f);
+            v *= Vec2{2.0f, 3.0f};
+            TEST(v.x == 6.0f && v.y == 15.0f);
+            v /= Vec2{3.0f, 5.0f};
+            TEST(v.x == 2.0f && v.y == 3.0f);
+        }
+
+        // vecDot2
+        {
+            TEST(vecDot2({1.0f, 0.0f}, {0.0f, 1.0f}) == 0.0f);
+            TEST(vecDot2({1.0f, 0.0f}, {1.0f, 0.0f}) == 1.0f);
+            TEST(vecDot2({3.0f, 4.0f}, {5.0f, 6.0f}) == 39.0f);
+        }
+
+        // vecLenSqr2 / vecLen2
+        {
+            TEST(vecLenSqr2({0.0f, 0.0f}) == 0.0f);
+            TEST(vecLenSqr2({1.0f, 0.0f}) == 1.0f);
+            TEST(vecLenSqr2({3.0f, 4.0f}) == 25.0f);
+            TEST(std::abs(vecLen2({3.0f, 4.0f}) - 5.0f) < FLT_EPSILON);
+        }
+
+        // vecNorm2
+        {
+            Vec2 n = vecNorm2({3.0f, 0.0f});
+            TEST(n.x == 1.0f && n.y == 0.0f);
+            TEST(std::abs(vecLen2(vecNorm2({3.0f, 4.0f})) - 1.0f) < FLT_EPSILON);
+        }
+
+        // vecCross2
+        {
+            TEST(vecCross2({1.0f, 0.0f}, {0.0f, 1.0f}) == 1.0f);
+            TEST(vecCross2({0.0f, 1.0f}, {1.0f, 0.0f}) == -1.0f);
+            TEST(std::abs(vecCross2({2.0f, 3.0f}, {4.0f, 6.0f})) < FLT_EPSILON);
+        }
+
+        // vecEq2
+        {
+            TEST(vecEq2({1.0f, 2.0f}, {1.0f, 2.0f}));
+            TEST(!vecEq2({1.0f, 2.0f}, {1.0f, 3.0f}));
+            TEST(vecEq2({1.0f + 1e-7f, 2.0f}, {1.0f, 2.0f}));
+            TEST(!vecEq2({1.0f + 1e-5f, 2.0f}, {1.0f, 2.0f}));
+        }
+    }
+
+    // Vec3
+    {
+        // Construction
+        {
+            Vec3 v{1.0f, 2.0f, 3.0f};
+            TEST(v.x == 1.0f && v.y == 2.0f && v.z == 3.0f);
+            Vec3 s{5.0f};
+            TEST(s.x == 5.0f && s.y == 5.0f && s.z == 5.0f);
+            Vec3 v2{Vec2{1.0f, 2.0f}, 3.0f};
+            TEST(v2.x == 1.0f && v2.y == 2.0f && v2.z == 3.0f);
+        }
+
+        // Downcast
+        {
+            Vec2 v = static_cast<Vec2>(Vec3{1.0f, 2.0f, 3.0f});
+            TEST(v.x == 1.0f && v.y == 2.0f);
+        }
+
+        // operator[]
+        {
+            Vec3 v{3.0f, 4.0f, 5.0f};
+            TEST(v[0] == 3.0f && v[1] == 4.0f && v[2] == 5.0f);
+        }
+
+        // Negation and arithmetic
+        {
+            TEST((-Vec3{1.0f, -2.0f, 3.0f} == Vec3{-1.0f, 2.0f, -3.0f}));
+            Vec3 a{1.0f, 2.0f, 3.0f};
+            Vec3 b{4.0f, 5.0f, 6.0f};
+            TEST((a + b == Vec3{5.0f, 7.0f, 9.0f}));
+            TEST((b - a == Vec3{3.0f, 3.0f, 3.0f}));
+            TEST((a * b == Vec3{4.0f, 10.0f, 18.0f}));
+        }
+
+        // Scalar ops
+        {
+            Vec3 v{1.0f, 2.0f, 3.0f};
+            TEST((2.0f * v == Vec3{2.0f, 4.0f, 6.0f}));
+            TEST((v * 2.0f == Vec3{2.0f, 4.0f, 6.0f}));
+            TEST((v / 2.0f == Vec3{0.5f, 1.0f, 1.5f}));
+        }
+
+        // vecDot3 / vecLen / vecNorm3
+        {
+            TEST(vecDot3({1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}) == 0.0f);
+            TEST(vecDot3({1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}) == 32.0f);
+            TEST(vecLenSqr3({1.0f, 2.0f, 2.0f}) == 9.0f);
+            TEST(std::abs(vecLen3({1.0f, 2.0f, 2.0f}) - 3.0f) < FLT_EPSILON);
+            Vec3 n = vecNorm3({0.0f, -5.0f, 0.0f});
+            TEST(n.x == 0.0f && n.y == -1.0f && n.z == 0.0f);
+            TEST(std::abs(vecLen3(vecNorm3({1.0f, 2.0f, 3.0f})) - 1.0f) < FLT_EPSILON);
+        }
+
+        // vecCross3
+        {
+            Vec3 x{1.0f, 0.0f, 0.0f};
+            Vec3 y{0.0f, 1.0f, 0.0f};
+            Vec3 z{0.0f, 0.0f, 1.0f};
+            TEST(vecCross3(x, y) == z);
+            TEST(vecCross3(y, z) == x);
+            TEST(vecCross3(z, x) == y);
+            TEST(vecCross3(y, x) == -z);
+            TEST(vecCross3(x, x) == Vec3{0});
+        }
+
+        // vecEq3
+        {
+            TEST(vecEq3({1.0f, 2.0f, 3.0f}, {1.0f, 2.0f, 3.0f}));
+            TEST(!vecEq3({1.0f, 2.0f, 3.0f}, {1.0f, 2.0f, 4.0f}));
+            TEST(vecEq3({1.0f + 1e-7f, 2.0f, 3.0f}, {1.0f, 2.0f, 3.0f}));
+        }
+    }
+
+    // Vec4
+    {
+        // Construction
+        {
+            Vec4 v{1.0f, 2.0f, 3.0f, 4.0f};
+            TEST(v.x == 1.0f && v.y == 2.0f && v.z == 3.0f && v.w == 4.0f);
+            Vec4 s{5.0f};
+            TEST(s.x == 5.0f && s.y == 5.0f && s.z == 5.0f && s.w == 5.0f);
+        }
+
+        // Vec2/Vec3 promotion
+        {
+            Vec4 v1{Vec2{1.0f, 2.0f}, 3.0f, 4.0f};
+            TEST(v1.x == 1.0f && v1.y == 2.0f && v1.z == 3.0f && v1.w == 4.0f);
+            Vec4 v2{Vec3{1.0f, 2.0f, 3.0f}, 4.0f};
+            TEST((v2 == Vec4{1.0f, 2.0f, 3.0f, 4.0f}));
+        }
+
+        // Downcasts
+        {
+            Vec2 v2 = static_cast<Vec2>(Vec4{1.0f, 2.0f, 3.0f, 4.0f});
+            TEST(v2.x == 1.0f && v2.y == 2.0f);
+            Vec3 v3 = static_cast<Vec3>(Vec4{1.0f, 2.0f, 3.0f, 4.0f});
+            TEST(v3.x == 1.0f && v3.y == 2.0f && v3.z == 3.0f);
+        }
+
+        // Arithmetic
+        {
+            Vec4 a{1.0f, 2.0f, 3.0f, 4.0f};
+            Vec4 b{5.0f, 6.0f, 7.0f, 8.0f};
+            TEST((a + b == Vec4{6.0f, 8.0f, 10.0f, 12.0f}));
+            TEST((b - a == Vec4{4.0f, 4.0f, 4.0f, 4.0f}));
+            TEST((-Vec4{1.0f, -2.0f, 3.0f, -4.0f} == Vec4{-1.0f, 2.0f, -3.0f, 4.0f}));
+            TEST((2.0f * a == Vec4{2.0f, 4.0f, 6.0f, 8.0f}));
+            TEST((a / 2.0f == Vec4{0.5f, 1.0f, 1.5f, 2.0f}));
+        }
+
+        // vecDot4 / vecLen / vecNorm4
+        {
+            TEST(vecDot4({1.0f, 2.0f, 3.0f, 4.0f}, {5.0f, 6.0f, 7.0f, 8.0f}) == 70.0f);
+            TEST(vecLenSqr4({1.0f, 0.0f, 0.0f, 0.0f}) == 1.0f);
+            TEST(std::abs(vecLen4({1.0f, 2.0f, 3.0f, 4.0f}) - std::sqrt(30.0f)) < FLT_EPSILON);
+            Vec4 n = vecNorm4({-5.0f, 0.0f, 0.0f, 0.0f});
+            TEST(n.x == -1.0f && n.y == 0.0f && n.z == 0.0f && n.w == 0.0f);
+            TEST(std::abs(vecLen4(vecNorm4({1.0f, 2.0f, 3.0f, 4.0f})) - 1.0f) < FLT_EPSILON);
+        }
+
+        // vecEq4
+        {
+            TEST(vecEq4({1.0f, 2.0f, 3.0f, 4.0f}, {1.0f, 2.0f, 3.0f, 4.0f}));
+            TEST(!vecEq4({1.0f, 2.0f, 3.0f, 4.0f}, {1.0f, 2.0f, 3.0f, 5.0f}));
+        }
+    }
+
+    // Mat2
+    {
+        // Construction
+        {
+            Mat2 m{Vec2{1.0f, 2.0f}, Vec2{3.0f, 4.0f}};
+            TEST(m.x.x == 1.0f && m.x.y == 2.0f);
+            TEST(m.y.x == 3.0f && m.y.y == 4.0f);
+            Mat2 s{1.0f};
+            TEST(s.x.x == 1.0f && s.x.y == 0.0f && s.y.x == 0.0f && s.y.y == 1.0f);
+            Mat2 c{1.0f, 2.0f, 3.0f, 4.0f};
+            TEST(c.x.x == 1.0f && c.x.y == 2.0f);
+            TEST(c.y.x == 3.0f && c.y.y == 4.0f);
+        }
+
+        // operator[]
+        {
+            Mat2 m{1.0f, 2.0f, 3.0f, 4.0f};
+            TEST(m[0].x == 1.0f && m[0].y == 2.0f);
+            TEST(m[1].x == 3.0f && m[1].y == 4.0f);
+        }
+
+        // Comparison
+        {
+            Mat2 a{1.0f};
+            Mat2 b{2.0f};
+            TEST(a == a);
+            TEST(a != b);
+        }
+
+        // Add / Sub
+        {
+            Mat2 a{Vec2{1, 2}, Vec2{3, 4}};
+            Mat2 b{Vec2{5, 6}, Vec2{7, 8}};
+            Mat2 sum = a + b;
+            Mat2 diff = a - b;
+            TEST(sum.x.x == 6 && sum.x.y == 8 && sum.y.x == 10 && sum.y.y == 12);
+            TEST(diff.x.x == -4 && diff.x.y == -4 && diff.y.x == -4 && diff.y.y == -4);
+        }
+
+        // In-place
+        {
+            Mat2 m{Vec2{1, 2}, Vec2{3, 4}};
+            m += Mat2{Vec2{5, 6}, Vec2{7, 8}};
+            TEST(m.x.x == 6);
+            m -= Mat2{Vec2{1, 1}, Vec2{1, 1}};
+            TEST(m.x.x == 5);
+        }
+
+        // Mul
+        {
+            Mat2 a{Vec2{1, 2}, Vec2{3, 4}};
+            Mat2 b{Vec2{5, 6}, Vec2{7, 8}};
+            Mat2 id{1.0f};
+            Mat2 p = a * b;
+            TEST(p.x.x == 23 && p.x.y == 34 && p.y.x == 31 && p.y.y == 46);
+            TEST(id * a == a);
+            TEST(a * id == a);
+        }
+
+        // Matrix * Vec2
+        {
+            Mat2 id{1.0f};
+            Mat2 m{Vec2{1, 2}, Vec2{3, 4}};
+            Vec2 v{5, 6};
+            TEST(id * v == v);
+            Vec2 mv = m * v;
+            TEST(mv.x == 23 && mv.y == 34);
+        }
+
+        // Transpose
+        {
+            Mat2 m{Vec2{1, 2}, Vec2{3, 4}};
+            Mat2 t = matTranspose2(m);
+            TEST(t.x.x == 1 && t.x.y == 3 && t.y.x == 2 && t.y.y == 4);
+            TEST(matTranspose2(t) == m);
+        }
+    }
+
+    // Mat3
+    {
+        // Construction
+        {
+            Mat3 m{Vec3{1, 2, 3}, Vec3{4, 5, 6}, Vec3{7, 8, 9}};
+            TEST(m.x.x == 1 && m.x.y == 2 && m.x.z == 3);
+            TEST(m.y.x == 4 && m.y.y == 5 && m.y.z == 6);
+            TEST(m.z.x == 7 && m.z.y == 8 && m.z.z == 9);
+            Mat3 id{1.0f};
+            TEST((id == Mat3{Vec3{1,0,0}, Vec3{0,1,0}, Vec3{0,0,1}}));
+        }
+
+        // Mat2 promotion / Mat2 demotion
+        {
+            Mat2 m2{Vec2{1, 2}, Vec2{3, 4}};
+            Mat3 up{m2};
+            TEST(up.x.x == 1 && up.x.y == 2 && up.x.z == 0);
+            TEST(up.z.x == 0 && up.z.y == 0 && up.z.z == 1);
+            Mat3 m3{Vec3{1,2,3}, Vec3{4,5,6}, Vec3{7,8,9}};
+            Mat2 down = (Mat2)m3;
+            TEST(down.x.x == 1 && down.x.y == 2);
+            TEST(down.y.x == 4 && down.y.y == 5);
+        }
+
+        // Arithmetic
+        {
+            Mat3 a{1.0f};
+            Mat3 b{2.0f};
+            Mat3 zero{0.0f};
+            TEST(a + b == Mat3{3.0f});
+            TEST(b - a == Mat3{1.0f});
+            TEST(a * zero == zero);
+            TEST(a * a == a);
+        }
+
+        // Matrix * Vec3
+        {
+            Mat3 id{1.0f};
+            Vec3 v{1, 2, 3};
+            TEST(id * v == v);
+        }
+
+        // Transpose
+        {
+            Mat3 m{Vec3{1,2,3}, Vec3{4,5,6}, Vec3{7,8,9}};
+            Mat3 t = matTranspose3(m);
+            TEST(t.x.x == 1 && t.x.y == 4 && t.x.z == 7);
+            TEST(t.y.x == 2 && t.y.y == 5 && t.y.z == 8);
+            TEST(t.z.x == 3 && t.z.y == 6 && t.z.z == 9);
+            TEST(matTranspose3(t) == m);
+        }
+    }
+
+    // Mat4
+    {
+        // Construction
+        {
+            Mat4 m{Vec4{1,2,3,4}, Vec4{5,6,7,8}, Vec4{9,10,11,12}, Vec4{13,14,15,16}};
+            TEST(m.x.x == 1 && m.x.y == 2 && m.x.z == 3 && m.x.w == 4);
+            TEST(m.w.x == 13 && m.w.w == 16);
+            Mat4 id{1.0f};
+            TEST(id.x.x == 1 && id.y.y == 1 && id.z.z == 1 && id.w.w == 1);
+            TEST(id.x.y == 0);
+        }
+
+        // Promotions and downcasts
+        {
+            Mat4 m2{Mat2{Vec2{1,2}, Vec2{3,4}}};
+            TEST(m2.x.x == 1 && m2.x.y == 2 && m2.z.z == 1 && m2.w.w == 1);
+            Mat3 m3{Vec3{1,2,3}, Vec3{4,5,6}, Vec3{7,8,9}};
+            Mat4 m4{m3};
+            TEST(m4.x.x == 1 && m4.y.y == 5 && m4.z.z == 9 && m4.w.w == 1);
+            Mat4 full{Vec4{1,2,3,4}, Vec4{5,6,7,8}, Vec4{9,10,11,12}, Vec4{13,14,15,16}};
+            TEST(((Mat2)full == Mat2{Vec2{1,2}, Vec2{5,6}}));
+            TEST(((Mat3)full == Mat3{Vec3{1,2,3}, Vec3{5,6,7}, Vec3{9,10,11}}));
+        }
+
+        // Arithmetic
+        {
+            Mat4 id{1.0f};
+            Mat4 a{Vec4{1,2,3,4}, Vec4{5,6,7,8}, Vec4{9,10,11,12}, Vec4{13,14,15,16}};
+            TEST(id * a == a);
+            TEST(a * id == a);
+            Vec4 v{1, 2, 3, 4};
+            TEST(id * v == v);
+        }
+
+        // Transpose
+        {
+            Mat4 m{Vec4{1,2,3,4}, Vec4{5,6,7,8}, Vec4{9,10,11,12}, Vec4{13,14,15,16}};
+            Mat4 t = matTranspose4(m);
+            TEST(t.x.x == 1 && t.x.y == 5 && t.x.z == 9 && t.x.w == 13);
+            TEST(matTranspose4(t) == m);
+        }
+    }
+
+    // Complex
+    {
+        // Construction
+        {
+            Complex c{3.0f, 4.0f};
+            TEST(c.r == 3.0f && c.i == 4.0f);
+            Complex r{5.0f};
+            TEST(r.r == 5.0f && r.i == 0.0f);
+        }
+
+        // Add / Sub
+        {
+            Complex a{1, 2};
+            Complex b{3, 4};
+            TEST((a + b == Complex{4, 6}));
+            TEST((a - b == Complex{-2, -2}));
+        }
+
+        // Mul
+        {
+            Complex a{1, 2};
+            Complex b{3, 4};
+            TEST((a * b == Complex{-5, 10}));
+            TEST((Complex{0, 1} * Complex{0, 1} == Complex{-1, 0}));
+        }
+
+        // In-place
+        {
+            Complex c{1, 2};
+            c += Complex{3, 4};
+            TEST((c == Complex{4, 6}));
+            c -= Complex{1, 1};
+            TEST((c == Complex{3, 5}));
+        }
+
+        // Conjugate / Abs / Norm
+        {
+            Complex c{3, 4};
+            Complex cj = complexConj(c);
+            TEST(cj.r == 3 && cj.i == -4);
+            TEST(complexConj(cj) == c);
+            TEST(complexAbsSqr(c) == 25.0f);
+            TEST(std::abs(complexAbs(c) - 5.0f) < FLT_EPSILON);
+            Complex n = complexNorm(c);
+            TEST(std::abs(complexAbs(n) - 1.0f) < FLT_EPSILON);
+        }
+
+        // vecRot2
+        {
+            Vec2 v{1, 0};
+            Vec2 r90 = vecRot2(Complex{0, 1}, v);
+            TEST(std::abs(r90.x) < FLT_EPSILON && std::abs(r90.y - 1.0f) < FLT_EPSILON);
+            Vec2 r180 = vecRot2(Complex{-1, 0}, v);
+            TEST(std::abs(r180.x + 1.0f) < FLT_EPSILON && std::abs(r180.y) < FLT_EPSILON);
+            Vec2 r0 = vecRot2(Complex{1, 0}, v);
+            TEST(r0.x == 1.0f && std::abs(r0.y) < FLT_EPSILON);
+        }
+    }
+
+    // Quat
+    {
+        // Construction
+        {
+            Quat q{1, 2, 3, 4};
+            TEST(q.r == 1 && q.i == 2 && q.j == 3 && q.k == 4);
+            Quat r{5};
+            TEST(r.r == 5 && r.i == 0 && r.j == 0 && r.k == 0);
+        }
+
+        // Add / Sub
+        {
+            Quat a{1, 2, 3, 4};
+            Quat b{5, 6, 7, 8};
+            TEST((a + b == Quat{6, 8, 10, 12}));
+            TEST((a - b == Quat{-4, -4, -4, -4}));
+        }
+
+        // Mul
+        {
+            Quat id{1};
+            Quat q{1, 2, 3, 4};
+            TEST(id * q == q);
+            TEST(q * id == q);
+            Quat i{0, 1, 0, 0};
+            Quat j{0, 0, 1, 0};
+            Quat k{0, 0, 0, 1};
+            TEST(i * j == k);
+            TEST(j * k == i);
+            TEST(k * i == j);
+            TEST((j * i == Quat{0, 0, 0, -1}));
+        }
+
+        // In-place
+        {
+            Quat q{1, 2, 3, 4};
+            q += Quat{1, 1, 1, 1};
+            TEST((q == Quat{2, 3, 4, 5}));
+            q -= Quat{0, 1, 2, 3};
+            TEST((q == Quat{2, 2, 2, 2}));
+        }
+
+        // Conjugate / Abs / Norm
+        {
+            Quat q{1, 2, 3, 4};
+            Quat cj = quatConj(q);
+            TEST(cj.r == 1 && cj.i == -2 && cj.j == -3 && cj.k == -4);
+            TEST(quatConj(cj) == q);
+            TEST(quatAbsSqr(q) == 30.0f);
+            TEST(std::abs(quatAbs(q) - std::sqrt(30.0f)) < FLT_EPSILON);
+            Quat n = quatNorm(q);
+            TEST(std::abs(quatAbs(n) - 1.0f) < FLT_EPSILON);
+        }
+
+        // quatAxisAngle / vecRot3
+        {
+            f32 pi = static_cast<f32>(HG_PI);
+            Quat id = quatAxisAngle({0, 0, 1}, 0.0f);
+            TEST(std::abs(id.r - 1.0f) < FLT_EPSILON);
+            Quat q90 = quatAxisAngle({0, 0, 1}, pi / 2.0f);
+            Vec3 r = vecRot3(q90, {1, 0, 0});
+            TEST(std::abs(r.x) < FLT_EPSILON);
+            TEST(std::abs(r.y - 1.0f) < FLT_EPSILON);
+            TEST(std::abs(r.z) < FLT_EPSILON);
+        }
+
+        // quatBetween
+        {
+            Quat id = quatBetween({1, 0, 0}, {1, 0, 0});
+            TEST(std::abs(id.r - 1.0f) < FLT_EPSILON);
+            Quat q = quatBetween({1, 0, 0}, {0, 1, 0});
+            Vec3 r = vecRot3(q, {1, 0, 0});
+            TEST(std::abs(r.x) < 1e-5f);
+            TEST(std::abs(r.y - 1.0f) < 1e-5f);
+            TEST(std::abs(r.z) < 1e-5f);
+        }
+
+        // matRot3 consistency with vecRot3
+        {
+            Quat q = quatAxisAngle({0, 0, 1}, static_cast<f32>(HG_PI) / 3.0f);
+            Vec3 v{1, 2, 3};
+            Vec3 rv = vecRot3(q, v);
+            Vec3 rm = matRot3(q, Mat3{1.0f}) * v;
+            TEST(vecEq3(rv, rm));
+        }
+    }
+
+    // Matrix construction
+    {
+        // matModel2D - identity
+        {
+            Mat4 m = matModel2D({0, 0, 0}, {1, 1}, 0);
+            TEST(m == Mat4{1.0f});
+        }
+
+        // matModel2D - translation
+        {
+            Mat4 m = matModel2D({10, 20, 0}, {1, 1}, 0);
+            TEST(m.w.x == 10 && m.w.y == 20);
+        }
+
+        // matModel2D - scale
+        {
+            Mat4 m = matModel2D({0, 0, 0}, {2, 3}, 0);
+            Vec4 scaled = m * Vec4{1, 1, 0, 1};
+            TEST(std::abs(scaled.x - 2.0f) < FLT_EPSILON);
+            TEST(std::abs(scaled.y - 3.0f) < FLT_EPSILON);
+        }
+
+        // matOrthographic
+        {
+            Mat4 p = matOrthographic(-1, 1, 1, -1, 0, 100);
+            Vec4 nc = p * Vec4{0, 0, 0, 1};
+            TEST(std::abs(nc.x) < FLT_EPSILON);
+            TEST(std::abs(nc.y) < FLT_EPSILON);
+            TEST(std::abs(nc.z) < FLT_EPSILON);
+            TEST(std::abs(nc.w - 1.0f) < FLT_EPSILON);
+        }
+    }
+
+    // Circle
+    {
+        Circle c{{0, 0}, 5};
+
+        // containsPointCircle
+        {
+            TEST(containsPointCircle({0, 0}, c));
+            TEST(containsPointCircle({3, 4}, c));
+            TEST(containsPointCircle({5, 0}, c));
+            TEST(!containsPointCircle({5.01f, 0}, c));
+        }
+
+        // Zero radius
+        {
+            Circle z{{0, 0}, 0};
+            TEST(containsPointCircle({0, 0}, z));
+            TEST(!containsPointCircle({0.01f, 0}, z));
+        }
+
+        // distPointCircle
+        {
+            TEST(std::abs(distPointCircle({0, 0}, c) - (-5.0f)) < FLT_EPSILON);
+            TEST(std::abs(distPointCircle({5, 0}, c)) < FLT_EPSILON);
+            TEST(std::abs(distPointCircle({10, 0}, c) - 5.0f) < FLT_EPSILON);
+        }
+
+        // closestPointCircle
+        {
+            Vec2 p = closestPointCircle({10, 0}, c);
+            TEST(std::abs(p.x - 5.0f) < FLT_EPSILON && std::abs(p.y) < FLT_EPSILON);
+        }
+
+        // intersectCircles / distCircles
+        {
+            Circle a{{0, 0}, 5};
+            Circle b{{8, 0}, 3};
+            TEST(intersectCircles(a, b));
+            Circle miss{{20, 0}, 1};
+            TEST(!intersectCircles(a, miss));
+            TEST(std::abs(distCircles(a, b)) < FLT_EPSILON);
+        }
+    }
+
+    // Rect
+    {
+        // rectEmpty
+        {
+            Rect r = rectEmpty();
+            TEST(!containsPointRect({0, 0}, r));
+        }
+
+        // rectAddPoint
+        {
+            Rect r = rectEmpty();
+            r = rectAddPoint(r, {2, 3});
+            TEST(containsPointRect({2, 3}, r));
+            r = rectAddPoint(r, {5, 7});
+            TEST(containsPointRect({3, 4}, r));
+        }
+
+        // Negative region
+        {
+            Rect r = rectEmpty();
+            r = rectAddPoint(r, {-2, -3});
+            r = rectAddPoint(r, {5, 5});
+            TEST(containsPointRect({0, 0}, r));
+            TEST(!containsPointRect({6, 0}, r));
+        }
+
+        // containsPointRect boundary
+        {
+            Rect r{{0, 0}, {10, 5}};
+            TEST(containsPointRect({0, 0}, r));
+            TEST(containsPointRect({10, 5}, r));
+            TEST(!containsPointRect({-0.01f, 0}, r));
+        }
+
+        // closestPointRect
+        {
+            Rect r{{0, 0}, {10, 10}};
+            Vec2 p1 = closestPointRect({-5, 5}, r);
+            TEST(p1.x == 0 && p1.y == 5);
+            Vec2 p2 = closestPointRect({15, 5}, r);
+            TEST(p2.x == 10 && p2.y == 5);
+            Vec2 p3 = closestPointRect({5, -3}, r);
+            TEST(p3.x == 5 && p3.y == 0);
+            Vec2 p4 = closestPointRect({5, 5}, r);
+            TEST(p4.x == 5 && p4.y == 5);
+        }
+
+        // intersectRects
+        {
+            Rect a{{0, 0}, {10, 10}};
+            Rect b{{5, 5}, {15, 15}};
+            TEST(intersectRects(a, b));
+            Rect c{{20, 20}, {30, 30}};
+            TEST(!intersectRects(a, c));
+        }
+
+        // intersectRectCircle
+        {
+            Rect r{{0, 0}, {10, 10}};
+            Circle c{{5, 5}, 3};
+            TEST(intersectRectCircle(r, c));
+            Circle far{{20, 20}, 1};
+            TEST(!intersectRectCircle(r, far));
+        }
+    }
+
+    // 2D intersections
+    {
+        // intersectRays2D
+        {
+            Ray2D a{{0, 0}, {1, 0}};
+            Ray2D b{{0, 0}, {0, 1}};
+            Maybe<Hit2D> hit = intersectRays2D(a, b);
+            TEST(hit.has);
+        }
+
+        // intersectRays2D - parallel
+        {
+            Ray2D a{{0, 0}, {1, 0}};
+            Ray2D b{{0, 1}, {1, 0}};
+            TEST(!intersectRays2D(a, b).has);
+        }
+
+        // intersectRayLine2D
+        {
+            Ray2D ray{{0, 0}, {1, 0}};
+            Line2D line{{5, -1}, {5, 1}};
+            Maybe<Hit2D> hit = intersectRayLine2D(ray, line);
+            TEST(hit.has);
+            if (hit.has)
+                TEST(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
+        }
+
+        // intersectRayLine2D - behind
+        {
+            Ray2D ray{{0, 0}, {1, 0}};
+            Line2D line{{-5, -1}, {-5, 1}};
+            TEST(!intersectRayLine2D(ray, line).has);
+        }
+
+        // intersectRayCircle
+        {
+            Ray2D ray{{0, 0}, {1, 0}};
+            Circle c{{10, 0}, 3};
+            Maybe<Hit2D> hit = intersectRayCircle(ray, c);
+            TEST(hit.has);
+            if (hit.has)
+                TEST(std::abs(hit.val.dist - 7.0f) < FLT_EPSILON);
+        }
+
+        // intersectRayCircle - miss
+        {
+            Ray2D ray{{0, 0}, {1, 0}};
+            Circle c{{10, 5}, 1};
+            TEST(!intersectRayCircle(ray, c).has);
+        }
+
+        // intersectRayRect
+        {
+            Ray2D ray{{-5, 5}, {1, 0}};
+            Rect r{{0, 0}, {10, 10}};
+            Maybe<Hit2D> hit = intersectRayRect(ray, r);
+            TEST(hit.has);
+        }
+
+        // intersectLines2D
+        {
+            Line2D a{{0, 0}, {10, 0}};
+            Line2D b{{5, -5}, {5, 5}};
+            TEST(intersectLines2D(a, b).has);
+        }
+
+        // intersectLines2D - parallel
+        {
+            Line2D a{{0, 0}, {10, 0}};
+            Line2D b{{0, 1}, {10, 1}};
+            TEST(!intersectLines2D(a, b).has);
+        }
+
+        // intersectLineCircle
+        {
+            Line2D line{{-10, 3}, {10, 3}};
+            Circle c{{0, 5}, 3};
+            TEST(intersectLineCircle(line, c).has);
+        }
+
+        // intersectLineRect
+        {
+            Line2D line{{-5, 5}, {15, 5}};
+            Rect r{{0, 0}, {10, 10}};
+            TEST(intersectLineRect(line, r).has);
+        }
+    }
+
+    // Sphere
+    {
+        Sphere s{{0, 0, 0}, 5};
+
+        // containsPointSphere
+        {
+            TEST(containsPointSphere({0, 0, 0}, s));
+            TEST(containsPointSphere({5, 0, 0}, s));
+            TEST(!containsPointSphere({5.01f, 0, 0}, s));
+        }
+
+        // distPointSphere
+        {
+            TEST(std::abs(distPointSphere({0, 0, 0}, s) - (-5.0f)) < FLT_EPSILON);
+            TEST(std::abs(distPointSphere({5, 0, 0}, s)) < FLT_EPSILON);
+        }
+
+        // closestPointSphere
+        {
+            Vec3 p = closestPointSphere({10, 0, 0}, s);
+            TEST(std::abs(p.x - 5.0f) < FLT_EPSILON);
+        }
+
+        // intersectSpheres / distSpheres
+        {
+            Sphere b{{8, 0, 0}, 3};
+            TEST(intersectSpheres(s, b));
+            Sphere miss{{20, 0, 0}, 1};
+            TEST(!intersectSpheres(s, miss));
+            TEST(std::abs(distSpheres(s, b)) < FLT_EPSILON);
+        }
+    }
+
+    // Box
+    {
+        // boxEmpty
+        {
+            Box b = boxEmpty();
+            TEST(!containsPointBox({0, 0, 0}, b));
+        }
+
+        // boxAddPoint
+        {
+            Box b = boxEmpty();
+            b = boxAddPoint(b, {1, 2, 3});
+            b = boxAddPoint(b, {4, 5, 6});
+            TEST(containsPointBox({2, 3, 4}, b));
+        }
+
+        // containsPointBox / closestPointBox
+        {
+            Box b{{0, 0, 0}, {10, 10, 10}};
+            TEST(containsPointBox({5, 5, 5}, b));
+            TEST(containsPointBox({0, 0, 0}, b));
+            TEST(containsPointBox({10, 10, 10}, b));
+            TEST(!containsPointBox({-0.01f, 5, 5}, b));
+            Vec3 p = closestPointBox({-5, 5, 5}, b);
+            TEST(p.x == 0 && p.y == 5 && p.z == 5);
+        }
+
+        // intersectBox
+        {
+            Box a{{0, 0, 0}, {10, 10, 10}};
+            Box b{{5, 5, 5}, {15, 15, 15}};
+            TEST(intersectBox(a, b));
+            Box c{{20, 20, 20}, {30, 30, 30}};
+            TEST(!intersectBox(a, c));
+        }
+
+        // intersectBoxSphere
+        {
+            Box b{{0, 0, 0}, {10, 10, 10}};
+            Sphere s{{5, 5, 5}, 3};
+            TEST(intersectBoxSphere(b, s));
+            Sphere far{{20, 20, 20}, 1};
+            TEST(!intersectBoxSphere(b, far));
+        }
+    }
+
+    // Plane
+    {
+        // planeFromPoint
+        {
+            Plane p = planeFromPoint({0, 5, 0}, {0, 1, 0});
+            TEST(vecEq3(p.normal, {0, 1, 0}));
+            TEST(std::abs(p.dist - 5.0f) < FLT_EPSILON);
+        }
+
+        // planeFromTri
+        {
+            Tri tri{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+            Plane p = planeFromTri(tri);
+            TEST(std::abs(p.dist) < FLT_EPSILON);
+        }
+    }
+
+    // 3D intersections
+    {
+        // intersectRaySphere
+        {
+            Ray3D ray{{0, 0, 0}, {0, 0, 1}};
+            Sphere s{{0, 0, 10}, 3};
+            Maybe<Hit3D> hit = intersectRaySphere(ray, s);
+            TEST(hit.has);
+            if (hit.has)
+                TEST(std::abs(hit.val.dist - 7.0f) < FLT_EPSILON);
+        }
+
+        // intersectRayBox
+        {
+            Ray3D ray{{-5, 5, 5}, {1, 0, 0}};
+            Box b{{0, 0, 0}, {10, 10, 10}};
+            Maybe<Hit3D> hit = intersectRayBox(ray, b);
+            TEST(hit.has);
+        }
+
+        // intersectRayTri
+        {
+            Ray3D ray{{0, 0, -5}, {0, 0, 1}};
+            Tri tri{{-1, -1, 0}, {1, -1, 0}, {0, 1, 0}};
+            Maybe<Hit3D> hit = intersectRayTri(ray, tri);
+            TEST(hit.has);
+            if (hit.has)
+                TEST(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
+        }
+
+        // intersectRayPlane
+        {
+            Ray3D ray{{0, 0, -5}, {0, 0, 1}};
+            Plane p{{0, 0, 1}, 0};
+            Maybe<Hit3D> hit = intersectRayPlane(ray, p);
+            TEST(hit.has);
+            if (hit.has)
+                TEST(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
+        }
+
+        // intersectRayPlane - parallel
+        {
+            Ray3D ray{{0, 0, 0}, {1, 0, 0}};
+            Plane p{{0, 0, 1}, 10};
+            TEST(!intersectRayPlane(ray, p).has);
+        }
+
+        // intersectLineSphere
+        {
+            Line3D line{{-10, 3, 0}, {10, 3, 0}};
+            Sphere s{{0, 5, 0}, 3};
+            TEST(intersectLineSphere(line, s).has);
+        }
+
+        // intersectLineBox
+        {
+            Line3D line{{-5, 5, 5}, {15, 5, 5}};
+            Box b{{0, 0, 0}, {10, 10, 10}};
+            TEST(intersectLineBox(line, b).has);
+        }
+
+        // intersectLineTri
+        {
+            Line3D line{{0, 0, -5}, {0, 0, 5}};
+            Tri tri{{-1, -1, 0}, {1, -1, 0}, {0, 1, 0}};
+            TEST(intersectLineTri(line, tri).has);
+        }
+
+        // intersectLinePlane
+        {
+            Line3D line{{0, 0, -5}, {0, 0, 5}};
+            Plane p{{0, 0, 1}, 0};
+            Maybe<Hit3D> hit = intersectLinePlane(line, p);
+            TEST(hit.has);
+            if (hit.has)
+                TEST(std::abs(hit.val.dist - 0.5f) < FLT_EPSILON);
+        }
+
+        // intersectLinePlane - parallel
+        {
+            Line3D line{{0, 0, -5}, {1, 0, -5}};
+            Plane p{{0, 0, 1}, 0};
+            TEST(!intersectLinePlane(line, p).has);
+        }
+    }
+
+    // Noise
+    {
+        // Deterministic
+        {
+            TEST(noise(42, 100) == noise(42, 100));
+            TEST(noise2D(1, 2, 3) == noise2D(1, 2, 3));
+            TEST(noise3D(1, 2, 3, 4) == noise3D(1, 2, 3, 4));
+            TEST(noise4D(1, 2, 3, 4, 5) == noise4D(1, 2, 3, 4, 5));
+        }
+
+        // Likely different for different inputs
+        {
+            TEST(noise(42, 100) != noise(42, 101));
+        }
+
+        // noiseNorm range
+        {
+            f32 v = noiseNorm(42, 3.14f);
+            TEST(v >= 0.0f && v <= 1.0f);
+        }
+
+        // noiseVec1D range
+        {
+            f32 v = noiseVec1D(42, 3.14f);
+            TEST(v >= -1.0f && v <= 1.0f);
+        }
+
+        // noiseVec2D unit length
+        {
+            Vec2 v = noiseVec2D(42, {3.14f, 2.72f});
+            TEST(std::abs(vecLen2(v) - 1.0f) < FLT_EPSILON);
+        }
+    }
+
+    // ============================================================================
+    // cString
+    // ============================================================================
+    //
+    // Creates a null-terminated C string from a StringView by allocating
+    // from an arena.
+    //
+    // Functions covered:
+    // - cString(Arena*, StringView)
+
+    // Normal case
+    {
+        ArenaScope arena = getScratch();
+        char* c = cString(arena, "hello");
+        TEST(c != nullptr);
+        TEST(c[0] == 'h');
+        TEST(c[1] == 'e');
+        TEST(c[2] == 'l');
+        TEST(c[3] == 'l');
+        TEST(c[4] == 'o');
+        TEST(c[5] == '\0');
+    }
+
+    // Empty string
+    {
+        ArenaScope arena = getScratch();
+        char* c = cString(arena, "");
+        TEST(c != nullptr);
+        TEST(c[0] == '\0');
+    }
+
+    // String with null data and zero length
+    {
+        ArenaScope arena = getScratch();
+        StringView empty{};
+        char* c = cString(arena, empty);
+        TEST(c != nullptr);
+        TEST(c[0] == '\0');
+    }
+
+    // String with data and length (non-null-terminated input)
+    {
+        ArenaScope arena = getScratch();
+        StringView sv{"hello world", 5};
+        char* c = cString(arena, sv);
+        TEST(c != nullptr);
+        TEST(c[0] == 'h');
+        TEST(c[5] == '\0');
+        TEST(StringView{c} == "hello");
+    }
+
+    // ============================================================================
+    // StringBuilder
+    // ============================================================================
+    //
+    // StringBuilder is an arena-allocated mutable string. It supports insert,
+    // append, and prepend for both strings and individual characters.
+    // StringBuilder converts implicitly to StringView for comparison.
+    //
+    // Functions covered:
+    // - StringBuilder(Arena*, StringView) — construction
+    // - StringBuilder() — default construction (empty)
+    // - insert(u64 idx, StringView)
+    // - insert(u64 idx, char)
+    // - append(StringView)
+    // - append(char)
+    // - prepend(StringView)
+    // - prepend(char)
+    // - operator==(StringBuilder, StringBuilder)
+    // - operator==(StringBuilder, StringView)
+
+    // Default construction is empty
+    {
+        StringBuilder sb{};
+        TEST(sb.chars == nullptr);
+        TEST(sb.length == 0);
+        TEST(sb.arena == nullptr);
+    }
+
+    // Construction from a string
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        TEST(sb.length == 5);
+        TEST(sb == "hello");
+    }
+
+    // Construction with an empty string defaults to empty builder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        TEST(sb.length == 0);
+        TEST(sb == "");
+    }
+
+    // Construction from a StringView
+    {
+        ArenaScope arena = getScratch();
+        StringView sv{"world"};
+        StringBuilder sb{arena, sv};
+        TEST(sb == "world");
+    }
+
+    // Construction from partial StringView
+    {
+        ArenaScope arena = getScratch();
+        StringView sv{"hello world", 5};
+        StringBuilder sb{arena, sv};
+        TEST(sb == "hello");
+    }
+
+    // Append a string to a builder that already has content
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        sb.append(" world");
+        TEST(sb == "hello world");
+    }
+
+    // Append a string to an empty builder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        sb.append("hello");
+        TEST(sb == "hello");
+    }
+
+    // Append a char
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        sb.append('!');
+        TEST(sb == "hello!");
+    }
+
+    // Append a char to an empty builder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        sb.append('x');
+        TEST(sb == "x");
+    }
+
+    // Append multiple times (triggers reallocation)
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "a"};
+        sb.append("b");
+        sb.append("c");
+        sb.append("d");
+        sb.append("e");
+        TEST(sb == "abcde");
+    }
+
+    // Prepend a string
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "world"};
+        sb.prepend("hello ");
+        TEST(sb == "hello world");
+    }
+
+    // Prepend to an empty builder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        sb.prepend("hello");
+        TEST(sb == "hello");
+    }
+
+    // Prepend a char
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "ello"};
+        sb.prepend('h');
+        TEST(sb == "hello");
+    }
+
+    // Insert at the beginning
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "world"};
+        sb.insert(0, "hello ");
+        TEST(sb == "hello world");
+    }
+
+    // Insert in the middle
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello world"};
+        sb.insert(5, ",");
+        TEST(sb == "hello, world");
+    }
+
+    // Insert at the end (same as append)
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        sb.insert(5, " world");
+        TEST(sb == "hello world");
+    }
+
+    // Insert a char in the middle
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello world"};
+        sb.insert(5, ',');
+        TEST(sb == "hello, world");
+    }
+
+    // Insert with empty string (no-op)
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        sb.insert(3, "");
+        TEST(sb == "hello");
+    }
+
+    // StringBuilder equality with another StringBuilder
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder a{arena, "hello"};
+        StringBuilder b{arena, "hello"};
+        StringBuilder c{arena, "world"};
+
+        TEST(a == b);
+        TEST(a != c);
+    }
+
+    // StringBuilder equality with StringView (via implicit conversion)
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        TEST(sb == StringView{"hello"});
+    }
+
+    // Index operator
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena, "hello"};
+        TEST(sb[0] == 'h');
+        TEST(sb[4] == 'o');
+    }
+
+    // Large string with many appends
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb{arena};
+        for (u32 i = 0; i < 100; ++i)
+            sb.append('x');
+        TEST(sb.length == 100);
+        for (u32 i = 0; i < 100; ++i)
+            TEST(sb[i] == 'x');
+    }
+
+    // ============================================================================
+    // String
+    // ============================================================================
+    //
+    // String is a heap-allocated owning string (move-only). Created via
+    // String::create().
+    //
+    // Functions covered:
+    // - String::create(StringView)
+    // - ~String()
+    // - String(String&&) — move construct
+    // - String& operator=(String&&) — move assign
+    // - operator==(String, String)
+    // - operator!=(String, String)
+    // - operator StringView()
+    // - operator[]
+
+    // Create from a string literal
+    {
+        String s = String::create("hello");
+        TEST(s.length == 5);
+        TEST(s == "hello");
+        TEST(s[0] == 'h');
+        TEST(s[4] == 'o');
+    }
+
+    // Create from empty string
+    {
+        String s = String::create("");
+        TEST(s.length == 0);
+        TEST(s == "");
+    }
+
+    // Create from partial StringView
+    {
+        StringView sv{"hello world", 5};
+        String s = String::create(sv);
+        TEST(s == "hello");
+    }
+
+    // Move construct
+    {
+        String a = String::create("hello");
+        String b{std::move(a)};
+        TEST(a.chars == nullptr);
+        TEST(a.length == 0);
+        TEST(b == "hello");
+    }
+
+    // Move assign
+    {
+        String a = String::create("hello");
+        String b = String::create("world");
+        b = std::move(a);
+        TEST(a.chars == nullptr);
+        TEST(a.length == 0);
+        TEST(b == "hello");
+    }
+
+    // String equality
+    {
+        String a = String::create("hello");
+        String b = String::create("hello");
+        String c = String::create("world");
+        TEST(a == b);
+        TEST(!(a == c));
+        TEST(a != c);
+    }
+
+    // String equality with StringView (via implicit conversion)
+    {
+        String s = String::create("hello");
+        TEST(s == StringView{"hello"});
+    }
+
+    // String equality with const char* (via implicit conversion to StringView)
+    {
+        String s = String::create("hello");
+        TEST(s == "hello");
+    }
+
+    // ------------------------------------------------------------------
+    // String destruction & lifecycle
+    // ------------------------------------------------------------------
+    //
+    // ~String() calls heapFree(chars, length).  free(nullptr) is a no-op,
+    // so moved-from Strings (chars == nullptr) are safe to destroy.
+    // These tests verify no double-free, no leak, and correct ownership
+    // transfer across every code path.
+
+    // Create, move, destroy in order (ownership transfer)
+    {
+        String a = String::create("hello");
+        {
+            String b = std::move(a);
+            TEST(a.chars == nullptr);
+            TEST(b == "hello");
+        }
+        // b destroyed — frees "hello"
+        TEST(a.chars == nullptr);
+        // a destroyed — no-op (chars == nullptr)
+    }
+
+    // Chain of moves through multiple Strings
+    {
+        String a = String::create("alpha");
+        String b = String::create("beta");
+        String c = std::move(a);    // c owns "alpha", a is null
+        b = std::move(c);           // b frees "beta", takes "alpha", c is null
+        TEST(b == "alpha");
+        TEST(a.chars == nullptr);
+        TEST(c.chars == nullptr);
+        // b destroyed — frees "alpha"
+        // a,c destroyed — no-op
+    }
+
+    // Empty String create and move
+    {
+        String empty = String::create("");
+        TEST(empty == "");
+        String moved = std::move(empty);
+        TEST(empty.chars == nullptr);
+        TEST(moved == "");
+        // moved destroyed — frees (size 0 allocation if any)
+        // empty destroyed — no-op
+    }
+
+    // Move-assign onto self after a prior move (edge case: two moved-from Strings)
+    {
+        String a = String::create("hello");
+        String b = String::create("world");
+        a = std::move(b);  // a frees "hello", takes "world", b is null
+        TEST(a == "world");
+        TEST(b.chars == nullptr);
+        // Now assign b (moved-from) to a
+        b = std::move(a);  // b is null, so ~String() on b is no-op; b takes "world", a is null
+        TEST(b == "world");
+        TEST(a.chars == nullptr);
+        // b destroyed — frees "world"
+        // a destroyed — no-op
+    }
+
+    // ============================================================================
+    // isWhitespace / isNumeral
+    // ============================================================================
+    //
+    // Character classification functions.
+    //
+    // Functions covered:
+    // - isWhitespace(char)
+    // - isNumeral(char)
+
+    // isWhitespace: space
+    {
+        TEST(isWhitespace(' '));
+    }
+
+    // isWhitespace: tab
+    {
+        TEST(isWhitespace('\t'));
+    }
+
+    // isWhitespace: newline
+    {
+        TEST(isWhitespace('\n'));
+    }
+
+    // isWhitespace: carriage return
+    {
+        TEST(isWhitespace('\r'));
+    }
+
+    // isWhitespace: non-whitespace chars are false
+    {
+        TEST(!isWhitespace('a'));
+        TEST(!isWhitespace('0'));
+        TEST(!isWhitespace('.'));
+        TEST(!isWhitespace('\0'));
+        TEST(!isWhitespace('_'));
+    }
+
+    // isNumeral: digits 0-9
+    {
+        TEST(isNumeral('0'));
+        TEST(isNumeral('1'));
+        TEST(isNumeral('2'));
+        TEST(isNumeral('3'));
+        TEST(isNumeral('4'));
+        TEST(isNumeral('5'));
+        TEST(isNumeral('6'));
+        TEST(isNumeral('7'));
+        TEST(isNumeral('8'));
+        TEST(isNumeral('9'));
+    }
+
+    // isNumeral: non-digits
+    {
+        TEST(!isNumeral('a'));
+        TEST(!isNumeral('z'));
+        TEST(!isNumeral('A'));
+        TEST(!isNumeral('Z'));
+        TEST(!isNumeral('.'));
+        TEST(!isNumeral('-'));
+        TEST(!isNumeral('+'));
+        TEST(!isNumeral(' '));
+        TEST(!isNumeral('\0'));
+        TEST(!isNumeral('/'));  // before '0'
+        TEST(!isNumeral(':'));  // after '9'
+    }
+
+    // ============================================================================
+    // isInteger
+    // ============================================================================
+    //
+    // Checks whether a string is a valid base-10 integer, optionally with
+    // a leading + or - sign.
+    //
+    // Functions covered:
+    // - isInteger(StringView)
+
+    // Single digits
+    {
+        TEST(isInteger("0"));
+        TEST(isInteger("1"));
+        TEST(isInteger("2"));
+        TEST(isInteger("3"));
+        TEST(isInteger("4"));
+        TEST(isInteger("5"));
+        TEST(isInteger("6"));
+        TEST(isInteger("7"));
+        TEST(isInteger("8"));
+        TEST(isInteger("9"));
+    }
+
+    // Multi-digit numbers
+    {
+        TEST(isInteger("42"));
+        TEST(isInteger("100"));
+        TEST(isInteger("1234567890"));
+    }
+
+    // With leading sign
+    {
+        TEST(isInteger("+12"));
+        TEST(isInteger("-12"));
+        TEST(isInteger("+0"));
+        TEST(isInteger("-0"));
+    }
+
+    // Leading zeros
+    {
+        TEST(isInteger("00"));
+        TEST(isInteger("00042"));
+    }
+
+    // Empty string
+    {
+        TEST(!isInteger(""));
+    }
+
+    // Non-numeric characters
+    {
+        TEST(!isInteger("hello"));
+        TEST(!isInteger("12a"));
+        TEST(!isInteger("a12"));
+        TEST(!isInteger("1.0"));
+        TEST(!isInteger("--12"));
+        TEST(!isInteger("+-12"));
+        TEST(!isInteger("12-"));
+        TEST(!isInteger("12+"));
+    }
+
+    // Just a sign (no digits)
+    {
+        TEST(!isInteger("+"));
+        TEST(!isInteger("-"));
+    }
+
+    // ============================================================================
+    // isFloat
+    // ============================================================================
+    //
+    // Checks whether a string is a valid base-10 floating point number,
+    // optionally with decimal point, exponent (e), and trailing f suffix.
+    //
+    // Functions covered:
+    // - isFloat(StringView)
+
+    // Simple decimals
+    {
+        TEST(isFloat("0.0"));
+        TEST(isFloat("1.0"));
+        TEST(isFloat("2.5"));
+        TEST(isFloat("99.99"));
+    }
+
+    // Leading decimal point
+    {
+        TEST(isFloat(".1"));
+        TEST(isFloat(".5"));
+        TEST(isFloat(".12345"));
+    }
+
+    // Trailing decimal point
+    {
+        TEST(isFloat("1."));
+        TEST(isFloat("100."));
+    }
+
+    // With sign
+    {
+        TEST(isFloat("+1.0"));
+        TEST(isFloat("-1.0"));
+        TEST(isFloat("+.5"));
+        TEST(isFloat("-.5"));
+    }
+
+    // With exponent
+    {
+        TEST(isFloat("1e3"));
+        TEST(isFloat("1e+3"));
+        TEST(isFloat("1e-3"));
+        TEST(isFloat("1.5e3"));
+        TEST(isFloat(".5e3"));
+    }
+
+    // With f suffix
+    {
+        TEST(isFloat("1.0f"));
+        TEST(isFloat("+10.f"));
+        TEST(isFloat("-999.999f"));
+        TEST(isFloat("1e3f"));
+        TEST(isFloat("1.e3f"));
+        TEST(isFloat(".1e3"));
+    }
+
+    // Integer-only strings (no decimal or exponent) — isFloat returns true
+    // if there's a decimal or exponent, false for plain integers
+    {
+        TEST(!isFloat("1"));
+        TEST(!isFloat("42"));
+        TEST(!isFloat("+12"));
+        TEST(!isFloat("-12"));
+    }
+
+    // Empty string
+    {
+        TEST(!isFloat(""));
+    }
+
+    // Invalid strings
+    {
+        TEST(!isFloat("hello"));
+        TEST(!isFloat("1.0ff"));
+        TEST(!isFloat("1.0.0"));
+        TEST(!isFloat("1e3.0"));
+        TEST(!isFloat("--1.0"));
+        TEST(!isFloat("1ef"));
+        TEST(!isFloat("e1"));
+    }
+
+    // Just a decimal point
+    {
+        TEST(!isFloat("."));
+    }
+
+    // Just an exponent
+    {
+        TEST(!isFloat("e"));
+        TEST(!isFloat("e1"));
+    }
+
+    // ============================================================================
+    // stringToInteger
+    // ============================================================================
+    //
+    // Parses a base-10 integer string into an i64. Asserts the input is
+    // a valid integer (call isInteger first).
+    //
+    // Functions covered:
+    // - stringToInteger(StringView)
+
+    // Single digits
+    {
+        TEST(stringToInteger("0") == 0);
+        TEST(stringToInteger("1") == 1);
+        TEST(stringToInteger("2") == 2);
+        TEST(stringToInteger("3") == 3);
+        TEST(stringToInteger("4") == 4);
+        TEST(stringToInteger("5") == 5);
+        TEST(stringToInteger("6") == 6);
+        TEST(stringToInteger("7") == 7);
+        TEST(stringToInteger("8") == 8);
+        TEST(stringToInteger("9") == 9);
+    }
+
+    // Multi-digit
+    {
+        TEST(stringToInteger("42") == 42);
+        TEST(stringToInteger("100") == 100);
+        TEST(stringToInteger("1234567890") == 1234567890);
+    }
+
+    // With sign
+    {
+        TEST(stringToInteger("+12") == 12);
+        TEST(stringToInteger("-12") == -12);
+        TEST(stringToInteger("+0") == 0);
+        TEST(stringToInteger("-0") == 0);
+    }
+
+    // Leading zeros
+    {
+        TEST(stringToInteger("00") == 0);
+        TEST(stringToInteger("00042") == 42);
+    }
+
+    // Large values
+    {
+        TEST(stringToInteger("2147483647") == 2147483647);   // i32 max
+        TEST(stringToInteger("2147483648") == 2147483648);
+    }
+
+    // Negative large values
+    {
+        TEST(stringToInteger("-2147483648") == -2147483648);  // i32 min
+    }
+
+    // ============================================================================
+    // stringToFloat
+    // ============================================================================
+    //
+    // Parses a base-10 floating point string into an f64. Handles decimal
+    // points, exponents, signs, and f suffix.
+    //
+    // Functions covered:
+    // - stringToFloat(StringView)
+
+    // Basic decimals
+    {
+        TEST(std::abs(stringToFloat("0.0") - 0.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("1.0") - 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("2.5") - 2.5) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("99.99") - 99.99) <= 1e-10);
+    }
+
+    // Leading decimal
+    {
+        TEST(std::abs(stringToFloat(".1") - 0.1) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat(".5") - 0.5) <= FLT_EPSILON);
+    }
+
+    // Trailing decimal
+    {
+        TEST(std::abs(stringToFloat("1.") - 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("100.") - 100.0) <= FLT_EPSILON);
+    }
+
+    // With sign
+    {
+        TEST(std::abs(stringToFloat("+1.0") - 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("-1.0") + 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("+.5") - 0.5) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("-.5") + 0.5) <= FLT_EPSILON);
+    }
+
+    // With exponent
+    {
+        TEST(std::abs(stringToFloat("1e3") - 1000.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("1e+3") - 1000.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("1e-3") - 0.001) <= 1e-10);
+        TEST(std::abs(stringToFloat("1.5e3") - 1500.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat(".5e3") - 500.0) <= FLT_EPSILON);
+    }
+
+    // With f suffix
+    {
+        TEST(std::abs(stringToFloat("1.0f") - 1.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("+10.f") - 10.0) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("-999.999f") + 999.999) <= 1e-10);
+        TEST(std::abs(stringToFloat("1e3f") - 1000.0) <= FLT_EPSILON);
+    }
+
+    // Zero
+    {
+        TEST(std::abs(stringToFloat("0.0")) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat(".0")) <= FLT_EPSILON);
+        TEST(std::abs(stringToFloat("0.")) <= FLT_EPSILON);
+    }
+
+    // ============================================================================
+    // integerToString
+    // ============================================================================
+    //
+    // Formats an i64 into a base-10 string allocated from an arena.
+    //
+    // Functions covered:
+    // - integerToString(Arena*, i64)
+
+    // Zero
+    {
+        ArenaScope arena = getScratch();
+        StringBuilder sb = integerToString(arena, 0);
+        TEST(sb == "0");
+    }
+
+    // Positive single digit
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, 1) == "1");
+        TEST(integerToString(arena, 9) == "9");
+    }
+
+    // Negative single digit
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, -1) == "-1");
+        TEST(integerToString(arena, -9) == "-9");
+    }
+
+    // Multi-digit
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, 42) == "42");
+        TEST(integerToString(arena, 100) == "100");
+        TEST(integerToString(arena, 1234567890) == "1234567890");
+    }
+
+    // Negative multi-digit
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, -42) == "-42");
+        TEST(integerToString(arena, -1000000) == "-1000000");
+    }
+
+    // Large values (within f64 exact-representation range to avoid
+    // precision loss in the f64 division used by integerToString)
+    {
+        ArenaScope arena = getScratch();
+        TEST(integerToString(arena, 9000000000000000LL) == "9000000000000000");
+    }
+
+    // ============================================================================
+    // floatToString
+    // ============================================================================
+    //
+    // Formats an f64 into a base-10 string with a specified number of
+    // decimal places, allocated from an arena.
+    //
+    // Functions covered:
+    // - floatToString(Arena*, f64, u32 decimalCount)
+
+    // Zero
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, 0.0, 1) == "0.0");
+    }
+
+    // Positive values with varying decimal places
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, 1.0, 0) == "1.");
+        TEST(floatToString(arena, 2.0, 1) == "2.0");
+        TEST(floatToString(arena, 3.0, 2) == "3.00");
+        TEST(floatToString(arena, 4.0, 3) == "4.000");
+    }
+
+    // Negative values
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, -1.0, 1) == "-1.0");
+        TEST(floatToString(arena, -2.0, 2) == "-2.00");
+    }
+
+    // Fractional values
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, 0.5, 1) == "0.5");
+        TEST(floatToString(arena, 3.14, 2) == "3.14");
+        TEST(floatToString(arena, -0.5, 1) == "-0.5");
+    }
+
+    // Zero decimal places (zero case returns "0.0" regardless)
+    {
+        ArenaScope arena = getScratch();
+        TEST(floatToString(arena, 0.0, 0) == "0.0");
+        TEST(floatToString(arena, 100.0, 0) == "100.");
+    }
+
+    // ============================================================================
+    // BinaryBuilder
+    // ============================================================================
+    //
+    // BinaryBuilder is an arena-backed builder for binary data. Supports
+    // resize, append, overwrite, read, and implicit BinaryView conversion.
+    //
+    // Functions covered:
+    // - BinaryBuilder() — default
+    // - BinaryBuilder(Arena*, u64) — arena + optional initial size
+    // - operator BinaryView()
+    // - read(u64, void*, u64)
+    // - read<T>(u64)
+    // - resize(u64)
+    // - overwrite(u64, const void*, u64)
+    // - overwrite<T>(u64, const T&)
+    // - append(const void*, u64)
+    // - append<T>(const T&)
+
+    // Default-constructed builder has null arena
+    {
+        BinaryBuilder bb;
+        TEST(bb.arena == nullptr);
+        TEST(bb.data == nullptr);
+        TEST(bb.size == 0);
+    }
+
+    // Create with arena and initial size
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 8};
+        TEST(bb.arena == arena);
+        TEST(bb.data != nullptr);
+        TEST(bb.size == 8);
+    }
+
+    // Create with arena and zero size
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 0};
+        TEST(bb.arena == arena);
+        TEST(bb.data != nullptr); // alloc(0,1) returns a valid pointer
+        TEST(bb.size == 0);
+    }
+
+    // resize grows the builder
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        bb.resize(8);
+        TEST(bb.size == 8);
+    }
+
+    // append raw data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena};
+        u32 val = 42;
+        bb.append(&val, sizeof(val));
+        TEST(bb.size == sizeof(val));
+        u32 result = bb.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // append<T> typed data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena};
+        u32 val = 0xDEADBEEF;
+        bb.append(val);
+        TEST(bb.size == sizeof(val));
+        u32 result = bb.read<u32>(0);
+        TEST(result == 0xDEADBEEF);
+    }
+
+    // overwrite existing data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        u32 val = 123;
+        bb.overwrite(0, &val, sizeof(val));
+        u32 result = bb.read<u32>(0);
+        TEST(result == 123);
+    }
+
+    // overwrite<T> typed data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        bb.overwrite(0, static_cast<u32>(789));
+        u32 result = bb.read<u32>(0);
+        TEST(result == 789);
+    }
+
+    // Read raw data
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        bb.overwrite(0, static_cast<u32>(0xAABBCCDD));
+        u32 result = 0;
+        bb.read(0, &result, sizeof(result));
+        TEST(result == 0xAABBCCDD);
+    }
+
+    // Implicit conversion to BinaryView
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena, 4};
+        BinaryView bv = bb;
+        TEST(bv.data == bb.data);
+        TEST(bv.size == bb.size);
+    }
+
+    // Append multiple values
+    {
+        ArenaScope arena = getScratch();
+        BinaryBuilder bb{arena};
+        u8 a = 0xAA;
+        u8 b = 0xBB;
+        bb.append(a);
+        bb.append(b);
+        TEST(bb.size == 2);
+        u8 ra = bb.read<u8>(0);
+        u8 rb = bb.read<u8>(1);
+        TEST(ra == 0xAA);
+        TEST(rb == 0xBB);
+    }
+
+    // ============================================================================
+    // Binary
+    // ============================================================================
+    //
+    // Binary is an owning, heap-allocated, move-only binary data block.
+    //
+    // Functions covered:
+    // - Binary() — default
+    // - Binary::create(BinaryView) — factory
+    // - ~Binary() — destructor
+    // - Binary(Binary&&) — move construct
+    // - Binary& operator=(Binary&&) — move assign
+    // - read(u64, void*, u64)
+    // - read<T>(u64)
+    // - operator BinaryView()
+
+    // Default-constructed Binary is empty
+    {
+        Binary b;
+        TEST(b.data == nullptr);
+        TEST(b.size == 0);
+    }
+
+    // Create from BinaryView
+    {
+        u32 val = 42;
+        BinaryView bv{&val, sizeof(val)};
+        Binary b = Binary::create(bv);
+        TEST(b.size == sizeof(val));
+        u32 result = b.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // Create from empty BinaryView
+    {
+        BinaryView bv{};
+        Binary b = Binary::create(bv);
+        TEST(b.size == 0);
+        // data may be non-null (heapAlloc(0,1) returns valid pointer)
+    }
+
+    // Move construct
+    {
+        u32 val = 42;
+        BinaryView bv{&val, sizeof(val)};
+        Binary a = Binary::create(bv);
+        Binary b = std::move(a);
+        TEST(a.data == nullptr);
+        TEST(a.size == 0);
+        TEST(b.size == sizeof(val));
+        u32 result = b.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // Move assign
+    {
+        u32 val1 = 42;
+        u32 val2 = 99;
+        BinaryView bv1{&val1, sizeof(val1)};
+        BinaryView bv2{&val2, sizeof(val2)};
+        Binary a = Binary::create(bv1);
+        Binary b = Binary::create(bv2);
+        b = std::move(a);
+        TEST(a.data == nullptr);
+        TEST(a.size == 0);
+        TEST(b.size == sizeof(val1));
+        u32 result = b.read<u32>(0);
+        TEST(result == 42);
+    }
+
+    // Implicit conversion to BinaryView
+    {
+        u32 val = 0xCAFEBABE;
+        BinaryView bv{&val, sizeof(val)};
+        Binary b = Binary::create(bv);
+        BinaryView bv2 = b;
+        TEST(bv2.size == b.size);
+        u32 result = bv2.read<u32>(0);
+        TEST(result == 0xCAFEBABE);
+    }
+
+    // Create, scope-exit destroys (no double-free crash)
+    {
+        u32 val = 12345;
+        BinaryView bv{&val, sizeof(val)};
+        Binary b = Binary::create(bv);
+        TEST(b.read<u32>(0) == 12345);
+    }
+    // Allocate after — if heap is corrupt, we crash
+    {
+        Binary b2 = Binary::create(BinaryView{});
+        TEST(b2.size == 0);
+    }
+
+    // ============================================================================
+    // Serialization
+    // ============================================================================
+    //
+    // Tests for the serialization API: serialWriter, serialReader,
+    // serialize primitives, serializeObject, binaryWriteSerial,
+    // binaryReadSerial, jsonWriteSerial.
+    //
+    // Functions covered:
+    // - serialWriter / serialReader
+    // - serializeNodeStart
+    // - serializeBegin / serializeEnd
+    // - serializeVoid (default T*)
+    // - serializeObject
+    // - serialize(bool*), integral T*, floating_point T*
+    // - serialize(Vec2/3/4*), serialize(Mat2/3/4*)
+    // - serialize(Complex*), serialize(Quat*)
+    // - serialize(String*), serialize(Binary*)
+    // - serialize(T (*arr)[N])
+    // - serialize(Array<T>*), serialize(Set<V>*), serialize(Map<K, V>*)
+    // - binaryWriteSerial / binaryReadSerial
+    // - jsonWriteSerial
+
+    // Primitives: bool, integer, floating-point
+    {
+        bool val = true;
+        bool copy = false;
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        i64 val = -1234567890123;
+        i64 copy = 0;
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        u32 val = 0xDEADBEEF;
+        u32 copy = 0;
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        f64 val = 3.14159265358979;
+        f64 copy = 0.0;
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    // Math types
+    {
+        Vec3 val{1.0f, 2.0f, 3.0f};
+        Vec3 copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        Mat4 val{1.0f};
+        Mat4 copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        Complex val{3.0f, 4.0f};
+        Complex copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        Quat val{0.707f, 0.0f, 0.707f, 0.0f};
+        Quat copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    // Nested serializeBegin/End
+    {
+        ArenaScope arena = getScratch();
+        i32 outer = 7;
+        i32 inner = 42;
+        i32 outerCopy = 0;
+        i32 innerCopy = 0;
+
+        Serializer w = serialWriter(arena);
+        serializeBegin(&w);
+        serialize(&w, &outer);
+        serializeBegin(&w);
+        serialize(&w, &inner);
+        serializeEnd(&w);
+        serializeEnd(&w);
+
+        Serializer r = serialReader(arena, w.current);
+        serializeBegin(&r);
+        serialize(&r, &outerCopy);
+        serializeBegin(&r);
+        serialize(&r, &innerCopy);
+        serializeEnd(&r);
+        serializeEnd(&r);
+
+        TEST(outerCopy == outer);
+        TEST(innerCopy == inner);
+    }
+
+    // serializeBegin with size parameter
+    {
+        ArenaScope arena = getScratch();
+        u32 childCount = 0;
+        u32 val = 99;
+        u32 copy = 0;
+
+        Serializer w = serialWriter(arena);
+        serializeBegin(&w);
+        serialize(&w, &val);
+        serializeEnd(&w);
+
+        Serializer r = serialReader(arena, w.current);
+        serializeBegin(&r, &childCount);
+        serialize(&r, &copy);
+        serializeEnd(&r);
+
+        TEST(childCount == 1);
+        TEST(copy == val);
+    }
+
+    // Composite struct via serializeObject
+    {
+        struct Data {
+            i64 a;
+            u16 b;
+            f32 c;
+            bool d;
+            String e;
+        };
+
+        auto serializeData = [](Serializer* s, Data* val)
+        {
+            serializeObject(s,
+                &val->a,
+                &val->b,
+                &val->c,
+                &val->d,
+                &val->e);
+        };
+
+        ArenaScope arena = getScratch();
+        Data val{};
+        val.a = -42;
+        val.b = 99;
+        val.c = 2.5f;
+        val.d = true;
+        val.e = String::create("composite");
+
+        Data copy{};
+        Serializer w = serialWriter(arena);
+        serializeData(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serializeData(&r, &copy);
+        TEST(copy.a == val.a);
+        TEST(copy.b == val.b);
+        TEST(copy.c == val.c);
+        TEST(copy.d == val.d);
+        TEST(copy.e == val.e);
+    }
+
+    // Lifecycle
+    {
+        Lifecycle::stats.reset();
+        ArenaScope arena = getScratch();
+
+        Lifecycle val{};
+        u64 savedId = val.id;
+
+        Lifecycle copy{};
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.id == savedId);
+        TEST(copy.valid == true);
+    }
+
+    // C array
+    {
+        u32 val[4] = {10, 20, 30, 40};
+        u32 copy[4] = {};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy[0] == 10);
+        TEST(copy[1] == 20);
+        TEST(copy[2] == 30);
+        TEST(copy[3] == 40);
+    }
+
+    // String
+    {
+        String val = String::create("hello world");
+        String copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    // Binary
+    {
+        u8 raw[8] = {0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE};
+        Binary val = Binary::create({raw, 8});
+        Binary copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.size == val.size);
+        TEST(memcmp(copy.data, val.data, val.size) == 0);
+    }
+
+    // UniquePtr
+    {
+        UniquePtr<i32> val = makeUnique<i32>(42);
+        UniquePtr<i32> copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(*copy == 42);
+        TEST(copy.ptr != val.ptr); // New allocation, not same pointer
+    }
+
+    // Array
+    {
+        ArenaScope arena = getScratch();
+        Array<u32> val{};
+        val.push(1);
+        val.push(2);
+        val.push(3);
+
+        Array<u32> copy{};
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.count == val.count);
+        for (u32 i = 0; i < val.count; ++i)
+            TEST(copy[i] == val[i]);
+    }
+
+    // Set
+    {
+        ArenaScope arena = getScratch();
+        Set<u32> val{};
+        val.add(10);
+        val.add(20);
+        val.add(30);
+
+        Set<u32> copy{};
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.count == val.count);
+        TEST(copy.has(10));
+        TEST(copy.has(20));
+        TEST(copy.has(30));
+    }
+
+    // Map
+    {
+        ArenaScope arena = getScratch();
+        Map<u32, f32> val{};
+        val.add(1, 1.5f);
+        val.add(2, 2.5f);
+        val.add(3, 3.5f);
+
+        Map<u32, f32> copy{};
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.count == val.count);
+        TEST(*copy.get(1) == 1.5f);
+        TEST(*copy.get(2) == 2.5f);
+        TEST(*copy.get(3) == 3.5f);
+    }
+
+    // Binary format round-trip
+    {
+        struct Data {
+            i64 a;
+            f64 b;
+            bool c;
+        };
+
+        auto serializeData = [](Serializer* s, Data* val)
+        {
+            serializeObject(s,
+                &val->a,
+                &val->b,
+                &val->c);
+        };
+
+        ArenaScope arena = getScratch();
+        Data val{};
+        val.a = -999;
+        val.b = 3.14;
+        val.c = true;
+
+        Data copy{};
+        Serializer w = serialWriter(arena);
+        serializeData(&w, &val);
+        BinaryView bin = binaryWriteSerial(arena, &w);
+        Serializer r = binaryReadSerial(arena, bin);
+        serializeData(&r, &copy);
+        TEST(copy.a == val.a);
+        TEST(copy.b == val.b);
+        TEST(copy.c == val.c);
+    }
+
+    // Binary format round-trip for String
+    {
+        struct Data {
+            i64 a;
+            String b;
+        };
+
+        auto serializeData = [](Serializer* s, Data* val)
+        {
+            serializeObject(s,
+                &val->a,
+                &val->b);
+        };
+
+        ArenaScope arena = getScratch();
+        Data val{};
+        val.a = -999;
+        val.b = String::create("binary-test");
+
+        Data copy{};
+        Serializer w = serialWriter(arena);
+        serializeData(&w, &val);
+        BinaryView bin = binaryWriteSerial(arena, &w);
+        Serializer r = binaryReadSerial(arena, bin);
+        serializeData(&r, &copy);
+        TEST(copy.a == val.a);
+        TEST(copy.b == val.b);
+    }
+
+    // Binary format round-trip for Binary
+    {
+        struct Data {
+            i64 a;
+            Binary b;
+        };
+
+        auto serializeData = [](Serializer* s, Data* val)
+        {
+            serializeObject(s,
+                &val->a,
+                &val->b);
+        };
+
+        ArenaScope arena = getScratch();
+        u8 raw[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+        Data val{};
+        val.a = -123;
+        val.b = Binary::create({raw, 4});
+
+        Data copy{};
+        Serializer w = serialWriter(arena);
+        serializeData(&w, &val);
+        BinaryView bin = binaryWriteSerial(arena, &w);
+        Serializer r = binaryReadSerial(arena, bin);
+        serializeData(&r, &copy);
+        TEST(copy.a == val.a);
+        TEST(copy.b.size == val.b.size);
+        TEST(memcmp(copy.b.data, val.b.data, val.b.size) == 0);
+    }
+
+    // ============================================================================
     // GPU API
     // ============================================================================
     //
@@ -4172,2529 +6695,6 @@ int main()
         colorView.read(pixels);
         for (u32 i = 0; i < imgSize * imgSize; ++i)
             TEST(pixels[i] == 0xFF996633);
-    }
-
-    // ============================================================================
-    // Math
-    // ============================================================================
-
-    // Scalar functions
-    {
-        // pow
-        {
-            TEST(pow(2.0f, 0) == 1.0f);
-            TEST(pow(2.0f, 1) == 2.0f);
-            TEST(pow(3.0f, 2) == 9.0f);
-            TEST(pow(0.0f, 5) == 0.0f);
-            TEST(pow(1.0f, 100) == 1.0f);
-            TEST(pow(-2.0f, 3) == -8.0f);
-            TEST(pow(-2.0f, 2) == 4.0f);
-        }
-
-        // square
-        {
-            TEST(square(0.0f) == 0.0f);
-            TEST(square(1.0f) == 1.0f);
-            TEST(square(-1.0f) == 1.0f);
-            TEST(square(2.5f) == 6.25f);
-        }
-
-        // lerp
-        {
-            TEST(lerp(0.0f, 10.0f, 0.0f) == 0.0f);
-            TEST(lerp(0.0f, 10.0f, 1.0f) == 10.0f);
-            TEST(lerp(0.0f, 10.0f, 0.5f) == 5.0f);
-            TEST(lerp(5.0f, 5.0f, 0.3f) == 5.0f);
-        }
-
-        // smooth / smoothQuintic
-        {
-            TEST(smooth(0.0f) == 0.0f);
-            TEST(smooth(1.0f) == 1.0f);
-            TEST(std::abs(smooth(0.5f) - 0.5f) < FLT_EPSILON);
-            TEST(smoothQuintic(0.0f) == 0.0f);
-            TEST(smoothQuintic(1.0f) == 1.0f);
-            TEST(std::abs(smoothQuintic(0.5f) - 0.5f) < FLT_EPSILON);
-        }
-    }
-
-    // Vec2
-    {
-        // Construction and operator[]
-        {
-            Vec2 v{1.0f, 2.0f};
-            TEST(v.x == 1.0f && v.y == 2.0f);
-            Vec2 s{5.0f};
-            TEST(s.x == 5.0f && s.y == 5.0f);
-            TEST(v[0] == 1.0f && v[1] == 2.0f);
-        }
-
-        // Negation
-        {
-            Vec2 n = -Vec2{1.0f, -2.0f};
-            TEST(n.x == -1.0f && n.y == 2.0f);
-        }
-
-        // Arithmetic
-        {
-            Vec2 a{1.0f, 2.0f};
-            Vec2 b{3.0f, 4.0f};
-            TEST((a + b == Vec2{4.0f, 6.0f}));
-            TEST((b - a == Vec2{2.0f, 2.0f}));
-            TEST((a * b == Vec2{3.0f, 8.0f}));
-            TEST((b / a == Vec2{3.0f, 2.0f}));
-        }
-
-        // Scalar multiply / divide
-        {
-            Vec2 v{2.0f, 3.0f};
-            TEST((5.0f * v == Vec2{10.0f, 15.0f}));
-            TEST((v * 5.0f == Vec2{10.0f, 15.0f}));
-            TEST((v / 2.0f == Vec2{1.0f, 1.5f}));
-        }
-
-        // In-place
-        {
-            Vec2 v{1.0f, 2.0f};
-            v += Vec2{3.0f, 4.0f};
-            TEST(v.x == 4.0f && v.y == 6.0f);
-            v -= Vec2{1.0f, 1.0f};
-            TEST(v.x == 3.0f && v.y == 5.0f);
-            v *= Vec2{2.0f, 3.0f};
-            TEST(v.x == 6.0f && v.y == 15.0f);
-            v /= Vec2{3.0f, 5.0f};
-            TEST(v.x == 2.0f && v.y == 3.0f);
-        }
-
-        // vecDot2
-        {
-            TEST(vecDot2({1.0f, 0.0f}, {0.0f, 1.0f}) == 0.0f);
-            TEST(vecDot2({1.0f, 0.0f}, {1.0f, 0.0f}) == 1.0f);
-            TEST(vecDot2({3.0f, 4.0f}, {5.0f, 6.0f}) == 39.0f);
-        }
-
-        // vecLenSqr2 / vecLen2
-        {
-            TEST(vecLenSqr2({0.0f, 0.0f}) == 0.0f);
-            TEST(vecLenSqr2({1.0f, 0.0f}) == 1.0f);
-            TEST(vecLenSqr2({3.0f, 4.0f}) == 25.0f);
-            TEST(std::abs(vecLen2({3.0f, 4.0f}) - 5.0f) < FLT_EPSILON);
-        }
-
-        // vecNorm2
-        {
-            Vec2 n = vecNorm2({3.0f, 0.0f});
-            TEST(n.x == 1.0f && n.y == 0.0f);
-            TEST(std::abs(vecLen2(vecNorm2({3.0f, 4.0f})) - 1.0f) < FLT_EPSILON);
-        }
-
-        // vecCross2
-        {
-            TEST(vecCross2({1.0f, 0.0f}, {0.0f, 1.0f}) == 1.0f);
-            TEST(vecCross2({0.0f, 1.0f}, {1.0f, 0.0f}) == -1.0f);
-            TEST(std::abs(vecCross2({2.0f, 3.0f}, {4.0f, 6.0f})) < FLT_EPSILON);
-        }
-
-        // vecEq2
-        {
-            TEST(vecEq2({1.0f, 2.0f}, {1.0f, 2.0f}));
-            TEST(!vecEq2({1.0f, 2.0f}, {1.0f, 3.0f}));
-            TEST(vecEq2({1.0f + 1e-7f, 2.0f}, {1.0f, 2.0f}));
-            TEST(!vecEq2({1.0f + 1e-5f, 2.0f}, {1.0f, 2.0f}));
-        }
-    }
-
-    // Vec3
-    {
-        // Construction
-        {
-            Vec3 v{1.0f, 2.0f, 3.0f};
-            TEST(v.x == 1.0f && v.y == 2.0f && v.z == 3.0f);
-            Vec3 s{5.0f};
-            TEST(s.x == 5.0f && s.y == 5.0f && s.z == 5.0f);
-            Vec3 v2{Vec2{1.0f, 2.0f}, 3.0f};
-            TEST(v2.x == 1.0f && v2.y == 2.0f && v2.z == 3.0f);
-        }
-
-        // Downcast
-        {
-            Vec2 v = static_cast<Vec2>(Vec3{1.0f, 2.0f, 3.0f});
-            TEST(v.x == 1.0f && v.y == 2.0f);
-        }
-
-        // operator[]
-        {
-            Vec3 v{3.0f, 4.0f, 5.0f};
-            TEST(v[0] == 3.0f && v[1] == 4.0f && v[2] == 5.0f);
-        }
-
-        // Negation and arithmetic
-        {
-            TEST((-Vec3{1.0f, -2.0f, 3.0f} == Vec3{-1.0f, 2.0f, -3.0f}));
-            Vec3 a{1.0f, 2.0f, 3.0f};
-            Vec3 b{4.0f, 5.0f, 6.0f};
-            TEST((a + b == Vec3{5.0f, 7.0f, 9.0f}));
-            TEST((b - a == Vec3{3.0f, 3.0f, 3.0f}));
-            TEST((a * b == Vec3{4.0f, 10.0f, 18.0f}));
-        }
-
-        // Scalar ops
-        {
-            Vec3 v{1.0f, 2.0f, 3.0f};
-            TEST((2.0f * v == Vec3{2.0f, 4.0f, 6.0f}));
-            TEST((v * 2.0f == Vec3{2.0f, 4.0f, 6.0f}));
-            TEST((v / 2.0f == Vec3{0.5f, 1.0f, 1.5f}));
-        }
-
-        // vecDot3 / vecLen / vecNorm3
-        {
-            TEST(vecDot3({1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}) == 0.0f);
-            TEST(vecDot3({1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}) == 32.0f);
-            TEST(vecLenSqr3({1.0f, 2.0f, 2.0f}) == 9.0f);
-            TEST(std::abs(vecLen3({1.0f, 2.0f, 2.0f}) - 3.0f) < FLT_EPSILON);
-            Vec3 n = vecNorm3({0.0f, -5.0f, 0.0f});
-            TEST(n.x == 0.0f && n.y == -1.0f && n.z == 0.0f);
-            TEST(std::abs(vecLen3(vecNorm3({1.0f, 2.0f, 3.0f})) - 1.0f) < FLT_EPSILON);
-        }
-
-        // vecCross3
-        {
-            Vec3 x{1.0f, 0.0f, 0.0f};
-            Vec3 y{0.0f, 1.0f, 0.0f};
-            Vec3 z{0.0f, 0.0f, 1.0f};
-            TEST(vecCross3(x, y) == z);
-            TEST(vecCross3(y, z) == x);
-            TEST(vecCross3(z, x) == y);
-            TEST(vecCross3(y, x) == -z);
-            TEST(vecCross3(x, x) == Vec3{0});
-        }
-
-        // vecEq3
-        {
-            TEST(vecEq3({1.0f, 2.0f, 3.0f}, {1.0f, 2.0f, 3.0f}));
-            TEST(!vecEq3({1.0f, 2.0f, 3.0f}, {1.0f, 2.0f, 4.0f}));
-            TEST(vecEq3({1.0f + 1e-7f, 2.0f, 3.0f}, {1.0f, 2.0f, 3.0f}));
-        }
-    }
-
-    // Vec4
-    {
-        // Construction
-        {
-            Vec4 v{1.0f, 2.0f, 3.0f, 4.0f};
-            TEST(v.x == 1.0f && v.y == 2.0f && v.z == 3.0f && v.w == 4.0f);
-            Vec4 s{5.0f};
-            TEST(s.x == 5.0f && s.y == 5.0f && s.z == 5.0f && s.w == 5.0f);
-        }
-
-        // Vec2/Vec3 promotion
-        {
-            Vec4 v1{Vec2{1.0f, 2.0f}, 3.0f, 4.0f};
-            TEST(v1.x == 1.0f && v1.y == 2.0f && v1.z == 3.0f && v1.w == 4.0f);
-            Vec4 v2{Vec3{1.0f, 2.0f, 3.0f}, 4.0f};
-            TEST((v2 == Vec4{1.0f, 2.0f, 3.0f, 4.0f}));
-        }
-
-        // Downcasts
-        {
-            Vec2 v2 = static_cast<Vec2>(Vec4{1.0f, 2.0f, 3.0f, 4.0f});
-            TEST(v2.x == 1.0f && v2.y == 2.0f);
-            Vec3 v3 = static_cast<Vec3>(Vec4{1.0f, 2.0f, 3.0f, 4.0f});
-            TEST(v3.x == 1.0f && v3.y == 2.0f && v3.z == 3.0f);
-        }
-
-        // Arithmetic
-        {
-            Vec4 a{1.0f, 2.0f, 3.0f, 4.0f};
-            Vec4 b{5.0f, 6.0f, 7.0f, 8.0f};
-            TEST((a + b == Vec4{6.0f, 8.0f, 10.0f, 12.0f}));
-            TEST((b - a == Vec4{4.0f, 4.0f, 4.0f, 4.0f}));
-            TEST((-Vec4{1.0f, -2.0f, 3.0f, -4.0f} == Vec4{-1.0f, 2.0f, -3.0f, 4.0f}));
-            TEST((2.0f * a == Vec4{2.0f, 4.0f, 6.0f, 8.0f}));
-            TEST((a / 2.0f == Vec4{0.5f, 1.0f, 1.5f, 2.0f}));
-        }
-
-        // vecDot4 / vecLen / vecNorm4
-        {
-            TEST(vecDot4({1.0f, 2.0f, 3.0f, 4.0f}, {5.0f, 6.0f, 7.0f, 8.0f}) == 70.0f);
-            TEST(vecLenSqr4({1.0f, 0.0f, 0.0f, 0.0f}) == 1.0f);
-            TEST(std::abs(vecLen4({1.0f, 2.0f, 3.0f, 4.0f}) - std::sqrt(30.0f)) < FLT_EPSILON);
-            Vec4 n = vecNorm4({-5.0f, 0.0f, 0.0f, 0.0f});
-            TEST(n.x == -1.0f && n.y == 0.0f && n.z == 0.0f && n.w == 0.0f);
-            TEST(std::abs(vecLen4(vecNorm4({1.0f, 2.0f, 3.0f, 4.0f})) - 1.0f) < FLT_EPSILON);
-        }
-
-        // vecEq4
-        {
-            TEST(vecEq4({1.0f, 2.0f, 3.0f, 4.0f}, {1.0f, 2.0f, 3.0f, 4.0f}));
-            TEST(!vecEq4({1.0f, 2.0f, 3.0f, 4.0f}, {1.0f, 2.0f, 3.0f, 5.0f}));
-        }
-    }
-
-    // Mat2
-    {
-        // Construction
-        {
-            Mat2 m{Vec2{1.0f, 2.0f}, Vec2{3.0f, 4.0f}};
-            TEST(m.x.x == 1.0f && m.x.y == 2.0f);
-            TEST(m.y.x == 3.0f && m.y.y == 4.0f);
-            Mat2 s{1.0f};
-            TEST(s.x.x == 1.0f && s.x.y == 0.0f && s.y.x == 0.0f && s.y.y == 1.0f);
-            Mat2 c{1.0f, 2.0f, 3.0f, 4.0f};
-            TEST(c.x.x == 1.0f && c.x.y == 2.0f);
-            TEST(c.y.x == 3.0f && c.y.y == 4.0f);
-        }
-
-        // operator[]
-        {
-            Mat2 m{1.0f, 2.0f, 3.0f, 4.0f};
-            TEST(m[0].x == 1.0f && m[0].y == 2.0f);
-            TEST(m[1].x == 3.0f && m[1].y == 4.0f);
-        }
-
-        // Comparison
-        {
-            Mat2 a{1.0f};
-            Mat2 b{2.0f};
-            TEST(a == a);
-            TEST(a != b);
-        }
-
-        // Add / Sub
-        {
-            Mat2 a{Vec2{1, 2}, Vec2{3, 4}};
-            Mat2 b{Vec2{5, 6}, Vec2{7, 8}};
-            Mat2 sum = a + b;
-            Mat2 diff = a - b;
-            TEST(sum.x.x == 6 && sum.x.y == 8 && sum.y.x == 10 && sum.y.y == 12);
-            TEST(diff.x.x == -4 && diff.x.y == -4 && diff.y.x == -4 && diff.y.y == -4);
-        }
-
-        // In-place
-        {
-            Mat2 m{Vec2{1, 2}, Vec2{3, 4}};
-            m += Mat2{Vec2{5, 6}, Vec2{7, 8}};
-            TEST(m.x.x == 6);
-            m -= Mat2{Vec2{1, 1}, Vec2{1, 1}};
-            TEST(m.x.x == 5);
-        }
-
-        // Mul
-        {
-            Mat2 a{Vec2{1, 2}, Vec2{3, 4}};
-            Mat2 b{Vec2{5, 6}, Vec2{7, 8}};
-            Mat2 id{1.0f};
-            Mat2 p = a * b;
-            TEST(p.x.x == 23 && p.x.y == 34 && p.y.x == 31 && p.y.y == 46);
-            TEST(id * a == a);
-            TEST(a * id == a);
-        }
-
-        // Matrix * Vec2
-        {
-            Mat2 id{1.0f};
-            Mat2 m{Vec2{1, 2}, Vec2{3, 4}};
-            Vec2 v{5, 6};
-            TEST(id * v == v);
-            Vec2 mv = m * v;
-            TEST(mv.x == 23 && mv.y == 34);
-        }
-
-        // Transpose
-        {
-            Mat2 m{Vec2{1, 2}, Vec2{3, 4}};
-            Mat2 t = matTranspose2(m);
-            TEST(t.x.x == 1 && t.x.y == 3 && t.y.x == 2 && t.y.y == 4);
-            TEST(matTranspose2(t) == m);
-        }
-    }
-
-    // Mat3
-    {
-        // Construction
-        {
-            Mat3 m{Vec3{1, 2, 3}, Vec3{4, 5, 6}, Vec3{7, 8, 9}};
-            TEST(m.x.x == 1 && m.x.y == 2 && m.x.z == 3);
-            TEST(m.y.x == 4 && m.y.y == 5 && m.y.z == 6);
-            TEST(m.z.x == 7 && m.z.y == 8 && m.z.z == 9);
-            Mat3 id{1.0f};
-            TEST((id == Mat3{Vec3{1,0,0}, Vec3{0,1,0}, Vec3{0,0,1}}));
-        }
-
-        // Mat2 promotion / Mat2 demotion
-        {
-            Mat2 m2{Vec2{1, 2}, Vec2{3, 4}};
-            Mat3 up{m2};
-            TEST(up.x.x == 1 && up.x.y == 2 && up.x.z == 0);
-            TEST(up.z.x == 0 && up.z.y == 0 && up.z.z == 1);
-            Mat3 m3{Vec3{1,2,3}, Vec3{4,5,6}, Vec3{7,8,9}};
-            Mat2 down = (Mat2)m3;
-            TEST(down.x.x == 1 && down.x.y == 2);
-            TEST(down.y.x == 4 && down.y.y == 5);
-        }
-
-        // Arithmetic
-        {
-            Mat3 a{1.0f};
-            Mat3 b{2.0f};
-            Mat3 zero{0.0f};
-            TEST(a + b == Mat3{3.0f});
-            TEST(b - a == Mat3{1.0f});
-            TEST(a * zero == zero);
-            TEST(a * a == a);
-        }
-
-        // Matrix * Vec3
-        {
-            Mat3 id{1.0f};
-            Vec3 v{1, 2, 3};
-            TEST(id * v == v);
-        }
-
-        // Transpose
-        {
-            Mat3 m{Vec3{1,2,3}, Vec3{4,5,6}, Vec3{7,8,9}};
-            Mat3 t = matTranspose3(m);
-            TEST(t.x.x == 1 && t.x.y == 4 && t.x.z == 7);
-            TEST(t.y.x == 2 && t.y.y == 5 && t.y.z == 8);
-            TEST(t.z.x == 3 && t.z.y == 6 && t.z.z == 9);
-            TEST(matTranspose3(t) == m);
-        }
-    }
-
-    // Mat4
-    {
-        // Construction
-        {
-            Mat4 m{Vec4{1,2,3,4}, Vec4{5,6,7,8}, Vec4{9,10,11,12}, Vec4{13,14,15,16}};
-            TEST(m.x.x == 1 && m.x.y == 2 && m.x.z == 3 && m.x.w == 4);
-            TEST(m.w.x == 13 && m.w.w == 16);
-            Mat4 id{1.0f};
-            TEST(id.x.x == 1 && id.y.y == 1 && id.z.z == 1 && id.w.w == 1);
-            TEST(id.x.y == 0);
-        }
-
-        // Promotions and downcasts
-        {
-            Mat4 m2{Mat2{Vec2{1,2}, Vec2{3,4}}};
-            TEST(m2.x.x == 1 && m2.x.y == 2 && m2.z.z == 1 && m2.w.w == 1);
-            Mat3 m3{Vec3{1,2,3}, Vec3{4,5,6}, Vec3{7,8,9}};
-            Mat4 m4{m3};
-            TEST(m4.x.x == 1 && m4.y.y == 5 && m4.z.z == 9 && m4.w.w == 1);
-            Mat4 full{Vec4{1,2,3,4}, Vec4{5,6,7,8}, Vec4{9,10,11,12}, Vec4{13,14,15,16}};
-            TEST(((Mat2)full == Mat2{Vec2{1,2}, Vec2{5,6}}));
-            TEST(((Mat3)full == Mat3{Vec3{1,2,3}, Vec3{5,6,7}, Vec3{9,10,11}}));
-        }
-
-        // Arithmetic
-        {
-            Mat4 id{1.0f};
-            Mat4 a{Vec4{1,2,3,4}, Vec4{5,6,7,8}, Vec4{9,10,11,12}, Vec4{13,14,15,16}};
-            TEST(id * a == a);
-            TEST(a * id == a);
-            Vec4 v{1, 2, 3, 4};
-            TEST(id * v == v);
-        }
-
-        // Transpose
-        {
-            Mat4 m{Vec4{1,2,3,4}, Vec4{5,6,7,8}, Vec4{9,10,11,12}, Vec4{13,14,15,16}};
-            Mat4 t = matTranspose4(m);
-            TEST(t.x.x == 1 && t.x.y == 5 && t.x.z == 9 && t.x.w == 13);
-            TEST(matTranspose4(t) == m);
-        }
-    }
-
-    // Complex
-    {
-        // Construction
-        {
-            Complex c{3.0f, 4.0f};
-            TEST(c.r == 3.0f && c.i == 4.0f);
-            Complex r{5.0f};
-            TEST(r.r == 5.0f && r.i == 0.0f);
-        }
-
-        // Add / Sub
-        {
-            Complex a{1, 2};
-            Complex b{3, 4};
-            TEST((a + b == Complex{4, 6}));
-            TEST((a - b == Complex{-2, -2}));
-        }
-
-        // Mul
-        {
-            Complex a{1, 2};
-            Complex b{3, 4};
-            TEST((a * b == Complex{-5, 10}));
-            TEST((Complex{0, 1} * Complex{0, 1} == Complex{-1, 0}));
-        }
-
-        // In-place
-        {
-            Complex c{1, 2};
-            c += Complex{3, 4};
-            TEST((c == Complex{4, 6}));
-            c -= Complex{1, 1};
-            TEST((c == Complex{3, 5}));
-        }
-
-        // Conjugate / Abs / Norm
-        {
-            Complex c{3, 4};
-            Complex cj = complexConj(c);
-            TEST(cj.r == 3 && cj.i == -4);
-            TEST(complexConj(cj) == c);
-            TEST(complexAbsSqr(c) == 25.0f);
-            TEST(std::abs(complexAbs(c) - 5.0f) < FLT_EPSILON);
-            Complex n = complexNorm(c);
-            TEST(std::abs(complexAbs(n) - 1.0f) < FLT_EPSILON);
-        }
-
-        // vecRot2
-        {
-            Vec2 v{1, 0};
-            Vec2 r90 = vecRot2(Complex{0, 1}, v);
-            TEST(std::abs(r90.x) < FLT_EPSILON && std::abs(r90.y - 1.0f) < FLT_EPSILON);
-            Vec2 r180 = vecRot2(Complex{-1, 0}, v);
-            TEST(std::abs(r180.x + 1.0f) < FLT_EPSILON && std::abs(r180.y) < FLT_EPSILON);
-            Vec2 r0 = vecRot2(Complex{1, 0}, v);
-            TEST(r0.x == 1.0f && std::abs(r0.y) < FLT_EPSILON);
-        }
-    }
-
-    // Quat
-    {
-        // Construction
-        {
-            Quat q{1, 2, 3, 4};
-            TEST(q.r == 1 && q.i == 2 && q.j == 3 && q.k == 4);
-            Quat r{5};
-            TEST(r.r == 5 && r.i == 0 && r.j == 0 && r.k == 0);
-        }
-
-        // Add / Sub
-        {
-            Quat a{1, 2, 3, 4};
-            Quat b{5, 6, 7, 8};
-            TEST((a + b == Quat{6, 8, 10, 12}));
-            TEST((a - b == Quat{-4, -4, -4, -4}));
-        }
-
-        // Mul
-        {
-            Quat id{1};
-            Quat q{1, 2, 3, 4};
-            TEST(id * q == q);
-            TEST(q * id == q);
-            Quat i{0, 1, 0, 0};
-            Quat j{0, 0, 1, 0};
-            Quat k{0, 0, 0, 1};
-            TEST(i * j == k);
-            TEST(j * k == i);
-            TEST(k * i == j);
-            TEST((j * i == Quat{0, 0, 0, -1}));
-        }
-
-        // In-place
-        {
-            Quat q{1, 2, 3, 4};
-            q += Quat{1, 1, 1, 1};
-            TEST((q == Quat{2, 3, 4, 5}));
-            q -= Quat{0, 1, 2, 3};
-            TEST((q == Quat{2, 2, 2, 2}));
-        }
-
-        // Conjugate / Abs / Norm
-        {
-            Quat q{1, 2, 3, 4};
-            Quat cj = quatConj(q);
-            TEST(cj.r == 1 && cj.i == -2 && cj.j == -3 && cj.k == -4);
-            TEST(quatConj(cj) == q);
-            TEST(quatAbsSqr(q) == 30.0f);
-            TEST(std::abs(quatAbs(q) - std::sqrt(30.0f)) < FLT_EPSILON);
-            Quat n = quatNorm(q);
-            TEST(std::abs(quatAbs(n) - 1.0f) < FLT_EPSILON);
-        }
-
-        // quatAxisAngle / vecRot3
-        {
-            f32 pi = static_cast<f32>(HG_PI);
-            Quat id = quatAxisAngle({0, 0, 1}, 0.0f);
-            TEST(std::abs(id.r - 1.0f) < FLT_EPSILON);
-            Quat q90 = quatAxisAngle({0, 0, 1}, pi / 2.0f);
-            Vec3 r = vecRot3(q90, {1, 0, 0});
-            TEST(std::abs(r.x) < FLT_EPSILON);
-            TEST(std::abs(r.y - 1.0f) < FLT_EPSILON);
-            TEST(std::abs(r.z) < FLT_EPSILON);
-        }
-
-        // quatBetween
-        {
-            Quat id = quatBetween({1, 0, 0}, {1, 0, 0});
-            TEST(std::abs(id.r - 1.0f) < FLT_EPSILON);
-            Quat q = quatBetween({1, 0, 0}, {0, 1, 0});
-            Vec3 r = vecRot3(q, {1, 0, 0});
-            TEST(std::abs(r.x) < 1e-5f);
-            TEST(std::abs(r.y - 1.0f) < 1e-5f);
-            TEST(std::abs(r.z) < 1e-5f);
-        }
-
-        // matRot3 consistency with vecRot3
-        {
-            Quat q = quatAxisAngle({0, 0, 1}, static_cast<f32>(HG_PI) / 3.0f);
-            Vec3 v{1, 2, 3};
-            Vec3 rv = vecRot3(q, v);
-            Vec3 rm = matRot3(q, Mat3{1.0f}) * v;
-            TEST(vecEq3(rv, rm));
-        }
-    }
-
-    // Matrix construction
-    {
-        // matModel2D - identity
-        {
-            Mat4 m = matModel2D({0, 0, 0}, {1, 1}, 0);
-            TEST(m == Mat4{1.0f});
-        }
-
-        // matModel2D - translation
-        {
-            Mat4 m = matModel2D({10, 20, 0}, {1, 1}, 0);
-            TEST(m.w.x == 10 && m.w.y == 20);
-        }
-
-        // matModel2D - scale
-        {
-            Mat4 m = matModel2D({0, 0, 0}, {2, 3}, 0);
-            Vec4 scaled = m * Vec4{1, 1, 0, 1};
-            TEST(std::abs(scaled.x - 2.0f) < FLT_EPSILON);
-            TEST(std::abs(scaled.y - 3.0f) < FLT_EPSILON);
-        }
-
-        // matOrthographic
-        {
-            Mat4 p = matOrthographic(-1, 1, 1, -1, 0, 100);
-            Vec4 nc = p * Vec4{0, 0, 0, 1};
-            TEST(std::abs(nc.x) < FLT_EPSILON);
-            TEST(std::abs(nc.y) < FLT_EPSILON);
-            TEST(std::abs(nc.z) < FLT_EPSILON);
-            TEST(std::abs(nc.w - 1.0f) < FLT_EPSILON);
-        }
-    }
-
-    // Circle
-    {
-        Circle c{{0, 0}, 5};
-
-        // containsPointCircle
-        {
-            TEST(containsPointCircle({0, 0}, c));
-            TEST(containsPointCircle({3, 4}, c));
-            TEST(containsPointCircle({5, 0}, c));
-            TEST(!containsPointCircle({5.01f, 0}, c));
-        }
-
-        // Zero radius
-        {
-            Circle z{{0, 0}, 0};
-            TEST(containsPointCircle({0, 0}, z));
-            TEST(!containsPointCircle({0.01f, 0}, z));
-        }
-
-        // distPointCircle
-        {
-            TEST(std::abs(distPointCircle({0, 0}, c) - (-5.0f)) < FLT_EPSILON);
-            TEST(std::abs(distPointCircle({5, 0}, c)) < FLT_EPSILON);
-            TEST(std::abs(distPointCircle({10, 0}, c) - 5.0f) < FLT_EPSILON);
-        }
-
-        // closestPointCircle
-        {
-            Vec2 p = closestPointCircle({10, 0}, c);
-            TEST(std::abs(p.x - 5.0f) < FLT_EPSILON && std::abs(p.y) < FLT_EPSILON);
-        }
-
-        // intersectCircles / distCircles
-        {
-            Circle a{{0, 0}, 5};
-            Circle b{{8, 0}, 3};
-            TEST(intersectCircles(a, b));
-            Circle miss{{20, 0}, 1};
-            TEST(!intersectCircles(a, miss));
-            TEST(std::abs(distCircles(a, b)) < FLT_EPSILON);
-        }
-    }
-
-    // Rect
-    {
-        // rectEmpty
-        {
-            Rect r = rectEmpty();
-            TEST(!containsPointRect({0, 0}, r));
-        }
-
-        // rectAddPoint
-        {
-            Rect r = rectEmpty();
-            r = rectAddPoint(r, {2, 3});
-            TEST(containsPointRect({2, 3}, r));
-            r = rectAddPoint(r, {5, 7});
-            TEST(containsPointRect({3, 4}, r));
-        }
-
-        // Negative region
-        {
-            Rect r = rectEmpty();
-            r = rectAddPoint(r, {-2, -3});
-            r = rectAddPoint(r, {5, 5});
-            TEST(containsPointRect({0, 0}, r));
-            TEST(!containsPointRect({6, 0}, r));
-        }
-
-        // containsPointRect boundary
-        {
-            Rect r{{0, 0}, {10, 5}};
-            TEST(containsPointRect({0, 0}, r));
-            TEST(containsPointRect({10, 5}, r));
-            TEST(!containsPointRect({-0.01f, 0}, r));
-        }
-
-        // closestPointRect
-        {
-            Rect r{{0, 0}, {10, 10}};
-            Vec2 p1 = closestPointRect({-5, 5}, r);
-            TEST(p1.x == 0 && p1.y == 5);
-            Vec2 p2 = closestPointRect({15, 5}, r);
-            TEST(p2.x == 10 && p2.y == 5);
-            Vec2 p3 = closestPointRect({5, -3}, r);
-            TEST(p3.x == 5 && p3.y == 0);
-            Vec2 p4 = closestPointRect({5, 5}, r);
-            TEST(p4.x == 5 && p4.y == 5);
-        }
-
-        // intersectRects
-        {
-            Rect a{{0, 0}, {10, 10}};
-            Rect b{{5, 5}, {15, 15}};
-            TEST(intersectRects(a, b));
-            Rect c{{20, 20}, {30, 30}};
-            TEST(!intersectRects(a, c));
-        }
-
-        // intersectRectCircle
-        {
-            Rect r{{0, 0}, {10, 10}};
-            Circle c{{5, 5}, 3};
-            TEST(intersectRectCircle(r, c));
-            Circle far{{20, 20}, 1};
-            TEST(!intersectRectCircle(r, far));
-        }
-    }
-
-    // 2D intersections
-    {
-        // intersectRays2D
-        {
-            Ray2D a{{0, 0}, {1, 0}};
-            Ray2D b{{0, 0}, {0, 1}};
-            Maybe<Hit2D> hit = intersectRays2D(a, b);
-            TEST(hit.has);
-        }
-
-        // intersectRays2D - parallel
-        {
-            Ray2D a{{0, 0}, {1, 0}};
-            Ray2D b{{0, 1}, {1, 0}};
-            TEST(!intersectRays2D(a, b).has);
-        }
-
-        // intersectRayLine2D
-        {
-            Ray2D ray{{0, 0}, {1, 0}};
-            Line2D line{{5, -1}, {5, 1}};
-            Maybe<Hit2D> hit = intersectRayLine2D(ray, line);
-            TEST(hit.has);
-            if (hit.has)
-                TEST(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
-        }
-
-        // intersectRayLine2D - behind
-        {
-            Ray2D ray{{0, 0}, {1, 0}};
-            Line2D line{{-5, -1}, {-5, 1}};
-            TEST(!intersectRayLine2D(ray, line).has);
-        }
-
-        // intersectRayCircle
-        {
-            Ray2D ray{{0, 0}, {1, 0}};
-            Circle c{{10, 0}, 3};
-            Maybe<Hit2D> hit = intersectRayCircle(ray, c);
-            TEST(hit.has);
-            if (hit.has)
-                TEST(std::abs(hit.val.dist - 7.0f) < FLT_EPSILON);
-        }
-
-        // intersectRayCircle - miss
-        {
-            Ray2D ray{{0, 0}, {1, 0}};
-            Circle c{{10, 5}, 1};
-            TEST(!intersectRayCircle(ray, c).has);
-        }
-
-        // intersectRayRect
-        {
-            Ray2D ray{{-5, 5}, {1, 0}};
-            Rect r{{0, 0}, {10, 10}};
-            Maybe<Hit2D> hit = intersectRayRect(ray, r);
-            TEST(hit.has);
-        }
-
-        // intersectLines2D
-        {
-            Line2D a{{0, 0}, {10, 0}};
-            Line2D b{{5, -5}, {5, 5}};
-            TEST(intersectLines2D(a, b).has);
-        }
-
-        // intersectLines2D - parallel
-        {
-            Line2D a{{0, 0}, {10, 0}};
-            Line2D b{{0, 1}, {10, 1}};
-            TEST(!intersectLines2D(a, b).has);
-        }
-
-        // intersectLineCircle
-        {
-            Line2D line{{-10, 3}, {10, 3}};
-            Circle c{{0, 5}, 3};
-            TEST(intersectLineCircle(line, c).has);
-        }
-
-        // intersectLineRect
-        {
-            Line2D line{{-5, 5}, {15, 5}};
-            Rect r{{0, 0}, {10, 10}};
-            TEST(intersectLineRect(line, r).has);
-        }
-    }
-
-    // Sphere
-    {
-        Sphere s{{0, 0, 0}, 5};
-
-        // containsPointSphere
-        {
-            TEST(containsPointSphere({0, 0, 0}, s));
-            TEST(containsPointSphere({5, 0, 0}, s));
-            TEST(!containsPointSphere({5.01f, 0, 0}, s));
-        }
-
-        // distPointSphere
-        {
-            TEST(std::abs(distPointSphere({0, 0, 0}, s) - (-5.0f)) < FLT_EPSILON);
-            TEST(std::abs(distPointSphere({5, 0, 0}, s)) < FLT_EPSILON);
-        }
-
-        // closestPointSphere
-        {
-            Vec3 p = closestPointSphere({10, 0, 0}, s);
-            TEST(std::abs(p.x - 5.0f) < FLT_EPSILON);
-        }
-
-        // intersectSpheres / distSpheres
-        {
-            Sphere b{{8, 0, 0}, 3};
-            TEST(intersectSpheres(s, b));
-            Sphere miss{{20, 0, 0}, 1};
-            TEST(!intersectSpheres(s, miss));
-            TEST(std::abs(distSpheres(s, b)) < FLT_EPSILON);
-        }
-    }
-
-    // Box
-    {
-        // boxEmpty
-        {
-            Box b = boxEmpty();
-            TEST(!containsPointBox({0, 0, 0}, b));
-        }
-
-        // boxAddPoint
-        {
-            Box b = boxEmpty();
-            b = boxAddPoint(b, {1, 2, 3});
-            b = boxAddPoint(b, {4, 5, 6});
-            TEST(containsPointBox({2, 3, 4}, b));
-        }
-
-        // containsPointBox / closestPointBox
-        {
-            Box b{{0, 0, 0}, {10, 10, 10}};
-            TEST(containsPointBox({5, 5, 5}, b));
-            TEST(containsPointBox({0, 0, 0}, b));
-            TEST(containsPointBox({10, 10, 10}, b));
-            TEST(!containsPointBox({-0.01f, 5, 5}, b));
-            Vec3 p = closestPointBox({-5, 5, 5}, b);
-            TEST(p.x == 0 && p.y == 5 && p.z == 5);
-        }
-
-        // intersectBox
-        {
-            Box a{{0, 0, 0}, {10, 10, 10}};
-            Box b{{5, 5, 5}, {15, 15, 15}};
-            TEST(intersectBox(a, b));
-            Box c{{20, 20, 20}, {30, 30, 30}};
-            TEST(!intersectBox(a, c));
-        }
-
-        // intersectBoxSphere
-        {
-            Box b{{0, 0, 0}, {10, 10, 10}};
-            Sphere s{{5, 5, 5}, 3};
-            TEST(intersectBoxSphere(b, s));
-            Sphere far{{20, 20, 20}, 1};
-            TEST(!intersectBoxSphere(b, far));
-        }
-    }
-
-    // Plane
-    {
-        // planeFromPoint
-        {
-            Plane p = planeFromPoint({0, 5, 0}, {0, 1, 0});
-            TEST(vecEq3(p.normal, {0, 1, 0}));
-            TEST(std::abs(p.dist - 5.0f) < FLT_EPSILON);
-        }
-
-        // planeFromTri
-        {
-            Tri tri{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
-            Plane p = planeFromTri(tri);
-            TEST(std::abs(p.dist) < FLT_EPSILON);
-        }
-    }
-
-    // 3D intersections
-    {
-        // intersectRaySphere
-        {
-            Ray3D ray{{0, 0, 0}, {0, 0, 1}};
-            Sphere s{{0, 0, 10}, 3};
-            Maybe<Hit3D> hit = intersectRaySphere(ray, s);
-            TEST(hit.has);
-            if (hit.has)
-                TEST(std::abs(hit.val.dist - 7.0f) < FLT_EPSILON);
-        }
-
-        // intersectRayBox
-        {
-            Ray3D ray{{-5, 5, 5}, {1, 0, 0}};
-            Box b{{0, 0, 0}, {10, 10, 10}};
-            Maybe<Hit3D> hit = intersectRayBox(ray, b);
-            TEST(hit.has);
-        }
-
-        // intersectRayTri
-        {
-            Ray3D ray{{0, 0, -5}, {0, 0, 1}};
-            Tri tri{{-1, -1, 0}, {1, -1, 0}, {0, 1, 0}};
-            Maybe<Hit3D> hit = intersectRayTri(ray, tri);
-            TEST(hit.has);
-            if (hit.has)
-                TEST(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
-        }
-
-        // intersectRayPlane
-        {
-            Ray3D ray{{0, 0, -5}, {0, 0, 1}};
-            Plane p{{0, 0, 1}, 0};
-            Maybe<Hit3D> hit = intersectRayPlane(ray, p);
-            TEST(hit.has);
-            if (hit.has)
-                TEST(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
-        }
-
-        // intersectRayPlane - parallel
-        {
-            Ray3D ray{{0, 0, 0}, {1, 0, 0}};
-            Plane p{{0, 0, 1}, 10};
-            TEST(!intersectRayPlane(ray, p).has);
-        }
-
-        // intersectLineSphere
-        {
-            Line3D line{{-10, 3, 0}, {10, 3, 0}};
-            Sphere s{{0, 5, 0}, 3};
-            TEST(intersectLineSphere(line, s).has);
-        }
-
-        // intersectLineBox
-        {
-            Line3D line{{-5, 5, 5}, {15, 5, 5}};
-            Box b{{0, 0, 0}, {10, 10, 10}};
-            TEST(intersectLineBox(line, b).has);
-        }
-
-        // intersectLineTri
-        {
-            Line3D line{{0, 0, -5}, {0, 0, 5}};
-            Tri tri{{-1, -1, 0}, {1, -1, 0}, {0, 1, 0}};
-            TEST(intersectLineTri(line, tri).has);
-        }
-
-        // intersectLinePlane
-        {
-            Line3D line{{0, 0, -5}, {0, 0, 5}};
-            Plane p{{0, 0, 1}, 0};
-            Maybe<Hit3D> hit = intersectLinePlane(line, p);
-            TEST(hit.has);
-            if (hit.has)
-                TEST(std::abs(hit.val.dist - 0.5f) < FLT_EPSILON);
-        }
-
-        // intersectLinePlane - parallel
-        {
-            Line3D line{{0, 0, -5}, {1, 0, -5}};
-            Plane p{{0, 0, 1}, 0};
-            TEST(!intersectLinePlane(line, p).has);
-        }
-    }
-
-    // Noise
-    {
-        // Deterministic
-        {
-            TEST(noise(42, 100) == noise(42, 100));
-            TEST(noise2D(1, 2, 3) == noise2D(1, 2, 3));
-            TEST(noise3D(1, 2, 3, 4) == noise3D(1, 2, 3, 4));
-            TEST(noise4D(1, 2, 3, 4, 5) == noise4D(1, 2, 3, 4, 5));
-        }
-
-        // Likely different for different inputs
-        {
-            TEST(noise(42, 100) != noise(42, 101));
-        }
-
-        // noiseNorm range
-        {
-            f32 v = noiseNorm(42, 3.14f);
-            TEST(v >= 0.0f && v <= 1.0f);
-        }
-
-        // noiseVec1D range
-        {
-            f32 v = noiseVec1D(42, 3.14f);
-            TEST(v >= -1.0f && v <= 1.0f);
-        }
-
-        // noiseVec2D unit length
-        {
-            Vec2 v = noiseVec2D(42, {3.14f, 2.72f});
-            TEST(std::abs(vecLen2(v) - 1.0f) < FLT_EPSILON);
-        }
-    }
-
-    // ============================================================================
-    // Serialization
-    // ============================================================================
-    //
-    // Tests for the serialization API: serialWriter, serialReader,
-    // serialize primitives, serializeObject, binaryWriteSerial,
-    // binaryReadSerial, jsonWriteSerial.
-    //
-    // Functions covered:
-    // - serialWriter / serialReader
-    // - serializeNodeStart
-    // - serializeBegin / serializeEnd
-    // - serializeVoid (default T*)
-    // - serializeObject
-    // - serialize(bool*), integral T*, floating_point T*
-    // - serialize(Vec2/3/4*), serialize(Mat2/3/4*)
-    // - serialize(Complex*), serialize(Quat*)
-    // - serialize(String*), serialize(Binary*)
-    // - serialize(T (*arr)[N])
-    // - serialize(Array<T>*), serialize(Set<V>*), serialize(Map<K, V>*)
-    // - binaryWriteSerial / binaryReadSerial
-    // - jsonWriteSerial
-
-    // Primitives: bool, integer, floating-point
-    {
-        bool val = true;
-        bool copy = false;
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    {
-        i64 val = -1234567890123;
-        i64 copy = 0;
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    {
-        u32 val = 0xDEADBEEF;
-        u32 copy = 0;
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    {
-        f64 val = 3.14159265358979;
-        f64 copy = 0.0;
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    // Math types
-    {
-        Vec3 val{1.0f, 2.0f, 3.0f};
-        Vec3 copy{};
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    {
-        Mat4 val{1.0f};
-        Mat4 copy{};
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    {
-        Complex val{3.0f, 4.0f};
-        Complex copy{};
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    {
-        Quat val{0.707f, 0.0f, 0.707f, 0.0f};
-        Quat copy{};
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    // Nested serializeBegin/End
-    {
-        ArenaScope arena = getScratch();
-        i32 outer = 7;
-        i32 inner = 42;
-        i32 outerCopy = 0;
-        i32 innerCopy = 0;
-
-        Serializer w = serialWriter(arena);
-        serializeBegin(&w);
-        serialize(&w, &outer);
-        serializeBegin(&w);
-        serialize(&w, &inner);
-        serializeEnd(&w);
-        serializeEnd(&w);
-
-        Serializer r = serialReader(arena, w.current);
-        serializeBegin(&r);
-        serialize(&r, &outerCopy);
-        serializeBegin(&r);
-        serialize(&r, &innerCopy);
-        serializeEnd(&r);
-        serializeEnd(&r);
-
-        TEST(outerCopy == outer);
-        TEST(innerCopy == inner);
-    }
-
-    // serializeBegin with size parameter
-    {
-        ArenaScope arena = getScratch();
-        u32 childCount = 0;
-        u32 val = 99;
-        u32 copy = 0;
-
-        Serializer w = serialWriter(arena);
-        serializeBegin(&w);
-        serialize(&w, &val);
-        serializeEnd(&w);
-
-        Serializer r = serialReader(arena, w.current);
-        serializeBegin(&r, &childCount);
-        serialize(&r, &copy);
-        serializeEnd(&r);
-
-        TEST(childCount == 1);
-        TEST(copy == val);
-    }
-
-    // Composite struct via serializeObject
-    {
-        struct Data {
-            i64 a;
-            u16 b;
-            f32 c;
-            bool d;
-            String e;
-        };
-
-        auto serializeData = [](Serializer* s, Data* val)
-        {
-            serializeObject(s,
-                &val->a,
-                &val->b,
-                &val->c,
-                &val->d,
-                &val->e);
-        };
-
-        ArenaScope arena = getScratch();
-        Data val{};
-        val.a = -42;
-        val.b = 99;
-        val.c = 2.5f;
-        val.d = true;
-        val.e = String::create("composite");
-
-        Data copy{};
-        Serializer w = serialWriter(arena);
-        serializeData(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serializeData(&r, &copy);
-        TEST(copy.a == val.a);
-        TEST(copy.b == val.b);
-        TEST(copy.c == val.c);
-        TEST(copy.d == val.d);
-        TEST(copy.e == val.e);
-    }
-
-    // Lifecycle
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-
-        Lifecycle val{};
-        u64 savedId = val.id;
-
-        Lifecycle copy{};
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy.id == savedId);
-        TEST(copy.valid == true);
-    }
-
-    // C array
-    {
-        u32 val[4] = {10, 20, 30, 40};
-        u32 copy[4] = {};
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy[0] == 10);
-        TEST(copy[1] == 20);
-        TEST(copy[2] == 30);
-        TEST(copy[3] == 40);
-    }
-
-    // String
-    {
-        String val = String::create("hello world");
-        String copy{};
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy == val);
-    }
-
-    // Binary
-    {
-        u8 raw[8] = {0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE};
-        Binary val = Binary::create({raw, 8});
-        Binary copy{};
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy.size == val.size);
-        TEST(memcmp(copy.data, val.data, val.size) == 0);
-    }
-
-    // UniquePtr
-    {
-        UniquePtr<i32> val = makeUnique<i32>(42);
-        UniquePtr<i32> copy{};
-        ArenaScope arena = getScratch();
-
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(*copy == 42);
-        TEST(copy.ptr != val.ptr); // New allocation, not same pointer
-    }
-
-    // Array
-    {
-        ArenaScope arena = getScratch();
-        Array<u32> val{};
-        val.push(1);
-        val.push(2);
-        val.push(3);
-
-        Array<u32> copy{};
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy.count == val.count);
-        for (u32 i = 0; i < val.count; ++i)
-            TEST(copy[i] == val[i]);
-    }
-
-    // Set
-    {
-        ArenaScope arena = getScratch();
-        Set<u32> val{};
-        val.add(10);
-        val.add(20);
-        val.add(30);
-
-        Set<u32> copy{};
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy.count == val.count);
-        TEST(copy.has(10));
-        TEST(copy.has(20));
-        TEST(copy.has(30));
-    }
-
-    // Map
-    {
-        ArenaScope arena = getScratch();
-        Map<u32, f32> val{};
-        val.add(1, 1.5f);
-        val.add(2, 2.5f);
-        val.add(3, 3.5f);
-
-        Map<u32, f32> copy{};
-        Serializer w = serialWriter(arena);
-        serialize(&w, &val);
-        Serializer r = serialReader(arena, w.current);
-        serialize(&r, &copy);
-        TEST(copy.count == val.count);
-        TEST(*copy.get(1) == 1.5f);
-        TEST(*copy.get(2) == 2.5f);
-        TEST(*copy.get(3) == 3.5f);
-    }
-
-    // Binary format round-trip
-    {
-        struct Data {
-            i64 a;
-            f64 b;
-            bool c;
-        };
-
-        auto serializeData = [](Serializer* s, Data* val)
-        {
-            serializeObject(s,
-                &val->a,
-                &val->b,
-                &val->c);
-        };
-
-        ArenaScope arena = getScratch();
-        Data val{};
-        val.a = -999;
-        val.b = 3.14;
-        val.c = true;
-
-        Data copy{};
-        Serializer w = serialWriter(arena);
-        serializeData(&w, &val);
-        BinaryView bin = binaryWriteSerial(arena, &w);
-        Serializer r = binaryReadSerial(arena, bin);
-        serializeData(&r, &copy);
-        TEST(copy.a == val.a);
-        TEST(copy.b == val.b);
-        TEST(copy.c == val.c);
-    }
-
-    // Binary format round-trip for String
-    {
-        struct Data {
-            i64 a;
-            String b;
-        };
-
-        auto serializeData = [](Serializer* s, Data* val)
-        {
-            serializeObject(s,
-                &val->a,
-                &val->b);
-        };
-
-        ArenaScope arena = getScratch();
-        Data val{};
-        val.a = -999;
-        val.b = String::create("binary-test");
-
-        Data copy{};
-        Serializer w = serialWriter(arena);
-        serializeData(&w, &val);
-        BinaryView bin = binaryWriteSerial(arena, &w);
-        Serializer r = binaryReadSerial(arena, bin);
-        serializeData(&r, &copy);
-        TEST(copy.a == val.a);
-        TEST(copy.b == val.b);
-    }
-
-    // Binary format round-trip for Binary
-    {
-        struct Data {
-            i64 a;
-            Binary b;
-        };
-
-        auto serializeData = [](Serializer* s, Data* val)
-        {
-            serializeObject(s,
-                &val->a,
-                &val->b);
-        };
-
-        ArenaScope arena = getScratch();
-        u8 raw[4] = {0xDE, 0xAD, 0xBE, 0xEF};
-        Data val{};
-        val.a = -123;
-        val.b = Binary::create({raw, 4});
-
-        Data copy{};
-        Serializer w = serialWriter(arena);
-        serializeData(&w, &val);
-        BinaryView bin = binaryWriteSerial(arena, &w);
-        Serializer r = binaryReadSerial(arena, bin);
-        serializeData(&r, &copy);
-        TEST(copy.a == val.a);
-        TEST(copy.b.size == val.b.size);
-        TEST(memcmp(copy.b.data, val.b.data, val.b.size) == 0);
-    }
-
-    // ============================================================================
-    // cString
-    // ============================================================================
-    //
-    // Creates a null-terminated C string from a StringView by allocating
-    // from an arena.
-    //
-    // Functions covered:
-    // - cString(Arena*, StringView)
-
-    // Normal case
-    {
-        ArenaScope arena = getScratch();
-        char* c = cString(arena, "hello");
-        TEST(c != nullptr);
-        TEST(c[0] == 'h');
-        TEST(c[1] == 'e');
-        TEST(c[2] == 'l');
-        TEST(c[3] == 'l');
-        TEST(c[4] == 'o');
-        TEST(c[5] == '\0');
-    }
-
-    // Empty string
-    {
-        ArenaScope arena = getScratch();
-        char* c = cString(arena, "");
-        TEST(c != nullptr);
-        TEST(c[0] == '\0');
-    }
-
-    // String with null data and zero length
-    {
-        ArenaScope arena = getScratch();
-        StringView empty{};
-        char* c = cString(arena, empty);
-        TEST(c != nullptr);
-        TEST(c[0] == '\0');
-    }
-
-    // String with data and length (non-null-terminated input)
-    {
-        ArenaScope arena = getScratch();
-        StringView sv{"hello world", 5};
-        char* c = cString(arena, sv);
-        TEST(c != nullptr);
-        TEST(c[0] == 'h');
-        TEST(c[5] == '\0');
-        TEST(StringView{c} == "hello");
-    }
-
-    // ============================================================================
-    // StringBuilder
-    // ============================================================================
-    //
-    // StringBuilder is an arena-allocated mutable string. It supports insert,
-    // append, and prepend for both strings and individual characters.
-    // StringBuilder converts implicitly to StringView for comparison.
-    //
-    // Functions covered:
-    // - StringBuilder(Arena*, StringView) — construction
-    // - StringBuilder() — default construction (empty)
-    // - insert(u64 idx, StringView)
-    // - insert(u64 idx, char)
-    // - append(StringView)
-    // - append(char)
-    // - prepend(StringView)
-    // - prepend(char)
-    // - operator==(StringBuilder, StringBuilder)
-    // - operator==(StringBuilder, StringView)
-
-    // Default construction is empty
-    {
-        StringBuilder sb{};
-        TEST(sb.chars == nullptr);
-        TEST(sb.length == 0);
-        TEST(sb.arena == nullptr);
-    }
-
-    // Construction from a string
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello"};
-        TEST(sb.length == 5);
-        TEST(sb == "hello");
-    }
-
-    // Construction with an empty string defaults to empty builder
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena};
-        TEST(sb.length == 0);
-        TEST(sb == "");
-    }
-
-    // Construction from a StringView
-    {
-        ArenaScope arena = getScratch();
-        StringView sv{"world"};
-        StringBuilder sb{arena, sv};
-        TEST(sb == "world");
-    }
-
-    // Construction from partial StringView
-    {
-        ArenaScope arena = getScratch();
-        StringView sv{"hello world", 5};
-        StringBuilder sb{arena, sv};
-        TEST(sb == "hello");
-    }
-
-    // Append a string to a builder that already has content
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello"};
-        sb.append(" world");
-        TEST(sb == "hello world");
-    }
-
-    // Append a string to an empty builder
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena};
-        sb.append("hello");
-        TEST(sb == "hello");
-    }
-
-    // Append a char
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello"};
-        sb.append('!');
-        TEST(sb == "hello!");
-    }
-
-    // Append a char to an empty builder
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena};
-        sb.append('x');
-        TEST(sb == "x");
-    }
-
-    // Append multiple times (triggers reallocation)
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "a"};
-        sb.append("b");
-        sb.append("c");
-        sb.append("d");
-        sb.append("e");
-        TEST(sb == "abcde");
-    }
-
-    // Prepend a string
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "world"};
-        sb.prepend("hello ");
-        TEST(sb == "hello world");
-    }
-
-    // Prepend to an empty builder
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena};
-        sb.prepend("hello");
-        TEST(sb == "hello");
-    }
-
-    // Prepend a char
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "ello"};
-        sb.prepend('h');
-        TEST(sb == "hello");
-    }
-
-    // Insert at the beginning
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "world"};
-        sb.insert(0, "hello ");
-        TEST(sb == "hello world");
-    }
-
-    // Insert in the middle
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello world"};
-        sb.insert(5, ",");
-        TEST(sb == "hello, world");
-    }
-
-    // Insert at the end (same as append)
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello"};
-        sb.insert(5, " world");
-        TEST(sb == "hello world");
-    }
-
-    // Insert a char in the middle
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello world"};
-        sb.insert(5, ',');
-        TEST(sb == "hello, world");
-    }
-
-    // Insert with empty string (no-op)
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello"};
-        sb.insert(3, "");
-        TEST(sb == "hello");
-    }
-
-    // StringBuilder equality with another StringBuilder
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder a{arena, "hello"};
-        StringBuilder b{arena, "hello"};
-        StringBuilder c{arena, "world"};
-
-        TEST(a == b);
-        TEST(a != c);
-    }
-
-    // StringBuilder equality with StringView (via implicit conversion)
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello"};
-        TEST(sb == StringView{"hello"});
-    }
-
-    // Index operator
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena, "hello"};
-        TEST(sb[0] == 'h');
-        TEST(sb[4] == 'o');
-    }
-
-    // Large string with many appends
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb{arena};
-        for (u32 i = 0; i < 100; ++i)
-            sb.append('x');
-        TEST(sb.length == 100);
-        for (u32 i = 0; i < 100; ++i)
-            TEST(sb[i] == 'x');
-    }
-
-    // ============================================================================
-    // String
-    // ============================================================================
-    //
-    // String is a heap-allocated owning string (move-only). Created via
-    // String::create().
-    //
-    // Functions covered:
-    // - String::create(StringView)
-    // - ~String()
-    // - String(String&&) — move construct
-    // - String& operator=(String&&) — move assign
-    // - operator==(String, String)
-    // - operator!=(String, String)
-    // - operator StringView()
-    // - operator[]
-
-    // Create from a string literal
-    {
-        String s = String::create("hello");
-        TEST(s.length == 5);
-        TEST(s == "hello");
-        TEST(s[0] == 'h');
-        TEST(s[4] == 'o');
-    }
-
-    // Create from empty string
-    {
-        String s = String::create("");
-        TEST(s.length == 0);
-        TEST(s == "");
-    }
-
-    // Create from partial StringView
-    {
-        StringView sv{"hello world", 5};
-        String s = String::create(sv);
-        TEST(s == "hello");
-    }
-
-    // Move construct
-    {
-        String a = String::create("hello");
-        String b{std::move(a)};
-        TEST(a.chars == nullptr);
-        TEST(a.length == 0);
-        TEST(b == "hello");
-    }
-
-    // Move assign
-    {
-        String a = String::create("hello");
-        String b = String::create("world");
-        b = std::move(a);
-        TEST(a.chars == nullptr);
-        TEST(a.length == 0);
-        TEST(b == "hello");
-    }
-
-    // String equality
-    {
-        String a = String::create("hello");
-        String b = String::create("hello");
-        String c = String::create("world");
-        TEST(a == b);
-        TEST(!(a == c));
-        TEST(a != c);
-    }
-
-    // String equality with StringView (via implicit conversion)
-    {
-        String s = String::create("hello");
-        TEST(s == StringView{"hello"});
-    }
-
-    // String equality with const char* (via implicit conversion to StringView)
-    {
-        String s = String::create("hello");
-        TEST(s == "hello");
-    }
-
-    // ------------------------------------------------------------------
-    // String destruction & lifecycle
-    // ------------------------------------------------------------------
-    //
-    // ~String() calls heapFree(chars, length).  free(nullptr) is a no-op,
-    // so moved-from Strings (chars == nullptr) are safe to destroy.
-    // These tests verify no double-free, no leak, and correct ownership
-    // transfer across every code path.
-
-    // Create, move, destroy in order (ownership transfer)
-    {
-        String a = String::create("hello");
-        {
-            String b = std::move(a);
-            TEST(a.chars == nullptr);
-            TEST(b == "hello");
-        }
-        // b destroyed — frees "hello"
-        TEST(a.chars == nullptr);
-        // a destroyed — no-op (chars == nullptr)
-    }
-
-    // Chain of moves through multiple Strings
-    {
-        String a = String::create("alpha");
-        String b = String::create("beta");
-        String c = std::move(a);    // c owns "alpha", a is null
-        b = std::move(c);           // b frees "beta", takes "alpha", c is null
-        TEST(b == "alpha");
-        TEST(a.chars == nullptr);
-        TEST(c.chars == nullptr);
-        // b destroyed — frees "alpha"
-        // a,c destroyed — no-op
-    }
-
-    // Empty String create and move
-    {
-        String empty = String::create("");
-        TEST(empty == "");
-        String moved = std::move(empty);
-        TEST(empty.chars == nullptr);
-        TEST(moved == "");
-        // moved destroyed — frees (size 0 allocation if any)
-        // empty destroyed — no-op
-    }
-
-    // Move-assign onto self after a prior move (edge case: two moved-from Strings)
-    {
-        String a = String::create("hello");
-        String b = String::create("world");
-        a = std::move(b);  // a frees "hello", takes "world", b is null
-        TEST(a == "world");
-        TEST(b.chars == nullptr);
-        // Now assign b (moved-from) to a
-        b = std::move(a);  // b is null, so ~String() on b is no-op; b takes "world", a is null
-        TEST(b == "world");
-        TEST(a.chars == nullptr);
-        // b destroyed — frees "world"
-        // a destroyed — no-op
-    }
-
-    // ============================================================================
-    // isWhitespace / isNumeral
-    // ============================================================================
-    //
-    // Character classification functions.
-    //
-    // Functions covered:
-    // - isWhitespace(char)
-    // - isNumeral(char)
-
-    // isWhitespace: space
-    {
-        TEST(isWhitespace(' '));
-    }
-
-    // isWhitespace: tab
-    {
-        TEST(isWhitespace('\t'));
-    }
-
-    // isWhitespace: newline
-    {
-        TEST(isWhitespace('\n'));
-    }
-
-    // isWhitespace: carriage return
-    {
-        TEST(isWhitespace('\r'));
-    }
-
-    // isWhitespace: non-whitespace chars are false
-    {
-        TEST(!isWhitespace('a'));
-        TEST(!isWhitespace('0'));
-        TEST(!isWhitespace('.'));
-        TEST(!isWhitespace('\0'));
-        TEST(!isWhitespace('_'));
-    }
-
-    // isNumeral: digits 0-9
-    {
-        TEST(isNumeral('0'));
-        TEST(isNumeral('1'));
-        TEST(isNumeral('2'));
-        TEST(isNumeral('3'));
-        TEST(isNumeral('4'));
-        TEST(isNumeral('5'));
-        TEST(isNumeral('6'));
-        TEST(isNumeral('7'));
-        TEST(isNumeral('8'));
-        TEST(isNumeral('9'));
-    }
-
-    // isNumeral: non-digits
-    {
-        TEST(!isNumeral('a'));
-        TEST(!isNumeral('z'));
-        TEST(!isNumeral('A'));
-        TEST(!isNumeral('Z'));
-        TEST(!isNumeral('.'));
-        TEST(!isNumeral('-'));
-        TEST(!isNumeral('+'));
-        TEST(!isNumeral(' '));
-        TEST(!isNumeral('\0'));
-        TEST(!isNumeral('/'));  // before '0'
-        TEST(!isNumeral(':'));  // after '9'
-    }
-
-    // ============================================================================
-    // isInteger
-    // ============================================================================
-    //
-    // Checks whether a string is a valid base-10 integer, optionally with
-    // a leading + or - sign.
-    //
-    // Functions covered:
-    // - isInteger(StringView)
-
-    // Single digits
-    {
-        TEST(isInteger("0"));
-        TEST(isInteger("1"));
-        TEST(isInteger("2"));
-        TEST(isInteger("3"));
-        TEST(isInteger("4"));
-        TEST(isInteger("5"));
-        TEST(isInteger("6"));
-        TEST(isInteger("7"));
-        TEST(isInteger("8"));
-        TEST(isInteger("9"));
-    }
-
-    // Multi-digit numbers
-    {
-        TEST(isInteger("42"));
-        TEST(isInteger("100"));
-        TEST(isInteger("1234567890"));
-    }
-
-    // With leading sign
-    {
-        TEST(isInteger("+12"));
-        TEST(isInteger("-12"));
-        TEST(isInteger("+0"));
-        TEST(isInteger("-0"));
-    }
-
-    // Leading zeros
-    {
-        TEST(isInteger("00"));
-        TEST(isInteger("00042"));
-    }
-
-    // Empty string
-    {
-        TEST(!isInteger(""));
-    }
-
-    // Non-numeric characters
-    {
-        TEST(!isInteger("hello"));
-        TEST(!isInteger("12a"));
-        TEST(!isInteger("a12"));
-        TEST(!isInteger("1.0"));
-        TEST(!isInteger("--12"));
-        TEST(!isInteger("+-12"));
-        TEST(!isInteger("12-"));
-        TEST(!isInteger("12+"));
-    }
-
-    // Just a sign (no digits)
-    {
-        TEST(!isInteger("+"));
-        TEST(!isInteger("-"));
-    }
-
-    // ============================================================================
-    // isFloat
-    // ============================================================================
-    //
-    // Checks whether a string is a valid base-10 floating point number,
-    // optionally with decimal point, exponent (e), and trailing f suffix.
-    //
-    // Functions covered:
-    // - isFloat(StringView)
-
-    // Simple decimals
-    {
-        TEST(isFloat("0.0"));
-        TEST(isFloat("1.0"));
-        TEST(isFloat("2.5"));
-        TEST(isFloat("99.99"));
-    }
-
-    // Leading decimal point
-    {
-        TEST(isFloat(".1"));
-        TEST(isFloat(".5"));
-        TEST(isFloat(".12345"));
-    }
-
-    // Trailing decimal point
-    {
-        TEST(isFloat("1."));
-        TEST(isFloat("100."));
-    }
-
-    // With sign
-    {
-        TEST(isFloat("+1.0"));
-        TEST(isFloat("-1.0"));
-        TEST(isFloat("+.5"));
-        TEST(isFloat("-.5"));
-    }
-
-    // With exponent
-    {
-        TEST(isFloat("1e3"));
-        TEST(isFloat("1e+3"));
-        TEST(isFloat("1e-3"));
-        TEST(isFloat("1.5e3"));
-        TEST(isFloat(".5e3"));
-    }
-
-    // With f suffix
-    {
-        TEST(isFloat("1.0f"));
-        TEST(isFloat("+10.f"));
-        TEST(isFloat("-999.999f"));
-        TEST(isFloat("1e3f"));
-        TEST(isFloat("1.e3f"));
-        TEST(isFloat(".1e3"));
-    }
-
-    // Integer-only strings (no decimal or exponent) — isFloat returns true
-    // if there's a decimal or exponent, false for plain integers
-    {
-        TEST(!isFloat("1"));
-        TEST(!isFloat("42"));
-        TEST(!isFloat("+12"));
-        TEST(!isFloat("-12"));
-    }
-
-    // Empty string
-    {
-        TEST(!isFloat(""));
-    }
-
-    // Invalid strings
-    {
-        TEST(!isFloat("hello"));
-        TEST(!isFloat("1.0ff"));
-        TEST(!isFloat("1.0.0"));
-        TEST(!isFloat("1e3.0"));
-        TEST(!isFloat("--1.0"));
-        TEST(!isFloat("1ef"));
-        TEST(!isFloat("e1"));
-    }
-
-    // Just a decimal point
-    {
-        TEST(!isFloat("."));
-    }
-
-    // Just an exponent
-    {
-        TEST(!isFloat("e"));
-        TEST(!isFloat("e1"));
-    }
-
-    // ============================================================================
-    // stringToInteger
-    // ============================================================================
-    //
-    // Parses a base-10 integer string into an i64. Asserts the input is
-    // a valid integer (call isInteger first).
-    //
-    // Functions covered:
-    // - stringToInteger(StringView)
-
-    // Single digits
-    {
-        TEST(stringToInteger("0") == 0);
-        TEST(stringToInteger("1") == 1);
-        TEST(stringToInteger("2") == 2);
-        TEST(stringToInteger("3") == 3);
-        TEST(stringToInteger("4") == 4);
-        TEST(stringToInteger("5") == 5);
-        TEST(stringToInteger("6") == 6);
-        TEST(stringToInteger("7") == 7);
-        TEST(stringToInteger("8") == 8);
-        TEST(stringToInteger("9") == 9);
-    }
-
-    // Multi-digit
-    {
-        TEST(stringToInteger("42") == 42);
-        TEST(stringToInteger("100") == 100);
-        TEST(stringToInteger("1234567890") == 1234567890);
-    }
-
-    // With sign
-    {
-        TEST(stringToInteger("+12") == 12);
-        TEST(stringToInteger("-12") == -12);
-        TEST(stringToInteger("+0") == 0);
-        TEST(stringToInteger("-0") == 0);
-    }
-
-    // Leading zeros
-    {
-        TEST(stringToInteger("00") == 0);
-        TEST(stringToInteger("00042") == 42);
-    }
-
-    // Large values
-    {
-        TEST(stringToInteger("2147483647") == 2147483647);   // i32 max
-        TEST(stringToInteger("2147483648") == 2147483648);
-    }
-
-    // Negative large values
-    {
-        TEST(stringToInteger("-2147483648") == -2147483648);  // i32 min
-    }
-
-    // ============================================================================
-    // stringToFloat
-    // ============================================================================
-    //
-    // Parses a base-10 floating point string into an f64. Handles decimal
-    // points, exponents, signs, and f suffix.
-    //
-    // Functions covered:
-    // - stringToFloat(StringView)
-
-    // Basic decimals
-    {
-        TEST(std::abs(stringToFloat("0.0") - 0.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("1.0") - 1.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("2.5") - 2.5) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("99.99") - 99.99) <= 1e-10);
-    }
-
-    // Leading decimal
-    {
-        TEST(std::abs(stringToFloat(".1") - 0.1) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat(".5") - 0.5) <= FLT_EPSILON);
-    }
-
-    // Trailing decimal
-    {
-        TEST(std::abs(stringToFloat("1.") - 1.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("100.") - 100.0) <= FLT_EPSILON);
-    }
-
-    // With sign
-    {
-        TEST(std::abs(stringToFloat("+1.0") - 1.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("-1.0") + 1.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("+.5") - 0.5) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("-.5") + 0.5) <= FLT_EPSILON);
-    }
-
-    // With exponent
-    {
-        TEST(std::abs(stringToFloat("1e3") - 1000.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("1e+3") - 1000.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("1e-3") - 0.001) <= 1e-10);
-        TEST(std::abs(stringToFloat("1.5e3") - 1500.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat(".5e3") - 500.0) <= FLT_EPSILON);
-    }
-
-    // With f suffix
-    {
-        TEST(std::abs(stringToFloat("1.0f") - 1.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("+10.f") - 10.0) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("-999.999f") + 999.999) <= 1e-10);
-        TEST(std::abs(stringToFloat("1e3f") - 1000.0) <= FLT_EPSILON);
-    }
-
-    // Zero
-    {
-        TEST(std::abs(stringToFloat("0.0")) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat(".0")) <= FLT_EPSILON);
-        TEST(std::abs(stringToFloat("0.")) <= FLT_EPSILON);
-    }
-
-    // ============================================================================
-    // integerToString
-    // ============================================================================
-    //
-    // Formats an i64 into a base-10 string allocated from an arena.
-    //
-    // Functions covered:
-    // - integerToString(Arena*, i64)
-
-    // Zero
-    {
-        ArenaScope arena = getScratch();
-        StringBuilder sb = integerToString(arena, 0);
-        TEST(sb == "0");
-    }
-
-    // Positive single digit
-    {
-        ArenaScope arena = getScratch();
-        TEST(integerToString(arena, 1) == "1");
-        TEST(integerToString(arena, 9) == "9");
-    }
-
-    // Negative single digit
-    {
-        ArenaScope arena = getScratch();
-        TEST(integerToString(arena, -1) == "-1");
-        TEST(integerToString(arena, -9) == "-9");
-    }
-
-    // Multi-digit
-    {
-        ArenaScope arena = getScratch();
-        TEST(integerToString(arena, 42) == "42");
-        TEST(integerToString(arena, 100) == "100");
-        TEST(integerToString(arena, 1234567890) == "1234567890");
-    }
-
-    // Negative multi-digit
-    {
-        ArenaScope arena = getScratch();
-        TEST(integerToString(arena, -42) == "-42");
-        TEST(integerToString(arena, -1000000) == "-1000000");
-    }
-
-    // Large values (within f64 exact-representation range to avoid
-    // precision loss in the f64 division used by integerToString)
-    {
-        ArenaScope arena = getScratch();
-        TEST(integerToString(arena, 9000000000000000LL) == "9000000000000000");
-    }
-
-    // ============================================================================
-    // floatToString
-    // ============================================================================
-    //
-    // Formats an f64 into a base-10 string with a specified number of
-    // decimal places, allocated from an arena.
-    //
-    // Functions covered:
-    // - floatToString(Arena*, f64, u32 decimalCount)
-
-    // Zero
-    {
-        ArenaScope arena = getScratch();
-        TEST(floatToString(arena, 0.0, 1) == "0.0");
-    }
-
-    // Positive values with varying decimal places
-    {
-        ArenaScope arena = getScratch();
-        TEST(floatToString(arena, 1.0, 0) == "1.");
-        TEST(floatToString(arena, 2.0, 1) == "2.0");
-        TEST(floatToString(arena, 3.0, 2) == "3.00");
-        TEST(floatToString(arena, 4.0, 3) == "4.000");
-    }
-
-    // Negative values
-    {
-        ArenaScope arena = getScratch();
-        TEST(floatToString(arena, -1.0, 1) == "-1.0");
-        TEST(floatToString(arena, -2.0, 2) == "-2.00");
-    }
-
-    // Fractional values
-    {
-        ArenaScope arena = getScratch();
-        TEST(floatToString(arena, 0.5, 1) == "0.5");
-        TEST(floatToString(arena, 3.14, 2) == "3.14");
-        TEST(floatToString(arena, -0.5, 1) == "-0.5");
-    }
-
-    // Zero decimal places (zero case returns "0.0" regardless)
-    {
-        ArenaScope arena = getScratch();
-        TEST(floatToString(arena, 0.0, 0) == "0.0");
-        TEST(floatToString(arena, 100.0, 0) == "100.");
-    }
-
-    // ============================================================================
-    // BinaryBuilder
-    // ============================================================================
-    //
-    // BinaryBuilder is an arena-backed builder for binary data. Supports
-    // resize, append, overwrite, read, and implicit BinaryView conversion.
-    //
-    // Functions covered:
-    // - BinaryBuilder() — default
-    // - BinaryBuilder(Arena*, u64) — arena + optional initial size
-    // - operator BinaryView()
-    // - read(u64, void*, u64)
-    // - read<T>(u64)
-    // - resize(u64)
-    // - overwrite(u64, const void*, u64)
-    // - overwrite<T>(u64, const T&)
-    // - append(const void*, u64)
-    // - append<T>(const T&)
-
-    // Default-constructed builder has null arena
-    {
-        BinaryBuilder bb;
-        TEST(bb.arena == nullptr);
-        TEST(bb.data == nullptr);
-        TEST(bb.size == 0);
-    }
-
-    // Create with arena and initial size
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena, 8};
-        TEST(bb.arena == arena);
-        TEST(bb.data != nullptr);
-        TEST(bb.size == 8);
-    }
-
-    // Create with arena and zero size
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena, 0};
-        TEST(bb.arena == arena);
-        TEST(bb.data != nullptr); // alloc(0,1) returns a valid pointer
-        TEST(bb.size == 0);
-    }
-
-    // resize grows the builder
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena, 4};
-        bb.resize(8);
-        TEST(bb.size == 8);
-    }
-
-    // append raw data
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena};
-        u32 val = 42;
-        bb.append(&val, sizeof(val));
-        TEST(bb.size == sizeof(val));
-        u32 result = bb.read<u32>(0);
-        TEST(result == 42);
-    }
-
-    // append<T> typed data
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena};
-        u32 val = 0xDEADBEEF;
-        bb.append(val);
-        TEST(bb.size == sizeof(val));
-        u32 result = bb.read<u32>(0);
-        TEST(result == 0xDEADBEEF);
-    }
-
-    // overwrite existing data
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena, 4};
-        u32 val = 123;
-        bb.overwrite(0, &val, sizeof(val));
-        u32 result = bb.read<u32>(0);
-        TEST(result == 123);
-    }
-
-    // overwrite<T> typed data
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena, 4};
-        bb.overwrite(0, static_cast<u32>(789));
-        u32 result = bb.read<u32>(0);
-        TEST(result == 789);
-    }
-
-    // Read raw data
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena, 4};
-        bb.overwrite(0, static_cast<u32>(0xAABBCCDD));
-        u32 result = 0;
-        bb.read(0, &result, sizeof(result));
-        TEST(result == 0xAABBCCDD);
-    }
-
-    // Implicit conversion to BinaryView
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena, 4};
-        BinaryView bv = bb;
-        TEST(bv.data == bb.data);
-        TEST(bv.size == bb.size);
-    }
-
-    // Append multiple values
-    {
-        ArenaScope arena = getScratch();
-        BinaryBuilder bb{arena};
-        u8 a = 0xAA;
-        u8 b = 0xBB;
-        bb.append(a);
-        bb.append(b);
-        TEST(bb.size == 2);
-        u8 ra = bb.read<u8>(0);
-        u8 rb = bb.read<u8>(1);
-        TEST(ra == 0xAA);
-        TEST(rb == 0xBB);
-    }
-
-    // ============================================================================
-    // Binary
-    // ============================================================================
-    //
-    // Binary is an owning, heap-allocated, move-only binary data block.
-    //
-    // Functions covered:
-    // - Binary() — default
-    // - Binary::create(BinaryView) — factory
-    // - ~Binary() — destructor
-    // - Binary(Binary&&) — move construct
-    // - Binary& operator=(Binary&&) — move assign
-    // - read(u64, void*, u64)
-    // - read<T>(u64)
-    // - operator BinaryView()
-
-    // Default-constructed Binary is empty
-    {
-        Binary b;
-        TEST(b.data == nullptr);
-        TEST(b.size == 0);
-    }
-
-    // Create from BinaryView
-    {
-        u32 val = 42;
-        BinaryView bv{&val, sizeof(val)};
-        Binary b = Binary::create(bv);
-        TEST(b.size == sizeof(val));
-        u32 result = b.read<u32>(0);
-        TEST(result == 42);
-    }
-
-    // Create from empty BinaryView
-    {
-        BinaryView bv{};
-        Binary b = Binary::create(bv);
-        TEST(b.size == 0);
-        // data may be non-null (heapAlloc(0,1) returns valid pointer)
-    }
-
-    // Move construct
-    {
-        u32 val = 42;
-        BinaryView bv{&val, sizeof(val)};
-        Binary a = Binary::create(bv);
-        Binary b = std::move(a);
-        TEST(a.data == nullptr);
-        TEST(a.size == 0);
-        TEST(b.size == sizeof(val));
-        u32 result = b.read<u32>(0);
-        TEST(result == 42);
-    }
-
-    // Move assign
-    {
-        u32 val1 = 42;
-        u32 val2 = 99;
-        BinaryView bv1{&val1, sizeof(val1)};
-        BinaryView bv2{&val2, sizeof(val2)};
-        Binary a = Binary::create(bv1);
-        Binary b = Binary::create(bv2);
-        b = std::move(a);
-        TEST(a.data == nullptr);
-        TEST(a.size == 0);
-        TEST(b.size == sizeof(val1));
-        u32 result = b.read<u32>(0);
-        TEST(result == 42);
-    }
-
-    // Implicit conversion to BinaryView
-    {
-        u32 val = 0xCAFEBABE;
-        BinaryView bv{&val, sizeof(val)};
-        Binary b = Binary::create(bv);
-        BinaryView bv2 = b;
-        TEST(bv2.size == b.size);
-        u32 result = bv2.read<u32>(0);
-        TEST(result == 0xCAFEBABE);
-    }
-
-    // Create, scope-exit destroys (no double-free crash)
-    {
-        u32 val = 12345;
-        BinaryView bv{&val, sizeof(val)};
-        Binary b = Binary::create(bv);
-        TEST(b.read<u32>(0) == 12345);
-    }
-    // Allocate after — if heap is corrupt, we crash
-    {
-        Binary b2 = Binary::create(BinaryView{});
-        TEST(b2.size == 0);
     }
 
 //     // // Array

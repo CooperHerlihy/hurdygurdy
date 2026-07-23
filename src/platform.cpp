@@ -742,11 +742,6 @@ struct VulkanState {
 
     HandlePool descriptorPools[DescriptorType_count];
 
-    Pool<GpuBufferData> buffers{};
-    Pool<GpuImageData> images{};
-    Pool<GpuViewData> views{};
-    Pool<GpuPipelineData> pipelines{};
-
     Map<SamplerInfo, VkSampler> samplers;
 
     Frame* frames = nullptr;
@@ -1252,11 +1247,6 @@ void internal::deinitGpu()
     });
     vk.samplers = {};
 
-    vk.pipelines = {};
-    vk.views = {};
-    vk.images = {};
-    vk.buffers = {};
-
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
         handlePoolDestroy(&vk.descriptorPools[i]);
@@ -1393,11 +1383,8 @@ static void descriptorDestroy(GpuDescriptor desc, DescriptorType type)
         handlePoolFree(&vk.descriptorPools[type], desc);
 }
 
-GpuBuffer::GpuBuffer(
-    u64 size,
-    GpuBufferUsageFlags usageFlags,
-    GpuMemoryUsage memoryUsage)
-    : data{vk.buffers.alloc()}
+GpuBuffer::GpuBuffer(u64 size, GpuBufferUsageFlags usageFlags, GpuMemoryUsage memoryUsage)
+    : data{makeUnique<GpuBufferData>()}
 {
     HG_ASSERT(size > 0);
     HG_ASSERT(usageFlags != 0);
@@ -1451,9 +1438,12 @@ GpuBuffer::~GpuBuffer() noexcept
         descriptorDestroy(data->storageDesc, DescriptorType_storageBuffer);
         descriptorDestroy(data->uniformDesc, DescriptorType_uniformBuffer);
         vmaDestroyBuffer(vk.vma, data->buffer, data->alloc);
-        vk.buffers.free(data);
     }
 }
+
+GpuBuffer::GpuBuffer() noexcept = default;
+GpuBuffer::GpuBuffer(GpuBuffer&&) noexcept = default;
+GpuBuffer& GpuBuffer::operator=(GpuBuffer&&) noexcept = default;
 
 u32 GpuBuffer::uniformDescriptor()
 {
@@ -1537,18 +1527,17 @@ void GpuBuffer::read(void* dst, u64 offset, u64 size)
 }
 
 GpuImage::GpuImage(u32 width, u32 height, Format format, GpuImageUsageFlags usage)
-    : GpuImage{}
 {
     GpuImageCreateInfo create{};
     create.width = width;
     create.height = height;
     create.format = format;
     create.usage = usage;
-    *this = GpuImage{create};
+    data = GpuImage{create}.data;
 }
 
 GpuImage::GpuImage(const GpuImageCreateInfo& create)
-    : data{vk.images.alloc()}
+    : data{makeUnique<GpuImageData>()}
 {
     HG_ASSERT(create.format != Format_undefined);
     HG_ASSERT(create.usage != 0);
@@ -1594,9 +1583,12 @@ GpuImage::~GpuImage()
     if (data != nullptr)
     {
         vmaDestroyImage(vk.vma, data->image, data->alloc);
-        vk.images.free(data);
     }
 }
+
+GpuImage::GpuImage() noexcept = default;
+GpuImage::GpuImage(GpuImage&&) noexcept = default;
+GpuImage& GpuImage::operator=(GpuImage&&) noexcept = default;
 
 u32 GpuImage::width() const
 {
@@ -1667,7 +1659,7 @@ GpuView::GpuView(
 }
 
 GpuView::GpuView(const GpuViewCreateInfo& config)
-    : data{vk.views.alloc()}
+    : data{makeUnique<GpuViewData>()}
 {
     HG_ASSERT(config.aspectFlags != 0);
 
@@ -1722,9 +1714,12 @@ GpuView::~GpuView() noexcept
         descriptorDestroy(data->storageDesc, DescriptorType_storageImage);
         descriptorDestroy(data->samplerDesc, DescriptorType_combinedImageSampler);
         vkDestroyImageView(vk.device, data->view, nullptr);
-        vk.views.free(data);
     }
 }
+
+GpuView::GpuView() noexcept = default;
+GpuView::GpuView(GpuView&&) noexcept = default;
+GpuView& GpuView::operator=(GpuView&&) noexcept = default;
 
 u32 GpuView::width() const
 {
@@ -2121,7 +2116,7 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
 }
 
 GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
-    : data{vk.pipelines.alloc()}
+    : data{makeUnique<GpuPipelineData>()}
 {
     HG_ASSERT(config.vertexShader.data != nullptr);
     HG_ASSERT(config.fragmentShader.data != nullptr);
@@ -2293,7 +2288,7 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
 }
 
 GpuPipeline::GpuPipeline(const GpuComputePipelineCreateInfo& config)
-    : data{vk.pipelines.alloc()}
+    : data{makeUnique<GpuPipelineData>()}
 {
     HG_ASSERT(config.shaderCode.data != nullptr);
     HG_ASSERT(config.shaderCode.count > 0);
@@ -2340,9 +2335,12 @@ GpuPipeline::~GpuPipeline()
     {
         vkDestroyPipeline(vk.device, data->pipeline, nullptr);
         vkDestroyPipelineLayout(vk.device, data->layout, nullptr);
-        vk.pipelines.free(data);
     }
 }
+
+GpuPipeline::GpuPipeline() noexcept = default;
+GpuPipeline::GpuPipeline(GpuPipeline&&) noexcept = default;
+GpuPipeline& GpuPipeline::operator=(GpuPipeline&&) noexcept = default;
 
 GpuCmd* gpuCmdBegin()
 {
@@ -3221,7 +3219,8 @@ static void resizeWindowSwapchain(WindowData* window)
 
         for (u32 i = 0; i < window->images.count; ++i)
         {
-            window->images[i].data = vk.images.alloc();
+            if (window->images[i].data == nullptr)
+                window->images[i].data = makeUnique<GpuImageData>();
             window->images[i].data->image = swapImages[i];
             window->images[i].data->dimensions = 2;
             window->images[i].data->format = window->format;
@@ -3239,7 +3238,8 @@ static void resizeWindowSwapchain(WindowData* window)
             viewInfo.format = formatToVk(window->format);
             viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-            window->views[i].data = vk.views.alloc();
+            if (window->views[i].data == nullptr)
+                window->views[i].data = makeUnique<GpuViewData>();
 
             [[maybe_unused]]
             VkResult viewResult = vkCreateImageView(vk.device, &viewInfo, nullptr, &window->views[i].data->view);

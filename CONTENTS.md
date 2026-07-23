@@ -39,14 +39,6 @@ Use `grep` to find specific symbols.
     - Fence
     - thread pool
     - parallel for
-- GPU
-    - Format enum
-    - GpuBuffer
-    - GpuImage
-    - GpuView
-    - GpuPipeline
-    - GpuCmd (command buffer)
-    - barriers and passes
 - Math
     - constants and util functions
     - Vec2/3/4
@@ -124,6 +116,14 @@ Use `grep` to find specific symbols.
 - Dynamic Library
 - TODO: Process
 - TODO: Console
+- GPU
+    - Format enum
+    - GpuBuffer
+    - GpuImage
+    - GpuView
+    - GpuPipeline
+    - GpuCmd (command buffer)
+    - barriers and passes
 - Windowing & Input
     - state queries
     - event queue
