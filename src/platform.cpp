@@ -4034,7 +4034,7 @@ struct VulkanFuncs {
 
 static VulkanFuncs vulkanFuncs{};
 
-static Library* libvulkan = nullptr;
+static Library libvulkan{};
 
 #define HG_LOAD_VULKAN_FUNC(name) \
     hg::vulkanFuncs. name = (PFN_##name)hg::vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
@@ -4045,21 +4045,21 @@ static Library* libvulkan = nullptr;
 
 static bool loadVulkan()
 {
-    libvulkan = libraryLoad(
+    Maybe<Library> lib = loadDynamicLibrary(
 #if defined(HG_PLATFORM_LINUX)
         "libvulkan.so.1"
 #elif defined(HG_PLATFORM_WINDOWS)
         "vulkan-1.dll"
 #endif
     );
-
-    if (libvulkan == nullptr)
+    if (!lib.has)
     {
         setError("Could not load vulkan");
         return false;
     }
+    libvulkan = std::move(*lib);
 
-    *(void**)&hg::vulkanFuncs.vkGetInstanceProcAddr = libraryFindFunction(libvulkan, "vkGetInstanceProcAddr");
+    *(void**)&hg::vulkanFuncs.vkGetInstanceProcAddr = libvulkan.findFunction( "vkGetInstanceProcAddr").orElse(nullptr);
     if (hg::vulkanFuncs.vkGetInstanceProcAddr == nullptr)
     {
         setError("Could not load vkGetInstanceProcAddr\n");
@@ -4075,11 +4075,7 @@ static bool loadVulkan()
 
 static void unloadVulkan()
 {
-    if (libvulkan != nullptr)
-    {
-        libraryUnload(libvulkan);
-        libvulkan = nullptr;
-    }
+    libvulkan = {};
 }
 
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
@@ -5536,34 +5532,43 @@ namespace hg {
 
 #include <dlfcn.h>
 
-Library* libraryLoad(StringView path)
+Maybe<Library> loadDynamicLibrary(StringView path)
 {
     ArenaScope scratch = getScratch();
 
     char* cstr = cString(scratch, path);
 
-    Library* lib = static_cast<Library*>(dlopen(cstr, RTLD_LAZY));
+    void* lib = dlopen(cstr, RTLD_LAZY);
     if (lib == nullptr)
+    {
         setError("Could not load dynamic library \"%s\": %s", cstr, dlerror());
+        return none<Library>();
+    }
 
-    return lib;
+    Maybe<Library> ret = some<Library>();
+    ret->lib = lib;
+    return ret;
 }
 
-void libraryUnload(Library* lib)
+Library::~Library() noexcept
 {
     if (lib != nullptr)
         dlclose(lib);
 }
 
-void* libraryFindFunction(Library* lib, StringView symbol)
+Maybe<void*> Library::findFunction(StringView name)
 {
-    char* cstr = cString(getScratch(), symbol);
+    ArenaScope scratch = getScratch();
+    char* cstr = cString(scratch, name);
 
     void* fn = dlsym(lib, cstr);
     if (fn == nullptr)
+    {
         setError("Could not load function symbol \"%s\": %s", cstr, dlerror());
+        return none<void*>();
+    }
 
-    return fn;
+    return some<void*>(fn);
 }
 
 #elif defined(HG_PLATFORM_WINDOWS)
@@ -5571,34 +5576,42 @@ void* libraryFindFunction(Library* lib, StringView symbol)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-Library* libraryLoad(StringView path)
+Maybe<Library> loadDynamicLibrary(StringView path)
 {
     ArenaScope scratch = getScratch();
     char* cstr = cString(scratch, path);
 
-    Library* lib = reinterpret_cast<Library*>(LoadLibraryA(cstr));
+    void* lib = static_cast<void*>(LoadLibraryA(cstr));
     if (lib == nullptr)
+    {
         setError("Could not load dynamic library \"%s\"", cstr);
+        return none<Library>();
+    }
 
+    Maybe<Library> ret = some<Library>();
+    ret->lib = lib;
     return lib;
 }
 
-void libraryUnload(Library* lib)
+Library::~Library() noexcept
 {
     if (lib != nullptr)
-        FreeLibrary(reinterpret_cast<HMODULE>(lib));
+        FreeLibrary(static_cast<HMODULE>(lib));
 }
 
-void* libraryFindFunction(Library* lib, StringView symbol)
+Maybe<void*> Library::findFunction(StringView name)
 {
     ArenaScope scratch = getScratch();
-    char* cstr = cString(scratch, symbol);
+    char* cstr = cString(scratch, name);
 
     void* fn = GetProcAddress(reinterpret_cast<HMODULE>(lib), cstr);
     if (fn == nullptr)
+    {
         setError("Could not load function symbol \"%s\"", cstr);
+        return none<void*>();
+    }
 
-    return fn;
+    return some<void*>(fn);
 }
 
 #endif

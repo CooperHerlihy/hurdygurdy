@@ -1059,6 +1059,24 @@ struct Maybe
     }
 
     /**
+     * Dereference
+     */
+    T& operator*()
+    {
+        HG_ASSERT(has);
+        return val;
+    }
+
+    /**
+     * Dereference
+     */
+    T* operator->()
+    {
+        HG_ASSERT(has);
+        return &val;
+    }
+
+    /**
      * Return the value, or a default value if it does not exist
      */
     T orElse(T defaultVal);
@@ -6048,32 +6066,55 @@ void perfLog(StringView title, const PerfStats* stats, PerfScale scale);
 /**
  * A dynamically loaded library
  */
-struct Library;
+struct Library {
+    /**
+     * The library data
+     */
+    void* lib = nullptr;
+
+    /**
+     * Construct empty
+     */
+    Library() noexcept = default;
+
+    /**
+     * Unload the library
+     */
+    ~Library() noexcept;
+
+    /**
+     * Find a function pointer in the library
+     */
+    Maybe<void*> findFunction(StringView name);
+
+    /**
+     * Move construct
+     */
+    Library(Library&& other) noexcept
+        : lib{std::exchange(other.lib, nullptr)}
+    {}
+
+    /**
+     * Move assign
+     */
+    Library& operator=(Library&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~Library();
+            new (this) Library{std::move(other)};
+        }
+        return *this;
+    }
+
+    Library(const Library&) = delete;
+    Library& operator=(const Library&) = delete;
+};
 
 /**
  * Load a dynamic library
- *
- * Returns
- * - The loaded library, or nullptr on failure
  */
-Library* libraryLoad(StringView path);
-
-/**
- * Unload a dynamic library
- */
-void libraryUnload(Library* lib);
-
-/**
- * Find a function from a dynamic library
- *
- * Parameters
- * - lib The dynamic library to load from
- * - path The symbol of the function to load
- *
- * Returns
- * - A function pointer to the found symbol, or nullptr not found
- */
-void* libraryFindFunction(Library* lib, StringView symbol);
+Maybe<Library> loadDynamicLibrary(StringView path);
 
 // ============================================================================
 // GPU
