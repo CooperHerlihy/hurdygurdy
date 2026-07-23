@@ -91,6 +91,12 @@ set(SHADERS
     test_uniform.vert
     test_uniform.frag
     test_storage_img.comp
+    test_depth.vert
+    test_depth.frag
+    test_instance.vert
+    test_instance.frag
+    test_blur.comp
+    test_invert.frag
 )
 
 set(SHADER_HEADERS)
