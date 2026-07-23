@@ -72,10 +72,6 @@ Use `grep` to find specific symbols.
     - TODO: gradient noise
     - true random
     - random number generator
-- Serialization
-    - Serializer
-    - binary format
-    - TODO: text format
 - Strings
     - cString
     - StringBuilder
@@ -101,7 +97,6 @@ Use `grep` to find specific symbols.
     - Pool (allocator)
     - HandlePool
 - TODO: Algorithms ???
-- TODO: JSON
 - Asset System
     - Asset
     - Asset Manager
@@ -109,6 +104,11 @@ Use `grep` to find specific symbols.
     - unload impl template
     - TODO: streaming ???
     - TODO: dependency tracking ???
+- Serialization
+    - Serializer
+    - binary format
+    - TODO: text format
+- TODO: JSON
 - Timing
     - Clock
     - Perf

@@ -1771,6 +1771,489 @@ u64 rngNext64(Rng* rng)
     return (static_cast<u64>(rngNext(rng)) << 32) | static_cast<u64>(rngNext(rng));
 }
 
+char* cString(Arena* arena, StringView str)
+{
+    HG_ASSERT(arena != nullptr);
+    if (str.length > 0)
+        HG_ASSERT(str.chars != nullptr);
+
+    char* cStr = arena->alloc<char>(str.length + 1);
+    if (str.length > 0)
+        memcpy(cStr, str.chars, str.length);
+    cStr[str.length] = 0;
+    return cStr;
+}
+
+void StringBuilder::insert(u64 idx, StringView src)
+{
+    HG_ASSERT(arena != nullptr);
+    HG_ASSERT(idx <= length);
+    if (src.length > 0)
+        HG_ASSERT(src.chars != nullptr);
+
+    u64 newLength = length + src.length;
+
+    if (!arena->extend(chars, length, newLength))
+    {
+        char* newChars = arena->alloc<char>(newLength);
+        if (length > 0)
+            memcpy(newChars, chars, length);
+        chars = newChars;
+    }
+
+    if (idx != length)
+        memmove(&chars[idx + src.length], &chars[idx], length - idx);
+    memcpy(&chars[idx], src.chars, src.length);
+
+    length = newLength;
+}
+
+String String::create(StringView data)
+{
+    String str;
+    str.chars = heapAlloc<char>(data.length);
+    str.length = data.length;
+    memcpy(str.chars, data.chars, data.length);
+    return str;
+}
+
+String::~String() noexcept
+{
+    if (chars != nullptr)
+        heapFree(chars, length);
+}
+
+bool isWhitespace(char c)
+{
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+bool isNumeral(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
+bool isInteger(StringView str)
+{
+    if (str.length == 0)
+        return false;
+
+    u64 head = 0;
+    if (!isNumeral(str[head]) && str[head] != '+' && str[head] != '-')
+        return false;
+
+    if (str[head] == '+' || str[head] == '-')
+    {
+        ++head;
+        if (head >= str.length)
+            return false;
+    }
+
+    while (head < str.length)
+    {
+        if (!isNumeral(str[head]))
+            return false;
+        ++head;
+    }
+    return true;
+}
+
+bool isFloat(StringView str)
+{
+    if (str.length == 0)
+        return false;
+
+    bool hasDecimal = false;
+    bool hasExponent = false;
+    bool hasDigit = false;
+
+    u64 head = 0;
+
+    if (!isNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
+        return false;
+
+    if (isNumeral(str[head]))
+        hasDigit = true;
+
+    if (str[head] == '.')
+        hasDecimal = true;
+
+    ++head;
+    while (head < str.length)
+    {
+        if (isNumeral(str[head]))
+        {
+            hasDigit = true;
+            ++head;
+            continue;
+        }
+
+        if (str[head] == '.' && !hasDecimal && !hasExponent)
+        {
+            hasDecimal = true;
+            ++head;
+            continue;
+        }
+
+        if (str[head] == 'e' && !hasExponent)
+        {
+            hasExponent = true;
+            ++head;
+            if (isNumeral(str[head]) || str[head] == '+' || str[head] == '-')
+            {
+                ++head;
+                continue;
+            }
+            return false;
+        }
+
+        if (str[head] == 'f' && head == str.length - 1)
+            break;
+
+        return false;
+    }
+
+    return hasDigit && (hasDecimal || hasExponent);
+}
+
+i64 stringToInteger(StringView str)
+{
+    HG_ASSERT(isInteger(str));
+
+    i64 power = 1;
+    i64 ret = 0;
+
+    u64 head = str.length - 1;
+    while (head > 0)
+    {
+            ret += static_cast<i64>(str[head] - '0') * power;
+        power *= 10;
+        --head;
+    }
+
+    if (str[head] != '+')
+    {
+        if (str[head] == '-')
+            ret *= -1;
+        else
+        ret += static_cast<i64>(str[head] - '0') * power;
+    }
+
+    return ret;
+}
+
+f64 stringToFloat(StringView str)
+{
+    HG_ASSERT(isFloat(str));
+
+    f64 ret = 0.0;
+    u64 head = 0;
+
+    bool isNegative = str[head] == '-';
+    if (isNegative || str[head] == '+')
+        ++head;
+
+    if (isNumeral(str[head]))
+    {
+        u64 intPartBegin = head;
+        while (head < str.length && str[head] != '.' && str[head] != 'e')
+        {
+            ++head;
+        }
+        ret += static_cast<f64>(stringToInteger({&str[intPartBegin], &str[head]}));
+    }
+
+    if (head < str.length && str[head] == '.')
+    {
+        ++head;
+
+        f64 power = 0.1;
+        while (head < str.length && isNumeral(str[head]))
+        {
+            ret += static_cast<f64>(str[head] - '0') * power;
+            power *= 0.1;
+            ++head;
+        }
+    }
+
+    if (head < str.length && str[head] == 'e')
+    {
+        ++head;
+
+        bool expIsNegative = str[head] == '-';
+        if (expIsNegative || str[head] == '+')
+            ++head;
+
+        u64 expBegin = head;
+        while (head < str.length && isNumeral(str[head]))
+        {
+            ++head;
+        }
+
+        i64 exp = stringToInteger({&str[expBegin], str.chars + head});
+        if (exp != 0)
+        {
+            if (expIsNegative)
+            {
+                for (i64 i = 0; i < exp; ++i)
+                {
+                    ret *= 0.1;
+                }
+            } else {
+                for (i64 i = 0; i < exp; ++i)
+                {
+                    ret *= 10.0;
+                }
+            }
+        } else {
+            ret = 1.0;
+        }
+    }
+
+    if (isNegative)
+        ret *= -1.0;
+
+    return ret;
+}
+
+StringBuilder integerToString(Arena* arena, i64 num)
+{
+    HG_ASSERT(arena != nullptr);
+
+    ArenaScope scratch = getScratch(&arena, 1);
+
+    if (num == 0)
+        return {arena, "0"};
+
+    bool isNegative = num < 0;
+    u64 unum = static_cast<u64>(std::abs(num));
+
+    StringBuilder reverse{scratch};
+    while (unum != 0)
+    {
+        u64 digit = unum % 10;
+        unum = static_cast<u64>(static_cast<f64>(unum) / 10.0);
+        reverse.append('0' + static_cast<char>(digit));
+    }
+
+    StringBuilder ret{arena};
+    if (isNegative)
+        ret.append('-');
+    for (u64 i = reverse.length - 1; i < reverse.length; --i)
+    {
+        ret.append(reverse[i]);
+    }
+    return ret;
+}
+
+StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
+{
+    HG_ASSERT(arena != nullptr);
+
+    ArenaScope scratch = getScratch(&arena, 1);
+
+    if (num == 0.0)
+        return {arena, "0.0"};
+
+    StringBuilder intStr = integerToString(scratch, static_cast<i64>(std::abs(num)));
+
+    StringBuilder decStr{scratch};
+    decStr.append('.');
+
+    f64 decPart = std::abs(num);
+    for (u64 i = 0; i < decimalCount; ++i)
+    {
+        decPart *= 10.0;
+        decStr.append('0' + static_cast<char>(static_cast<u64>(decPart) % 10));
+    }
+
+    StringBuilder ret{arena};
+    if (num < 0.0)
+        ret.append('-');
+    ret.append(intStr);
+    ret.append(decStr);
+    return ret;
+}
+
+void BinaryBuilder::read(u64 idx, void* dst, u64 len)
+{
+    HG_ASSERT(idx + len <= size);
+    memcpy(dst, static_cast<const u8*>(data) + idx, len);
+}
+
+void BinaryBuilder::resize(u64 newSize)
+{
+    HG_ASSERT(arena != nullptr);
+    if (!arena->extend(data, size, newSize))
+    {
+        char* newData = arena->alloc<char>(newSize);
+        memcpy(newData, data, size);
+        data = newData;
+    }
+    size = newSize;
+}
+
+void BinaryBuilder::overwrite(u64 idx, const void* src, u64 len)
+{
+    HG_ASSERT(idx + len <= size);
+    memcpy(static_cast<u8*>(data) + idx, src, len);
+}
+
+void BinaryBuilder::append(const void* src, u64 len)
+{
+    HG_ASSERT(arena != nullptr);
+    if (!arena->extend(data, size, size + len))
+    {
+        char* newData = arena->alloc<char>(size + len);
+        memcpy(newData, data, size);
+        data = newData;
+    }
+    memcpy(static_cast<u8*>(data) + size, src, len);
+    size += len;
+}
+
+void Binary::read(u64 idx, void* dst, u64 len)
+{
+    HG_ASSERT(idx + len <= size);
+    memcpy(dst, static_cast<const u8*>(data) + idx, len);
+}
+
+Binary Binary::create(BinaryView data)
+{
+    Binary bin;
+    bin.size = data.size;
+    bin.data = heapAlloc(bin.size, 1);
+    if (bin.size > 0)
+        memcpy(bin.data, data.data, bin.size);
+    return bin;
+}
+
+Binary::~Binary() noexcept
+{
+    if (data != nullptr)
+        heapFree(data, size);
+}
+
+HandlePool handlePoolCreate()
+{
+    HandlePool handles{};
+    handles.handles = Array<Handle>{0, 1024};
+    handles.freed = Array<Handle>{0, 1024};
+
+    handlePoolAlloc(&handles);
+
+    return handles;
+}
+
+void handlePoolDestroy(HandlePool* pool)
+{
+    HG_ASSERT(pool != nullptr);
+
+    pool->handles = {};
+    pool->freed = {};
+}
+
+void handlePoolReset(HandlePool* pool)
+{
+    HG_ASSERT(pool != nullptr);
+
+    pool->handles.count = 0;
+    pool->freed.count = 0;
+
+    handlePoolAlloc(pool);
+}
+
+Handle handlePoolAlloc(HandlePool* pool)
+{
+    HG_ASSERT(pool != nullptr);
+
+    if (pool->freed.count > 0)
+    {
+        Handle handle = pool->freed.pop();
+        pool->handles[handleIdx(handle)] = handle;
+        return handle;
+    }
+    else
+    {
+        Handle handle = {pool->handles.count};
+        pool->handles.push(handle);
+        return handle;
+    }
+}
+
+bool handlePoolAlive(HandlePool* pool, Handle handle)
+{
+    HG_ASSERT(pool != nullptr);
+
+    u32 idx = handleIdx(handle);
+    return handle != handleNull && idx < pool->handles.count && pool->handles[idx] == handle;
+}
+
+void handlePoolFree(HandlePool* pool, Handle handle)
+{
+    HG_ASSERT(pool != nullptr);
+    HG_ASSERT(handlePoolAlive(pool, handle));
+    pool->handles[handleIdx(handle)] = handleNull;
+    pool->freed.push(handleNextGeneration(handle));
+}
+
+template<>
+void assetLoadImpl(AssetData<Binary>* data)
+{
+    ArenaScope scratch = getScratch();
+
+    char* cpath = cString(scratch, data->path);
+
+    FILE* fileHandle = fopen(cpath, "rb");
+    if (fileHandle == nullptr)
+    {
+        setError("Could not find file to read binary: %s", cpath);
+        return;
+    }
+    HG_DEFER(fclose(fileHandle));
+
+    if (fseek(fileHandle, 0, SEEK_END) != 0)
+    {
+        setError("Failed to read binary from file: %s", cpath);
+        return;
+    }
+
+    data->asset.size = static_cast<u64>(ftell(fileHandle));
+    data->asset.data = heapAlloc(data->asset.size, 1);
+
+    rewind(fileHandle);
+    if (fread(const_cast<void*>(data->asset.data), 1, data->asset.size, fileHandle) != data->asset.size)
+    {
+        heapFree(const_cast<void*>(data->asset.data), data->asset.size);
+        setError("Failed to read binary from file: %s", cpath);
+        data->asset = {};
+        return;
+    }
+}
+
+bool binaryStore(BinaryView bin, StringView path)
+{
+    ArenaScope scratch = getScratch();
+
+    char* cpath = cString(scratch, path);
+
+    FILE* fileHandle = fopen(cpath, "wb");
+    if (fileHandle == nullptr)
+    {
+        setError("Failed to create file to write binary: %s", cpath);
+        return false;
+    }
+    HG_DEFER(fclose(fileHandle));
+
+    if (fwrite(bin.data, 1, bin.size, fileHandle) != bin.size)
+    {
+        setError("Failed to write binary data to file: %s", cpath);
+        return false;
+    }
+
+    return true;
+}
+
 Serializer serialWriter(Arena* arena)
 {
     Serializer s{};
@@ -1976,6 +2459,39 @@ void serialize(Serializer* s, Quat* val)
         &val->k);
 }
 
+template<>
+void serialize(Serializer* s, String* val)
+{
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->data = StringView{StringBuilder{s->arena, *val}};
+    }
+    else
+    {
+        HG_ASSERT(s->current->data.is<StringView>());
+        *val = String::create(s->current->data.get<StringView>());
+    }
+}
+
+template<>
+void serialize(Serializer* s, Binary* val)
+{
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->data = StringView{StringBuilder{s->arena, {static_cast<char*>(val->data), val->size}}};
+    }
+    else
+    {
+        HG_ASSERT(s->current->data.is<StringView>());
+        StringView str = s->current->data.get<StringView>();
+        *val = Binary::create({str.chars, str.length});
+    }
+}
+
 static constexpr char serialBinTag[] = "Data";
 static constexpr u32 serialBinVersionMajor = 0;
 static constexpr u32 serialBinVersionMinor = 0;
@@ -2109,8 +2625,7 @@ static void serialBinReadObject(BinaryView bin, SerialBinObject object, Serializ
 
 static void serialBinReadString(BinaryView bin, SerialBinString string, Serializer* s)
 {
-    StringView val = {static_cast<const char*>(bin.data) + string.begin, string.length};
-    serialize(s, &val);
+    serializeVoid(s, {static_cast<u8*>(const_cast<void*>(bin.data)) + string.begin, string.length});
 }
 
 static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s)
@@ -2889,522 +3404,6 @@ StringView jsonWriteSerial(Arena* arena, Serializer* serial)
 //     parseState.line = 1;
 //     return jsonParseNext(arena, &parseState);
 // }
-
-char* cString(Arena* arena, StringView str)
-{
-    HG_ASSERT(arena != nullptr);
-    if (str.length > 0)
-        HG_ASSERT(str.chars != nullptr);
-
-    char* cStr = arena->alloc<char>(str.length + 1);
-    if (str.length > 0)
-        memcpy(cStr, str.chars, str.length);
-    cStr[str.length] = 0;
-    return cStr;
-}
-
-void StringBuilder::insert(u64 idx, StringView src)
-{
-    HG_ASSERT(arena != nullptr);
-    HG_ASSERT(idx <= length);
-    if (src.length > 0)
-        HG_ASSERT(src.chars != nullptr);
-
-    u64 newLength = length + src.length;
-
-    if (!arena->extend(chars, length, newLength))
-    {
-        char* newChars = arena->alloc<char>(newLength);
-        if (length > 0)
-            memcpy(newChars, chars, length);
-        chars = newChars;
-    }
-
-    if (idx != length)
-        memmove(&chars[idx + src.length], &chars[idx], length - idx);
-    memcpy(&chars[idx], src.chars, src.length);
-
-    length = newLength;
-}
-
-String String::create(StringView data)
-{
-    String str;
-    str.chars = heapAlloc<char>(data.length);
-    str.length = data.length;
-    memcpy(str.chars, data.chars, data.length);
-    return str;
-}
-
-String::~String() noexcept
-{
-    if (chars != nullptr)
-        heapFree(chars, length);
-}
-
-template<>
-void serialize(Serializer* s, String* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->data = StringView{StringBuilder{s->arena, *val}};
-    }
-    else
-    {
-        HG_ASSERT(s->current->data.is<StringView>());
-        *val = String::create(s->current->data.get<StringView>());
-    }
-}
-
-bool isWhitespace(char c)
-{
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
-}
-
-bool isNumeral(char c)
-{
-    return c >= '0' && c <= '9';
-}
-
-bool isInteger(StringView str)
-{
-    if (str.length == 0)
-        return false;
-
-    u64 head = 0;
-    if (!isNumeral(str[head]) && str[head] != '+' && str[head] != '-')
-        return false;
-
-    if (str[head] == '+' || str[head] == '-')
-    {
-        ++head;
-        if (head >= str.length)
-            return false;
-    }
-
-    while (head < str.length)
-    {
-        if (!isNumeral(str[head]))
-            return false;
-        ++head;
-    }
-    return true;
-}
-
-bool isFloat(StringView str)
-{
-    if (str.length == 0)
-        return false;
-
-    bool hasDecimal = false;
-    bool hasExponent = false;
-    bool hasDigit = false;
-
-    u64 head = 0;
-
-    if (!isNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
-        return false;
-
-    if (isNumeral(str[head]))
-        hasDigit = true;
-
-    if (str[head] == '.')
-        hasDecimal = true;
-
-    ++head;
-    while (head < str.length)
-    {
-        if (isNumeral(str[head]))
-        {
-            hasDigit = true;
-            ++head;
-            continue;
-        }
-
-        if (str[head] == '.' && !hasDecimal && !hasExponent)
-        {
-            hasDecimal = true;
-            ++head;
-            continue;
-        }
-
-        if (str[head] == 'e' && !hasExponent)
-        {
-            hasExponent = true;
-            ++head;
-            if (isNumeral(str[head]) || str[head] == '+' || str[head] == '-')
-            {
-                ++head;
-                continue;
-            }
-            return false;
-        }
-
-        if (str[head] == 'f' && head == str.length - 1)
-            break;
-
-        return false;
-    }
-
-    return hasDigit && (hasDecimal || hasExponent);
-}
-
-i64 stringToInteger(StringView str)
-{
-    HG_ASSERT(isInteger(str));
-
-    i64 power = 1;
-    i64 ret = 0;
-
-    u64 head = str.length - 1;
-    while (head > 0)
-    {
-            ret += static_cast<i64>(str[head] - '0') * power;
-        power *= 10;
-        --head;
-    }
-
-    if (str[head] != '+')
-    {
-        if (str[head] == '-')
-            ret *= -1;
-        else
-        ret += static_cast<i64>(str[head] - '0') * power;
-    }
-
-    return ret;
-}
-
-f64 stringToFloat(StringView str)
-{
-    HG_ASSERT(isFloat(str));
-
-    f64 ret = 0.0;
-    u64 head = 0;
-
-    bool isNegative = str[head] == '-';
-    if (isNegative || str[head] == '+')
-        ++head;
-
-    if (isNumeral(str[head]))
-    {
-        u64 intPartBegin = head;
-        while (head < str.length && str[head] != '.' && str[head] != 'e')
-        {
-            ++head;
-        }
-        ret += static_cast<f64>(stringToInteger({&str[intPartBegin], &str[head]}));
-    }
-
-    if (head < str.length && str[head] == '.')
-    {
-        ++head;
-
-        f64 power = 0.1;
-        while (head < str.length && isNumeral(str[head]))
-        {
-            ret += static_cast<f64>(str[head] - '0') * power;
-            power *= 0.1;
-            ++head;
-        }
-    }
-
-    if (head < str.length && str[head] == 'e')
-    {
-        ++head;
-
-        bool expIsNegative = str[head] == '-';
-        if (expIsNegative || str[head] == '+')
-            ++head;
-
-        u64 expBegin = head;
-        while (head < str.length && isNumeral(str[head]))
-        {
-            ++head;
-        }
-
-        i64 exp = stringToInteger({&str[expBegin], str.chars + head});
-        if (exp != 0)
-        {
-            if (expIsNegative)
-            {
-                for (i64 i = 0; i < exp; ++i)
-                {
-                    ret *= 0.1;
-                }
-            } else {
-                for (i64 i = 0; i < exp; ++i)
-                {
-                    ret *= 10.0;
-                }
-            }
-        } else {
-            ret = 1.0;
-        }
-    }
-
-    if (isNegative)
-        ret *= -1.0;
-
-    return ret;
-}
-
-StringBuilder integerToString(Arena* arena, i64 num)
-{
-    HG_ASSERT(arena != nullptr);
-
-    ArenaScope scratch = getScratch(&arena, 1);
-
-    if (num == 0)
-        return {arena, "0"};
-
-    bool isNegative = num < 0;
-    u64 unum = static_cast<u64>(std::abs(num));
-
-    StringBuilder reverse{scratch};
-    while (unum != 0)
-    {
-        u64 digit = unum % 10;
-        unum = static_cast<u64>(static_cast<f64>(unum) / 10.0);
-        reverse.append('0' + static_cast<char>(digit));
-    }
-
-    StringBuilder ret{arena};
-    if (isNegative)
-        ret.append('-');
-    for (u64 i = reverse.length - 1; i < reverse.length; --i)
-    {
-        ret.append(reverse[i]);
-    }
-    return ret;
-}
-
-StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
-{
-    HG_ASSERT(arena != nullptr);
-
-    ArenaScope scratch = getScratch(&arena, 1);
-
-    if (num == 0.0)
-        return {arena, "0.0"};
-
-    StringBuilder intStr = integerToString(scratch, static_cast<i64>(std::abs(num)));
-
-    StringBuilder decStr{scratch};
-    decStr.append('.');
-
-    f64 decPart = std::abs(num);
-    for (u64 i = 0; i < decimalCount; ++i)
-    {
-        decPart *= 10.0;
-        decStr.append('0' + static_cast<char>(static_cast<u64>(decPart) % 10));
-    }
-
-    StringBuilder ret{arena};
-    if (num < 0.0)
-        ret.append('-');
-    ret.append(intStr);
-    ret.append(decStr);
-    return ret;
-}
-
-void BinaryBuilder::read(u64 idx, void* dst, u64 len)
-{
-    HG_ASSERT(idx + len <= size);
-    memcpy(dst, static_cast<const u8*>(data) + idx, len);
-}
-
-void BinaryBuilder::resize(u64 newSize)
-{
-    HG_ASSERT(arena != nullptr);
-    if (!arena->extend(data, size, newSize))
-    {
-        char* newData = arena->alloc<char>(newSize);
-        memcpy(newData, data, size);
-        data = newData;
-    }
-    size = newSize;
-}
-
-void BinaryBuilder::overwrite(u64 idx, const void* src, u64 len)
-{
-    HG_ASSERT(idx + len <= size);
-    memcpy(static_cast<u8*>(data) + idx, src, len);
-}
-
-void BinaryBuilder::append(const void* src, u64 len)
-{
-    HG_ASSERT(arena != nullptr);
-    if (!arena->extend(data, size, size + len))
-    {
-        char* newData = arena->alloc<char>(size + len);
-        memcpy(newData, data, size);
-        data = newData;
-    }
-    memcpy(static_cast<u8*>(data) + size, src, len);
-    size += len;
-}
-
-void Binary::read(u64 idx, void* dst, u64 len)
-{
-    HG_ASSERT(idx + len <= size);
-    memcpy(dst, static_cast<const u8*>(data) + idx, len);
-}
-
-Binary Binary::create(BinaryView data)
-{
-    Binary bin;
-    bin.size = data.size;
-    bin.data = heapAlloc(bin.size, 1);
-    if (bin.size > 0)
-        memcpy(bin.data, data.data, bin.size);
-    return bin;
-}
-
-Binary::~Binary() noexcept
-{
-    if (data != nullptr)
-        heapFree(data, size);
-}
-
-template<>
-void serialize(Serializer* s, Binary* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->data = StringView{StringBuilder{s->arena, {static_cast<char*>(val->data), val->size}}};
-    }
-    else
-    {
-        HG_ASSERT(s->current->data.is<StringView>());
-        StringView str = s->current->data.get<StringView>();
-        *val = Binary::create({str.chars, str.length});
-    }
-}
-
-HandlePool handlePoolCreate()
-{
-    HandlePool handles{};
-    handles.handles = Array<Handle>{0, 1024};
-    handles.freed = Array<Handle>{0, 1024};
-
-    handlePoolAlloc(&handles);
-
-    return handles;
-}
-
-void handlePoolDestroy(HandlePool* pool)
-{
-    HG_ASSERT(pool != nullptr);
-
-    pool->handles = {};
-    pool->freed = {};
-}
-
-void handlePoolReset(HandlePool* pool)
-{
-    HG_ASSERT(pool != nullptr);
-
-    pool->handles.count = 0;
-    pool->freed.count = 0;
-
-    handlePoolAlloc(pool);
-}
-
-Handle handlePoolAlloc(HandlePool* pool)
-{
-    HG_ASSERT(pool != nullptr);
-
-    if (pool->freed.count > 0)
-    {
-        Handle handle = pool->freed.pop();
-        pool->handles[handleIdx(handle)] = handle;
-        return handle;
-    }
-    else
-    {
-        Handle handle = {pool->handles.count};
-        pool->handles.push(handle);
-        return handle;
-    }
-}
-
-bool handlePoolAlive(HandlePool* pool, Handle handle)
-{
-    HG_ASSERT(pool != nullptr);
-
-    u32 idx = handleIdx(handle);
-    return handle != handleNull && idx < pool->handles.count && pool->handles[idx] == handle;
-}
-
-void handlePoolFree(HandlePool* pool, Handle handle)
-{
-    HG_ASSERT(pool != nullptr);
-    HG_ASSERT(handlePoolAlive(pool, handle));
-    pool->handles[handleIdx(handle)] = handleNull;
-    pool->freed.push(handleNextGeneration(handle));
-}
-
-template<>
-void assetLoadImpl(AssetData<Binary>* data)
-{
-    ArenaScope scratch = getScratch();
-
-    char* cpath = cString(scratch, data->path);
-
-    FILE* fileHandle = fopen(cpath, "rb");
-    if (fileHandle == nullptr)
-    {
-        setError("Could not find file to read binary: %s", cpath);
-        return;
-    }
-    HG_DEFER(fclose(fileHandle));
-
-    if (fseek(fileHandle, 0, SEEK_END) != 0)
-    {
-        setError("Failed to read binary from file: %s", cpath);
-        return;
-    }
-
-    data->asset.size = static_cast<u64>(ftell(fileHandle));
-    data->asset.data = heapAlloc(data->asset.size, 1);
-
-    rewind(fileHandle);
-    if (fread(const_cast<void*>(data->asset.data), 1, data->asset.size, fileHandle) != data->asset.size)
-    {
-        heapFree(const_cast<void*>(data->asset.data), data->asset.size);
-        setError("Failed to read binary from file: %s", cpath);
-        data->asset = {};
-        return;
-    }
-}
-
-bool binaryStore(BinaryView bin, StringView path)
-{
-    ArenaScope scratch = getScratch();
-
-    char* cpath = cString(scratch, path);
-
-    FILE* fileHandle = fopen(cpath, "wb");
-    if (fileHandle == nullptr)
-    {
-        setError("Failed to create file to write binary: %s", cpath);
-        return false;
-    }
-    HG_DEFER(fclose(fileHandle));
-
-    if (fwrite(bin.data, 1, bin.size, fileHandle) != bin.size)
-    {
-        setError("Failed to write binary data to file: %s", cpath);
-        return false;
-    }
-
-    return true;
-}
 
 f64 Clock::tick()
 {

@@ -87,6 +87,21 @@ u64 LifecycleT<Tag>::s_nextId = 0;
 
 using Lifecycle = LifecycleT<>;
 
+namespace hg {
+template<>
+void serialize(Serializer* s, Lifecycle* val)
+{
+    serializeBegin(s);
+    i64 id = static_cast<i64>(val->id);
+    serialize(s, &id);
+    serialize(s, &val->valid);
+    serializeEnd(s);
+
+    if (!s->writing)
+        val->id = static_cast<u64>(id);
+}
+}
+
 int main()
 {
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
@@ -5179,6 +5194,482 @@ int main()
         {
             Vec2 v = noiseVec2D(42, {3.14f, 2.72f});
             TEST(std::abs(vecLen2(v) - 1.0f) < FLT_EPSILON);
+        }
+    }
+
+    // ============================================================================
+    // Serialization
+    // ============================================================================
+    //
+    // Tests for the serialization API: serialWriter, serialReader,
+    // serialize primitives, serializeObject, binaryWriteSerial,
+    // binaryReadSerial, jsonWriteSerial.
+    //
+    // Functions covered:
+    // - serialWriter / serialReader
+    // - serializeNodeStart
+    // - serializeBegin / serializeEnd
+    // - serializeVoid (default T*)
+    // - serializeObject
+    // - serialize(bool*), integral T*, floating_point T*
+    // - serialize(Vec2/3/4*), serialize(Mat2/3/4*)
+    // - serialize(Complex*), serialize(Quat*)
+    // - serialize(String*), serialize(Binary*)
+    // - serialize(T (*arr)[N])
+    // - serialize(Array<T>*), serialize(Set<V>*), serialize(Map<K, V>*)
+    // - binaryWriteSerial / binaryReadSerial
+    // - jsonWriteSerial
+
+    // Primitives: bool, integer, floating-point
+    {
+        bool val = true;
+        bool copy = false;
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        i64 val = -1234567890123;
+        i64 copy = 0;
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        u32 val = 0xDEADBEEF;
+        u32 copy = 0;
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        f64 val = 3.14159265358979;
+        f64 copy = 0.0;
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    // Math types
+    {
+        Vec3 val{1.0f, 2.0f, 3.0f};
+        Vec3 copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        Mat4 val{1.0f};
+        Mat4 copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        Complex val{3.0f, 4.0f};
+        Complex copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    {
+        Quat val{0.707f, 0.0f, 0.707f, 0.0f};
+        Quat copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    // Nested serializeBegin/End
+    {
+        ArenaScope arena = getScratch();
+        i32 outer = 7;
+        i32 inner = 42;
+        i32 outerCopy = 0;
+        i32 innerCopy = 0;
+
+        Serializer w = serialWriter(arena);
+        serializeBegin(&w);
+        serialize(&w, &outer);
+        serializeBegin(&w);
+        serialize(&w, &inner);
+        serializeEnd(&w);
+        serializeEnd(&w);
+
+        Serializer r = serialReader(arena, w.current);
+        serializeBegin(&r);
+        serialize(&r, &outerCopy);
+        serializeBegin(&r);
+        serialize(&r, &innerCopy);
+        serializeEnd(&r);
+        serializeEnd(&r);
+
+        TEST(outerCopy == outer);
+        TEST(innerCopy == inner);
+    }
+
+    // serializeBegin with size parameter
+    {
+        ArenaScope arena = getScratch();
+        u32 childCount = 0;
+        u32 val = 99;
+        u32 copy = 0;
+
+        Serializer w = serialWriter(arena);
+        serializeBegin(&w);
+        serialize(&w, &val);
+        serializeEnd(&w);
+
+        Serializer r = serialReader(arena, w.current);
+        serializeBegin(&r, &childCount);
+        serialize(&r, &copy);
+        serializeEnd(&r);
+
+        TEST(childCount == 1);
+        TEST(copy == val);
+    }
+
+    // Composite struct via serializeObject
+    {
+        struct Data {
+            i64 a;
+            u16 b;
+            f32 c;
+            bool d;
+            String e;
+        };
+
+        auto serializeData = [](Serializer* s, Data* val)
+        {
+            serializeObject(s,
+                &val->a,
+                &val->b,
+                &val->c,
+                &val->d,
+                &val->e);
+        };
+
+        ArenaScope arena = getScratch();
+        Data val{};
+        val.a = -42;
+        val.b = 99;
+        val.c = 2.5f;
+        val.d = true;
+        val.e = String::create("composite");
+
+        Data copy{};
+        Serializer w = serialWriter(arena);
+        serializeData(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serializeData(&r, &copy);
+        TEST(copy.a == val.a);
+        TEST(copy.b == val.b);
+        TEST(copy.c == val.c);
+        TEST(copy.d == val.d);
+        TEST(copy.e == val.e);
+    }
+
+    // Lifecycle
+    {
+        Lifecycle::stats.reset();
+        ArenaScope arena = getScratch();
+
+        Lifecycle val{};
+        u64 savedId = val.id;
+
+        Lifecycle copy{};
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.id == savedId);
+        TEST(copy.valid == true);
+    }
+
+    // C array
+    {
+        u32 val[4] = {10, 20, 30, 40};
+        u32 copy[4] = {};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy[0] == 10);
+        TEST(copy[1] == 20);
+        TEST(copy[2] == 30);
+        TEST(copy[3] == 40);
+    }
+
+    // String
+    {
+        String val = String::create("hello world");
+        String copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy == val);
+    }
+
+    // Binary
+    {
+        u8 raw[8] = {0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE};
+        Binary val = Binary::create({raw, 8});
+        Binary copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.size == val.size);
+        TEST(memcmp(copy.data, val.data, val.size) == 0);
+    }
+
+    // UniquePtr
+    {
+        UniquePtr<i32> val = makeUnique<i32>(42);
+        UniquePtr<i32> copy{};
+        ArenaScope arena = getScratch();
+
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(*copy == 42);
+        TEST(copy.ptr != val.ptr); // New allocation, not same pointer
+    }
+
+    // Array
+    {
+        ArenaScope arena = getScratch();
+        Array<u32> val{};
+        val.push(1);
+        val.push(2);
+        val.push(3);
+
+        Array<u32> copy{};
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.count == val.count);
+        for (u32 i = 0; i < val.count; ++i)
+            TEST(copy[i] == val[i]);
+    }
+
+    // Set
+    {
+        ArenaScope arena = getScratch();
+        Set<u32> val{};
+        val.add(10);
+        val.add(20);
+        val.add(30);
+
+        Set<u32> copy{};
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.count == val.count);
+        TEST(copy.has(10));
+        TEST(copy.has(20));
+        TEST(copy.has(30));
+    }
+
+    // Map
+    {
+        ArenaScope arena = getScratch();
+        Map<u32, f32> val{};
+        val.add(1, 1.5f);
+        val.add(2, 2.5f);
+        val.add(3, 3.5f);
+
+        Map<u32, f32> copy{};
+        Serializer w = serialWriter(arena);
+        serialize(&w, &val);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.count == val.count);
+        TEST(*copy.get(1) == 1.5f);
+        TEST(*copy.get(2) == 2.5f);
+        TEST(*copy.get(3) == 3.5f);
+    }
+
+    // Binary format round-trip
+    {
+        struct Data {
+            i64 a;
+            f64 b;
+            bool c;
+        };
+
+        auto serializeData = [](Serializer* s, Data* val)
+        {
+            serializeObject(s,
+                &val->a,
+                &val->b,
+                &val->c);
+        };
+
+        ArenaScope arena = getScratch();
+        Data val{};
+        val.a = -999;
+        val.b = 3.14;
+        val.c = true;
+
+        Data copy{};
+        Serializer w = serialWriter(arena);
+        serializeData(&w, &val);
+        BinaryView bin = binaryWriteSerial(arena, &w);
+        Serializer r = binaryReadSerial(arena, bin);
+        serializeData(&r, &copy);
+        TEST(copy.a == val.a);
+        TEST(copy.b == val.b);
+        TEST(copy.c == val.c);
+    }
+
+    // Binary format round-trip for String
+    {
+        struct Data {
+            i64 a;
+            String b;
+        };
+
+        auto serializeData = [](Serializer* s, Data* val)
+        {
+            serializeObject(s,
+                &val->a,
+                &val->b);
+        };
+
+        ArenaScope arena = getScratch();
+        Data val{};
+        val.a = -999;
+        val.b = String::create("binary-test");
+
+        Data copy{};
+        Serializer w = serialWriter(arena);
+        serializeData(&w, &val);
+        BinaryView bin = binaryWriteSerial(arena, &w);
+        Serializer r = binaryReadSerial(arena, bin);
+        serializeData(&r, &copy);
+        TEST(copy.a == val.a);
+        TEST(copy.b == val.b);
+    }
+
+    // Binary format round-trip for Binary
+    {
+        struct Data {
+            i64 a;
+            Binary b;
+        };
+
+        auto serializeData = [](Serializer* s, Data* val)
+        {
+            serializeObject(s,
+                &val->a,
+                &val->b);
+        };
+
+        ArenaScope arena = getScratch();
+        u8 raw[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+        Data val{};
+        val.a = -123;
+        val.b = Binary::create({raw, 4});
+
+        Data copy{};
+        Serializer w = serialWriter(arena);
+        serializeData(&w, &val);
+        BinaryView bin = binaryWriteSerial(arena, &w);
+        Serializer r = binaryReadSerial(arena, bin);
+        serializeData(&r, &copy);
+        TEST(copy.a == val.a);
+        TEST(copy.b.size == val.b.size);
+        TEST(memcmp(copy.b.data, val.b.data, val.b.size) == 0);
+    }
+
+    // jsonWriteSerial output format
+    {
+        ArenaScope arena = getScratch();
+
+        {
+            i64 val = 42;
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            TEST(jsonWriteSerial(arena, &w) == "42\n");
+        }
+
+        {
+            bool val = true;
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            TEST(jsonWriteSerial(arena, &w) == "true\n");
+        }
+
+        {
+            String val = String::create("hello");
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            TEST(jsonWriteSerial(arena, &w) == "\"hello\"\n");
+        }
+
+        {
+            u32 arr[3] = {1, 2, 3};
+            Serializer w = serialWriter(arena);
+            serialize(&w, &arr);
+            StringView json = jsonWriteSerial(arena, &w);
+            StringView expected = "[\n    1,\n    2,\n    3\n]\n";
+            TEST(json == expected);
+        }
+
+        {
+            f64 val = 3.140000;
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            TEST(jsonWriteSerial(arena, &w) == "3.140000\n");
         }
     }
 
