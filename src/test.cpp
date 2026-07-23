@@ -2245,6 +2245,93 @@ int main()
 #include "test_blur.comp.spv.h"
 #include "test_invert.frag.spv.h"
 
+    // ---- shared shader references ----
+    Span<const u8> shTriVert    = {test_tri_vert_spv,      sizeof(test_tri_vert_spv)};
+    Span<const u8> shTriFrag    = {test_tri_frag_spv,      sizeof(test_tri_frag_spv)};
+    Span<const u8> shDepthVert  = {test_depth_vert_spv,    sizeof(test_depth_vert_spv)};
+    Span<const u8> shDepthFrag  = {test_depth_frag_spv,    sizeof(test_depth_frag_spv)};
+    Span<const u8> shSamplerFrag= {test_sampler_frag_spv,  sizeof(test_sampler_frag_spv)};
+    Span<const u8> shInvertFrag = {test_invert_frag_spv,   sizeof(test_invert_frag_spv)};
+    Span<const u8> shUniformVert= {test_uniform_vert_spv,  sizeof(test_uniform_vert_spv)};
+    Span<const u8> shUniformFrag= {test_uniform_frag_spv,  sizeof(test_uniform_frag_spv)};
+    Span<const u8> shInstVert   = {test_instance_vert_spv, sizeof(test_instance_vert_spv)};
+    Span<const u8> shInstFrag   = {test_instance_frag_spv, sizeof(test_instance_frag_spv)};
+    Span<const u8> shAddCs      = {test_compute_comp_spv,      sizeof(test_compute_comp_spv)};
+    Span<const u8> shMulCs      = {test_mul_comp_spv,         sizeof(test_mul_comp_spv)};
+    Span<const u8> shBufToImgCs = {test_buf_to_img_comp_spv,  sizeof(test_buf_to_img_comp_spv)};
+    Span<const u8> shBlurCs     = {test_blur_comp_spv,        sizeof(test_blur_comp_spv)};
+    Span<const u8> shStorageCs  = {test_storage_img_comp_spv, sizeof(test_storage_img_comp_spv)};
+
+    Format kColorFmt = Format_r8g8b8a8_unorm;
+
+    // ---- shared helper lambdas ----
+    auto makeColorAtt = [](GpuView* view, f32 r, f32 g, f32 b, f32 a,
+                           GpuLoadOp loadOp = GpuLoadOp_clear,
+                           GpuStoreOp storeOp = GpuStoreOp_store)
+    {
+        GpuRenderAttachment att{};
+        att.image = view;
+        att.loadOp = loadOp;
+        att.storeOp = storeOp;
+        att.clearValue.color.float32[0] = r;
+        att.clearValue.color.float32[1] = g;
+        att.clearValue.color.float32[2] = b;
+        att.clearValue.color.float32[3] = a;
+        return att;
+    };
+
+    auto makeDepthAtt = [](GpuView* view, f32 clearDepth = 1.0f)
+    {
+        GpuRenderAttachment att{};
+        att.image = view;
+        att.loadOp = GpuLoadOp_clear;
+        att.storeOp = GpuStoreOp_store;
+        att.clearValue.depthStencil.depth = clearDepth;
+        return att;
+    };
+
+    auto simpleColorPass = [](GpuRenderAttachment* colorAtt,
+                              GpuView** sampledImages = nullptr,
+                              u32 sampledCount = 0,
+                              GpuBuffer** uniformBufs = nullptr,
+                              u32 uniformCount = 0)
+    {
+        GpuRenderPass pass{};
+        pass.colorAttachments = {colorAtt, 1};
+        if (sampledImages) pass.sampledImages = {sampledImages, sampledCount};
+        if (uniformBufs)   pass.uniformBuffers = {uniformBufs, uniformCount};
+        return pass;
+    };
+
+    auto makeSimplePipeline = [](Span<const u8> vertShader, Span<const u8> fragShader,
+                                 u32 pushSize = 0, GpuTopology topo = GpuTopology_triangleList)
+    {
+        GpuGraphicsPipelineCreateInfo ci{};
+        ci.vertexShader = vertShader;
+        ci.fragmentShader = fragShader;
+        Format cf = Format_r8g8b8a8_unorm;
+        ci.colorAttachmentFormats = {&cf, 1};
+        ci.pushConstantSize = pushSize;
+        ci.topology = topo;
+        return GpuPipeline{ci};
+    };
+
+    auto makeColorTarget = [](u32 w, u32 h)
+    {
+        return GpuImage{w, h, Format_r8g8b8a8_unorm,
+            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
+    };
+
+    auto barrierToTransferRead = [](GpuCmd* cmd, GpuView* view)
+    {
+        GpuImageBarrier ib{};
+        ib.image = view;
+        ib.nextStage = GpuStage_transfer;
+        ib.nextAccess = GpuAccess_transferRead;
+        ib.nextLayout = GpuLayout_transferSrc;
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+    };
+
     // formatToSize
     {
         // Common 8-bit formats
@@ -2933,33 +3020,15 @@ int main()
     {
         static constexpr u32 imgSize = 4;
 
-        GpuImage colorImg{
-            imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc
-        };
+        GpuImage colorImg = makeColorTarget(imgSize, imgSize);
         GpuView colorView{colorImg, GpuAspect_color};
 
-        GpuGraphicsPipelineCreateInfo ci{};
-        ci.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
-        ci.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
-        Format colorFmt = Format_r8g8b8a8_unorm;
-        ci.colorAttachmentFormats = {&colorFmt, 1};
-
-        GpuPipeline pipe{ci};
+        GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
 
         GpuCmd* cmd = gpuCmdBegin();
 
-        GpuRenderAttachment colorAtt{};
-        colorAtt.image = &colorView;
-        colorAtt.loadOp = GpuLoadOp_clear;
-        colorAtt.storeOp = GpuStoreOp_store;
-        colorAtt.clearValue.color.float32[0] = 1.0f;
-        colorAtt.clearValue.color.float32[1] = 0.0f;
-        colorAtt.clearValue.color.float32[2] = 0.0f;
-        colorAtt.clearValue.color.float32[3] = 1.0f;
-
-        GpuRenderPass pass{};
-        pass.colorAttachments = {&colorAtt, 1};
+        GpuRenderAttachment colorAtt = makeColorAtt(&colorView, 1.0f, 0.0f, 0.0f, 1.0f);
+        GpuRenderPass pass = simpleColorPass(&colorAtt);
 
         gpuRenderPassBegin(cmd, pass);
         gpuBindPipeline(cmd, pipe);
@@ -2972,8 +3041,6 @@ int main()
         colorView.read(pixelData);
 
         // Triangle covers the whole viewport; all pixels should be (0.2, 0.4, 0.6, 1.0)
-        // packed as r8g8b8a8_unorm = 0x99663399 or similar depending on float→byte
-        // 0.2f → 51 = 0x33, 0.4f → 102 = 0x66, 0.6f → 153 = 0x99, 1.0f → 255 = 0xFF
         // packed RGBA → 0xFF996633
         for (u32 i = 0; i < imgSize * imgSize; ++i)
             TEST(pixelData[i] == 0xFF996633);
@@ -3040,8 +3107,7 @@ int main()
     {
         static constexpr u32 imgSize = 4;
 
-        GpuImage colorImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
+        GpuImage colorImg = makeColorTarget(imgSize, imgSize);
         GpuView colorView{colorImg, GpuAspect_color};
 
         GpuImage depthImg{imgSize, imgSize, Format_d32_sfloat,
@@ -3055,10 +3121,9 @@ int main()
         };
 
         GpuGraphicsPipelineCreateInfo ci{};
-        ci.vertexShader = {test_depth_vert_spv, sizeof(test_depth_vert_spv)};
-        ci.fragmentShader = {test_depth_frag_spv, sizeof(test_depth_frag_spv)};
-        Format colorFmt = Format_r8g8b8a8_unorm;
-        ci.colorAttachmentFormats = {&colorFmt, 1};
+        ci.vertexShader = shDepthVert;
+        ci.fragmentShader = shDepthFrag;
+        ci.colorAttachmentFormats = {&kColorFmt, 1};
         ci.depthAttachmentFormat = Format_d32_sfloat;
         ci.enableDepthRead = true;
         ci.enableDepthWrite = true;
@@ -3068,20 +3133,8 @@ int main()
 
         GpuCmd* cmd = gpuCmdBegin();
 
-        GpuRenderAttachment colorAtt{};
-        colorAtt.image = &colorView;
-        colorAtt.loadOp = GpuLoadOp_clear;
-        colorAtt.storeOp = GpuStoreOp_store;
-        colorAtt.clearValue.color.float32[0] = 0.0f;
-        colorAtt.clearValue.color.float32[1] = 0.0f;
-        colorAtt.clearValue.color.float32[2] = 0.0f;
-        colorAtt.clearValue.color.float32[3] = 0.0f;
-
-        GpuRenderAttachment depthAtt{};
-        depthAtt.image = &depthView;
-        depthAtt.loadOp = GpuLoadOp_clear;
-        depthAtt.storeOp = GpuStoreOp_store;
-        depthAtt.clearValue.depthStencil.depth = 1.0f;
+        GpuRenderAttachment colorAtt = makeColorAtt(&colorView, 0.0f, 0.0f, 0.0f, 0.0f);
+        GpuRenderAttachment depthAtt = makeDepthAtt(&depthView);
 
         GpuRenderPass pass{};
         pass.colorAttachments = {&colorAtt, 1};
@@ -3090,39 +3143,29 @@ int main()
         gpuRenderPassBegin(cmd, pass);
         gpuBindPipeline(cmd, pipe);
 
-        // Far triangle at z=0.75, red
         Push farPush{0.75f, {}, {1.0f, 0.0f, 0.0f, 1.0f}};
         gpuPushConstants(cmd, pipe, &farPush, sizeof(farPush));
         gpuDraw(cmd, 0, 3, 0, 1);
 
-        // Near triangle at z=0.25, green
         Push nearPush{0.25f, {}, {0.0f, 1.0f, 0.0f, 1.0f}};
         gpuPushConstants(cmd, pipe, &nearPush, sizeof(nearPush));
         gpuDraw(cmd, 0, 3, 0, 1);
 
         gpuRenderPassEnd(cmd);
 
-        // Barrier: depth to transferSrc for readback
-        GpuImageBarrier ib{};
-        ib.image = &depthView;
-        ib.nextStage = GpuStage_transfer;
-        ib.nextAccess = GpuAccess_transferRead;
-        ib.nextLayout = GpuLayout_transferSrc;
-        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+        barrierToTransferRead(cmd, &depthView);
 
         gpuCmdEnd(cmd);
 
         u32 colorPixels[imgSize * imgSize] = {};
         colorView.read(colorPixels);
 
-        // Closer triangle (green at depth=0.25) overwrites far (red at depth=0.75)
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(colorPixels[i] == 0xFF00FF00); // green
+            TEST(colorPixels[i] == 0xFF00FF00);
 
         f32 depthPixels[imgSize * imgSize] = {};
         depthView.read(depthPixels);
 
-        // Depth values should be ~0.25 where the near triangle was drawn
         for (u32 i = 0; i < imgSize * imgSize; ++i)
             TEST(depthPixels[i] > 0.24f && depthPixels[i] < 0.26f);
     }
@@ -3204,27 +3247,6 @@ int main()
         TEST(pixels[2 * imgSize + 6] == green);
         TEST(pixels[6 * imgSize + 2] == green);
         TEST(pixels[6 * imgSize + 6] == green);
-    }
-
-    // Buffer Upload + Image Blit
-    {
-        static constexpr u32 imgSize = 4;
-
-        u32 pattern[imgSize * imgSize] = {};
-        for (u32 i = 0; i < imgSize * imgSize; ++i)
-            pattern[i] = 0xFF000000 | ((i & 1) ? 0x000000FF : 0x0000FF00);
-
-        GpuImage img{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_sampled | GpuImageUsage_transferDst | GpuImageUsage_transferSrc};
-        GpuView view{img, GpuAspect_color};
-
-        view.write(pattern);
-
-        u32 pixels[imgSize * imgSize] = {};
-        view.read(pixels);
-
-        for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(pixels[i] == pattern[i]);
     }
 
     // Multi-Viewport / Multi-Scissor Render
@@ -3621,7 +3643,18 @@ int main()
         imgCI.usage = GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc;
         GpuImage arrayImg{imgCI};
 
-        // Create and render to each layer individually
+        // Hoisted: pipeline and attachment template (invariant across layers)
+        GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
+        GpuRenderAttachment colorAtt{};
+        colorAtt.loadOp = GpuLoadOp_clear;
+        colorAtt.storeOp = GpuStoreOp_store;
+        colorAtt.clearValue.color.float32[0] = 0.0f;
+        colorAtt.clearValue.color.float32[1] = 0.0f;
+        colorAtt.clearValue.color.float32[2] = 0.0f;
+        colorAtt.clearValue.color.float32[3] = 1.0f;
+        GpuRenderPass pass{};
+        pass.colorAttachments = {&colorAtt, 1};
+
         for (u32 layer = 0; layer < numLayers; ++layer) {
             GpuViewCreateInfo viewCI{};
             viewCI.image = &arrayImg;
@@ -3630,41 +3663,20 @@ int main()
             viewCI.aspectFlags = GpuAspect_color;
             viewCI.type = GpuViewType_2D;
             GpuView layerView{viewCI};
-
-            GpuGraphicsPipelineCreateInfo pipeCI{};
-            pipeCI.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
-            pipeCI.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
-            Format colorFmt = Format_r8g8b8a8_unorm;
-            pipeCI.colorAttachmentFormats = {&colorFmt, 1};
-            GpuPipeline pipe{pipeCI};
+            colorAtt.image = &layerView;
 
             GpuCmd* cmd = gpuCmdBegin();
-
-            GpuRenderAttachment colorAtt{};
-            colorAtt.image = &layerView;
-            colorAtt.loadOp = GpuLoadOp_clear;
-            colorAtt.storeOp = GpuStoreOp_store;
-            colorAtt.clearValue.color.float32[0] = 0.0f;
-            colorAtt.clearValue.color.float32[1] = 0.0f;
-            colorAtt.clearValue.color.float32[2] = 0.0f;
-            colorAtt.clearValue.color.float32[3] = 1.0f;
-
-            GpuRenderPass pass{};
-            pass.colorAttachments = {&colorAtt, 1};
-
             gpuRenderPassBegin(cmd, pass);
             gpuBindPipeline(cmd, pipe);
             gpuDraw(cmd, 0, 3, 0, 1);
             gpuRenderPassEnd(cmd);
             gpuCmdEnd(cmd);
 
-            // Read back this layer
             u32 pixels[imgSize * imgSize] = {};
             layerView.read(pixels);
 
-            u32 expected = 0xFF996633;
             for (u32 i = 0; i < imgSize * imgSize; ++i)
-                TEST(pixels[i] == expected);
+                TEST(pixels[i] == 0xFF996633);
         }
     }
 
@@ -3911,12 +3923,7 @@ int main()
         GpuView readView{readVci};
 
         GpuCmd* cmd = gpuCmdBegin();
-        GpuImageBarrier ib{};
-        ib.image = &readView;
-        ib.nextStage = GpuStage_transfer;
-        ib.nextAccess = GpuAccess_transferRead;
-        ib.nextLayout = GpuLayout_transferSrc;
-        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+        barrierToTransferRead(cmd, &readView);
         gpuCmdEnd(cmd);
 
         u32 face[faceSize * faceSize] = {};
@@ -4001,12 +4008,7 @@ int main()
         GpuView mip1View{mip1Vci};
 
         GpuCmd* cmd = gpuCmdBegin();
-        GpuImageBarrier ib{};
-        ib.image = &mip1View;
-        ib.nextStage = GpuStage_transfer;
-        ib.nextAccess = GpuAccess_transferRead;
-        ib.nextLayout = GpuLayout_transferSrc;
-        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+        barrierToTransferRead(cmd, &mip1View);
         gpuCmdEnd(cmd);
 
         u32 mip1[4] = {};
@@ -4018,6 +4020,147 @@ int main()
         TEST(mip1[1] == green);
         TEST(mip1[2] == green);
         TEST(mip1[3] == green);
+    }
+
+    // ============================================================================
+    // New Coverage: LoadOp load, Sampler Border, Stage/Access Flags
+    // ============================================================================
+
+    // GpuLoadOp_load: render pass begins without clearing, preserves existing content
+    {
+        static constexpr u32 w = 4;
+        static constexpr u32 h = 4;
+        static constexpr u32 halfW = 2;
+
+        GpuImage img{w, h, Format_r8g8b8a8_unorm,
+            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc
+            | GpuImageUsage_transferDst};
+        GpuView view{img, GpuAspect_color};
+
+        // Fill image with known pattern (red)
+        u32 redPx = 0xFF0000FF;
+        u32 src[w * h];
+        for (u32 i = 0; i < w * h; ++i)
+            src[i] = redPx;
+        view.write(src);
+
+        GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        GpuRenderAttachment att = makeColorAtt(&view, 0.0f, 0.0f, 0.0f, 0.0f,
+                                                GpuLoadOp_load, GpuStoreOp_store);
+        GpuRenderPass pass = simpleColorPass(&att);
+
+        gpuRenderPassBegin(cmd, pass);
+        gpuBindPipeline(cmd, pipe);
+
+        // Viewport covers left half only; right half should retain original red
+        gpuSetViewport(cmd, 0.0f, 0.0f, static_cast<f32>(halfW), static_cast<f32>(h));
+        gpuSetScissor(cmd, 0, 0, halfW, h);
+        gpuDraw(cmd, 0, 3, 0, 1);
+
+        gpuRenderPassEnd(cmd);
+        gpuCmdEnd(cmd);
+
+        u32 pixels[w * h] = {};
+        view.read(pixels);
+
+        u32 triColor = 0xFF996633;
+        for (u32 y = 0; y < h; ++y)
+            for (u32 x = 0; x < w; ++x)
+                TEST(pixels[y * w + x] == (x < halfW ? triColor : redPx));
+    }
+
+    // GpuView mirroredRepeat edge mode
+    {
+        static constexpr u32 texSize = 2;
+        static constexpr u32 outSize = 2;
+
+        GpuImage texImg{texSize, texSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst
+            | GpuImageUsage_sampled};
+
+        u32 pattern[texSize * texSize] = {0xFF0000FF, 0xFF00FF00,
+                                           0xFFFF0000, 0xFFFFFFFF};
+        GpuViewCreateInfo vci{};
+        vci.image = &texImg;
+        vci.aspectFlags = GpuAspect_color;
+        vci.type = GpuViewType_2D;
+        vci.filter = GpuFilter_nearest;
+        vci.edgeMode = GpuSamplerEdgeMode_mirroredRepeat;
+        GpuView view{vci};
+        view.write(pattern);
+
+        GpuImage outImg = makeColorTarget(outSize, outSize);
+        GpuView outView{outImg, GpuAspect_color};
+
+        // UV=(1.25, 0.25) -> mirroredRepeat: floor(1.25)=1(odd) -> 1-0.25=0.75,
+        // floor(0.25)=0(even) -> 0.25.  Nearest texel to (0.75, 0.25) = (1,0) = green
+        struct Push { f32 uvX; f32 uvY; u32 texIdx; };
+        Push push{1.25f, 0.25f, view.samplerDescriptor()};
+
+        GpuPipeline pipe = makeSimplePipeline(shTriVert, shSamplerFrag, sizeof(Push));
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        GpuRenderAttachment att = makeColorAtt(&outView, 0.0f, 0.0f, 0.0f, 0.0f);
+        GpuRenderPass pass = simpleColorPass(&att);
+        GpuView* sampledImages[] = {&view};
+        pass.sampledImages = sampledImages;
+
+        gpuRenderPassBegin(cmd, pass);
+        gpuBindPipeline(cmd, pipe);
+        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuDraw(cmd, 0, 3, 0, 1);
+        gpuRenderPassEnd(cmd);
+        gpuCmdEnd(cmd);
+
+        u32 result[outSize * outSize] = {};
+        outView.read(result);
+        for (u32 i = 0; i < outSize * outSize; ++i)
+            TEST(result[i] == 0xFF00FF00); // green from mirrored repeat
+    }
+
+    // Untested barrier stage/access flags: allGraphics + colorAttachmentWrite
+    {
+        static constexpr u32 imgSize = 4;
+
+        GpuImage colorImg = makeColorTarget(imgSize, imgSize);
+        GpuView colorView{colorImg, GpuAspect_color};
+
+        GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        GpuRenderAttachment att = makeColorAtt(&colorView, 1.0f, 0.0f, 0.0f, 1.0f);
+        GpuRenderPass pass = simpleColorPass(&att);
+
+        gpuRenderPassBegin(cmd, pass);
+        gpuBindPipeline(cmd, pipe);
+        gpuDraw(cmd, 0, 3, 0, 1);
+        gpuRenderPassEnd(cmd);
+
+        // Barrier with allGraphics / colorAttachmentWrite
+        GpuImageBarrier ib{};
+        ib.image = &colorView;
+        ib.nextStage = GpuStage_allGraphics;
+        ib.nextAccess = GpuAccess_colorAttachmentWrite;
+        ib.nextLayout = GpuLayout_transferSrc;
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+
+        // Barrier from read-after-write: allCommands + memoryRead
+        ib.nextStage = GpuStage_allCommands;
+        ib.nextAccess = GpuAccess_memoryRead;
+        ib.nextLayout = GpuLayout_general;
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+
+        gpuCmdEnd(cmd);
+
+        u32 pixels[imgSize * imgSize] = {};
+        colorView.read(pixels);
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            TEST(pixels[i] == 0xFF996633);
     }
 
     // ============================================================================
