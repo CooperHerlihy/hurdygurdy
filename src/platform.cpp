@@ -3813,7 +3813,7 @@ void internal::deinitAudio()
     SDL_CloseAudioDevice(audio.device);
 }
 
-AudioStream* audioStreamCreate(u32 frequency, u32 channels)
+AudioStream::AudioStream(u32 frequency, u32 channels)
 {
     SDL_AudioSpec audioSpec{};
     audioSpec.format = SDL_AUDIO_F32;
@@ -3826,15 +3826,13 @@ AudioStream* audioStreamCreate(u32 frequency, u32 channels)
         stream = SDL_CreateAudioStream(&audioSpec, nullptr);
         if (stream == nullptr)
         {
-            setError(SDL_GetError());
-            return nullptr;
+            HG_PANIC("Could not create audio stream: %s\n", SDL_GetError());
         }
 
         if (!SDL_BindAudioStream(audio.device, stream))
         {
-            setError(SDL_GetError());
             SDL_DestroyAudioStream(stream);
-            return nullptr;
+            HG_PANIC("Could not create audio stream: %s\n", SDL_GetError());
         }
     }
     else
@@ -3844,14 +3842,14 @@ AudioStream* audioStreamCreate(u32 frequency, u32 channels)
             HG_PANIC("SDL could not set audio stream format: %s\n", SDL_GetError());
     }
 
-    return reinterpret_cast<AudioStream*>(stream);
+    data = reinterpret_cast<AudioStreamData*>(stream);
 }
 
-void audioStreamDestroy(AudioStream* stream)
+AudioStream::~AudioStream()
 {
-    if (stream != nullptr)
+    if (data != nullptr)
     {
-        SDL_AudioStream* sdlStream = reinterpret_cast<SDL_AudioStream*>(stream);
+        SDL_AudioStream* sdlStream = reinterpret_cast<SDL_AudioStream*>(data);
 
         if (!SDL_ClearAudioStream(sdlStream))
             HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
@@ -3860,31 +3858,31 @@ void audioStreamDestroy(AudioStream* stream)
     }
 }
 
-void audioStreamPush(AudioStream* player, const f32* data, u64 size)
+void AudioStream::push(Span<f32> samples)
 {
-    SDL_AudioStream* stream = reinterpret_cast<SDL_AudioStream*>(player);
-    if (!SDL_PutAudioStreamData(stream, data, static_cast<int>(size)))
+    SDL_AudioStream* stream = reinterpret_cast<SDL_AudioStream*>(data);
+    if (!SDL_PutAudioStreamData(stream, samples.data, static_cast<int>(samples.count * sizeof(f32))))
         HG_PANIC("SDL could not push audio data: %s\n", SDL_GetError());
 }
 
-u32 audioStreamQueuedSize(AudioStream* stream)
+void AudioStream::clear()
 {
-    int size = SDL_GetAudioStreamQueued(reinterpret_cast<SDL_AudioStream*>(stream));
-    if (size == -1)
-        HG_PANIC("SDL could not read audio data: %s\n", SDL_GetError());
-
-    return static_cast<u32>(size);
-}
-
-void audioStreamClear(AudioStream* stream)
-{
-    if (!SDL_ClearAudioStream(reinterpret_cast<SDL_AudioStream*>(stream)))
+    if (!SDL_ClearAudioStream(reinterpret_cast<SDL_AudioStream*>(data)))
         HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 
-void audioStreamSetGain(AudioStream* stream, f32 gain)
+u32 AudioStream::queuedSize()
 {
-    if (!SDL_SetAudioStreamGain(reinterpret_cast<SDL_AudioStream*>(stream), gain))
+    int size = SDL_GetAudioStreamQueued(reinterpret_cast<SDL_AudioStream*>(data));
+    if (size == -1)
+        HG_PANIC("SDL could not read audio data: %s\n", SDL_GetError());
+
+    return static_cast<u32>(size) / sizeof(f32);
+}
+
+void AudioStream::setGain(f32 gain)
+{
+    if (!SDL_SetAudioStreamGain(reinterpret_cast<SDL_AudioStream*>(data), gain))
         HG_PANIC("SDL could not clear audio stream: %s\n", SDL_GetError());
 }
 

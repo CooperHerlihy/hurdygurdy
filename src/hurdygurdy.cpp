@@ -3503,139 +3503,107 @@ void assetLoadImpl(AssetData<Sound>* data)
     HG_PANIC("Load audio file impl : TODO\n");
 }
 
-AudioPlayer audioPlayerCreate()
+void AudioPlayer::update()
 {
-    AudioPlayer player{};
-    player.music = Array<AudioPlayerMusic>{0, 1024};
-    player.sounds = Array<AudioStream*>{0, 1024};
-    return player;
-}
-
-void audioPlayerDestroy(AudioPlayer* player)
-{
-    HG_ASSERT(player != nullptr);
-
-    for (u32 i = 0; i < player->sounds.count; ++i)
+    for (u32 i = sounds.count - 1; i < sounds.count; --i)
     {
-        audioStreamDestroy(player->sounds[i]);
-    }
-
-    for (u32 i = 0; i < player->music.count; ++i)
-    {
-        audioStreamDestroy(player->music[i].stream);
-    }
-
-    player->sounds = {};
-    player->music = {};
-}
-
-void audioPlayerUpdate(AudioPlayer* player)
-{
-    for (u32 i = player->sounds.count - 1; i < player->sounds.count; --i)
-    {
-        if (audioStreamQueuedSize(player->sounds[i]) == 0)
+        if (sounds[i].queuedSize() == 0)
         {
-            AudioStream* stream = player->sounds.removeShift(i);
-            audioStreamDestroy(stream);
+            sounds.removeShift(i);
         }
     }
 
-    for (u32 i = 0; i < player->music.count; ++i)
+    for (u32 i = 0; i < music.count; ++i)
     {
-        AudioPlayerMusic* music = &player->music[i];
-        if (!music->playing)
+        AudioPlayerMusic& m = music[i];
+        if (!m.playing)
             continue;
 
-        ArenaScope scratch = getScratch();
-
-        u32 width = sizeof(f32);
-
-        u32 total = music->sound->frequency * width / 16;
-        u32 queued = audioStreamQueuedSize(music->stream);
+        u32 total = m.sound->frequency / 16;
+        u32 queued = m.stream.queuedSize();
         if (queued >= total)
             continue;
-        u32 sizeToPush = total - queued;
+        u32 toPush = total - queued;
 
-        f32* queue = static_cast<f32*>(scratch.alloc(sizeToPush, width));
-        u32 queueSize = 0;
+        ArenaScope scratch = getScratch();
+        ArrayTemp<f32> queue{scratch, 0, toPush};
 
-        while (queueSize < sizeToPush)
+        while (queue.count < toPush)
         {
-            if (music->pos == music->sound->size)
-                music->pos = 0;
+            if (m.pos == m.sound->data.count)
+                m.pos = 0;
 
-            u32 sizeToQueue = std::min(sizeToPush - queueSize, static_cast<u32>(music->sound->size - music->pos));
-            memcpy(reinterpret_cast<u8*>(queue) + queueSize, reinterpret_cast<u8*>(music->sound->data) + music->pos, sizeToQueue);
-            queueSize += sizeToQueue;
-            music->pos += sizeToQueue;
+            u32 toQueue = std::min(toPush - queue.count, static_cast<u32>(m.sound->data.count - m.pos));
+            HG_ASSERT(queue.count + toQueue <= toPush);
+            u32 end = queue.count;
+            queue.count += toQueue;
+            memcpy(&queue[end], &m.sound->data[m.pos], toQueue * sizeof(f32));
+            m.pos += toQueue;
         }
 
-        HG_ASSERT(queueSize <= sizeToPush);
-        audioStreamPush(music->stream, queue, queueSize);
+        m.stream.push(queue);
     }
 }
 
-void audioPlayerMusic(AudioPlayer* player, Asset<Sound>* music)
+void AudioPlayer::playMusic(const Asset<Sound>& musicSrc)
 {
-    for (u32 i = 0; i < player->music.count; ++i)
+    for (u32 i = 0; i < music.count; ++i)
     {
-        if (player->music[i].sound == *music)
+        if (music[i].sound == musicSrc)
         {
-            player->music[i].playing = true;
+            music[i].playing = true;
             return;
         }
     }
 
-    AudioPlayerMusic* track = player->music.push();
-    track->stream = audioStreamCreate((*music)->frequency, (*music)->channels);
-    track->sound = music->clone();
+    AudioPlayerMusic* track = music.push();
+    track->stream = {musicSrc->frequency, musicSrc->channels};
+    track->sound = musicSrc.clone();
     track->pos = 0;
     track->playing = true;
 }
 
-void audioPlayerMusicKill(AudioPlayer* player, Asset<Sound>* music)
+void AudioPlayer::killMusic(const Asset<Sound>& musicSrc)
 {
-    for (u32 i = 0; i < player->music.count; ++i)
+    for (u32 i = 0; i < music.count; ++i)
     {
-        if (player->music[i].sound == *music)
+        if (music[i].sound == musicSrc)
         {
-            AudioPlayerMusic track = player->music.removeShift(i);
-            audioStreamDestroy(track.stream);
+            music.removeShift(i);
             return;
         }
     }
 }
 
-void audioPlayerMusicPause(AudioPlayer* player, Asset<Sound>* music)
+void AudioPlayer::pauseMusic(const Asset<Sound>& musicSrc)
 {
-    for (u32 i = 0; i < player->music.count; ++i)
+    for (u32 i = 0; i < music.count; ++i)
     {
-        if (player->music[i].sound == *music)
+        if (music[i].sound == musicSrc)
         {
-            player->music[i].playing = false;
+            music[i].playing = false;
             return;
         }
     }
 }
 
-void audioPlayerSetMusicGain(AudioPlayer* player, Asset<Sound>* music, f32 gain)
+void AudioPlayer::setMusicGain(const Asset<Sound>& musicSrc, f32 gain)
 {
-    for (u32 i = 0; i < player->music.count; ++i)
+    for (u32 i = 0; i < music.count; ++i)
     {
-        if (player->music[i].sound == *music)
+        if (music[i].sound == musicSrc)
         {
-            audioStreamSetGain(player->music[i].stream, gain);
+            music[i].stream.setGain(gain);
             return;
         }
     }
 }
 
-void audioPlayerSound(AudioPlayer* player, Asset<Sound>* sound, f32 gain)
+void AudioPlayer::playSound(const Asset<Sound>& sound, f32 gain)
 {
-    AudioStream** stream = player->sounds.push();
-    *stream = audioStreamCreate((*sound)->frequency, (*sound)->channels);
-    audioStreamSetGain(*stream, gain);
-    audioStreamPush(*stream, (*sound)->data, (*sound)->size);
+    AudioStream* stream = sounds.push({sound->frequency, sound->channels});
+    stream->setGain(gain);
+    stream->push(sound->data);
 }
 
 // AudioSource* audioSourceAdd(Ecs* ecs, Entity e, Asset<Sound>* audio, bool repeat)

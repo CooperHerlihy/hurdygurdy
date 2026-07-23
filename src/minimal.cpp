@@ -21,7 +21,6 @@ int main()
     f32 musicData[2000];
     Asset<Sound> music = newAsset<Sound>();
     music->data = musicData;
-    music->size = sizeof(musicData);
     music->frequency = 8000;
     music->channels = 1;
 
@@ -39,7 +38,6 @@ int main()
     f32 soundData[2000];
     Asset<Sound> sound = newAsset<Sound>();
     sound->data = soundData;
-    sound->size = sizeof(soundData);
     sound->frequency = 8000;
     sound->channels = 1;
 
@@ -49,10 +47,10 @@ int main()
         soundData[i] = noiseNorm(42u, t) / (t + 0.1f);
     }
 
-    AudioPlayer audio = audioPlayerCreate();
-    audioPlayerMusic(&audio, &music);
-    audioPlayerSetMusicGain(&audio, &music, 0.3f);
-    audioPlayerMusicPause(&audio, &music);
+    AudioPlayer audio{};
+    audio.playMusic(music);
+    audio.setMusicGain(music, 0.3f);
+    audio.pauseMusic(music);
 
     rendererInit2D(window.imageFormat());
     HG_DEFER(rendererDeinit2D());
@@ -101,7 +99,7 @@ int main()
         if (wasQuit() || window.wasClosed())
             goto quit;
 
-        audioPlayerUpdate(&audio);
+        audio.update();
 
         beginImGuiFrame();
         ImGui::NewFrame();
@@ -139,13 +137,13 @@ int main()
         {
             if (event.type == WindowEventType_buttonPress &&
                 event.button.button == Button_space)
-                audioPlayerSound(&audio, &sound, 0.5f);
+                audio.playSound(sound, 0.5f);
         }
 
         if (window.isButtonDown(Button_m))
-            audioPlayerMusic(&audio, &music);
+            audio.playMusic(music);
         else
-            audioPlayerMusicPause(&audio, &music);
+            audio.pauseMusic(music);
 
         if (ImGui::Begin("Info"))
         {

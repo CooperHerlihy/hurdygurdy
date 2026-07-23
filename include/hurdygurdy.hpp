@@ -7742,51 +7742,81 @@ void gpuFrameEnd(GpuCmd* cmd);
 // ============================================================================
 
 /**
+ * AudioStream implementation data
+ */
+struct AudioStreamData;
+
+/**
  * An audio stream
  */
-struct AudioStream;
+struct AudioStream {
+    /**
+     * The implementation data
+     */
+    AudioStreamData* data = nullptr;
 
-/**
- * Create a new audio stream
- *
- * Parameters
- * - frequency The segments per second to play
- * - channels The number of channels (mono, stereo, etc.)
- *
- * Returns
- * - The created audio stream, or nullptr on failure
- */
-AudioStream* audioStreamCreate(u32 frequency, u32 channels);
+    /**
+     * Construct empty
+     */
+    AudioStream() noexcept = default;
 
-/**
- * Destroy an audio stream
- */
-void audioStreamDestroy(AudioStream* player);
+    /**
+     * Create a new audio stream
+     *
+     * Parameters
+     * - frequency The segments per second to play
+     * - channels The number of channels (mono, stereo, etc.)
+     */
+    AudioStream(u32 frequency, u32 channels);
 
-/**
- * Push data to the audio stream
- *
- * Parameters
- * - stream The stream to push to
- * - data The raw audio data in 32 bit float format
- * - size The size of the pushed data in bytes
- */
-void audioStreamPush(AudioStream* player, const f32* data, u64 size);
+    /**
+     * Destroy the audio stream
+     */
+    ~AudioStream();
 
-/**
- * Returns the amount of audio still queued in bytes
- */
-u32 audioStreamQueuedSize(AudioStream* player);
+    /**
+     * Push data to the audio stream
+     */
+    void push(Span<f32> samples);
 
-/**
- * Clear data from the audio player
- */
-void audioStreamClear(AudioStream* player);
+    /**
+     * Clear data from the audio player
+     */
+    void clear();
 
-/**
- * The the gain for the stream
- */
-void audioStreamSetGain(AudioStream* stream, f32 gain);
+    /**
+     * Returns the amount of audio still queued in floats
+     */
+    u32 queuedSize();
+
+    /**
+     * The the gain for the stream
+     */
+    void setGain(f32 gain);
+
+    /**
+     * Move construct
+     */
+    AudioStream(AudioStream&& other)
+        : data{std::exchange(other.data, nullptr)}
+    {}
+
+    /**
+     * Move assign
+     */
+    AudioStream& operator=(AudioStream&& other)
+    {
+        if (this != &other)
+        {
+            this->~AudioStream();
+            new (this) AudioStream{std::move(other)};
+        }
+        return *this;
+    }
+
+    AudioStream(const AudioStream&) = delete;
+    AudioStream& operator=(const AudioStream&) = delete;
+};
 
 /**
  * Audio data asset
@@ -7795,11 +7825,7 @@ struct Sound {
     /**
      * The sound data
      */
-    f32* data = nullptr;
-    /**
-     * The size of the data in bytes
-     */
-    u64 size = 0;
+    Span<f32> data{};
     /**
      * The floats per second
      */
@@ -7823,11 +7849,11 @@ struct AudioPlayerMusic {
     /**
      * The music's stream
      */
-    AudioStream* stream = nullptr;
+    AudioStream stream{};
     /**
      * The music sound to play
      */
-    Asset<Sound> sound = nullptr;
+    Asset<Sound> sound{};
     /**
      * The current position in the sound
      */
@@ -7845,52 +7871,42 @@ struct AudioPlayer {
     /**
      * The repeating music
      */
-    Array<AudioPlayerMusic> music = {};
+    Array<AudioPlayerMusic> music{};
     /**
      * The temporary sounds
      */
-    Array<AudioStream*> sounds = {};
+    Array<AudioStream> sounds{};
+
+    /**
+     * Update the music and sounds
+     */
+    void update();
+
+    /**
+     * Start a new music track, or resume an existing one
+     */
+    void playMusic(const Asset<Sound>& music);
+
+    /**
+     * Remove a music track from the player
+     */
+    void killMusic(const Asset<Sound>& music);
+
+    /**
+     * Pause a music track
+     */
+    void pauseMusic(const Asset<Sound>& music);
+
+    /**
+     * Set the volume for a music track
+     */
+    void setMusicGain(const Asset<Sound>& music, f32 gain);
+
+    /**
+     * Play a sound once
+     */
+    void playSound(const Asset<Sound>& sound, f32 gain = 1.0f);
 };
-
-/**
- * Create a new audio player
- */
-AudioPlayer audioPlayerCreate();
-
-/**
- * Destroy an audio player
- */
-void audioPlayerDestroy(AudioPlayer* player);
-
-/**
- * Update the audio player
- */
-void audioPlayerUpdate(AudioPlayer* player);
-
-/**
- * Start a new music track, or resume an existing one
- */
-void audioPlayerMusic(AudioPlayer* player, Asset<Sound>* music);
-
-/**
- * Remove a music track from the player
- */
-void audioPlayerMusicKill(AudioPlayer* player, Asset<Sound>* music);
-
-/**
- * Pause a music track
- */
-void audioPlayerMusicPause(AudioPlayer* player, Asset<Sound>* music);
-
-/**
- * Set the volume for a music track
- */
-void audioPlayerSetMusicGain(AudioPlayer* player, Asset<Sound>* music, f32 gain = 1.0f);
-
-/**
- * Play a sound once
- */
-void audioPlayerSound(AudioPlayer* player, Asset<Sound>* sound, f32 gain);
 
 // ============================================================================
 // Rendering
