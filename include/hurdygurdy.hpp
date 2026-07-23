@@ -7134,10 +7134,10 @@ BinaryView binaryWriteSerial(Arena* arena, Serializer* data);
  */
 Serializer binaryReadSerial(Arena* arena, BinaryView bin);
 
-/**
- * Write serialized data as json
- */
-StringView jsonWriteSerial(Arena* arena, Serializer* data);
+// /**
+//  * Write serialized data as json
+//  */
+// StringView jsonWriteSerial(Arena* arena, Serializer* data);
 
 // /**
 //  * Read json data to be deserialized : TODO

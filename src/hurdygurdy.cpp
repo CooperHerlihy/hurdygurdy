@@ -2680,82 +2680,82 @@ Serializer binaryReadSerial(Arena* arena, BinaryView bin)
     return serialReader(arena, s.current);
 }
 
-static void serialJsonWriteNode(StringBuilder* str, u32 indentation, SerialNode* node);
-
-static void serialJsonWriteString(StringBuilder* str, StringView string)
-{
-    str->append('"');
-    for (u32 i = 0; i < string.length; ++i)
-    {
-        switch (string[i])
-        {
-        case '\\':
-            str->append("\\\\");
-            break;
-        case '\"':
-            str->append("\\\"");
-            break;
-        case '\n':
-            str->append("\\n");
-            break;
-        case '\r':
-            str->append("\\r");
-            break;
-        case '\f':
-            str->append("\\f");
-            break;
-        case '\b':
-            str->append("\\b");
-            break;
-        default:
-            str->append(string[i]);
-            break;
-        }
-    }
-    str->append('"');
-}
-
-static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialObject object)
-{
-    if (object.childCount > 0)
-    {
-        str->append("[\n");
-
-        SerialNode* elem = object.firstChild;
-
-        for (u32 i = 0; i < indentation + 1; ++i)
-        {
-            str->append("    ");
-        }
-        serialJsonWriteNode(str, indentation + 1, elem);
-
-        elem = elem->next;
-
-        for (u32 i = 1; i < object.childCount; ++i)
-        {
-            str->append(",\n");
-            for (u32 j = 0; j < indentation + 1; ++j)
-            {
-                str->append("    ");
-            }
-            serialJsonWriteNode(str, indentation + 1, elem);
-
-            elem = elem->next;
-        }
-
-        str->append( '\n');
-        for (u32 k = 0; k < indentation; ++k)
-        {
-            str->append("    ");
-        }
-        str->append(']');
-    }
-    else
-    {
-        str->append("[]");
-    }
-}
-
+// static void serialJsonWriteNode(StringBuilder* str, u32 indentation, SerialNode* node);
+//
+// static void serialJsonWriteString(StringBuilder* str, StringView string)
+// {
+//     str->append('"');
+//     for (u32 i = 0; i < string.length; ++i)
+//     {
+//         switch (string[i])
+//         {
+//         case '\\':
+//             str->append("\\\\");
+//             break;
+//         case '\"':
+//             str->append("\\\"");
+//             break;
+//         case '\n':
+//             str->append("\\n");
+//             break;
+//         case '\r':
+//             str->append("\\r");
+//             break;
+//         case '\f':
+//             str->append("\\f");
+//             break;
+//         case '\b':
+//             str->append("\\b");
+//             break;
+//         default:
+//             str->append(string[i]);
+//             break;
+//         }
+//     }
+//     str->append('"');
+// }
+//
+// static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialObject object)
+// {
+//     if (object.childCount > 0)
+//     {
+//         str->append("[\n");
+//
+//         SerialNode* elem = object.firstChild;
+//
+//         for (u32 i = 0; i < indentation + 1; ++i)
+//         {
+//             str->append("    ");
+//         }
+//         serialJsonWriteNode(str, indentation + 1, elem);
+//
+//         elem = elem->next;
+//
+//         for (u32 i = 1; i < object.childCount; ++i)
+//         {
+//             str->append(",\n");
+//             for (u32 j = 0; j < indentation + 1; ++j)
+//             {
+//                 str->append("    ");
+//             }
+//             serialJsonWriteNode(str, indentation + 1, elem);
+//
+//             elem = elem->next;
+//         }
+//
+//         str->append( '\n');
+//         for (u32 k = 0; k < indentation; ++k)
+//         {
+//             str->append("    ");
+//         }
+//         str->append(']');
+//     }
+//     else
+//     {
+//         str->append("[]");
+//     }
+// }
+//
 // static void serialJsonWriteObject(Arena* arena, StringBuilder* str, u32 indentation, SerialNode* node)
 // {
 //     if (node->count > 0)
@@ -2800,25 +2800,25 @@ static void serialJsonWriteArray(StringBuilder* str, u32 indentation, SerialObje
 //         stringAppend(arena, str, "{}");
 //     }
 // }
-
-static void serialJsonWriteNode(StringBuilder* str, u32 indentation, SerialNode* node)
-{
-    node->data.match(
-        [&](SerialObject& obj) { serialJsonWriteArray(str, indentation, obj); },
-        [&](StringView& strData) { serialJsonWriteString(str, strData); },
-        [&](i64& i) { str->append(integerToString(getScratch(), i)); },
-        [&](f64& f) { str->append(floatToString(getScratch(), f, 6)); },
-        [&](bool& b) { str->append(b ? "true" : "false"); }
-    );
-}
-
-StringView jsonWriteSerial(Arena* arena, Serializer* serial)
-{
-    StringBuilder str{arena};
-    serialJsonWriteNode(&str, 0, serial->current);
-    str.append('\n');
-    return str;
-}
+//
+// static void serialJsonWriteNode(StringBuilder* str, u32 indentation, SerialNode* node)
+// {
+//     node->data.match(
+//         [&](SerialObject& obj) { serialJsonWriteArray(str, indentation, obj); },
+//         [&](StringView& strData) { serialJsonWriteString(str, strData); },
+//         [&](i64& i) { str->append(integerToString(getScratch(), i)); },
+//         [&](f64& f) { str->append(floatToString(getScratch(), f, 6)); },
+//         [&](bool& b) { str->append(b ? "true" : "false"); }
+//     );
+// }
+//
+// StringView jsonWriteSerial(Arena* arena, Serializer* serial)
+// {
+//     StringBuilder str{arena};
+//     serialJsonWriteNode(&str, 0, serial->current);
+//     str.append('\n');
+//     return str;
+// }
 
 // Serializer jsonReadSerial(Arena* arena, StringView json)
 // {
