@@ -85,6 +85,12 @@ set(SHADERS
     test_compute.comp
     test_tri.vert
     test_tri.frag
+    test_sampler.frag
+    test_mul.comp
+    test_buf_to_img.comp
+    test_uniform.vert
+    test_uniform.frag
+    test_storage_img.comp
 )
 
 set(SHADER_HEADERS)

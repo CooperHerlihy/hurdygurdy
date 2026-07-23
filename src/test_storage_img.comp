@@ -1,0 +1,17 @@
+#version 460
+#include "hurdygurdy.glsl"
+
+layout(push_constant) uniform Push {
+    uint imgIdx;
+} push;
+
+layout(HgStorageImage, rgba8) uniform writeonly image2D img[];
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    uint parity = (uint(coord.x) + uint(coord.y)) & 1u;
+    vec4 color = parity == 0u
+        ? vec4(1.0, 1.0, 1.0, 1.0)
+        : vec4(0.0, 0.0, 0.0, 1.0);
+    imageStore(img[push.imgIdx], coord, color);
+}

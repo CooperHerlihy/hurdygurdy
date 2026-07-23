@@ -23,6 +23,12 @@ Existing test shaders in `src/`:
 | `test_compute.comp` | SSBO read+add+write via push constant descriptors |
 | `test_tri.vert` | Full-screen triangle (positions hardcoded) |
 | `test_tri.frag` | Constant color output `vec4(0.2, 0.4, 0.6, 1.0)` |
+| `test_sampler.frag` | Sample texture at push-constant UV |
+| `test_mul.comp` | Read `inBuf[i]`, write `inBuf[i] * 2` to `outBuf[i]` |
+| `test_buf_to_img.comp` | Read buffer, write to image via `imageStore` |
+| `test_uniform.vert` | Read ubo color, pass to fragment via location |
+| `test_uniform.frag` | Pass-through color from vertex input |
+| `test_storage_img.comp` | Write checkerboard to storage image |
 
 ## Test Macro
 
@@ -58,6 +64,12 @@ Shader includes are needed only in the GPU test section:
 #include "test_compute.comp.spv.h"
 #include "test_tri.vert.spv.h"
 #include "test_tri.frag.spv.h"
+#include "test_sampler.frag.spv.h"
+#include "test_mul.comp.spv.h"
+#include "test_buf_to_img.comp.spv.h"
+#include "test_uniform.vert.spv.h"
+#include "test_uniform.frag.spv.h"
+#include "test_storage_img.comp.spv.h"
 ```
 These generated headers contain `static const u8 shaderName[] = { ... };`.
 The variable name matches the file with dots replaced: `test_tri.vert.spv.h`
@@ -179,7 +191,7 @@ gpuMemoryBarrier(cmd, {}, {&ib, 1});
 gpuMemoryBarrier(cmd, {&bb, 1}, {&ib, 1});
 ```
 
-## Common Pitfalls
+## Common Pitfalls (Discovered During Implementation)
 
 1. **Missing barrier before dispatch/render pass** -- resource not visible to
    the shader, produces garbage or hangs.
@@ -201,6 +213,15 @@ gpuMemoryBarrier(cmd, {&bb, 1}, {&ib, 1});
 10. **`gpuRenderPassBegin` with `image` field as `GpuView*`** -- the view
     references the image internally. The attachment image is the view, not
     the raw image.
+11. **`GpuViewCreateInfo.type` must match image dimensionality** -- defaults to
+    `GpuViewType_1D`. For 2D images, set `type = GpuViewType_2D` explicitly.
+12. **Sampled images in render passes** -- list them in `pass.sampledImages` or
+    the layout never transitions to shader-read-only.
+13. **Buffers used as `vkCmdCopyBuffer` source** -- must include
+    `GpuBufferUsage_transferSrc`. `GpuBuffer::read()` on device-local buffers
+    copies via `vkCmdCopyBuffer` and the source buffer needs this flag.
+14. **RGBA8 little-endian `u32` values** -- `vec4(0,0,0,1)` = byte order
+    `[R=0,G=0,B=0,A=255]` = `0xFF000000`. `0x000000FF` is red with alpha=0.
 
 ## Adding a New Test Shader
 
@@ -569,243 +590,5 @@ an image array.
 
 **Verification:** Each array layer renders independently; `layerCount` correctly
 iterates render passes across layers.
-
----
-
-# Unit Tests for Existing Smoke Tests
-
-The 11 test blocks below replace smoke tests in `src/test.cpp 2208-2823`.
-Each verifies functional correctness, not just "does not crash."
-
----
-
-## U1. GpuBuffer Write/Read with Non-Zero Offsets
-
-**Replaces** `GpuBuffer write/read: host-visible` (line 2307) and `staging`
-(line 2317).
-
-**Steps:**
-1. Create `GpuBuffer` (256 bytes, `transferSrc | transferDst`,
-   `frequentUpdate`).
-2. Write `0x11111111` at offset 0.
-3. Write `0x22222222` at offset 64.
-4. Write `0x33333333` at offset 128.
-5. Read back 4 bytes from offset 0: assert `0x11111111`.
-6. Read back 4 bytes from offset 64: assert `0x22222222`.
-7. Read back 4 bytes from offset 128: assert `0x33333333`.
-8. Read back 8 bytes from offset 60 (crossing into offset-64 write):
-   assert yields the tail of `0x11111111` + head of `0x22222222`.
-9. **Repeat steps 1-8** with `GpuMemoryUsage_deviceOnly` (staging path).
-
-**Verification:** Independent buffer regions are independently writable and
-readable. Non-zero offsets work. Staging path matches host-visible path.
-
----
-
-## U2. GpuView Extended Config Affects Sampler Output
-
-**Replaces** `GpuView extended create info` (line 2413).
-
-**Steps:**
-1. Create 4x4 `GpuImage` (`transferSrc | transferDst | sampled | colorAttachment`).
-2. Write a checkerboard pattern to it (2x2 black, 2x2 white).
-3. Create `GpuView` with `GpuFilter_linear`, `GpuSamplerEdgeMode_clampToEdge`.
-4. Create a 2x2 color attachment.
-5. Build a pipeline that samples the view at half-pixel coordinates and outputs
-   the sampled color.
-6. `gpuRenderPassBegin`, bind pipeline, draw full-screen quad, end pass.
-7. Read back the 2x2 result.
-8. Verify bilinear interpolation: the sample at `(0.25, 0.25)` from a 4x4
-   texture yields a blend of 4 texels, not a nearest-neighbor result.
-9. **Repeat** with `GpuFilter_nearest`: verify nearest-neighbor produces
-   different values at the same coordinates.
-
-**Verification:** `GpuFilter` actually affects how texels are sampled.
-`GpuSamplerEdgeMode` could be verified by sampling outside `[0,1]` and
-checking clamp behavior. This proves the extended create info isn't ignored.
-
----
-
-## U3. Command Buffer Executes Recorded Commands
-
-**Replaces** `gpuCmdBegin / gpuCmdEnd` (line 2428).
-
-**Steps:**
-1. Create `GpuBuffer` (64 bytes, `transferDst`, device-only).
-2. Create staging `GpuBuffer` (64 bytes, `transferSrc`, `frequentUpdate`).
-3. Write known data into staging buffer at offset 0.
-4. `gpuCmdBegin()`.
-5. Issue a barrier: staging to `transferSrc`.
-6. **If `gpuCmdCopyBuffer` exists:** copy staging->device.
-   **Otherwise:** dispatch a compute shader that copies staging->device.
-7. Issue a barrier: device buffer to `transferSrc`.
-8. `gpuCmdEnd(cmd)`.
-9. Read from device buffer. Assert data matches what was written to staging.
-
-**Verification:** Commands recorded between `gpuCmdBegin` and `gpuCmdEnd` are
-actually executed and produce observable results. Without this, the test
-exposes a no-op command buffer.
-
----
-
-## U4. Buffer Barrier Synchronizes Compute Write Then Read
-
-**Replaces** `gpuMemoryBarrier: buffers` (line 2435).
-
-**Steps:**
-1. Create `GpuBuffer` (256 bytes, `storageBuffer`, device-only).
-2. Write known data via staging transfer (or use `frequentUpdate`).
-3. `gpuCmdBegin()`.
-4. **Dispatch 1:** barrier to `shaderWrite | shaderRead`, bind compute pipeline
-   that increments every element by 1, dispatch.
-5. **Barrier:** buffer to `shaderRead`.
-6. **Dispatch 2:** bind compute pipeline that reads elements and writes them
-   to a second output buffer.
-7. `gpuCmdEnd()`.
-8. Read result. Assert `result[i] == original[i] + 1`.
-9. **Repeat without the barrier between Dispatch 1 and Dispatch 2:**
-   expect incorrect results (data hazard). This confirms the barrier was
-   what made step 8 pass.
-
-**Verification:** The barrier actually forces visibility of the first dispatch's
-writes before the second dispatch reads them. Without the barrier, the second
-dispatch sees stale data.
-
----
-
-## U5. Image Barrier Transitions Layout Correctly
-
-**Replaces** `gpuMemoryBarrier: images` (line 2448).
-
-**Steps:**
-1. Create 4x4 `GpuImage` (`transferSrc | transferDst | sampled | colorAttachment`).
-2. Create `GpuView` on it.
-3. Write a known pattern via `view.write(src)`.
-4. `gpuCmdBegin()`.
-5. Barrier: transition image from `undefined` to `transferDst`.
-6. Write a different pattern (e.g. all `0xFF0000FF` red) via a second
-   `view.write()` call.
-7. Barrier: `transferDst` -> `transferSrc`.
-8. `gpuCmdEnd()`.
-9. Read back. Assert the last-written pattern is correct, proving the layout
-   transitions did not corrupt data.
-
-**Verification:** The image layout actually transitions; data written after
-a `transferDst` barrier survives a subsequent `transferSrc` barrier without
-corruption. The texture is readable after the final layout.
-
----
-
-## U6. Combined Buffer+Image Barrier in a Dependency Chain
-
-**Replaces** `gpuMemoryBarrier: buffers + images combined` (line 2463).
-
-**Steps:**
-1. Create `storageBuf` (256 bytes, `storageBuffer`, device-only).
-2. Create 4x4 `GpuImage` (`transferSrc | transferDst | storage`).
-3. Write input data into `storageBuf`.
-4. `gpuCmdBegin()`.
-5. **Barrier:** `storageBuf` to `shaderRead | shaderWrite`, image to `general`.
-6. **Dispatch 1:** compute shader reads `storageBuf`, writes result to image
-   (via `imageStore`).
-7. **Barrier:** `storageBuf` to `transferSrc`, image to `transferSrc`.
-8. Read back both resources.
-9. Verify `storageBuf` still contains input (or modified as expected).
-10. Verify image contains the computed output.
-
-**Verification:** A single `gpuMemoryBarrier` call correctly handles both
-buffer and image barriers simultaneously. The combined barrier transitions both
-resources to the correct stages/layouts for the subsequent operations.
-
----
-
-## U7. Compute Pass Dispatch Produces Correct Output
-
-**Replaces** `gpuComputePass` (line 2483).
-
-**Steps:**
-1. Create `inBuf` (256 bytes, `storageBuffer`, `frequentUpdate`).
-2. Create `outBuf` (256 bytes, `storageBuffer | transferSrc`, device-only).
-3. Write `0, 1, 2, ..., 63` into `inBuf`.
-4. Create compute pipeline that reads `inBuf`, writes `inBuf[i] * 2` to `outBuf[i]`.
-5. `gpuCmdBegin()`.
-6. Barrier both buffers to `shaderRead` / `shaderWrite`.
-7. `gpuComputePass(cmd, pass)` with `storageBuffers = {&inBuf, &outBuf}`.
-8. `gpuBindPipeline`, `gpuDispatch(cmd, 64, 1, 1)`.
-9. `gpuCmdEnd()`.
-10. Read `outBuf`. Assert `outBuf[i] == inBuf[i] * 2`.
-
-**Verification:** The compute pass structure actually makes resources visible to
-the shader and dispatch produces correct results. Without this, the `GpuComputePass`
-is just recording barriers that may never take effect.
-
----
-
-## U8. gpuWaitIdle Waits for Pending Work
-
-**Replaces** `gpuWaitIdle` (line 2629).
-
-**Steps:**
-1. Create `GpuBuffer` (64 bytes, `storageBuffer`, device-only).
-2. Create staging buffer (64 bytes, `transferSrc`, `frequentUpdate`).
-3. Write known data into staging.
-4. Submit a compute dispatch that copies/modifies data (via a one-time command
-   buffer: `gpuCmdBegin` + dispatch + `gpuCmdEnd`).
-5. **Immediately** call `gpuWaitIdle()`.
-6. Read the buffer. Assert the computation completed (data is modified from
-   original).
-7. **Without** `gpuWaitIdle`, the readback would race with the GPU.
-   With `gpuWaitIdle`, the result is guaranteed visible.
-
-**Verification:** After `gpuWaitIdle()`, all previously submitted work is
-complete and visible to the host. This catches cases where `gpuWaitIdle` returns
-before GPU work finishes.
-
----
-
-## U9. Uniform Buffer Passes Data to Vertex Shader
-
-**Replaces** `GpuBuffer::uniformDescriptor` (line 2634).
-
-**Steps:**
-1. Create `uniformBuf` (64 bytes, `GpuBufferUsage_uniformBuffer`,
-   `frequentUpdate`).
-2. Write a `Vec4` color (e.g. `{0.5, 0.3, 0.7, 1.0}`) into the buffer.
-3. Create 4x4 color attachment.
-4. Build a graphics pipeline with a uniform buffer binding in the vertex shader.
-   The vertex shader propagates the color to the fragment shader via `location`.
-5. `gpuRenderPassBegin`, include `uniformBuf` in `pass.uniformBuffers`.
-6. Bind pipeline, draw triangle.
-7. `gpuRenderPassEnd`, `gpuCmdEnd`.
-8. Read back pixels. Assert they match the color from the uniform buffer
-   (within rounding for `unorm8`).
-
-**Verification:** The descriptor returned by `uniformDescriptor()` is actually
-the correct binding point for uniform data. The shader receives the intended
-value.
-
----
-
-## U10. Storage Image Write via Compute Shader
-
-**Replaces** `GpuView::storageDescriptor` (line 2642).
-
-**Steps:**
-1. Create 4x4 `GpuImage` (`transferSrc | transferDst | storage | sampled`).
-2. Create `GpuView` with `GpuFilter_nearest`.
-3. Build compute pipeline that writes a checkerboard pattern to the storage
-   image via `imageStore`.
-4. `gpuCmdBegin()`.
-5. Barrier: image to `general`.
-6. `gpuComputePass` with `storageImages = {&view}`.
-7. Bind pipeline, dispatch 4x4x1.
-8. Barrier: image to `transferSrc`.
-9. `gpuCmdEnd()`.
-10. Read back the image via `view.read(dst)`.
-11. Assert each pixel matches the checkerboard pattern.
-
-**Verification:** The descriptor returned by `storageDescriptor()` is the correct
-binding point for `image2D` stores. Compute shader can write to the image via
-this descriptor.
 
 ---

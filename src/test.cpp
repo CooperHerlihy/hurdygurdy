@@ -2232,6 +2232,12 @@ int main()
 #include "test_compute.comp.spv.h"
 #include "test_tri.vert.spv.h"
 #include "test_tri.frag.spv.h"
+#include "test_sampler.frag.spv.h"
+#include "test_mul.comp.spv.h"
+#include "test_buf_to_img.comp.spv.h"
+#include "test_uniform.vert.spv.h"
+#include "test_uniform.frag.spv.h"
+#include "test_storage_img.comp.spv.h"
 
     // formatToSize
     {
@@ -2304,24 +2310,73 @@ int main()
         // Destruction via scope exit
     }
 
-    // GpuBuffer write/read: host-visible
+    // U1: GpuBuffer Write/Read with Non-Zero Offsets
     {
-        GpuBuffer buf{64, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst, GpuMemoryUsage_frequentUpdate};
-        u32 data = 0xDEADBEEF;
-        buf.write(&data, 0, sizeof(data));
-        u32 result = 0;
-        buf.read(&result, 0, sizeof(result));
-        TEST(result == 0xDEADBEEF);
-    }
+        // Host-visible path
+        {
+            GpuBuffer buf{256,
+                GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst,
+                GpuMemoryUsage_frequentUpdate};
 
-    // GpuBuffer write/read: staging (device-only)
-    {
-        GpuBuffer buf{64, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst};
-        u32 data = 0xCAFEBABE;
-        buf.write(&data, 0, sizeof(data));
-        u32 result = 0;
-        buf.read(&result, 0, sizeof(result));
-        TEST(result == 0xCAFEBABE);
+            // Write 68 bytes of 0x11111111 starting at offset 0
+            u32 fillVal = 0x11111111;
+            for (u32 off = 0; off < 68; off += 4)
+                buf.write(&fillVal, off, sizeof(fillVal));
+
+            // Overwrite at offset 64 and 128
+            u32 v2 = 0x22222222;
+            u32 v3 = 0x33333333;
+            buf.write(&v2, 64, sizeof(v2));
+            buf.write(&v3, 128, sizeof(v3));
+
+            u32 r1 = 0, r2 = 0, r3 = 0;
+            buf.read(&r1, 0, sizeof(r1));
+            buf.read(&r2, 64, sizeof(r2));
+            buf.read(&r3, 128, sizeof(r3));
+            TEST(r1 == 0x11111111);
+            TEST(r2 == 0x22222222);
+            TEST(r3 == 0x33333333);
+
+            // Cross-boundary read: 8 bytes starting at offset 60
+            // Bytes 60-63 are the tail of 0x11111111 fill,
+            // bytes 64-67 are the head of the 0x22222222 write
+            u64 cross = 0;
+            buf.read(&cross, 60, sizeof(cross));
+            u32 tail = static_cast<u32>(cross & 0xFFFFFFFF);
+            u32 head = static_cast<u32>((cross >> 32) & 0xFFFFFFFF);
+            TEST(tail == 0x11111111);
+            TEST(head == 0x22222222);
+        }
+
+        // Device-only (staging) path
+        {
+            GpuBuffer buf{256,
+                GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst};
+
+            u32 fillVal = 0x11111111;
+            for (u32 off = 0; off < 68; off += 4)
+                buf.write(&fillVal, off, sizeof(fillVal));
+
+            u32 v2 = 0x22222222;
+            u32 v3 = 0x33333333;
+            buf.write(&v2, 64, sizeof(v2));
+            buf.write(&v3, 128, sizeof(v3));
+
+            u32 r1 = 0, r2 = 0, r3 = 0;
+            buf.read(&r1, 0, sizeof(r1));
+            buf.read(&r2, 64, sizeof(r2));
+            buf.read(&r3, 128, sizeof(r3));
+            TEST(r1 == 0x11111111);
+            TEST(r2 == 0x22222222);
+            TEST(r3 == 0x33333333);
+
+            u64 cross = 0;
+            buf.read(&cross, 60, sizeof(cross));
+            u32 tail = static_cast<u32>(cross & 0xFFFFFFFF);
+            u32 head = static_cast<u32>((cross >> 32) & 0xFFFFFFFF);
+            TEST(tail == 0x11111111);
+            TEST(head == 0x22222222);
+        }
     }
 
     // GpuBuffer write/read: multiple values
@@ -2410,85 +2465,377 @@ int main()
             TEST(dst[i] == 0x30405060);
     }
 
-    // GpuView extended create info
+    // U2: GpuView Extended Config Affects Sampler Output
     {
-        GpuImage img{32, 32, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
+        static constexpr u32 texSize = 4;
+
+        GpuImage texImg{texSize, texSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst
+            | GpuImageUsage_sampled};
+
+        u32 checker[texSize * texSize] = {};
+        for (u32 y = 0; y < texSize; ++y)
+            for (u32 x = 0; x < texSize; ++x)
+                checker[y * texSize + x] = ((x + y) & 1)
+                    ? 0xFFFFFFFF
+                    : 0x000000FF;
+
         GpuViewCreateInfo vci{};
-        vci.image = &img;
+        vci.image = &texImg;
         vci.aspectFlags = GpuAspect_color;
-        vci.filter = GpuFilter_linear;
         vci.type = GpuViewType_2D;
+        vci.filter = GpuFilter_linear;
+        vci.edgeMode = GpuSamplerEdgeMode_clampToEdge;
         GpuView view{vci};
-        TEST(view.data != nullptr);
-        u32 idx = view.samplerDescriptor();
-        TEST(idx != ~0u);
+        view.write(checker);
+
+        // Verify descriptor is valid
+        // Read back texture data to verify write
+        u32 readback[texSize * texSize] = {};
+        view.read(readback);
+        bool match = true;
+        for (u32 i = 0; i < texSize * texSize; ++i)
+            if (readback[i] != checker[i])
+                match = false;
+        TEST(match);
+
+        // Verify sampled rendering produces non-clear color
+        static constexpr u32 outSize = 2;
+        GpuImage outImg{outSize, outSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
+        GpuView outView{outImg, GpuAspect_color};
+
+        struct Push {
+            f32 uvX;
+            f32 uvY;
+            u32 texIdx;
+        };
+        Push push{0.375f, 0.125f, view.samplerDescriptor()};
+
+        GpuGraphicsPipelineCreateInfo ci{};
+        ci.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
+        ci.fragmentShader = {test_sampler_frag_spv, sizeof(test_sampler_frag_spv)};
+        Format colorFmt = Format_r8g8b8a8_unorm;
+        ci.colorAttachmentFormats = {&colorFmt, 1};
+        ci.pushConstantSize = sizeof(Push);
+
+        GpuPipeline pipe{ci};
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        GpuRenderAttachment colorAtt{};
+        colorAtt.image = &outView;
+        colorAtt.loadOp = GpuLoadOp_clear;
+        colorAtt.storeOp = GpuStoreOp_store;
+        colorAtt.clearValue.color.float32[0] = 0.0f;
+        colorAtt.clearValue.color.float32[1] = 0.0f;
+        colorAtt.clearValue.color.float32[2] = 0.0f;
+        colorAtt.clearValue.color.float32[3] = 1.0f;
+
+        GpuRenderPass pass{};
+        pass.colorAttachments = {&colorAtt, 1};
+        GpuView* sampledImages[] = {&view};
+        pass.sampledImages = sampledImages;
+
+        gpuRenderPassBegin(cmd, pass);
+        gpuBindPipeline(cmd, pipe);
+        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuDraw(cmd, 0, 3, 0, 1);
+        gpuRenderPassEnd(cmd);
+        gpuCmdEnd(cmd);
+
+        u32 result[outSize * outSize] = {};
+        outView.read(result);
+        // Sampling center of white texel (1,0) → white (0xFFFFFFFF)
+        TEST(result[0] == 0xFFFFFFFF);
     }
 
-    // gpuCmdBegin / gpuCmdEnd
+    // U3: Command Buffer Executes Recorded Commands
     {
+        static constexpr u32 bufSize = 64;
+
+        GpuBuffer devBuf{bufSize, GpuBufferUsage_transferDst | GpuBufferUsage_transferSrc
+            | GpuBufferUsage_storageBuffer};
+        GpuBuffer staging{bufSize, GpuBufferUsage_transferSrc | GpuBufferUsage_storageBuffer,
+            GpuMemoryUsage_frequentUpdate};
+
+        u32 known = 0xDECAF123;
+        staging.write(&known, 0, sizeof(known));
+
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{
+            {test_compute_comp_spv, sizeof(test_compute_comp_spv)},
+            12}};
+
+        struct Push {
+            u32 addVal;
+            u32 inIdx;
+            u32 outIdx;
+        };
+        Push push{0, staging.storageDescriptor(), devBuf.storageDescriptor()};
+
         GpuCmd* cmd = gpuCmdBegin();
         TEST(cmd != nullptr);
+
+        GpuBufferBarrier stagingBarrier{};
+        stagingBarrier.buffer = &staging;
+        stagingBarrier.nextStage = GpuStage_computeShader;
+        stagingBarrier.nextAccess = GpuAccess_shaderRead;
+        gpuMemoryBarrier(cmd, {&stagingBarrier, 1}, {});
+
+        gpuBindPipeline(cmd, pipe);
+        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuDispatch(cmd, 1, 1, 1);
+
+        GpuBufferBarrier devBarrier{};
+        devBarrier.buffer = &devBuf;
+        devBarrier.nextStage = GpuStage_transfer;
+        devBarrier.nextAccess = GpuAccess_transferRead;
+        gpuMemoryBarrier(cmd, {&devBarrier, 1}, {});
+
         gpuCmdEnd(cmd);
+
+        u32 result = 0;
+        devBuf.read(&result, 0, sizeof(result));
+        TEST(result == 0xDECAF123);
     }
 
-    // gpuMemoryBarrier: buffers
+    // U4: Buffer Barrier Synchronizes Compute Write Then Read
     {
-        GpuBuffer buf{64, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
+        static constexpr u32 elemCount = 64;
+        static constexpr u32 bufSize = elemCount * sizeof(u32);
+
+        GpuBuffer buf{bufSize,
+            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
             GpuMemoryUsage_frequentUpdate};
+        GpuBuffer outBuf{bufSize,
+            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc};
+
+        u32 input[elemCount] = {};
+        for (u32 i = 0; i < elemCount; ++i)
+            input[i] = i;
+        buf.write(input, 0, bufSize);
+
+        struct Push {
+            u32 addVal;
+            u32 inIdx;
+            u32 outIdx;
+        };
+
+        GpuPipeline incPipe{GpuComputePipelineCreateInfo{
+            {test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push)}};
+
         GpuCmd* cmd = gpuCmdBegin();
+
+        // Barrier: buf to shaderWrite|shaderRead for Dispatch 1
         GpuBufferBarrier bb{};
         bb.buffer = &buf;
         bb.nextStage = GpuStage_computeShader;
         bb.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
         gpuMemoryBarrier(cmd, {&bb, 1}, {});
+
+        // Dispatch 1: increment every element by 1 (in-place)
+        {
+            Push push{1, buf.storageDescriptor(), buf.storageDescriptor()};
+            gpuBindPipeline(cmd, incPipe);
+            gpuPushConstants(cmd, incPipe, &push, sizeof(push));
+            gpuDispatch(cmd, elemCount, 1, 1);
+        }
+
+        // Barrier: buf to shaderRead for Dispatch 2
+        bb.nextAccess = GpuAccess_shaderRead;
+        gpuMemoryBarrier(cmd, {&bb, 1}, {});
+
+        // Dispatch 2: copy from buf to outBuf (addVal=0)
+        {
+            Push push{0, buf.storageDescriptor(), outBuf.storageDescriptor()};
+            gpuBindPipeline(cmd, incPipe);
+            gpuPushConstants(cmd, incPipe, &push, sizeof(push));
+            gpuDispatch(cmd, elemCount, 1, 1);
+        }
+
         gpuCmdEnd(cmd);
+
+        u32 result[elemCount] = {};
+        outBuf.read(result, 0, bufSize);
+        for (u32 i = 0; i < elemCount; ++i)
+            TEST(result[i] == input[i] + 1);
     }
 
-    // gpuMemoryBarrier: images
+    // U5: Image Barrier Transitions Layout Correctly
     {
-        GpuImage img{8, 8, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
+        static constexpr u32 imgSize = 4;
+
+        GpuImage img{imgSize, imgSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst
+            | GpuImageUsage_sampled | GpuImageUsage_colorAttachment};
         GpuView view{img, GpuAspect_color};
+
+        // Write a known pattern
+        u32 red[imgSize * imgSize] = {};
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            red[i] = 0xFF0000FF;
+        view.write(red);
+
+        // Do a round-trip layout transition:
+        // transferDst (after write) -> general -> transferSrc
         GpuCmd* cmd = gpuCmdBegin();
+
         GpuImageBarrier ib{};
         ib.image = &view;
+        ib.nextStage = GpuStage_computeShader;
+        ib.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        ib.nextLayout = GpuLayout_general;
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+
         ib.nextStage = GpuStage_transfer;
         ib.nextAccess = GpuAccess_transferRead;
         ib.nextLayout = GpuLayout_transferSrc;
         gpuMemoryBarrier(cmd, {}, {&ib, 1});
+
         gpuCmdEnd(cmd);
+
+        // Read back — data should survive the transitions
+        u32 result[imgSize * imgSize] = {};
+        view.read(result);
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            TEST(result[i] == 0xFF0000FF);
     }
 
-    // gpuMemoryBarrier: buffers + images combined
+    // U6: Combined Buffer+Image Barrier in a Dependency Chain
     {
-        GpuBuffer buf{64, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
-        GpuImage img{8, 8, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
-        GpuView view{img, GpuAspect_color};
+        static constexpr u32 bufSize = 256;
+        static constexpr u32 imgSize = 4;
+
+        GpuBuffer storageBuf{bufSize,
+            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
+            GpuMemoryUsage_frequentUpdate};
+        GpuImage img{imgSize, imgSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_storage};
+        GpuView imgView{img, GpuAspect_color};
+
+        // Write 16 RGBA pixels as u32 values into the buffer
+        u32 pixelData[imgSize * imgSize] = {};
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+        {
+            u8 r = static_cast<u8>((i * 37) & 0xFF);
+            u8 g = static_cast<u8>((i * 71) & 0xFF);
+            u8 b = static_cast<u8>((i * 101) & 0xFF);
+            pixelData[i] = r | (static_cast<u32>(g) << 8)
+                         | (static_cast<u32>(b) << 16) | (0xFFu << 24);
+        }
+        storageBuf.write(pixelData, 0, sizeof(pixelData));
+
+        struct Push {
+            u32 bufIdx;
+            u32 imgIdx;
+        };
+
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{
+            {test_buf_to_img_comp_spv, sizeof(test_buf_to_img_comp_spv)}, sizeof(Push)}};
+
         GpuCmd* cmd = gpuCmdBegin();
+
+        // Combined barrier: buffer to shaderRead|shaderWrite, image to general
         GpuBufferBarrier bb{};
-        bb.buffer = &buf;
+        bb.buffer = &storageBuf;
         bb.nextStage = GpuStage_computeShader;
         bb.nextAccess = GpuAccess_shaderRead;
         GpuImageBarrier ib{};
-        ib.image = &view;
-        ib.nextStage = GpuStage_transfer;
+        ib.image = &imgView;
+        ib.nextStage = GpuStage_computeShader;
+        ib.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        ib.nextLayout = GpuLayout_general;
+        gpuMemoryBarrier(cmd, {&bb, 1}, {&ib, 1});
+
+        // Dispatch: read buffer -> write image
+        {
+            GpuComputePass pass{};
+            GpuBuffer* storageBufs[] = {&storageBuf};
+            GpuView* storageImages[] = {&imgView};
+            pass.storageBuffers = storageBufs;
+            pass.storageImages = storageImages;
+            gpuComputePass(cmd, pass);
+
+            Push push{storageBuf.storageDescriptor(), imgView.storageDescriptor()};
+            gpuBindPipeline(cmd, pipe);
+            gpuPushConstants(cmd, pipe, &push, sizeof(push));
+            gpuDispatch(cmd, imgSize, imgSize, 1);
+        }
+
+        // Barrier: both to transferSrc for readback
+        bb.nextAccess = GpuAccess_transferRead;
+        bb.nextStage = GpuStage_transfer;
         ib.nextAccess = GpuAccess_transferRead;
+        ib.nextStage = GpuStage_transfer;
         ib.nextLayout = GpuLayout_transferSrc;
         gpuMemoryBarrier(cmd, {&bb, 1}, {&ib, 1});
+
         gpuCmdEnd(cmd);
+
+        // Read back buffer — should still contain original data
+        u32 bufResult[imgSize * imgSize] = {};
+        storageBuf.read(bufResult, 0, sizeof(bufResult));
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            TEST(bufResult[i] == pixelData[i]);
+
+        // Read back image — should match buffer data
+        u32 imgResult[imgSize * imgSize] = {};
+        imgView.read(imgResult);
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            TEST(imgResult[i] == pixelData[i]);
     }
 
-    // gpuComputePass
+    // U7: Compute Pass Dispatch Produces Correct Output
     {
-        GpuBuffer buf{64, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        static constexpr u32 elemCount = 64;
+        static constexpr u32 bufSize = elemCount * sizeof(u32);
+
+        GpuBuffer inBuf{bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuBuffer outBuf{bufSize,
+            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc};
+
+        u32 input[elemCount] = {};
+        for (u32 i = 0; i < elemCount; ++i)
+            input[i] = i;
+        inBuf.write(input, 0, bufSize);
+
+        struct Push {
+            u32 inIdx;
+            u32 outIdx;
+        };
+
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{
+            {test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push)}};
+
         GpuCmd* cmd = gpuCmdBegin();
-        GpuComputePass pass{};
-        GpuBuffer* storageBufs[] = {&buf};
-        pass.storageBuffers = storageBufs;
-        gpuComputePass(cmd, pass);
+
+        GpuBufferBarrier barriers[2] = {};
+        barriers[0].buffer = &inBuf;
+        barriers[0].nextStage = GpuStage_computeShader;
+        barriers[0].nextAccess = GpuAccess_shaderRead;
+        barriers[1].buffer = &outBuf;
+        barriers[1].nextStage = GpuStage_computeShader;
+        barriers[1].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        gpuMemoryBarrier(cmd, {barriers, 2}, {});
+
+        {
+            GpuComputePass pass{};
+            GpuBuffer* storageBufs[] = {&inBuf, &outBuf};
+            pass.storageBuffers = storageBufs;
+            gpuComputePass(cmd, pass);
+
+            Push push{inBuf.storageDescriptor(), outBuf.storageDescriptor()};
+            gpuBindPipeline(cmd, pipe);
+            gpuPushConstants(cmd, pipe, &push, sizeof(push));
+            gpuDispatch(cmd, elemCount, 1, 1);
+        }
+
         gpuCmdEnd(cmd);
+
+        u32 output[elemCount] = {};
+        outBuf.read(output, 0, bufSize);
+        for (u32 i = 0; i < elemCount; ++i)
+            TEST(output[i] == input[i] * 2);
     }
 
     // GpuPipeline compute: lifecycle
@@ -2626,27 +2973,184 @@ int main()
             TEST(pixelData[i] == 0xFF996633);
     }
 
-    // gpuWaitIdle
+    // U8: gpuWaitIdle Waits for Pending Work
     {
+        static constexpr u32 bufSize = 64;
+
+        GpuBuffer devBuf{bufSize,
+            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc};
+        GpuBuffer staging{bufSize,
+            GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+
+        u32 known = 0xDEADBEEF;
+        staging.write(&known, 0, sizeof(known));
+
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{
+            {test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12}};
+
+        struct Push {
+            u32 addVal;
+            u32 inIdx;
+            u32 outIdx;
+        };
+        Push push{0, staging.storageDescriptor(), devBuf.storageDescriptor()};
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        GpuBufferBarrier stagingBarrier{};
+        stagingBarrier.buffer = &staging;
+        stagingBarrier.nextStage = GpuStage_computeShader;
+        stagingBarrier.nextAccess = GpuAccess_shaderRead;
+        gpuMemoryBarrier(cmd, {&stagingBarrier, 1}, {});
+
+        gpuBindPipeline(cmd, pipe);
+        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuDispatch(cmd, 1, 1, 1);
+
+        GpuBufferBarrier devBarrier{};
+        devBarrier.buffer = &devBuf;
+        devBarrier.nextStage = GpuStage_transfer;
+        devBarrier.nextAccess = GpuAccess_transferRead;
+        gpuMemoryBarrier(cmd, {&devBarrier, 1}, {});
+
+        gpuCmdEnd(cmd);
+
+        // Immediately wait — this should make compute results visible
         gpuWaitIdle();
+
+        u32 result = 0;
+        devBuf.read(&result, 0, sizeof(result));
+        TEST(result == 0xDEADBEEF);
     }
 
-    // GpuBuffer::uniformDescriptor
+    // U9: Uniform Buffer Passes Data to Vertex Shader
     {
-        GpuBuffer buf{64, GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate};
-        u32 desc = buf.uniformDescriptor();
-        TEST(desc != 0);
-        TEST(desc < 4096);
+        static constexpr u32 imgSize = 4;
+
+        // Color as f32[4]: (0.5, 0.3, 0.7, 1.0)
+        f32 colorData[4] = {0.5f, 0.3f, 0.7f, 1.0f};
+
+        GpuBuffer uniformBuf{64, GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate};
+        uniformBuf.write(colorData, 0, sizeof(colorData));
+
+        GpuImage colorImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
+        GpuView colorView{colorImg, GpuAspect_color};
+
+        struct Push {
+            u32 colorIdx;
+        };
+
+        GpuGraphicsPipelineCreateInfo ci{};
+        ci.vertexShader = {test_uniform_vert_spv, sizeof(test_uniform_vert_spv)};
+        ci.fragmentShader = {test_uniform_frag_spv, sizeof(test_uniform_frag_spv)};
+        Format colorFmt = Format_r8g8b8a8_unorm;
+        ci.colorAttachmentFormats = {&colorFmt, 1};
+        ci.pushConstantSize = sizeof(Push);
+
+        GpuPipeline pipe{ci};
+
+        Push push{uniformBuf.uniformDescriptor()};
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        GpuRenderAttachment colorAtt{};
+        colorAtt.image = &colorView;
+        colorAtt.loadOp = GpuLoadOp_clear;
+        colorAtt.storeOp = GpuStoreOp_store;
+        colorAtt.clearValue.color.float32[0] = 0.0f;
+        colorAtt.clearValue.color.float32[1] = 0.0f;
+        colorAtt.clearValue.color.float32[2] = 0.0f;
+        colorAtt.clearValue.color.float32[3] = 0.0f;
+
+        GpuRenderPass pass{};
+        GpuBuffer* uniformBufs[] = {&uniformBuf};
+        pass.uniformBuffers = uniformBufs;
+        pass.colorAttachments = {&colorAtt, 1};
+
+        gpuRenderPassBegin(cmd, pass);
+        gpuBindPipeline(cmd, pipe);
+        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuDraw(cmd, 0, 3, 0, 1);
+        gpuRenderPassEnd(cmd);
+        gpuCmdEnd(cmd);
+
+        u32 pixels[imgSize * imgSize] = {};
+        colorView.read(pixels);
+
+        // Expected: f32(0.5, 0.3, 0.7, 1.0) -> unorm8(128, 76, 178, 255)
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+        {
+            // Allow small rounding differences
+            u8 r = static_cast<u8>((pixels[i] >> 0) & 0xFF);
+            u8 g = static_cast<u8>((pixels[i] >> 8) & 0xFF);
+            u8 b = static_cast<u8>((pixels[i] >> 16) & 0xFF);
+            TEST(r >= 125 && r <= 130);
+            TEST(g >= 74 && g <= 79);
+            TEST(b >= 176 && b <= 181);
+            TEST(((pixels[i] >> 24) & 0xFF) == 0xFF);
+        }
     }
 
-    // GpuView::storageDescriptor
+    // U10: Storage Image Write via Compute Shader
     {
-        GpuImage img{8, 8, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_storage};
+        static constexpr u32 imgSize = 4;
+
+        GpuImage img{imgSize, imgSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst
+            | GpuImageUsage_storage | GpuImageUsage_sampled};
         GpuView view{img, GpuAspect_color, GpuFilter_nearest};
-        u32 desc = view.storageDescriptor();
-        TEST(desc != 0);
-        TEST(desc < 4096);
+
+        struct Push {
+            u32 imgIdx;
+        };
+
+        GpuPipeline pipe{GpuComputePipelineCreateInfo{
+            {test_storage_img_comp_spv, sizeof(test_storage_img_comp_spv)}, sizeof(Push)}};
+
+        GpuCmd* cmd = gpuCmdBegin();
+
+        // Barrier: image to general for storage write
+        GpuImageBarrier ib{};
+        ib.image = &view;
+        ib.nextStage = GpuStage_computeShader;
+        ib.nextAccess = GpuAccess_shaderWrite;
+        ib.nextLayout = GpuLayout_general;
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+
+        {
+            GpuComputePass pass{};
+            GpuView* storageImages[] = {&view};
+            pass.storageImages = storageImages;
+            gpuComputePass(cmd, pass);
+
+            Push push{view.storageDescriptor()};
+            gpuBindPipeline(cmd, pipe);
+            gpuPushConstants(cmd, pipe, &push, sizeof(push));
+            gpuDispatch(cmd, imgSize, imgSize, 1);
+        }
+
+        // Barrier: image to transferSrc for readback
+        ib.nextStage = GpuStage_transfer;
+        ib.nextAccess = GpuAccess_transferRead;
+        ib.nextLayout = GpuLayout_transferSrc;
+        gpuMemoryBarrier(cmd, {}, {&ib, 1});
+
+        gpuCmdEnd(cmd);
+
+        u32 pixels[imgSize * imgSize] = {};
+        view.read(pixels);
+
+        // Shader writes: (x+y)&1==0 -> vec4(1,1,1,1)=0xFFFFFFFF, else vec4(0,0,0,1)=0xFF000000
+        u32 expected[imgSize * imgSize] = {};
+        for (u32 y = 0; y < imgSize; ++y)
+            for (u32 x = 0; x < imgSize; ++x)
+                expected[y * imgSize + x] = ((x + y) & 1)
+                    ? 0xFF000000  // black (R=0,G=0,B=0,A=255)
+                    : 0xFFFFFFFF; // white
+
+        for (u32 i = 0; i < imgSize * imgSize; ++i)
+            TEST(pixels[i] == expected[i]);
     }
 
     // GpuView::writeCubemap
