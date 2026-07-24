@@ -511,6 +511,34 @@ struct GpuBufferData {
     GpuMemoryHostAccess access = GpuMemoryHostAccess_none;
     GpuStageFlags lastStage = 0;
     GpuAccessFlags lastAccess = 0;
+
+    GpuBufferData() = default;
+    ~GpuBufferData();
+
+    GpuBufferData(GpuBufferData&& other) noexcept
+        : buffer{std::exchange(other.buffer, nullptr)}
+        , alloc{std::exchange(other.alloc, nullptr)}
+        , size{other.size}
+        , uniformDesc{std::exchange(other.uniformDesc, {})}
+        , storageDesc{std::exchange(other.storageDesc, {})}
+        , usage{other.usage}
+        , access{other.access}
+        , lastStage{other.lastStage}
+        , lastAccess{other.lastAccess}
+    {}
+
+    GpuBufferData& operator=(GpuBufferData&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~GpuBufferData();
+            new (this) GpuBufferData{std::move(other)};
+        }
+        return *this;
+    }
+
+    GpuBufferData(const GpuBufferData&) = delete;
+    GpuBufferData& operator=(const GpuBufferData&) = delete;
 };
 
 static VkBufferUsageFlags gpuBufferUsageToVk(GpuBufferUsageFlags usage)
@@ -565,6 +593,36 @@ struct GpuImageData {
     u8 mipLevels = 0;
     u8 arrayLayers = 0;
     u8 msaaSamples = 0;
+
+    GpuImageData() = default;
+    ~GpuImageData();
+
+    GpuImageData(GpuImageData&& other) noexcept
+        : image{std::exchange(other.image, nullptr)}
+        , alloc{std::exchange(other.alloc, nullptr)}
+        , usage{other.usage}
+        , format{other.format}
+        , width{other.width}
+        , height{other.height}
+        , depth{other.depth}
+        , dimensions{other.dimensions}
+        , mipLevels{other.mipLevels}
+        , arrayLayers{other.arrayLayers}
+        , msaaSamples{other.msaaSamples}
+    {}
+
+    GpuImageData& operator=(GpuImageData&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~GpuImageData();
+            new (this) GpuImageData{std::move(other)};
+        }
+        return *this;
+    }
+
+    GpuImageData(const GpuImageData&) = delete;
+    GpuImageData& operator=(const GpuImageData&) = delete;
 };
 
 static VkImageType imageDimensionsToVkImage(u32 dimensions)
@@ -654,6 +712,39 @@ struct GpuViewData {
     GpuStageFlags lastStage = 0;
     GpuAccessFlags lastAccess = 0;
     GpuLayout lastLayout = GpuLayout_undefined;
+
+    GpuViewData() = default;
+    ~GpuViewData();
+
+    GpuViewData(GpuViewData&& other) noexcept
+        : image{other.image}
+        , view{std::exchange(other.view, nullptr)}
+        , sampler{other.sampler}
+        , samplerDesc{std::exchange(other.samplerDesc, {})}
+        , storageDesc{std::exchange(other.storageDesc, {})}
+        , type{other.type}
+        , aspectFlags{other.aspectFlags}
+        , baseMipLevel{other.baseMipLevel}
+        , levelCount{other.levelCount}
+        , baseArrayLayer{other.baseArrayLayer}
+        , layerCount{other.layerCount}
+        , lastStage{other.lastStage}
+        , lastAccess{other.lastAccess}
+        , lastLayout{other.lastLayout}
+    {}
+
+    GpuViewData& operator=(GpuViewData&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~GpuViewData();
+            new (this) GpuViewData{std::move(other)};
+        }
+        return *this;
+    }
+
+    GpuViewData(const GpuViewData&) = delete;
+    GpuViewData& operator=(const GpuViewData&) = delete;
 };
 
 static GpuViewType imageDimensionsToHgView(u32 dimensions)
@@ -700,6 +791,28 @@ struct GpuPipelineData {
     VkPipeline pipeline = nullptr;
     VkPipelineLayout layout = nullptr;
     VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+    GpuPipelineData() = default;
+    ~GpuPipelineData();
+
+    GpuPipelineData(GpuPipelineData&& other) noexcept
+        : pipeline{std::exchange(other.pipeline, nullptr)}
+        , layout{std::exchange(other.layout, nullptr)}
+        , bindPoint{other.bindPoint}
+    {}
+
+    GpuPipelineData& operator=(GpuPipelineData&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~GpuPipelineData();
+            new (this) GpuPipelineData{std::move(other)};
+        }
+        return *this;
+    }
+
+    GpuPipelineData(const GpuPipelineData&) = delete;
+    GpuPipelineData& operator=(const GpuPipelineData&) = delete;
 };
 
 static VkPrimitiveTopology gpuTopologyToVk(GpuTopology topology)
@@ -1435,17 +1548,18 @@ GpuBuffer GpuBuffer::create(u64 size, GpuBufferUsageFlags usageFlags, GpuMemoryU
     return buf;
 }
 
-GpuBuffer::~GpuBuffer() noexcept
+GpuBufferData::~GpuBufferData()
 {
-    if (data != nullptr)
+    if (buffer != nullptr)
     {
-        descriptorDestroy(data->storageDesc, DescriptorType_storageBuffer);
-        descriptorDestroy(data->uniformDesc, DescriptorType_uniformBuffer);
-        vmaDestroyBuffer(vk.vma, data->buffer, data->alloc);
+        descriptorDestroy(storageDesc, DescriptorType_storageBuffer);
+        descriptorDestroy(uniformDesc, DescriptorType_uniformBuffer);
+        vmaDestroyBuffer(vk.vma, buffer, alloc);
     }
 }
 
 GpuBuffer::GpuBuffer() noexcept = default;
+GpuBuffer::~GpuBuffer() noexcept = default;
 GpuBuffer::GpuBuffer(GpuBuffer&&) noexcept = default;
 GpuBuffer& GpuBuffer::operator=(GpuBuffer&&) noexcept = default;
 
@@ -1586,15 +1700,14 @@ GpuImage GpuImage::createEx(const GpuImageCreateInfo& create)
     return img;
 }
 
-GpuImage::~GpuImage()
+GpuImageData::~GpuImageData()
 {
-    if (data != nullptr)
-    {
-        vmaDestroyImage(vk.vma, data->image, data->alloc);
-    }
+    if (image != nullptr)
+        vmaDestroyImage(vk.vma, image, alloc);
 }
 
 GpuImage::GpuImage() noexcept = default;
+GpuImage::~GpuImage() noexcept = default;
 GpuImage::GpuImage(GpuImage&&) noexcept = default;
 GpuImage& GpuImage::operator=(GpuImage&&) noexcept = default;
 
@@ -1719,17 +1832,18 @@ GpuView GpuView::createEx(const GpuViewCreateInfo& config)
     return view;
 }
 
-GpuView::~GpuView() noexcept
+GpuViewData::~GpuViewData()
 {
-    if (data != nullptr)
+    if (view != nullptr)
     {
-        descriptorDestroy(data->storageDesc, DescriptorType_storageImage);
-        descriptorDestroy(data->samplerDesc, DescriptorType_combinedImageSampler);
-        vkDestroyImageView(vk.device, data->view, nullptr);
+        descriptorDestroy(storageDesc, DescriptorType_storageImage);
+        descriptorDestroy(samplerDesc, DescriptorType_combinedImageSampler);
+        vkDestroyImageView(vk.device, view, nullptr);
     }
 }
 
 GpuView::GpuView() noexcept = default;
+GpuView::~GpuView() noexcept = default;
 GpuView::GpuView(GpuView&&) noexcept = default;
 GpuView& GpuView::operator=(GpuView&&) noexcept = default;
 
@@ -2349,16 +2463,17 @@ GpuPipeline GpuPipeline::compute(Span<const u8> shaderCode, u32 pushSize)
     return pipe;
 }
 
-GpuPipeline::~GpuPipeline()
+GpuPipelineData::~GpuPipelineData()
 {
-    if (data != nullptr)
+    if (pipeline != nullptr)
     {
-        vkDestroyPipeline(vk.device, data->pipeline, nullptr);
-        vkDestroyPipelineLayout(vk.device, data->layout, nullptr);
+        vkDestroyPipeline(vk.device, pipeline, nullptr);
+        vkDestroyPipelineLayout(vk.device, layout, nullptr);
     }
 }
 
 GpuPipeline::GpuPipeline() noexcept = default;
+GpuPipeline::~GpuPipeline() noexcept = default;
 GpuPipeline::GpuPipeline(GpuPipeline&&) noexcept = default;
 GpuPipeline& GpuPipeline::operator=(GpuPipeline&&) noexcept = default;
 

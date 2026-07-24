@@ -53,6 +53,7 @@ int main()
     audio.pauseMusic(music);
 
     initRenderer2D(window.imageFormat());
+    HG_DEFER(deinitRenderer2D());
 
     u32 width = window.width();
     u32 height = window.height();

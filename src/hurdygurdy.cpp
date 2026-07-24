@@ -3917,6 +3917,11 @@ void initRenderer2D(Format colorFormat)
     render2D.defaultTex.view.write(defaultColors);
 }
 
+void deinitRenderer2D()
+{
+    render2D = {};
+}
+
 Atlas2D Atlas2D::create(const Asset<Texture>& texture)
 {
     Atlas2D atlas{};

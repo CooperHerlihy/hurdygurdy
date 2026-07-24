@@ -6601,6 +6601,9 @@ struct GpuBuffer
      * Move assign
      */
     GpuBuffer& operator=(GpuBuffer&&) noexcept;
+
+    GpuBuffer(const GpuBuffer&) = delete;
+    GpuBuffer& operator=(const GpuBuffer&) = delete;
 };
 
 /**
@@ -6742,6 +6745,9 @@ struct GpuImage {
      * Move assign
      */
     GpuImage& operator=(GpuImage&&) noexcept;
+
+    GpuImage(const GpuImage&) = delete;
+    GpuImage& operator=(const GpuImage&) = delete;
 };
 
 /**
@@ -6956,6 +6962,9 @@ struct GpuView {
      * Move assign
      */
     GpuView& operator=(GpuView&&) noexcept;
+
+    GpuView(const GpuView&) = delete;
+    GpuView& operator=(const GpuView&) = delete;
 };
 
 /**
@@ -7125,6 +7134,9 @@ struct GpuPipeline {
      * Move assign
      */
     GpuPipeline& operator=(GpuPipeline&&) noexcept;
+
+    GpuPipeline(const GpuPipeline&) = delete;
+    GpuPipeline& operator=(const GpuPipeline&) = delete;
 };
 
 /**
@@ -8216,6 +8228,11 @@ void serialize(Serializer* s, Camera* camera);
  * Initialize the 2D renderer
  */
 void initRenderer2D(Format colorFormat);
+
+/**
+ * Deinitialize the 2D renderer
+ */
+void deinitRenderer2D();
 
 namespace internal {
 
