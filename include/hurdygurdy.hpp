@@ -5791,12 +5791,12 @@ void serialize(Serializer* s, Asset<T>* asset);
 /**
  * Write serialized data in a binary format
  */
-BinaryView binaryWriteSerial(Arena* arena, Serializer* data);
+BinaryView writeSerialBinary(Arena* arena, Serializer* data);
 
 /**
  * Read binary data to be deserialized
  */
-Serializer binaryReadSerial(Arena* arena, BinaryView bin);
+Serializer readSerialBinary(Arena* arena, BinaryView bin);
 
 // /**
 //  * Write serialized data as json
@@ -8215,156 +8215,99 @@ void serialize(Serializer* s, Camera* camera);
 /**
  * Initialize the 2D renderer
  */
-void rendererInit2D(Format colorFormat);
+void initRenderer2D(Format colorFormat);
 
-/**
- * Deinitialize the 2D renderer
- */
-void rendererDeinit2D();
+namespace internal {
 
-/**
- * The 2D instance types
- */
-enum Render2DInstanceType : u32 {
     /**
-     * A instance with a color value
+     * The 2D instance types
      */
-    Render2DInstanceType_color = 0,
+    enum Render2DInstanceType : u32 {
+        /**
+         * A instance with a color value
+         */
+        Render2DInstanceType_color = 0,
+        /**
+         * A instance with a sprite
+         */
+        Render2DInstanceType_sprite = 1,
+    };
+
     /**
-     * A instance with a sprite
+     * A rectangle instance
      */
-    Render2DInstanceType_sprite = 1,
+    struct Rect2DInstance {
+        /**
+         * The instance position
+         */
+        Vec2 pos;
+        /**
+         * The instance size
+         */
+        Vec2 size;
+        /**
+         * The instance type
+         */
+        u32 type;
+        /**
+         * Padding for 16 byte alignment
+         */
+        u32 pad[3];
+        /**
+         * The rectangle fill color
+         */
+        Vec4 color;
+    };
+
+    /**
+     * A sprite instance
+     */
+    struct Sprite2DInstance {
+        /**
+         * The instance position
+         */
+        Vec2 pos;
+        /**
+         * The instance size
+         */
+        Vec2 size;
+        /**
+         * The instance type
+         */
+        u32 type;
+        /**
+         * Padding for 16 byte alignment
+         */
+        u32 pad[2];
+        /**
+         * The texture index
+         */
+        u32 tex;
+        /**
+         * The texture uv coordinates
+         */
+        Vec2 uvPos;
+        /**
+         * The texture uv coordinates
+         */
+        Vec2 uvSize;
+    };
+
+    /**
+     * An instance in a 2D layer
+     */
+    union Render2DInstance {
+        /**
+         * The rectangle data
+         */
+        Rect2DInstance rect;
+        /**
+         * The sprite data
+         */
+        Sprite2DInstance sprite;
+    };
+
 };
-
-/**
- * A rectangle instance
- */
-struct Rect2DInstance {
-    /**
-     * The instance position
-     */
-    Vec2 pos;
-    /**
-     * The instance size
-     */
-    Vec2 size;
-    /**
-     * The instance type
-     */
-    u32 type;
-    /**
-     * Padding for 16 byte alignment
-     */
-    u32 pad[3];
-    /**
-     * The rectangle fill color
-     */
-    Vec4 color;
-};
-
-/**
- * A sprite instance
- */
-struct Sprite2DInstance {
-    /**
-     * The instance position
-     */
-    Vec2 pos;
-    /**
-     * The instance size
-     */
-    Vec2 size;
-    /**
-     * The instance type
-     */
-    u32 type;
-    /**
-     * Padding for 16 byte alignment
-     */
-    u32 pad[2];
-    /**
-     * The texture index
-     */
-    u32 tex;
-    /**
-     * The texture uv coordinates
-     */
-    Vec2 uvPos;
-    /**
-     * The texture uv coordinates
-     */
-    Vec2 uvSize;
-};
-
-/**
- * An instance in a 2D layer
- */
-union Render2DInstance {
-    /**
-     * The rectangle data
-     */
-    Rect2DInstance rect;
-    /**
-     * The sprite data
-     */
-    Sprite2DInstance sprite;
-};
-
-/**
- * A 2D render layer
- */
-struct Layer2D {
-    /**
-     * The transform, does not affect changed
-     */
-    Mat4 transform = {};
-    /**
-     * The instance data
-     */
-    Array<Render2DInstance> instances = {};
-    /**
-     * The gpu side instance buffer
-     */
-    GpuBuffer instanceBuffer{};
-    /**
-     * The capacity of the instance buffer
-     */
-    u32 instanceCapacity = 0;
-    /**
-     * Whether the gpu data needs to be updated
-     */
-    bool changed = false;
-};
-
-/**
- * Create a 2D render layer
- */
-Layer2D layerCreate2D();
-
-/**
- * Destroy a 2D render layer
- */
-void layerDestroy2D(Layer2D* layer);
-
-/**
- * Remove all drawings from the layer
- */
-void layerClear2D(Layer2D* layer);
-
-/**
- * Issue draw commands for a 2D layer
- */
-void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer);
-
-/**
- * Issue draw commands for a 2D layer using debug lines
- */
-void renderDebug2D(GpuCmd* cmd, Camera* camera, Layer2D* layer);
-
-/**
- * Draw a rectangle on the layer
- */
-void drawRect2D(Layer2D* layer, Vec4 color, Rect dst);
 
 /**
  * A 2D sprite which can be drawn
@@ -8381,11 +8324,6 @@ struct Sprite2D {
 };
 
 /**
- *  Draw the sprite on the layer
- */
-void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst);
-
-/**
  * A texture atlas
  */
 struct Atlas2D {
@@ -8397,50 +8335,60 @@ struct Atlas2D {
      * The sprites
      */
     Array<Rect> sprites = {};
+
+    /**
+     * Create a new texture atlas
+     */
+    static Atlas2D create(const Asset<Texture>& texture);
+
+    /**
+     * Add a sprite to the atlas
+     */
+    u32 add(Rect sprite);
+
+    /**
+     * Add a grid of sprites to the atlas
+     *
+     * Parameters
+     * - grid The uv coords of the grid
+     * - width The number of horizontal subdivisions
+     * - height The number of vertical subdivisions
+     *
+     * Returns
+     * - The first sprite index
+     */
+    u32 addGrid(Rect grid, u32 width, u32 height);
+
+    /**
+     * Get a sprite from the atlas
+     */
+    Sprite2D get(u32 idx);
 };
 
 /**
- * Create a new texture atlas
+ * Atlas2D serialization
  */
-Atlas2D atlasCreate2D(Asset<Texture>* texture);
+template<>
+void serialize(Serializer* s, Atlas2D* atlas);
 
 /**
- * Destroy a texture atlas
+ * Atlas2D asset loading
  */
-void atlasDestroy2D(Atlas2D* atlas);
-
-/**
- * Add a sprite to the atlas
- */
-u32 atlasAdd2D(Atlas2D* atlas, Rect sprite);
-
-/**
- * Add a grid of sprites to the atlas
- *
- * Parameters
- * - atlas The atlas to add to
- * - grid The uv coords of the grid
- * - width The number of horizontal subdivisions
- * - height The number of vertical subdivisions
- *
- * Returns
- * - The first sprite index
- */
-u32 atlasAddGrid2D(Atlas2D* atlas, Rect grid, u32 width, u32 height);
-
-/**
- * Get a sprite from the atlas
- */
-Sprite2D atlasGet2D(Atlas2D* atlas, u32 idx);
+template<>
+void assetLoadImpl(AssetData<Atlas2D>* data);
 
 /**
  * A world map of tiles
  */
 struct Tilemap2D {
     /**
+     * The texture atlas
+     */
+    Asset<Atlas2D> atlas = nullptr;
+    /**
      * The tilemap data
      */
-    u32* tiles = nullptr;
+    Array<u32> tiles{};
     /**
      * The width of the tilemap in tiles
      */
@@ -8449,32 +8397,89 @@ struct Tilemap2D {
      * The height of the tilemap in tiles
      */
     u32 height = 0;
+
+    /**
+     * Create an empty tilemap
+     */
+    static Tilemap2D create(u32 width, u32 height, const Asset<Atlas2D>& atlas);
+
+    /**
+     * Get the value of a tile in a tilemap
+     */
+    u32 get(u32 x, u32 y) const;
+
+    /**
+     * Set the value of a tile in a tilemap
+     */
+    u32 set(u32 x, u32 y, u32 tile);
 };
 
 /**
- * Create an empty tilemap
+ * Tilemap2D serialization
  */
-Tilemap2D tilemapCreate2D(u32 width, u32 height);
+template<>
+void serialize(Serializer* s, Tilemap2D* tilemap);
 
 /**
- * Destroy a tilemap
+ * A 2D render layer
  */
-void tilemapDestroy2D(Tilemap2D* tilemap);
+struct Layer2D {
+    /**
+     * The transform, does not affect changed
+     */
+    Mat4 transform = {};
+    /**
+     * The instance data
+     */
+    Array<internal::Render2DInstance> instances = {};
+    /**
+     * The gpu side instance buffer
+     */
+    GpuBuffer instanceBuffer{};
+    /**
+     * The capacity of the instance buffer
+     */
+    u32 instanceCapacity = 0;
+    /**
+     * Whether the gpu data needs to be updated
+     */
+    bool changed = false;
 
-/**
- * Get the value of a tile in a tilemap
- */
-u32 tilemapGet2D(Tilemap2D* tilemap, u32 x, u32 y);
+    /**
+     * Create a 2D render layer
+     */
+    static Layer2D create();
 
-/**
- * Set the value of a tile in a tilemap
- */
-void tilemapSet2D(Tilemap2D* tilemap, u32 x, u32 y, u32 tile);
+    /**
+     * Remove all drawings from the layer
+     */
+    void clear();
 
-/**
- * Draw a tilemap to the layer
- */
-void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst);
+    /**
+     * Issue draw commands for a 2D layer
+     */
+    void render(GpuCmd* cmd, Camera* camera);
+
+    /**
+     * Issue draw commands for a 2D layer using debug lines
+     */
+    void renderDebug(GpuCmd* cmd, Camera* camera);
+
+    /**
+     * Draw a rectangle on the layer
+     */
+    void drawRect(Vec4 color, Rect dst);
+
+    /**
+     *  Draw the sprite on the layer
+     */
+    void drawSprite(const Sprite2D& sprite, Rect dst);
+
+    /**
+     * Draw a tilemap to the layer
+     */
+    void drawTilemap(const Tilemap2D& tilemap, Rect dst);
+};
 
 /**
  * Initialize ImGui platform backend

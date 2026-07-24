@@ -52,25 +52,22 @@ int main()
     audio.setMusicGain(music, 0.3f);
     audio.pauseMusic(music);
 
-    rendererInit2D(window.imageFormat());
-    HG_DEFER(rendererDeinit2D());
+    initRenderer2D(window.imageFormat());
 
     u32 width = window.width();
     u32 height = window.height();
 
     Camera camera = Camera::create();
 
-    Layer2D backgroundLayer = layerCreate2D();
-    HG_DEFER(layerDestroy2D(&backgroundLayer));
+    Layer2D backgroundLayer = Layer2D::create();
 
-    layerClear2D(&backgroundLayer);
+    backgroundLayer.clear();
     Vec2 backgroundBegin = Vec2{static_cast<f32>(width) / static_cast<f32>(height) - 0.5f, 0.5f} / 2.0f;
-    drawRect2D(&backgroundLayer,
+    backgroundLayer.drawRect(
         {.002f, 0, .012f, 1},
         {backgroundBegin, backgroundBegin + Vec2{0.5f, 0.5f}});
 
-    Layer2D spriteLayer = layerCreate2D();
-    HG_DEFER(layerDestroy2D(&spriteLayer));
+    Layer2D spriteLayer = Layer2D::create();
 
     Sprite2D sprite = {nullptr, {Vec2{0}, Vec2{1}}};
     Vec2 spriteSize{0.1f, 0.1f};
@@ -128,9 +125,8 @@ int main()
             spritePos += vecNorm2(spriteMove) * moveSpeed * static_cast<f32>(delta);
         }
 
-        layerClear2D(&spriteLayer);
-
-        drawSprite2D(&spriteLayer, &sprite, {spritePos, spritePos + spriteSize});
+        spriteLayer.clear();
+        spriteLayer.drawSprite(sprite, {spritePos, spritePos + spriteSize});
 
         Span<WindowEvent> events = window.events();
         for (WindowEvent event : events)
@@ -173,13 +169,13 @@ int main()
 
             gpuRenderPassBegin(cmd, pass);
 
-            renderLayer2D(cmd, &camera, &backgroundLayer);
-            renderLayer2D(cmd, &camera, &spriteLayer);
+            backgroundLayer.render(cmd, &camera);
+            spriteLayer.render(cmd, &camera);
 
             if (renderDebug)
             {
-                renderDebug2D(cmd, &camera, &backgroundLayer);
-                renderDebug2D(cmd, &camera, &spriteLayer);
+                backgroundLayer.renderDebug(cmd, &camera);
+                spriteLayer.renderDebug(cmd, &camera);
             }
 
             renderImGui(cmd);

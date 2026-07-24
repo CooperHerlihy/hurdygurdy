@@ -2,8 +2,6 @@
 #define HG_LOGGING 1
 #include "hurdygurdy.hpp"
 
-#include <thread>
-
 #define TEST(cond) do { \
     if (!(cond)) \
         HG_PANIC("Test failed in " __FILE__ ":%d %s() \"" #cond "\"\n", __LINE__, __func__); \
@@ -4673,8 +4671,8 @@ int main()
         Data copy{};
         Serializer w = serialWriter(arena);
         serializeData(&w, &val);
-        BinaryView bin = binaryWriteSerial(arena, &w);
-        Serializer r = binaryReadSerial(arena, bin);
+        BinaryView bin = writeSerialBinary(arena, &w);
+        Serializer r = readSerialBinary(arena, bin);
         serializeData(&r, &copy);
         TEST(copy.a == val.a);
         TEST(copy.b == val.b);
@@ -4703,8 +4701,8 @@ int main()
         Data copy{};
         Serializer w = serialWriter(arena);
         serializeData(&w, &val);
-        BinaryView bin = binaryWriteSerial(arena, &w);
-        Serializer r = binaryReadSerial(arena, bin);
+        BinaryView bin = writeSerialBinary(arena, &w);
+        Serializer r = readSerialBinary(arena, bin);
         serializeData(&r, &copy);
         TEST(copy.a == val.a);
         TEST(copy.b == val.b);
@@ -4733,8 +4731,8 @@ int main()
         Data copy{};
         Serializer w = serialWriter(arena);
         serializeData(&w, &val);
-        BinaryView bin = binaryWriteSerial(arena, &w);
-        Serializer r = binaryReadSerial(arena, bin);
+        BinaryView bin = writeSerialBinary(arena, &w);
+        Serializer r = readSerialBinary(arena, bin);
         serializeData(&r, &copy);
         TEST(copy.a == val.a);
         TEST(copy.b.size == val.b.size);
@@ -4797,8 +4795,8 @@ int main()
 
             Serializer w = serialWriter(arena);
             serialize(&w, &val);
-            BinaryView bin = binaryWriteSerial(arena, &w);
-            Serializer r = binaryReadSerial(arena, bin);
+            BinaryView bin = writeSerialBinary(arena, &w);
+            Serializer r = readSerialBinary(arena, bin);
             serialize(&r, &copy);
             TEST(copy.get<0>() == val.get<0>());
             TEST(copy.get<1>() == val.get<1>());
@@ -4878,8 +4876,8 @@ int main()
 
             Serializer w = serialWriter(arena);
             serialize(&w, &val);
-            BinaryView bin = binaryWriteSerial(arena, &w);
-            Serializer r = binaryReadSerial(arena, bin);
+            BinaryView bin = writeSerialBinary(arena, &w);
+            Serializer r = readSerialBinary(arena, bin);
             serialize(&r, &copy);
             TEST(copy.is<f64>());
             TEST(copy.get<f64>() == 99.9);
@@ -4942,8 +4940,8 @@ int main()
 
             Serializer w = serialWriter(arena);
             serialize(&w, &val);
-            BinaryView bin = binaryWriteSerial(arena, &w);
-            Serializer r = binaryReadSerial(arena, bin);
+            BinaryView bin = writeSerialBinary(arena, &w);
+            Serializer r = readSerialBinary(arena, bin);
             serialize(&r, &copy);
             TEST(copy.has);
             TEST(*copy == 2.5f);

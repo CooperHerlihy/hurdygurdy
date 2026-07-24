@@ -2594,7 +2594,7 @@ static void serialBinWriteNode(BinaryBuilder* bin, u32 idx, SerialNode* node)
     );
 }
 
-BinaryView binaryWriteSerial(Arena* arena, Serializer* serial)
+BinaryView writeSerialBinary(Arena* arena, Serializer* serial)
 {
     BinaryBuilder bin{arena, sizeof(SerialBinHeader)};
 
@@ -2653,7 +2653,7 @@ static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s)
     }
 }
 
-Serializer binaryReadSerial(Arena* arena, BinaryView bin)
+Serializer readSerialBinary(Arena* arena, BinaryView bin)
 {
     SerialBinHeader header = bin.read<SerialBinHeader>(0);
 
@@ -3887,7 +3887,7 @@ struct RenderPush2D {
 #include "render2d.frag.spv.h"
 #include "debug2d.frag.spv.h"
 
-void rendererInit2D(Format colorFormat)
+void initRenderer2D(Format colorFormat)
 {
     GpuGraphicsPipelineCreateInfo pipelineConfig{};
     pipelineConfig.vertexShader = {render2d_vert_spv, sizeof(render2d_vert_spv)};
@@ -3917,13 +3917,98 @@ void rendererInit2D(Format colorFormat)
     render2D.defaultTex.view.write(defaultColors);
 }
 
-void rendererDeinit2D()
+Atlas2D Atlas2D::create(const Asset<Texture>& texture)
 {
-    render2D = {};
+    Atlas2D atlas{};
+    atlas.texture = texture.clone();
+    atlas.sprites = Array<Rect>{0, 1024};
+    return atlas;
 }
 
-Layer2D layerCreate2D()
+u32 Atlas2D::add(Rect sprite)
 {
+    u32 idx = static_cast<u32>(sprites.count);
+    sprites.push(sprite);
+    return idx;
+}
+
+u32 Atlas2D::addGrid(Rect grid, u32 width, u32 height)
+{
+    u32 idx = static_cast<u32>(sprites.count);
+
+    Vec2 spriteSize = (grid.end - grid.begin) / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
+    Vec2 pos = grid.begin;
+    for (u32 y = 0; y < height; ++y)
+    {
+        pos.x = grid.begin.x;
+        for (u32 x = 0; x < width; ++x)
+        {
+            sprites.push({pos, pos + spriteSize});
+            pos.x += spriteSize.x;
+        }
+        pos.y += spriteSize.y;
+    }
+
+    return idx;
+}
+
+Sprite2D Atlas2D::get(u32 idx)
+{
+    return {texture.clone(), sprites[idx]};
+}
+
+template<>
+void serialize(Serializer* s, Atlas2D* atlas)
+{
+    serializeObject(s, &atlas->texture, &atlas->sprites);
+}
+
+template<>
+void assetLoadImpl(AssetData<Atlas2D>* data)
+{
+    ArenaScope scratch = getScratch();
+
+    Serializer s = readSerialBinary(scratch, *load<Binary>(data->path));
+    serialize(&s, &data->asset);
+}
+
+Tilemap2D Tilemap2D::create(u32 width, u32 height, const Asset<Atlas2D>& atlas)
+{
+    Tilemap2D tilemap{};
+
+    tilemap.atlas = atlas.clone();
+    tilemap.tiles = Array<u32>{width * height, width * height};
+    tilemap.width = width;
+    tilemap.height = height;
+
+    for (u32 i = 0; i < width * height; ++i)
+    {
+        tilemap.tiles[i] = static_cast<u32>(-1);
+    }
+
+    return tilemap;
+}
+
+u32 Tilemap2D::get(u32 x, u32 y) const
+{
+    return tiles[y * width + x];
+}
+
+u32 Tilemap2D::set(u32 x, u32 y, u32 tile)
+{
+    return tiles[y * width + x] = tile;
+}
+
+template<>
+void serialize(Serializer* s, Tilemap2D* tilemap)
+{
+    serializeObject(s, &tilemap->atlas, &tilemap->tiles, &tilemap->width, &tilemap->height);
+}
+
+Layer2D Layer2D::create()
+{
+    using internal::Render2DInstance;
+
     Layer2D layer{};
     layer.instances = Array<Render2DInstance>{0, 1024};
     layer.instanceBuffer = GpuBuffer::create(layer.instances.capacity * sizeof(Render2DInstance),
@@ -3931,25 +4016,20 @@ Layer2D layerCreate2D()
     layer.instanceCapacity = static_cast<u32>(layer.instances.capacity);
     layer.transform = Mat4{1.0f};
     layer.changed = true;
+
     return layer;
 }
 
-void layerDestroy2D(Layer2D* layer)
+void Layer2D::clear()
 {
-    HG_ASSERT(layer != nullptr);
-    *layer = {};
-}
-
-void layerClear2D(Layer2D* layer)
-{
-    HG_ASSERT(layer != nullptr);
-
-    layer->instances.count = 0;
-    layer->changed = true;
+    instances.count = 0;
+    changed = true;
 }
 
 static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, const GpuPipeline& pipeline)
 {
+    using internal::Render2DInstance;
+
     HG_ASSERT(cmd != nullptr);
     HG_ASSERT(camera != nullptr);
     HG_ASSERT(layer != nullptr);
@@ -3982,19 +4062,20 @@ static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, const Gpu
     gpuDraw(cmd, 0, 6, 0, static_cast<u32>(layer->instances.count));
 }
 
-void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer)
+void Layer2D::render(GpuCmd* cmd, Camera* camera)
 {
-    renderLayer2D(cmd, camera, layer, render2D.pipeline);
+    renderLayer2D(cmd, camera, this, render2D.pipeline);
 }
 
-void renderDebug2D(GpuCmd* cmd, Camera* camera, Layer2D* layer)
+void Layer2D::renderDebug(GpuCmd* cmd, Camera* camera)
 {
-    renderLayer2D(cmd, camera, layer, render2D.debugPipeline);
+    renderLayer2D(cmd, camera, this, render2D.debugPipeline);
 }
 
-void drawRect2D(Layer2D* layer, Vec4 color, Rect dst)
+void Layer2D::drawRect(Vec4 color, Rect dst)
 {
-    HG_ASSERT(layer != nullptr);
+    using internal::Render2DInstance;
+    using internal::Render2DInstanceType_color;
 
     Render2DInstance instance{};
     instance.rect.pos = dst.begin;
@@ -4002,134 +4083,41 @@ void drawRect2D(Layer2D* layer, Vec4 color, Rect dst)
     instance.rect.type = Render2DInstanceType_color;
     instance.rect.color = color;
 
-    layer->instances.push(instance);
-
-    layer->changed = true;
+    instances.push(instance);
+    changed = true;
 }
 
-void drawSprite2D(Layer2D* layer, Sprite2D* sprite, Rect dst)
+void Layer2D::drawSprite(const Sprite2D& sprite, Rect dst)
 {
-    HG_ASSERT(layer != nullptr);
-    HG_ASSERT(sprite != nullptr);
+    using internal::Render2DInstance;
+    using internal::Render2DInstanceType_sprite;
 
-    Texture* texture = sprite->texture == nullptr
+    Texture* texture = sprite.texture == nullptr
         ? &render2D.defaultTex
-        : &*sprite->texture;
+        : &*sprite.texture;
 
     Render2DInstance instance{};
     instance.sprite.pos = dst.begin;
     instance.sprite.size = dst.end - dst.begin;
     instance.sprite.type = Render2DInstanceType_sprite;
     instance.sprite.tex = texture->view.samplerDescriptor();
-    instance.sprite.uvPos = sprite->uv.begin;
-    instance.sprite.uvSize = sprite->uv.end - sprite->uv.begin;
+    instance.sprite.uvPos = sprite.uv.begin;
+    instance.sprite.uvSize = sprite.uv.end - sprite.uv.begin;
 
-    layer->instances.push(instance);
-
-    layer->changed = true;
+    instances.push(instance);
+    changed = true;
 }
 
-Atlas2D atlasCreate2D(Asset<Texture>* texture)
+void Layer2D::drawTilemap(const Tilemap2D& tilemap, Rect dst)
 {
-    HG_ASSERT(texture != nullptr);
-
-    Atlas2D atlas{};
-    atlas.texture = texture->clone();
-    atlas.sprites = Array<Rect>{0, 1024};
-    return atlas;
-}
-
-void atlasDestroy2D(Atlas2D* atlas)
-{
-    HG_ASSERT(atlas != nullptr);
-    atlas->sprites = {};
-}
-
-u32 atlasAdd2D(Atlas2D* atlas, Rect sprite)
-{
-    HG_ASSERT(atlas != nullptr);
-
-    u32 idx = static_cast<u32>(atlas->sprites.count);
-    atlas->sprites.push(sprite);
-    return idx;
-}
-
-u32 atlasAddGrid2D(Atlas2D* atlas, Rect grid, u32 width, u32 height)
-{
-    HG_ASSERT(atlas != nullptr);
-
-    u32 idx = static_cast<u32>(atlas->sprites.count);
-
-    Vec2 spriteSize = (grid.end - grid.begin) / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
-    Vec2 pos = grid.begin;
-    for (u32 y = 0; y < height; ++y)
-    {
-        pos.x = grid.begin.x;
-        for (u32 x = 0; x < width; ++x)
-        {
-            atlas->sprites.push({pos, pos + spriteSize});
-            pos.x += spriteSize.x;
-        }
-        pos.y += spriteSize.y;
-    }
-
-    return idx;
-}
-
-Sprite2D atlasGet2D(Atlas2D* atlas, u32 idx)
-{
-    HG_ASSERT(atlas != nullptr);
-
-    return {atlas->texture.clone(), atlas->sprites[idx]};
-}
-
-Tilemap2D tilemapCreate2D(u32 width, u32 height)
-{
-    Tilemap2D tilemap{};
-    tilemap.tiles = heapAlloc<u32>(width * height);
-    tilemap.width = width;
-    tilemap.height = height;
-    for (u32 i = 0; i < width * height; ++i)
-    {
-        tilemap.tiles[i] = static_cast<u32>(-1);
-    }
-
-    return tilemap;
-}
-
-void tilemapDestroy2D(Tilemap2D* tilemap)
-{
-    HG_ASSERT(tilemap != nullptr);
-    heapFree(tilemap->tiles, tilemap->width * tilemap->height);
-}
-
-u32 tilemapGet2D(Tilemap2D* tilemap, u32 x, u32 y)
-{
-    HG_ASSERT(tilemap != nullptr);
-    return tilemap->tiles[y * tilemap->width + x];
-}
-
-void tilemapSet2D(Tilemap2D* tilemap, u32 x, u32 y, u32 tile)
-{
-    HG_ASSERT(tilemap != nullptr);
-    tilemap->tiles[y * tilemap->width + x] = tile;
-}
-
-void drawTilemap2D(Layer2D* layer, Atlas2D* atlas, Tilemap2D* tilemap, Rect dst)
-{
-    HG_ASSERT(layer != nullptr);
-    HG_ASSERT(tilemap != nullptr);
-
     Vec2 pos = dst.begin;
-    Vec2 size = (dst.end - dst.begin) / Vec2{static_cast<f32>(tilemap->width), static_cast<f32>(tilemap->height)};
-    for (u32 y = 0; y < tilemap->width; ++y)
+    Vec2 size = (dst.end - dst.begin) / Vec2{static_cast<f32>(tilemap.width), static_cast<f32>(tilemap.height)};
+    for (u32 y = 0; y < tilemap.width; ++y)
     {
         pos.x = dst.begin.x;
-        for (u32 x = 0; x < tilemap->height; ++x)
+        for (u32 x = 0; x < tilemap.height; ++x)
         {
-            u32 tile = tilemapGet2D(tilemap, x, y);
-            Sprite2D sprite = atlasGet2D(atlas, tile);
-            drawSprite2D(layer, &sprite, {pos, pos + size});
+            drawSprite(tilemap.atlas->get(tilemap.get(x, y)), {pos, pos + size});
             pos.x += size.x;
         }
         pos.y += size.y;
