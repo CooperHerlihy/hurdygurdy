@@ -4752,7 +4752,7 @@ int main()
     //
     // Functions covered:
     // - formatToSize, getMaxMipmaps
-    // - GpuBuffer/GpuImage/GpuView/GpuPipeline lifecycle (ctor, move, dtor)
+    // - GpuBuffer/GpuImage/GpuView/GpuPipeline lifecycle (create, move, dtor)
     // - GpuBuffer::write / GpuBuffer::read (host-visible + staging)
     // - GpuView::write / GpuView::read
     // - gpuCmdBegin / gpuCmdEnd
@@ -4849,13 +4849,12 @@ int main()
         ci.colorAttachmentFormats = {&cf, 1};
         ci.pushConstantSize = pushSize;
         ci.topology = topo;
-        return GpuPipeline{ci};
+        return GpuPipeline::graphics(ci);
     };
 
     auto makeColorTarget = [](u32 w, u32 h)
     {
-        return GpuImage{w, h, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
+        return GpuImage::create(w, h, Format_r8g8b8a8_unorm, GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
     };
 
     auto barrierToTransferRead = [](GpuCmd* cmd, GpuView* view)
@@ -4918,11 +4917,11 @@ int main()
         TEST(empty.data == nullptr);
 
         // Create a device-local buffer
-        GpuBuffer devBuf{256, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst};
+        GpuBuffer devBuf = GpuBuffer::create(256, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst);
         TEST(devBuf.data != nullptr);
 
         // Create a host-visible buffer
-        GpuBuffer hostBuf{128, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuBuffer hostBuf = GpuBuffer::create(128, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
         TEST(hostBuf.data != nullptr);
 
         // Move construction
@@ -4943,9 +4942,9 @@ int main()
     {
         // Host-visible path
         {
-            GpuBuffer buf{256,
-                GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst,
-                GpuMemoryUsage_frequentUpdate};
+            GpuBuffer buf = GpuBuffer::create(256,
+                    GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst,
+                    GpuMemoryUsage_frequentUpdate);
 
             // Write 68 bytes of 0x11111111 starting at offset 0
             u32 fillVal = 0x11111111;
@@ -4979,8 +4978,8 @@ int main()
 
         // Device-only (staging) path
         {
-            GpuBuffer buf{256,
-                GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst};
+            GpuBuffer buf = GpuBuffer::create(256,
+                    GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst);
 
             u32 fillVal = 0x11111111;
             for (u32 off = 0; off < 68; off += 4)
@@ -5010,7 +5009,7 @@ int main()
 
     // GpuBuffer write/read: multiple values
     {
-        GpuBuffer buf{256, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst, GpuMemoryUsage_frequentUpdate};
+        GpuBuffer buf = GpuBuffer::create(256, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst, GpuMemoryUsage_frequentUpdate);
         u32 src[16] = {};
         for (u32 i = 0; i < 16; ++i)
             src[i] = i * 3 + 7;
@@ -5027,7 +5026,7 @@ int main()
         TEST(empty.data == nullptr);
 
         // Simple constructor
-        GpuImage img{16, 16, Format_r8g8b8a8_unorm, GpuImageUsage_transferSrc};
+        GpuImage img = GpuImage::create(16, 16, Format_r8g8b8a8_unorm, GpuImageUsage_transferSrc);
         TEST(img.data != nullptr);
         TEST(img.width() == 16);
         TEST(img.height() == 16);
@@ -5039,7 +5038,7 @@ int main()
         ci.format = Format_r32_sfloat;
         ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst;
         ci.mipLevels = 4;
-        GpuImage mipImg{ci};
+        GpuImage mipImg = GpuImage::createEx(ci);
         TEST(mipImg.data != nullptr);
         TEST(mipImg.width() == 64);
         TEST(mipImg.height() == 64);
@@ -5058,10 +5057,10 @@ int main()
 
     // GpuView lifecycle
     {
-        GpuImage img{16, 16, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
+        GpuImage img = GpuImage::create(16, 16, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
 
-        GpuView view{img, GpuAspect_color};
+        GpuView view = GpuView::create(img, GpuAspect_color);
         TEST(view.data != nullptr);
         TEST(view.width() == 16);
         TEST(view.height() == 16);
@@ -5080,9 +5079,9 @@ int main()
 
     // GpuView write/read
     {
-        GpuImage img{16, 16, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled};
-        GpuView view{img, GpuAspect_color};
+        GpuImage img = GpuImage::create(16, 16, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+        GpuView view = GpuView::create(img, GpuAspect_color);
 
         u32 src[16 * 16] = {};
         for (u32 i = 0; i < 16 * 16; ++i)
@@ -5098,9 +5097,8 @@ int main()
     {
         static constexpr u32 texSize = 4;
 
-        GpuImage texImg{texSize, texSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst
-            | GpuImageUsage_sampled};
+        GpuImage texImg = GpuImage::create(texSize, texSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
 
         u32 checker[texSize * texSize] = {};
         for (u32 y = 0; y < texSize; ++y)
@@ -5115,7 +5113,7 @@ int main()
         vci.type = GpuViewType_2D;
         vci.filter = GpuFilter_linear;
         vci.edgeMode = GpuSamplerEdgeMode_clampToEdge;
-        GpuView view{vci};
+        GpuView view = GpuView::createEx(vci);
         view.write(checker);
 
         // Verify descriptor is valid
@@ -5130,9 +5128,9 @@ int main()
 
         // Verify sampled rendering produces non-clear color
         static constexpr u32 outSize = 2;
-        GpuImage outImg{outSize, outSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
-        GpuView outView{outImg, GpuAspect_color};
+        GpuImage outImg = GpuImage::create(outSize, outSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
+        GpuView outView = GpuView::create(outImg, GpuAspect_color);
 
         struct Push {
             f32 uvX;
@@ -5148,7 +5146,7 @@ int main()
         ci.colorAttachmentFormats = {&colorFmt, 1};
         ci.pushConstantSize = sizeof(Push);
 
-        GpuPipeline pipe{ci};
+        GpuPipeline pipe = GpuPipeline::graphics(ci);
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5183,17 +5181,15 @@ int main()
     {
         static constexpr u32 bufSize = 64;
 
-        GpuBuffer devBuf{bufSize, GpuBufferUsage_transferDst | GpuBufferUsage_transferSrc
-            | GpuBufferUsage_storageBuffer};
-        GpuBuffer staging{bufSize, GpuBufferUsage_transferSrc | GpuBufferUsage_storageBuffer,
-            GpuMemoryUsage_frequentUpdate};
+        GpuBuffer devBuf = GpuBuffer::create(bufSize, GpuBufferUsage_transferDst | GpuBufferUsage_transferSrc
+                | GpuBufferUsage_storageBuffer);
+        GpuBuffer staging = GpuBuffer::create(bufSize, GpuBufferUsage_transferSrc | GpuBufferUsage_storageBuffer,
+                GpuMemoryUsage_frequentUpdate);
 
         u32 known = 0xDECAF123;
         staging.write(&known, 0, sizeof(known));
 
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_compute_comp_spv, sizeof(test_compute_comp_spv)},
-            12}};
+        GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12);
 
         struct Push {
             u32 addVal;
@@ -5233,11 +5229,11 @@ int main()
         static constexpr u32 elemCount = 64;
         static constexpr u32 bufSize = elemCount * sizeof(u32);
 
-        GpuBuffer buf{bufSize,
-            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
-            GpuMemoryUsage_frequentUpdate};
-        GpuBuffer outBuf{bufSize,
-            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc};
+        GpuBuffer buf = GpuBuffer::create(bufSize,
+                GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
+                GpuMemoryUsage_frequentUpdate);
+        GpuBuffer outBuf = GpuBuffer::create(bufSize,
+                GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc);
 
         u32 input[elemCount] = {};
         for (u32 i = 0; i < elemCount; ++i)
@@ -5250,8 +5246,7 @@ int main()
             u32 outIdx;
         };
 
-        GpuPipeline incPipe{GpuComputePipelineCreateInfo{
-            {test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push)}};
+        GpuPipeline incPipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5294,10 +5289,9 @@ int main()
     {
         static constexpr u32 imgSize = 4;
 
-        GpuImage img{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst
-            | GpuImageUsage_sampled | GpuImageUsage_colorAttachment};
-        GpuView view{img, GpuAspect_color};
+        GpuImage img = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled | GpuImageUsage_colorAttachment);
+        GpuView view = GpuView::create(img, GpuAspect_color);
 
         // Write a known pattern
         u32 red[imgSize * imgSize] = {};
@@ -5335,12 +5329,12 @@ int main()
         static constexpr u32 bufSize = 256;
         static constexpr u32 imgSize = 4;
 
-        GpuBuffer storageBuf{bufSize,
-            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
-            GpuMemoryUsage_frequentUpdate};
-        GpuImage img{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_storage};
-        GpuView imgView{img, GpuAspect_color};
+        GpuBuffer storageBuf = GpuBuffer::create(bufSize,
+                GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
+                GpuMemoryUsage_frequentUpdate);
+        GpuImage img = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_storage);
+        GpuView imgView = GpuView::create(img, GpuAspect_color);
 
         // Write 16 RGBA pixels as u32 values into the buffer
         u32 pixelData[imgSize * imgSize] = {};
@@ -5358,9 +5352,7 @@ int main()
             u32 bufIdx;
             u32 imgIdx;
         };
-
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_buf_to_img_comp_spv, sizeof(test_buf_to_img_comp_spv)}, sizeof(Push)}};
+        GpuPipeline pipe = GpuPipeline::compute({test_buf_to_img_comp_spv, sizeof(test_buf_to_img_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5419,9 +5411,9 @@ int main()
         static constexpr u32 elemCount = 64;
         static constexpr u32 bufSize = elemCount * sizeof(u32);
 
-        GpuBuffer inBuf{bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
-        GpuBuffer outBuf{bufSize,
-            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc};
+        GpuBuffer inBuf = GpuBuffer::create(bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
+        GpuBuffer outBuf = GpuBuffer::create(bufSize,
+                GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc);
 
         u32 input[elemCount] = {};
         for (u32 i = 0; i < elemCount; ++i)
@@ -5432,9 +5424,7 @@ int main()
             u32 inIdx;
             u32 outIdx;
         };
-
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push)}};
+        GpuPipeline pipe = GpuPipeline::compute({test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5469,7 +5459,7 @@ int main()
 
     // GpuPipeline compute: lifecycle
     {
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{{test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12}};
+        GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12);
         TEST(pipe.data != nullptr);
 
         // Move construction
@@ -5490,8 +5480,8 @@ int main()
         static constexpr u32 bufSize = elemCount * sizeof(u32);
         u32 addVal = 100;
 
-        GpuBuffer inBuf{bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
-        GpuBuffer outBuf{bufSize, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc};
+        GpuBuffer inBuf = GpuBuffer::create(bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
+        GpuBuffer outBuf = GpuBuffer::create(bufSize, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc);
 
         u32 input[elemCount] = {};
         for (u32 i = 0; i < elemCount; ++i)
@@ -5505,7 +5495,7 @@ int main()
         };
         Push push{addVal, inBuf.storageDescriptor(), outBuf.storageDescriptor()};
 
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{{test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push)}};
+        GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5539,7 +5529,7 @@ int main()
         Format colorFmt = Format_r8g8b8a8_unorm;
         ci.colorAttachmentFormats = {&colorFmt, 1};
 
-        GpuPipeline pipe{ci};
+        GpuPipeline pipe = GpuPipeline::graphics(ci);
         TEST(pipe.data != nullptr);
 
         GpuPipeline moved{std::move(pipe)};
@@ -5557,7 +5547,7 @@ int main()
         static constexpr u32 imgSize = 4;
 
         GpuImage colorImg = makeColorTarget(imgSize, imgSize);
-        GpuView colorView{colorImg, GpuAspect_color};
+        GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
         GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
 
@@ -5588,10 +5578,10 @@ int main()
         static constexpr u32 bufSize = elemCount * sizeof(u32);
         u32 addVal = 100;
 
-        GpuBuffer inBuf{bufSize, GpuBufferUsage_storageBuffer,
-            GpuMemoryUsage_frequentUpdate};
-        GpuBuffer outBuf{bufSize, GpuBufferUsage_storageBuffer
-            | GpuBufferUsage_transferSrc};
+        GpuBuffer inBuf = GpuBuffer::create(bufSize, GpuBufferUsage_storageBuffer,
+                GpuMemoryUsage_frequentUpdate);
+        GpuBuffer outBuf = GpuBuffer::create(bufSize, GpuBufferUsage_storageBuffer
+                | GpuBufferUsage_transferSrc);
 
         u32 input[elemCount] = {};
         for (u32 i = 0; i < elemCount; ++i)
@@ -5605,8 +5595,7 @@ int main()
         };
         Push push{addVal, inBuf.storageDescriptor(), outBuf.storageDescriptor()};
 
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push)}};
+        GpuPipeline pipe = GpuPipeline::compute(                {test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5644,11 +5633,11 @@ int main()
         static constexpr u32 imgSize = 4;
 
         GpuImage colorImg = makeColorTarget(imgSize, imgSize);
-        GpuView colorView{colorImg, GpuAspect_color};
+        GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
-        GpuImage depthImg{imgSize, imgSize, Format_d32_sfloat,
-            GpuImageUsage_depthStencilAttachment | GpuImageUsage_transferSrc};
-        GpuView depthView{depthImg, GpuAspect_depth};
+        GpuImage depthImg = GpuImage::create(imgSize, imgSize, Format_d32_sfloat,
+                GpuImageUsage_depthStencilAttachment | GpuImageUsage_transferSrc);
+        GpuView depthView = GpuView::create(depthImg, GpuAspect_depth);
 
         struct Push {
             float depth;
@@ -5665,7 +5654,7 @@ int main()
         ci.enableDepthWrite = true;
         ci.pushConstantSize = sizeof(Push);
 
-        GpuPipeline pipe{ci};
+        GpuPipeline pipe = GpuPipeline::graphics(ci);
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5721,13 +5710,13 @@ int main()
             { 0.0f,  0.0f, 0.0f, 1.0f},
         };
 
-        GpuBuffer instBuf{sizeof(instanceData),
-            GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuBuffer instBuf = GpuBuffer::create(sizeof(instanceData),
+                GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
         instBuf.write(instanceData, 0, sizeof(instanceData));
 
-        GpuImage colorImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
-        GpuView colorView{colorImg, GpuAspect_color};
+        GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
+        GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
         struct Push {
             uint dataIdx;
@@ -5741,7 +5730,7 @@ int main()
         ci.pushConstantSize = sizeof(Push);
         ci.topology = GpuTopology_triangleStrip;
 
-        GpuPipeline pipe{ci};
+        GpuPipeline pipe = GpuPipeline::graphics(ci);
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5789,9 +5778,9 @@ int main()
     {
         static constexpr u32 imgSize = 16;
 
-        GpuImage colorImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
-        GpuView colorView{colorImg, GpuAspect_color};
+        GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
+        GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
         struct Push {
             float depth;
@@ -5806,7 +5795,7 @@ int main()
         ci.colorAttachmentFormats = {&colorFmt, 1};
         ci.pushConstantSize = sizeof(Push);
 
-        GpuPipeline pipe{ci};
+        GpuPipeline pipe = GpuPipeline::graphics(ci);
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5857,9 +5846,9 @@ int main()
     {
         static constexpr u32 imgSize = 8;
 
-        GpuImage srcImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_sampled | GpuImageUsage_transferDst | GpuImageUsage_transferSrc};
-        GpuView srcView{srcImg, GpuAspect_color};
+        GpuImage srcImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_sampled | GpuImageUsage_transferDst | GpuImageUsage_transferSrc);
+        GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
 
         u32 white = 0xFFFFFFFF;
         u32 whiteImg[imgSize * imgSize];
@@ -5867,21 +5856,20 @@ int main()
             whiteImg[i] = white;
         srcView.write(whiteImg);
 
-        GpuImage dstImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_storage | GpuImageUsage_transferSrc};
+        GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_storage | GpuImageUsage_transferSrc);
         GpuViewCreateInfo dstCI{};
         dstCI.image = &dstImg;
         dstCI.aspectFlags = GpuAspect_color;
         dstCI.type = GpuViewType_2D;
-        GpuView dstView{dstCI};
+        GpuView dstView = GpuView::createEx(dstCI);
 
         struct Push {
             u32 srcIdx;
             u32 dstIdx;
         };
 
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_blur_comp_spv, sizeof(test_blur_comp_spv)}, sizeof(Push)}};
+        GpuPipeline pipe = GpuPipeline::compute({test_blur_comp_spv, sizeof(test_blur_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -5933,20 +5921,20 @@ int main()
     {
         static constexpr u32 imgSize = 4;
 
-        GpuImage firstImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_sampled | GpuImageUsage_transferSrc};
-        GpuView firstView{firstImg, GpuAspect_color};
+        GpuImage firstImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_colorAttachment | GpuImageUsage_sampled | GpuImageUsage_transferSrc);
+        GpuView firstView = GpuView::create(firstImg, GpuAspect_color);
 
-        GpuImage resultImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
-        GpuView resultView{resultImg, GpuAspect_color};
+        GpuImage resultImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
+        GpuView resultView = GpuView::create(resultImg, GpuAspect_color);
 
         GpuGraphicsPipelineCreateInfo pass1CI{};
         pass1CI.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
         pass1CI.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
         Format colorFmt = Format_r8g8b8a8_unorm;
         pass1CI.colorAttachmentFormats = {&colorFmt, 1};
-        GpuPipeline pass1Pipe{pass1CI};
+        GpuPipeline pass1Pipe = GpuPipeline::graphics(pass1CI);
 
         struct Push2 { u32 texIdx; };
         GpuGraphicsPipelineCreateInfo pass2CI{};
@@ -5954,7 +5942,7 @@ int main()
         pass2CI.fragmentShader = {test_invert_frag_spv, sizeof(test_invert_frag_spv)};
         pass2CI.colorAttachmentFormats = {&colorFmt, 1};
         pass2CI.pushConstantSize = sizeof(Push2);
-        GpuPipeline pass2Pipe{pass2CI};
+        GpuPipeline pass2Pipe = GpuPipeline::graphics(pass2CI);
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -6027,20 +6015,19 @@ int main()
         static constexpr u32 elemCount = 32;
         static constexpr u32 bufSize = elemCount * sizeof(u32);
 
-        GpuBuffer inBuf{bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuBuffer inBuf = GpuBuffer::create(bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
 
         u32 input[elemCount] = {};
         for (u32 i = 0; i < elemCount; ++i)
             input[i] = i + 1;
         inBuf.write(input, 0, bufSize);
 
-        GpuBuffer outBuf{bufSize,
-            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
-            GpuMemoryUsage_stagingRead};
+        GpuBuffer outBuf = GpuBuffer::create(bufSize,
+                GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
+                GpuMemoryUsage_stagingRead);
 
         struct Push { u32 inIdx; u32 outIdx; };
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push)}};
+        GpuPipeline pipe = GpuPipeline::compute({test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -6084,11 +6071,11 @@ int main()
         static constexpr u32 elemCount = 32;
         static constexpr u32 bufSize = elemCount * sizeof(u32);
 
-        GpuBuffer bufA{bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
-        GpuBuffer bufB{bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
-        GpuBuffer bufC{bufSize,
-            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
-            GpuMemoryUsage_stagingRead};
+        GpuBuffer bufA = GpuBuffer::create(bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
+        GpuBuffer bufB = GpuBuffer::create(bufSize, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
+        GpuBuffer bufC = GpuBuffer::create(bufSize,
+                GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
+                GpuMemoryUsage_stagingRead);
 
         u32 input[elemCount] = {};
         for (u32 i = 0; i < elemCount; ++i)
@@ -6096,8 +6083,7 @@ int main()
         bufA.write(input, 0, bufSize);
 
         struct Push { u32 inIdx; u32 outIdx; };
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push)}};
+        GpuPipeline pipe = GpuPipeline::compute({test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -6177,7 +6163,7 @@ int main()
         imgCI.format = Format_r8g8b8a8_unorm;
         imgCI.arrayLayers = numLayers;
         imgCI.usage = GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc;
-        GpuImage arrayImg{imgCI};
+        GpuImage arrayImg = GpuImage::createEx(imgCI);
 
         // Hoisted: pipeline and attachment template (invariant across layers)
         GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
@@ -6198,7 +6184,7 @@ int main()
             viewCI.layerCount = 1;
             viewCI.aspectFlags = GpuAspect_color;
             viewCI.type = GpuViewType_2D;
-            GpuView layerView{viewCI};
+            GpuView layerView = GpuView::createEx(viewCI);
             colorAtt.image = &layerView;
 
             GpuCmd* cmd = gpuCmdBegin();
@@ -6220,16 +6206,15 @@ int main()
     {
         static constexpr u32 bufSize = 64;
 
-        GpuBuffer devBuf{bufSize,
-            GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc};
-        GpuBuffer staging{bufSize,
-            GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuBuffer devBuf = GpuBuffer::create(bufSize,
+                GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc);
+        GpuBuffer staging = GpuBuffer::create(bufSize,
+                GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
 
         u32 known = 0xDEADBEEF;
         staging.write(&known, 0, sizeof(known));
 
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12}};
+        GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12);
 
         struct Push {
             u32 addVal;
@@ -6273,12 +6258,12 @@ int main()
         // Color as f32[4]: (0.5, 0.3, 0.7, 1.0)
         f32 colorData[4] = {0.5f, 0.3f, 0.7f, 1.0f};
 
-        GpuBuffer uniformBuf{64, GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate};
+        GpuBuffer uniformBuf = GpuBuffer::create(64, GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
         uniformBuf.write(colorData, 0, sizeof(colorData));
 
-        GpuImage colorImg{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc};
-        GpuView colorView{colorImg, GpuAspect_color};
+        GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
+        GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
         struct Push {
             u32 colorIdx;
@@ -6291,7 +6276,7 @@ int main()
         ci.colorAttachmentFormats = {&colorFmt, 1};
         ci.pushConstantSize = sizeof(Push);
 
-        GpuPipeline pipe{ci};
+        GpuPipeline pipe = GpuPipeline::graphics(ci);
 
         Push push{uniformBuf.uniformDescriptor()};
 
@@ -6339,17 +6324,16 @@ int main()
     {
         static constexpr u32 imgSize = 4;
 
-        GpuImage img{imgSize, imgSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst
-            | GpuImageUsage_storage | GpuImageUsage_sampled};
-        GpuView view{img, GpuAspect_color, GpuFilter_nearest};
+        GpuImage img = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_transferSrc | GpuImageUsage_transferDst
+                | GpuImageUsage_storage | GpuImageUsage_sampled);
+        GpuView view = GpuView::create(img, GpuAspect_color, GpuFilter_nearest);
 
         struct Push {
             u32 imgIdx;
         };
 
-        GpuPipeline pipe{GpuComputePipelineCreateInfo{
-            {test_storage_img_comp_spv, sizeof(test_storage_img_comp_spv)}, sizeof(Push)}};
+        GpuPipeline pipe = GpuPipeline::compute({test_storage_img_comp_spv, sizeof(test_storage_img_comp_spv)}, sizeof(Push));
 
         GpuCmd* cmd = gpuCmdBegin();
 
@@ -6408,14 +6392,14 @@ int main()
         ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled;
         ci.arrayLayers = 6;
         ci.flags = GpuImageConfig_cubeCompatible;
-        GpuImage cubeImg{ci};
+        GpuImage cubeImg = GpuImage::createEx(ci);
 
         GpuViewCreateInfo vci{};
         vci.image = &cubeImg;
         vci.aspectFlags = GpuAspect_color;
         vci.type = GpuViewType_cube;
         vci.layerCount = 6;
-        GpuView cubeView{vci};
+        GpuView cubeView = GpuView::createEx(vci);
 
         // Build cubemap cross: 4 columns × 3 rows (each face is faceSize × faceSize)
         u8 cross[faceSize * 4 * faceSize * 3 * bpp] = {};
@@ -6456,7 +6440,7 @@ int main()
         readVci.type = GpuViewType_2D;
         readVci.baseArrayLayer = 0;
         readVci.layerCount = 1;
-        GpuView readView{readVci};
+        GpuView readView = GpuView::createEx(readVci);
 
         GpuCmd* cmd = gpuCmdBegin();
         barrierToTransferRead(cmd, &readView);
@@ -6479,14 +6463,14 @@ int main()
         ci.format = Format_r8g8b8a8_unorm;
         ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled;
         ci.mipLevels = mipLevels;
-        GpuImage mipImg{ci};
+        GpuImage mipImg = GpuImage::createEx(ci);
 
         GpuViewCreateInfo vci{};
         vci.image = &mipImg;
         vci.aspectFlags = GpuAspect_color;
         vci.type = GpuViewType_2D;
         vci.levelCount = mipLevels;
-        GpuView mipView{vci};
+        GpuView mipView = GpuView::createEx(vci);
 
         u32 yellow = 0xFF00FFFF;
         u32 src[imgSize * imgSize] = {};
@@ -6515,14 +6499,14 @@ int main()
         ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst
                  | GpuImageUsage_sampled;
         ci.mipLevels = mipLevels;
-        GpuImage img{ci};
+        GpuImage img = GpuImage::createEx(ci);
 
         GpuViewCreateInfo fullVci{};
         fullVci.image = &img;
         fullVci.aspectFlags = GpuAspect_color;
         fullVci.type = GpuViewType_2D;
         fullVci.levelCount = mipLevels;
-        GpuView fullView{fullVci};
+        GpuView fullView = GpuView::createEx(fullVci);
 
         u32 red   = 0xFF0000FF;
         u32 green = 0xFF00FF00;
@@ -6541,7 +6525,7 @@ int main()
         mip1Vci.type = GpuViewType_2D;
         mip1Vci.baseMipLevel = 1;
         mip1Vci.levelCount = 1;
-        GpuView mip1View{mip1Vci};
+        GpuView mip1View = GpuView::createEx(mip1Vci);
 
         GpuCmd* cmd = gpuCmdBegin();
         barrierToTransferRead(cmd, &mip1View);
@@ -6564,10 +6548,10 @@ int main()
         static constexpr u32 h = 4;
         static constexpr u32 halfW = 2;
 
-        GpuImage img{w, h, Format_r8g8b8a8_unorm,
-            GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc
-            | GpuImageUsage_transferDst};
-        GpuView view{img, GpuAspect_color};
+        GpuImage img = GpuImage::create(w, h, Format_r8g8b8a8_unorm,
+                GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc
+                | GpuImageUsage_transferDst);
+        GpuView view = GpuView::create(img, GpuAspect_color);
 
         // Fill image with known pattern (red)
         u32 redPx = 0xFF0000FF;
@@ -6609,9 +6593,9 @@ int main()
         static constexpr u32 texSize = 2;
         static constexpr u32 outSize = 2;
 
-        GpuImage texImg{texSize, texSize, Format_r8g8b8a8_unorm,
-            GpuImageUsage_transferSrc | GpuImageUsage_transferDst
-            | GpuImageUsage_sampled};
+        GpuImage texImg = GpuImage::create(texSize, texSize, Format_r8g8b8a8_unorm,
+                GpuImageUsage_transferSrc | GpuImageUsage_transferDst
+                | GpuImageUsage_sampled);
 
         u32 pattern[texSize * texSize] = {0xFF0000FF, 0xFF00FF00,
                                            0xFFFF0000, 0xFFFFFFFF};
@@ -6621,11 +6605,11 @@ int main()
         vci.type = GpuViewType_2D;
         vci.filter = GpuFilter_nearest;
         vci.edgeMode = GpuSamplerEdgeMode_mirroredRepeat;
-        GpuView view{vci};
+        GpuView view = GpuView::createEx(vci);
         view.write(pattern);
 
         GpuImage outImg = makeColorTarget(outSize, outSize);
-        GpuView outView{outImg, GpuAspect_color};
+        GpuView outView = GpuView::create(outImg, GpuAspect_color);
 
         // UV=(1.25, 0.25) -> mirroredRepeat: floor(1.25)=1(odd) -> 1-0.25=0.75,
         // floor(0.25)=0(even) -> 0.25.  Nearest texel to (0.75, 0.25) = (1,0) = green
@@ -6659,7 +6643,7 @@ int main()
         static constexpr u32 imgSize = 4;
 
         GpuImage colorImg = makeColorTarget(imgSize, imgSize);
-        GpuView colorView{colorImg, GpuAspect_color};
+        GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
         GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
 

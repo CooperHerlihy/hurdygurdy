@@ -3679,8 +3679,8 @@ void assetLoadImpl(AssetData<Texture>* data)
     imageInfo.depth = tex->depth;
     imageInfo.usage = GpuImageUsage_transferDst | GpuImageUsage_sampled;
 
-    data->asset.image = {imageInfo};
-    data->asset.view = {data->asset.image, GpuAspect_color, GpuFilter_nearest};
+    data->asset.image = GpuImage::createEx(imageInfo);
+    data->asset.view = GpuView::create(data->asset.image, GpuAspect_color, GpuFilter_nearest);
 
     data->asset.view.write(tex->pixels);
 }
@@ -3709,42 +3709,14 @@ void assetLoadImpl(AssetData<Mesh>* data)
     data->asset.vertexWidth = sizeof(MeshVertex);
     data->asset.indexCount = static_cast<u32>(mesh->indices.count);
 
-    data->asset.vertexBuffer = GpuBuffer{
-        data->asset.vertexCount * data->asset.vertexWidth, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst};
+    data->asset.vertexBuffer = GpuBuffer::create(
+        data->asset.vertexCount * data->asset.vertexWidth, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
 
-    data->asset.indexBuffer = GpuBuffer{
-        data->asset.indexCount * sizeof(u32), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst};
+    data->asset.indexBuffer = GpuBuffer::create(
+        data->asset.indexCount * sizeof(u32), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
 
     data->asset.vertexBuffer.write(mesh->vertices.vals, 0, data->asset.vertexCount * data->asset.vertexWidth);
     data->asset.indexBuffer.write(mesh->indices.vals, 0, data->asset.indexCount * sizeof(u32));
-}
-
-template<>
-void serialize(Serializer* s, Camera* camera)
-{
-    serializeBegin(s);
-    serialize(s, &camera->rotation);
-    serialize(s, &camera->position);
-    serialize(s, &camera->type);
-    if (camera->type == CameraType_perspective)
-    {
-        serializeObject(s,
-            &camera->perspective.aspect,
-            &camera->perspective.fov,
-            &camera->perspective.near,
-            &camera->perspective.far);
-    }
-    else
-    {
-        serializeObject(s,
-            &camera->orthographic.left,
-            &camera->orthographic.right,
-            &camera->orthographic.top,
-            &camera->orthographic.bottom,
-            &camera->orthographic.near,
-            &camera->orthographic.far);
-    }
-    serializeEnd(s);
 }
 
 struct VPUniform {
@@ -3756,10 +3728,8 @@ Camera cameraCreate()
 {
     Camera camera{};
 
-    camera.vpBuffer = GpuBuffer{
-        sizeof(VPUniform),
-        GpuBufferUsage_uniformBuffer,
-        GpuMemoryUsage_frequentUpdate};
+    camera.vpBuffer = GpuBuffer::create(
+        sizeof(VPUniform), GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
 
     camera.rotation = Quat{1.0f};
     camera.position = Vec3{0.0f};
@@ -3827,6 +3797,34 @@ void cameraUpdate(Camera* camera)
     }
 
     camera->vpBuffer.write(&vp, 0, sizeof(vp));
+}
+
+template<>
+void serialize(Serializer* s, Camera* camera)
+{
+    serializeBegin(s);
+    serialize(s, &camera->rotation);
+    serialize(s, &camera->position);
+    serialize(s, &camera->type);
+    if (camera->type == CameraType_perspective)
+    {
+        serializeObject(s,
+            &camera->perspective.aspect,
+            &camera->perspective.fov,
+            &camera->perspective.near,
+            &camera->perspective.far);
+    }
+    else
+    {
+        serializeObject(s,
+            &camera->orthographic.left,
+            &camera->orthographic.right,
+            &camera->orthographic.top,
+            &camera->orthographic.bottom,
+            &camera->orthographic.near,
+            &camera->orthographic.far);
+    }
+    serializeEnd(s);
 }
 
 // Camera* cameraAdd(Ecs* ecs, Entity e)
@@ -3904,12 +3902,12 @@ void rendererInit2D(Format colorFormat)
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = {&enableColorBlend, 1};
 
-    render2D.pipeline = GpuPipeline{pipelineConfig};
+    render2D.pipeline = GpuPipeline::graphics(pipelineConfig);
 
     pipelineConfig.fragmentShader = {debug2d_frag_spv, sizeof(debug2d_frag_spv)};
     pipelineConfig.topology = GpuTopology_lineStrip;
 
-    render2D.debugPipeline = GpuPipeline{pipelineConfig};
+    render2D.debugPipeline = GpuPipeline::graphics(pipelineConfig);
 
     struct Color {
         u8 r, g, b, a;
@@ -3919,8 +3917,8 @@ void rendererInit2D(Format colorFormat)
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    render2D.defaultTex.image = GpuImage{2, 2, Format_r8g8b8a8_srgb, GpuImageUsage_sampled | GpuImageUsage_transferDst};
-    render2D.defaultTex.view = GpuView{render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest};
+    render2D.defaultTex.image = GpuImage::create(2, 2, Format_r8g8b8a8_srgb, GpuImageUsage_sampled | GpuImageUsage_transferDst);
+    render2D.defaultTex.view = GpuView::create(render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
     render2D.defaultTex.view.write(defaultColors);
 }
 
@@ -3933,8 +3931,8 @@ Layer2D layerCreate2D()
 {
     Layer2D layer{};
     layer.instances = Array<Render2DInstance>{0, 1024};
-    layer.instanceBuffer = GpuBuffer{layer.instances.capacity * sizeof(Render2DInstance),
-        GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+    layer.instanceBuffer = GpuBuffer::create(layer.instances.capacity * sizeof(Render2DInstance),
+        GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
     layer.instanceCapacity = static_cast<u32>(layer.instances.capacity);
     layer.transform = Mat4{1.0f};
     layer.changed = true;
@@ -3967,8 +3965,8 @@ static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, const Gpu
         {
             gpuWaitIdle();
 
-            layer->instanceBuffer = GpuBuffer{layer->instances.capacity * sizeof(Render2DInstance),
-                GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
+            layer->instanceBuffer = GpuBuffer::create(layer->instances.capacity * sizeof(Render2DInstance),
+                GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
             layer->instanceCapacity = static_cast<u32>(layer->instances.capacity);
         }
 

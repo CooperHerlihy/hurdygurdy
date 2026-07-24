@@ -1383,11 +1383,13 @@ static void descriptorDestroy(GpuDescriptor desc, DescriptorType type)
         handlePoolFree(&vk.descriptorPools[type], desc);
 }
 
-GpuBuffer::GpuBuffer(u64 size, GpuBufferUsageFlags usageFlags, GpuMemoryUsage memoryUsage)
-    : data{makeUnique<GpuBufferData>()}
+GpuBuffer GpuBuffer::create(u64 size, GpuBufferUsageFlags usageFlags, GpuMemoryUsage memoryUsage)
 {
     HG_ASSERT(size > 0);
     HG_ASSERT(usageFlags != 0);
+
+    GpuBuffer buf{};
+    buf.data = makeUnique<GpuBufferData>();
 
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1402,33 +1404,35 @@ GpuBuffer::GpuBuffer(u64 size, GpuBufferUsageFlags usageFlags, GpuMemoryUsage me
         vk.vma,
         &bufferInfo,
         &allocInfo,
-        &data->buffer,
-        &data->alloc,
+        &buf.data->buffer,
+        &buf.data->alloc,
         nullptr);
 
     if (result != VK_SUCCESS)
         HG_PANIC("Could not create VkBuffer: %s\n", vkResultToStr(result));
 
-    data->size = size;
+    buf.data->size = size;
 
     if (usageFlags & GpuBufferUsage_uniformBuffer)
-        data->uniformDesc = createBufferDescriptor(DescriptorType_uniformBuffer, *this, 0, size);
+        buf.data->uniformDesc = createBufferDescriptor(DescriptorType_uniformBuffer, buf, 0, size);
 
     if (usageFlags & GpuBufferUsage_storageBuffer)
-        data->storageDesc = createBufferDescriptor(DescriptorType_storageBuffer, *this, 0, size);
+        buf.data->storageDesc = createBufferDescriptor(DescriptorType_storageBuffer, buf, 0, size);
 
-    data->usage = usageFlags;
+    buf.data->usage = usageFlags;
 
     if (memoryUsage == GpuMemoryUsage_frequentUpdate)
     {
         VkMemoryPropertyFlags memPropFlags;
-        vmaGetAllocationMemoryProperties(vk.vma, data->alloc, &memPropFlags);
-        data->access = memPropFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+        vmaGetAllocationMemoryProperties(vk.vma, buf.data->alloc, &memPropFlags);
+        buf.data->access = memPropFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
             ? GpuMemoryHostAccess_write
             : GpuMemoryHostAccess_none;
     } else {
-        data->access = gpuMemoryUsageToHostAccess(memoryUsage);
+        buf.data->access = gpuMemoryUsageToHostAccess(memoryUsage);
     }
+
+    return buf;
 }
 
 GpuBuffer::~GpuBuffer() noexcept
@@ -1476,7 +1480,7 @@ void GpuBuffer::write(const void* src, u64 offset, u64 size)
         return;
     }
 
-    GpuBuffer stage{size, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite};
+    GpuBuffer stage = GpuBuffer::create(size, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
     stage.write(src, 0, size);
 
     GpuCmd* cmd = gpuCmdBegin();
@@ -1508,7 +1512,7 @@ void GpuBuffer::read(void* dst, u64 offset, u64 size)
         return;
     }
 
-    GpuBuffer stage{size, GpuBufferUsage_transferDst, GpuMemoryUsage_stagingRead};
+    GpuBuffer stage = GpuBuffer::create(size, GpuBufferUsage_transferDst, GpuMemoryUsage_stagingRead);
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -1526,21 +1530,23 @@ void GpuBuffer::read(void* dst, u64 offset, u64 size)
     data->lastAccess = GpuAccess_transferRead;
 }
 
-GpuImage::GpuImage(u32 width, u32 height, Format format, GpuImageUsageFlags usage)
+GpuImage GpuImage::create(u32 width, u32 height, Format format, GpuImageUsageFlags usage)
 {
     GpuImageCreateInfo create{};
     create.width = width;
     create.height = height;
     create.format = format;
     create.usage = usage;
-    data = GpuImage{create}.data;
+    return GpuImage::createEx(create);
 }
 
-GpuImage::GpuImage(const GpuImageCreateInfo& create)
-    : data{makeUnique<GpuImageData>()}
+GpuImage GpuImage::createEx(const GpuImageCreateInfo& create)
 {
     HG_ASSERT(create.format != Format_undefined);
     HG_ASSERT(create.usage != 0);
+
+    GpuImage img{};
+    img.data = makeUnique<GpuImageData>();
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1560,22 +1566,24 @@ GpuImage::GpuImage(const GpuImageCreateInfo& create)
         vk.vma,
         &imageInfo,
         &allocInfo,
-        &data->image,
-        &data->alloc,
+        &img.data->image,
+        &img.data->alloc,
         nullptr);
 
     if (result != VK_SUCCESS)
         HG_PANIC("Could not create VkImage: %s\n", vkResultToStr(result));
 
-    data->usage = create.usage;
-    data->format = create.format;
-    data->width = create.width;
-    data->height = create.height;
-    data->depth = create.depth;
-    data->dimensions = static_cast<u8>(create.dimensions);
-    data->mipLevels = static_cast<u8>(create.mipLevels);
-    data->arrayLayers = static_cast<u8>(create.arrayLayers);
-    data->msaaSamples = static_cast<u8>(countToMsaaSampleBits(create.msaaSamples));
+    img.data->usage = create.usage;
+    img.data->format = create.format;
+    img.data->width = create.width;
+    img.data->height = create.height;
+    img.data->depth = create.depth;
+    img.data->dimensions = static_cast<u8>(create.dimensions);
+    img.data->mipLevels = static_cast<u8>(create.mipLevels);
+    img.data->arrayLayers = static_cast<u8>(create.arrayLayers);
+    img.data->msaaSamples = static_cast<u8>(countToMsaaSampleBits(create.msaaSamples));
+
+    return img;
 }
 
 GpuImage::~GpuImage()
@@ -1639,7 +1647,7 @@ static VkSampler samplerGet(
     return *sampler;
 }
 
-GpuView::GpuView(
+GpuView GpuView::create(
     GpuImage& image,
     GpuAspectFlags aspectFlags,
     GpuFilter filter)
@@ -1655,13 +1663,15 @@ GpuView::GpuView(
     config.filter = filter;
     config.edgeMode = GpuSamplerEdgeMode_repeat;
     config.border = GpuSamplerBorder_floatTransparentBlack;
-    new (this) GpuView{config};
+    return GpuView::createEx(config);
 }
 
-GpuView::GpuView(const GpuViewCreateInfo& config)
-    : data{makeUnique<GpuViewData>()}
+GpuView GpuView::createEx(const GpuViewCreateInfo& config)
 {
     HG_ASSERT(config.aspectFlags != 0);
+
+    GpuView view{};
+    view.data = makeUnique<GpuViewData>();
 
     GpuImageData* image = config.image->data;
 
@@ -1677,34 +1687,36 @@ GpuView::GpuView(const GpuViewCreateInfo& config)
     info.subresourceRange.layerCount = config.layerCount;
 
     [[maybe_unused]]
-    VkResult result = vkCreateImageView(vk.device, &info, nullptr, &data->view);
-    if (data->view == nullptr)
+    VkResult result = vkCreateImageView(vk.device, &info, nullptr, &view.data->view);
+    if (view.data->view == nullptr)
         HG_PANIC("Could not create VkImageView: %s\n", vkResultToStr(result));
 
     if (image->usage & GpuImageUsage_sampled)
     {
-        data->sampler = samplerGet(config.filter, config.edgeMode, config.border);
-        data->samplerDesc = createImageDescriptor(
+        view.data->sampler = samplerGet(config.filter, config.edgeMode, config.border);
+        view.data->samplerDesc = createImageDescriptor(
             DescriptorType_combinedImageSampler,
-            *this,
+            view,
             GpuLayout_shaderReadOnly);
     }
 
     if (image->usage & GpuImageUsage_storage)
     {
-        data->storageDesc = createImageDescriptor(
+        view.data->storageDesc = createImageDescriptor(
             DescriptorType_storageImage,
-            *this,
+            view,
             GpuLayout_general);
     }
 
-    data->image = image;
-    data->type = config.type;
-    data->aspectFlags = config.aspectFlags;
-    data->baseMipLevel = static_cast<u8>(config.baseMipLevel);
-    data->levelCount = static_cast<u8>(config.levelCount);
-    data->baseArrayLayer = static_cast<u8>(config.baseArrayLayer);
-    data->layerCount = static_cast<u8>(config.layerCount);
+    view.data->image = image;
+    view.data->type = config.type;
+    view.data->aspectFlags = config.aspectFlags;
+    view.data->baseMipLevel = static_cast<u8>(config.baseMipLevel);
+    view.data->levelCount = static_cast<u8>(config.levelCount);
+    view.data->baseArrayLayer = static_cast<u8>(config.baseArrayLayer);
+    view.data->layerCount = static_cast<u8>(config.layerCount);
+
+    return view;
 }
 
 GpuView::~GpuView() noexcept
@@ -1756,7 +1768,7 @@ void GpuView::write(const void* src)
              * data->image->depth
              * formatToSize(data->image->format);
 
-    GpuBuffer stage{size, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite};
+    GpuBuffer stage = GpuBuffer::create(size, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
     stage.write(src, 0, size);
 
     GpuCmd* cmd = gpuCmdBegin();
@@ -1811,14 +1823,14 @@ void GpuView::writeCubemap(const void* src)
 
     u64 size = data->image->width * data->image->height * formatToSize(data->image->format);
 
-    GpuBuffer buffer{size * 4 * 3, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite};
+    GpuBuffer buffer = GpuBuffer::create(size * 4 * 3, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
     buffer.write(src, 0, size * 4 * 3);
 
-    GpuImage stage{
+    GpuImage stage = GpuImage::create(
         data->image->width * 4,
         data->image->height * 3,
         data->image->format,
-        GpuImageUsage_transferDst | GpuImageUsage_transferSrc};
+        GpuImageUsage_transferDst | GpuImageUsage_transferSrc);
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -1955,7 +1967,7 @@ void GpuView::read(void* dst)
 
     u64 size = mipW * mipH * mipD * formatToSize(data->image->format);
 
-    GpuBuffer stage{size, GpuBufferUsage_transferDst, GpuMemoryUsage_stagingRead};
+    GpuBuffer stage = GpuBuffer::create(size, GpuBufferUsage_transferDst, GpuMemoryUsage_stagingRead);
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -2115,13 +2127,15 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
     return shader;
 }
 
-GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
-    : data{makeUnique<GpuPipelineData>()}
+GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
 {
     HG_ASSERT(config.vertexShader.data != nullptr);
     HG_ASSERT(config.fragmentShader.data != nullptr);
     if (config.colorAttachmentFormats.count > 0)
         HG_ASSERT(config.colorAttachmentFormats.data != nullptr);
+
+    GpuPipeline pipe{};
+    pipe.data = makeUnique<GpuPipelineData>();
 
     ArenaScope scratch = getScratch();
 
@@ -2137,8 +2151,8 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
     }
 
     [[maybe_unused]]
-    VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &data->layout);
-    if (data->layout == nullptr)
+    VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipe.data->layout);
+    if (pipe.data->layout == nullptr)
         HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule vertexShader = createShaderModule(config.vertexShader.data, config.vertexShader.count);
@@ -2274,40 +2288,44 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
     pipelineInfo.pDepthStencilState = &depthStencilState;
     pipelineInfo.pColorBlendState = &colorBlendState;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = data->layout;
+    pipelineInfo.layout = pipe.data->layout;
     pipelineInfo.basePipelineHandle = nullptr;
     pipelineInfo.basePipelineIndex = -1;
 
     [[maybe_unused]]
     VkResult pipelineResult = vkCreateGraphicsPipelines(
-        vk.device, nullptr, 1, &pipelineInfo, nullptr, &data->pipeline);
-    if (data->pipeline == nullptr)
+        vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipe.data->pipeline);
+    if (pipe.data->pipeline == nullptr)
         HG_PANIC("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
 
-    data->bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    pipe.data->bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+    return pipe;
 }
 
-GpuPipeline::GpuPipeline(const GpuComputePipelineCreateInfo& config)
-    : data{makeUnique<GpuPipelineData>()}
+GpuPipeline GpuPipeline::compute(Span<const u8> shaderCode, u32 pushSize)
 {
-    HG_ASSERT(config.shaderCode.data != nullptr);
-    HG_ASSERT(config.shaderCode.count > 0);
+    HG_ASSERT(shaderCode.data != nullptr);
+    HG_ASSERT(shaderCode.count > 0);
+
+    GpuPipeline pipe{};
+    pipe.data = makeUnique<GpuPipelineData>();
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 1;
     layoutInfo.pSetLayouts = &vk.bindlessLayout;
 
-    VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, config.pushSize};
-    layoutInfo.pushConstantRangeCount = config.pushSize > 0 ? 1 : 0;
-    layoutInfo.pPushConstantRanges = config.pushSize > 0 ? &push : nullptr;
+    VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, pushSize};
+    layoutInfo.pushConstantRangeCount = pushSize > 0 ? 1 : 0;
+    layoutInfo.pPushConstantRanges = pushSize > 0 ? &push : nullptr;
 
     [[maybe_unused]]
-    VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &data->layout);
-    if (data->layout == nullptr)
+    VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipe.data->layout);
+    if (pipe.data->layout == nullptr)
         HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
-    VkShaderModule computeShader = createShaderModule(config.shaderCode.data, static_cast<u32>(config.shaderCode.count));
+    VkShaderModule computeShader = createShaderModule(shaderCode.data, static_cast<u32>(shaderCode.count));
     HG_DEFER(vkDestroyShaderModule(vk.device, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
@@ -2316,17 +2334,19 @@ GpuPipeline::GpuPipeline(const GpuComputePipelineCreateInfo& config)
     pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
     pipelineInfo.stage.module = computeShader;
     pipelineInfo.stage.pName = "main";
-    pipelineInfo.layout = data->layout;
+    pipelineInfo.layout = pipe.data->layout;
     pipelineInfo.basePipelineHandle = nullptr;
     pipelineInfo.basePipelineIndex = -1;
 
     [[maybe_unused]]
     VkResult pipelineResult = vkCreateComputePipelines(
-        vk.device, nullptr, 1, &pipelineInfo, nullptr, &data->pipeline);
-    if (data->pipeline == nullptr)
+        vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipe.data->pipeline);
+    if (pipe.data->pipeline == nullptr)
         HG_PANIC("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
 
-    data->bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
+    pipe.data->bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
+
+    return pipe;
 }
 
 GpuPipeline::~GpuPipeline()

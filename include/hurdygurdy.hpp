@@ -6534,7 +6534,7 @@ struct GpuBuffer
      * - usageFlags How the buffer will be used
      * - memoryUsage How the buffer should be accessed
      */
-    GpuBuffer(
+    static GpuBuffer create(
         u64 size,
         GpuBufferUsageFlags usageFlags,
         GpuMemoryUsage memoryUsage = GpuMemoryUsage_deviceOnly);
@@ -6693,12 +6693,12 @@ struct GpuImage {
     /**
      * Create a gpu image assuming most defaults
      */
-    GpuImage(u32 width, u32 height, Format format, GpuImageUsageFlags usage);
+    static GpuImage create(u32 width, u32 height, Format format, GpuImageUsageFlags usage);
 
     /**
      * Create a gpu image with extended options
      */
-    GpuImage(const GpuImageCreateInfo& config);
+    static GpuImage createEx(const GpuImageCreateInfo& config);
 
     /**
      * Destroy a gpu image
@@ -6859,7 +6859,7 @@ struct GpuView {
     /**
      * Create a gpu image view
      */
-    GpuView(
+    static GpuView create(
         GpuImage& image,
         GpuAspectFlags aspectFlags,
         GpuFilter filter = GpuFilter_nearest);
@@ -6867,7 +6867,7 @@ struct GpuView {
     /**
      * Create a gpu image view with extended config
      */
-    GpuView(const GpuViewCreateInfo& config);
+    static GpuView createEx(const GpuViewCreateInfo& config);
 
     /**
      * Destroy the gpu view
@@ -7086,12 +7086,12 @@ struct GpuPipeline {
     /**
      * Create a graphics pipeline
      */
-    GpuPipeline(const GpuGraphicsPipelineCreateInfo& config);
+    static GpuPipeline graphics(const GpuGraphicsPipelineCreateInfo& config);
 
     /**
      * Create a compute pipeline
      */
-    GpuPipeline(const GpuComputePipelineCreateInfo& config);
+    static GpuPipeline compute(Span<const u8> shaderCode, u32 pushSize = 0);
 
     /**
      * Destroy a graphics or compute pipeline
@@ -8169,12 +8169,6 @@ struct Camera {
 };
 
 /**
- * Camera serialization
- */
-template<>
-void serialize(Serializer* s, Camera* camera);
-
-/**
  * Create a camera
  */
 Camera cameraCreate();
@@ -8204,6 +8198,12 @@ void cameraSetOrthographic(Camera* camera, f32 width, f32 height, f32 actualAspe
  * Update the camera's gpu side data
  */
 void cameraUpdate(Camera* camera);
+
+/**
+ * Camera serialization
+ */
+template<>
+void serialize(Serializer* s, Camera* camera);
 
 /**
  * Initialize the 2D renderer
