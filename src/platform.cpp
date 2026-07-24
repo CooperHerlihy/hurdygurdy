@@ -1238,7 +1238,9 @@ bool internal::initGpu()
     {
         Span<StringView> exts = internal::platformGetVulkanExtensions(scratch);
 #ifdef HG_VK_DEBUG_MESSENGER
-        scratch.extend(exts.data, exts.count, exts.count + 1);
+        [[maybe_unused]]
+        bool extended = scratch.extend(exts.data, exts.count, exts.count + 1);
+        HG_ASSERT(extended);
         ++exts.count;
         exts[exts.count - 1] = "VK_EXT_debug_utils";
 #endif
@@ -2329,7 +2331,7 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     depthStencilState.depthWriteEnable = config.enableDepthWrite;
     depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     depthStencilState.depthBoundsTestEnable = config.enableDepthRead;
-    depthStencilState.stencilTestEnable = VK_FALSE, // : TODO
+    depthStencilState.stencilTestEnable = VK_FALSE; // : TODO
     depthStencilState.front = {}; // : TODO
     depthStencilState.back = {}; // : TODO
     depthStencilState.minDepthBounds = 0.0f;
@@ -3016,26 +3018,64 @@ void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
 }
 
 struct WindowData {
-    VkSurfaceKHR surface;
-    VkSwapchainKHR swapchain;
-    Array<GpuImage> images;
-    Array<GpuView> views;
-    Array<VkSemaphore> imageAvailable;
-    Array<VkSemaphore> readyToPresent;
-    u32 imageIdx;
-    Format format;
-    GpuImageUsageFlags imageUsage;
-    GpuPresentMode presentMode;
+    VkSurfaceKHR surface = nullptr;
+    VkSwapchainKHR swapchain = nullptr;
+    Array<GpuImage> images{};
+    Array<GpuView> views{};
+    Array<VkSemaphore> imageAvailable{};
+    Array<VkSemaphore> readyToPresent{};
+    u32 imageIdx = 0;
+    Format format = Format_undefined;
+    GpuImageUsageFlags imageUsage = {};
+    GpuPresentMode presentMode = {};
 
-    SDL_Window* sdlWindow;
-    u32 width;
-    u32 height;
-    f32 mouseX;
-    f32 mouseY;
+    SDL_Window* sdlWindow = nullptr;
+    u32 width = 0;
+    u32 height = 0;
+    f32 mouseX = 0;
+    f32 mouseY = 0;
     bool isKeyDown[Button_count]{};
     bool wasClosed = false;
 
     Array<WindowEvent> events;
+
+    WindowData() noexcept = default;
+    ~WindowData() noexcept;
+
+    WindowData(WindowData&& other) noexcept
+        : surface{std::exchange(other.surface, nullptr)}
+        , swapchain{std::exchange(other.swapchain, nullptr)}
+        , images{std::exchange(other.images, {})}
+        , views{std::exchange(other.views, {})}
+        , imageAvailable{std::exchange(other.imageAvailable, {})}
+        , readyToPresent{std::exchange(other.readyToPresent, {})}
+        , imageIdx{std::exchange(other.imageIdx, 0)}
+        , format{std::exchange(other.format, Format_undefined)}
+        , imageUsage{std::exchange(other.imageUsage, {})}
+        , presentMode{std::exchange(other.presentMode, {})}
+        , sdlWindow{std::exchange(other.sdlWindow, nullptr)}
+        , width{std::exchange(other.width, 0)}
+        , height{std::exchange(other.height, 0)}
+        , mouseX{std::exchange(other.mouseX, 0)}
+        , mouseY{std::exchange(other.mouseY, 0)}
+        , wasClosed{std::exchange(other.wasClosed, false)}
+    {
+        memcpy(isKeyDown, other.isKeyDown, sizeof(isKeyDown));
+        memset(other.isKeyDown, 0, sizeof(other.isKeyDown));
+    }
+
+    WindowData& operator=(WindowData&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~WindowData();
+            new (this) WindowData{std::move(other)};
+        }
+        return *this;
+    }
+
+    WindowData(const WindowData&) = delete;
+    WindowData& operator=(const WindowData&) = delete;
 };
 
 struct WindowState {
@@ -3640,31 +3680,32 @@ windowFailed:
     return {};
 }
 
-Window::~Window() noexcept
+WindowData::~WindowData() noexcept
 {
-    if (data != nullptr)
+    if (sdlWindow != nullptr)
     {
-        for (GpuImage& image : data->images)
+        for (GpuImage& image : images)
         {
             image.data->image = nullptr;
         }
-        for (VkSemaphore semaphore : data->readyToPresent)
+        for (VkSemaphore semaphore : readyToPresent)
         {
             vkDestroySemaphore(vk.device, semaphore, nullptr);
         }
-        for (VkSemaphore semaphore : data->imageAvailable)
+        for (VkSemaphore semaphore : imageAvailable)
         {
             vkDestroySemaphore(vk.device, semaphore, nullptr);
         }
-        vkDestroySwapchainKHR(vk.device, data->swapchain, nullptr);
-        vkDestroySurfaceKHR(vk.instance, data->surface, nullptr);
+        vkDestroySwapchainKHR(vk.device, swapchain, nullptr);
+        vkDestroySurfaceKHR(vk.instance, surface, nullptr);
 
-        windowState.ids.remove(SDL_GetWindowID(data->sdlWindow));
-        SDL_DestroyWindow(data->sdlWindow);
+        windowState.ids.remove(SDL_GetWindowID(sdlWindow));
+        SDL_DestroyWindow(sdlWindow);
     }
 }
 
 Window::Window() noexcept = default;
+Window::~Window() noexcept = default;
 Window::Window(Window&& other) noexcept = default;
 Window& Window::operator=(Window&& other) noexcept = default;
 
@@ -3980,7 +4021,7 @@ AudioStream::AudioStream(u32 frequency, u32 channels)
     data = reinterpret_cast<AudioStreamData*>(stream);
 }
 
-AudioStream::~AudioStream()
+AudioStream::~AudioStream() noexcept
 {
     if (data != nullptr)
     {

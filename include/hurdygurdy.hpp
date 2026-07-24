@@ -3939,14 +3939,14 @@ struct UniquePtr {
     /**
      * Move construct
      */
-    UniquePtr(UniquePtr&& other)
+    UniquePtr(UniquePtr&& other) noexcept
         : ptr{std::exchange(other.ptr, nullptr)}
     {}
 
     /**
      * Move assign
      */
-    UniquePtr& operator=(UniquePtr&& other)
+    UniquePtr& operator=(UniquePtr&& other) noexcept
     {
         if (this != &other)
         {
@@ -4026,14 +4026,15 @@ struct SharedPtr {
     /**
      * Move construct
      */
-    SharedPtr(SharedPtr&& other)
+    SharedPtr(SharedPtr&& other) noexcept
         : ptr{std::exchange(other.ptr, nullptr)}
+        , refCount{std::exchange(other.refCount, nullptr)}
     {}
 
     /**
      * Move assign
      */
-    SharedPtr& operator=(SharedPtr&& other)
+    SharedPtr& operator=(SharedPtr&& other) noexcept
     {
         if (this != &other)
         {
@@ -5084,12 +5085,7 @@ constexpr u64 hash(i64 val)
 template<>
 constexpr u64 hash(f32 val)
 {
-    union {
-        f32 asFloat;
-        u32 asHash;
-    } u{};
-    u.asFloat = val;
-    return static_cast<u64>(u.asHash);
+    return static_cast<u64>(std::bit_cast<u32>(val));
 }
 
 /**
@@ -5098,12 +5094,7 @@ constexpr u64 hash(f32 val)
 template<>
 constexpr u64 hash(f64 val)
 {
-    union {
-        f64 asFloat;
-        u64 asHash;
-    } u{};
-    u.asFloat = val;
-    return u.asHash;
+    return std::bit_cast<u64>(val);
 }
 
 /**
@@ -5112,12 +5103,7 @@ constexpr u64 hash(f64 val)
 template<typename T>
 constexpr u64 hashPtr(T* val)
 {
-    union {
-        T* asPtr;
-        uptr asUptr;
-    } u{};
-    u.asPtr = val;
-    return static_cast<u64>(u.asUptr);
+    return std::bit_cast<u64>(val);
 };
 
 /**
@@ -7796,7 +7782,7 @@ struct AudioStream {
     /**
      * Destroy the audio stream
      */
-    ~AudioStream();
+    ~AudioStream() noexcept;
 
     /**
      * Push data to the audio stream
@@ -7821,14 +7807,14 @@ struct AudioStream {
     /**
      * Move construct
      */
-    AudioStream(AudioStream&& other)
+    AudioStream(AudioStream&& other) noexcept
         : data{std::exchange(other.data, nullptr)}
     {}
 
     /**
      * Move assign
      */
-    AudioStream& operator=(AudioStream&& other)
+    AudioStream& operator=(AudioStream&& other) noexcept
     {
         if (this != &other)
         {
@@ -9584,8 +9570,8 @@ template<typename T, typename... Args>
 SharedPtr<T> makeShared(Args&&... args)
 {
     SharedPtr<T> ptr{};
-    ptr.refCount = heapAlloc(sizeof(T), alignof(T));
-    ptr.ptr = new (heapAlloc(sizeof(T), alignof(T))) T{std::forward<Args>(args)...};
+    ptr.refCount = heapAlloc<u64>(1);
+    ptr.ptr = new (heapAlloc<T>(1)) T{std::forward<Args>(args)...};
     *ptr.refCount = 1;
     return ptr;
 }
@@ -10073,7 +10059,7 @@ void QueueTemp<T>::pushBack(T val)
     if (++count >= capacity)
         reserve(capacity == 0 ? 128 : capacity * 2);
 
-    new (vals = back) T{std::move(val)};
+    new (vals + back) T{std::move(val)};
     back = (back + 1) % capacity;
 }
 
@@ -10157,7 +10143,7 @@ void Set<V>::reset()
 template<typename V>
 void Set<V>::add(V val)
 {
-    if (capacity / 2 >= count)
+    if (capacity >= count / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u64 idx = static_cast<u64>(hash(val) % capacity);
@@ -10264,7 +10250,7 @@ void SetTemp<V>::resize(u64 newSize)
     for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
-            newSet->add(std::move(vals[i]));
+            newSet.add(std::move(vals[i]));
     }
 
     *this = std::move(newSet);
@@ -10287,7 +10273,7 @@ void SetTemp<V>::reset()
 template<typename V>
 void SetTemp<V>::add(V val)
 {
-    if (capacity / 2 >= count)
+    if (capacity >= count / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u64 idx = static_cast<u64>(hash(val) % capacity);
@@ -10421,7 +10407,7 @@ void Map<K, V>::reset()
 template<typename K, typename V>
 V* Map<K, V>::add(K key, V val)
 {
-    if (capacity / 2 >= count)
+    if (capacity >= count / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u64 idx = static_cast<u64>(hash(key) % capacity);
@@ -10565,7 +10551,7 @@ void MapTemp<K, V>::reset()
 template<typename K, typename V>
 V* MapTemp<K, V>::add(K key, V val)
 {
-    if (capacity / 2 >= count)
+    if (capacity >= count / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u64 idx = static_cast<u64>(hash(key) % capacity);
@@ -10765,7 +10751,7 @@ Asset<T> load(StringView path)
 template<typename T>
 void reload(const Asset<T>& asset)
 {
-    if (asset->data != nullptr)
+    if (asset.data != nullptr)
     {
         asset.data = {};
         assetLoadImpl(asset.data);
@@ -10845,9 +10831,22 @@ template<typename... Ts>
 void serialize(Serializer* s, Sum<Ts...>* sum)
 {
     serializeBegin(s);
-    serialize(s, &sum->tag);
-    if (sum->tag < sum->count)
+    u32 tag = sum->tag;
+    serialize(s, &tag);
+    if (tag < sum->count)
+    {
+        if (!s->writing && tag != sum->tag)
+        {
+            sum->tag = tag;
+            sum->call([&](auto& val) { new (&val) std::remove_cvref_t<decltype(val)>{}; });
+        }
         sum->call([&](auto& val) { serialize(s, &val); });
+    }
+    else
+    {
+        if (!s->writing)
+            *sum = {};
+    }
     serializeEnd(s);
 }
 
@@ -10855,9 +10854,19 @@ template<typename T>
 void serialize(Serializer* s, Maybe<T>* maybe)
 {
     serializeBegin(s);
-    serialize(s, &maybe->has);
-    if (maybe->has)
+    bool has = maybe->has;
+    serialize(s, &has);
+    if (has)
+    {
+        if (!s->writing && !maybe->has)
+            *maybe = some<T>();
         serialize(s, &maybe->val);
+    }
+    else
+    {
+        if (!s->writing)
+            *maybe = {};
+    }
     serializeEnd(s);
 }
 

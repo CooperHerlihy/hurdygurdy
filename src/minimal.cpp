@@ -8,7 +8,7 @@ using namespace hg;
 static volatile bool quit = false;
 
 static Clock cpuClock{};
-static f64 cpuTime = 0.0f;
+static f64 cpuTime = 0.0;
 
 static bool renderDebug = false;
 

@@ -2032,7 +2032,7 @@ StringBuilder integerToString(Arena* arena, i64 num)
     while (unum != 0)
     {
         u64 digit = unum % 10;
-        unum = static_cast<u64>(static_cast<f64>(unum) / 10.0);
+        unum /= 10;
         reverse.append('0' + static_cast<char>(digit));
     }
 
@@ -4117,10 +4117,10 @@ void Layer2D::drawTilemap(const Tilemap2D& tilemap, Rect dst)
 {
     Vec2 pos = dst.begin;
     Vec2 size = (dst.end - dst.begin) / Vec2{static_cast<f32>(tilemap.width), static_cast<f32>(tilemap.height)};
-    for (u32 y = 0; y < tilemap.width; ++y)
+    for (u32 y = 0; y < tilemap.height; ++y)
     {
         pos.x = dst.begin.x;
-        for (u32 x = 0; x < tilemap.height; ++x)
+        for (u32 x = 0; x < tilemap.width; ++x)
         {
             drawSprite(tilemap.atlas->get(tilemap.get(x, y)), {pos, pos + size});
             pos.x += size.x;
