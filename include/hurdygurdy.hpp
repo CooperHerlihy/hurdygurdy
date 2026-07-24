@@ -5729,6 +5729,24 @@ template<>
 void serialize(Serializer* s, Quat* val);
 
 /**
+ * Product serialization
+ */
+template<typename... Ts>
+void serialize(Serializer* s, Product<Ts...>* product);
+
+/**
+ * Sum serialization
+ */
+template<typename... Ts>
+void serialize(Serializer* s, Sum<Ts...>* sum);
+
+/**
+ * Maybe serialization
+ */
+template<typename T>
+void serialize(Serializer* s, Maybe<T>* maybe);
+
+/**
  * String serialization
  */
 template<>
@@ -8094,14 +8112,6 @@ template<>
 void assetLoadImpl(AssetData<Mesh>* data);
 
 /**
- * The types of camera projections
- */
-enum CameraType : u32 {
-    CameraType_perspective,
-    CameraType_orthographic,
-};
-
-/**
  * A perspective camera
  */
 struct CameraPerspective {
@@ -8150,54 +8160,51 @@ struct Camera {
      */
     Vec3 position = {};
     /**
-     * The type of projection
+     * The projection
      */
-    CameraType type = {};
+    Sum<CameraOrthographic, CameraPerspective> projection = {};
+
     /**
-     * The projection data
+     * Create a camera
      */
-    union {
-        /**
-         * An orthographic camera
-         */
-        CameraOrthographic orthographic;
-        /**
-         * A perspective camera
-         */
-        CameraPerspective perspective;
-    };
+    static Camera create();
+
+    /**
+     * The the camera to a perspective projection
+     */
+    void setPerspective(
+        f32 aspect,
+        f32 fov = static_cast<f32>(HG_PI) / 2.0f,
+        f32 near = 0.01f,
+        f32 far = 1000.0f);
+
+    /**
+     * The the camera to an orthographic projection
+     *
+     * Parameters
+     * - width The desired width of the render space
+     * - height The desired height of the render space
+     * - actualAspect The actual aspect, so margins can be added, or 0 to ignore
+     */
+    void setOrthographic(f32 width, f32 height, f32 actualAspect = 0.0f);
+
+    /**
+     * Update the camera's gpu side data
+     */
+    void update();
 };
 
 /**
- * Create a camera
+ * CameraPerspective serialization
  */
-Camera cameraCreate();
+template<>
+void serialize(Serializer* s, CameraPerspective* camera);
 
 /**
- * The the camera to a perspective projection
+ * CameraOrthographic serialization
  */
-void cameraSetPerspective(
-    Camera* camera,
-    f32 aspect,
-    f32 fov = static_cast<f32>(HG_PI) / 2.0f,
-    f32 near = 0.01f,
-    f32 far = 1000.0f);
-
-/**
- * The the camera to an orthographic projection
- *
- * Parameters
- * - camera The camera to set
- * - width The desired width of the render space
- * - height The desired height of the render space
- * - actualAspect The actual aspect, so margins can be added, or 0 to ignore
- */
-void cameraSetOrthographic(Camera* camera, f32 width, f32 height, f32 actualAspect = 0.0f);
-
-/**
- * Update the camera's gpu side data
- */
-void cameraUpdate(Camera* camera);
+template<>
+void serialize(Serializer* s, CameraOrthographic* camera);
 
 /**
  * Camera serialization
@@ -10800,12 +10807,51 @@ void serialize(Serializer* s, T* val)
     }
 }
 
+template<typename... Ts>
+void serialize(Serializer* s, Product<Ts...>* product)
+{
+    if constexpr (sizeof...(Ts) > 0)
+    {
+        [&]<u64... Is>(std::index_sequence<Is...>)
+        {
+            serializeObject(s, &product->template get<Is>()...);
+        }(std::index_sequence_for<Ts...>{});
+    }
+}
+
+template<typename... Ts>
+void serialize(Serializer* s, Sum<Ts...>* sum)
+{
+    serializeBegin(s);
+    serialize(s, &sum->tag);
+    if (sum->tag < sum->count)
+        sum->call([&](auto& val) { serialize(s, &val); });
+    serializeEnd(s);
+}
+
+template<typename T>
+void serialize(Serializer* s, Maybe<T>* maybe)
+{
+    serializeBegin(s);
+    serialize(s, &maybe->has);
+    if (maybe->has)
+        serialize(s, &maybe->val);
+    serializeEnd(s);
+}
+
 template<typename T>
 void serialize(Serializer* s, UniquePtr<T>* ptr)
 {
-    if (!s->writing)
-        *ptr = makeUnique<T>();
-    serializeObject(s, ptr->ptr);
+    serializeBegin(s);
+    bool has = *ptr != nullptr;
+    serialize(s, &has);
+    if (has)
+    {
+        if (!s->writing)
+            *ptr = makeUnique<T>();
+        serialize(s, ptr->ptr);
+    }
+    serializeEnd(s);
 }
 
 template<typename T>

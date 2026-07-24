@@ -58,7 +58,7 @@ int main()
     u32 width = window.width();
     u32 height = window.height();
 
-    Camera camera = cameraCreate();
+    Camera camera = Camera::create();
 
     Layer2D backgroundLayer = layerCreate2D();
     HG_DEFER(layerDestroy2D(&backgroundLayer));
@@ -107,7 +107,7 @@ int main()
         width = window.width();
         height = window.height();
 
-        cameraSetOrthographic(&camera, static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
+        camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
 
         if (window.isButtonDown(Button_lmouse))
         {
@@ -116,7 +116,7 @@ int main()
             camera.position.y -= window.mouseDY() * moveSpeed;
         }
 
-        cameraUpdate(&camera);
+        camera.update();
 
         Vec2 spriteMove = {
             static_cast<f32>(window.isButtonDown(Button_d) - window.isButtonDown(Button_a)),

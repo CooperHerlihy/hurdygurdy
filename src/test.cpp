@@ -4742,6 +4742,215 @@ int main()
     }
 
     // ============================================================================
+    // Serialization: Product
+    // ============================================================================
+    //
+    // Tests for serializing Product<Ts...> via serializeObject.
+
+    {
+        // Round-trip Product with primitive types (i64, f64, bool)
+        {
+            Product<i64, f64, bool> val{-42, 3.14, true};
+            Product<i64, f64, bool> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(copy.get<0>() == val.get<0>());
+            TEST(copy.get<1>() == val.get<1>());
+            TEST(copy.get<2>() == val.get<2>());
+        }
+
+        // Round-trip Product with String
+        {
+            Product<i64, String> val{7, String::create("hello")};
+            Product<i64, String> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(copy.get<0>() == val.get<0>());
+            TEST(copy.get<1>() == val.get<1>());
+        }
+
+        // Round-trip empty Product
+        {
+            Product<> val{};
+            Product<> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+        }
+
+        // Round-trip Product via binary format
+        {
+            Product<i32, String, f32> val{42, String::create("binary"), 2.5f};
+            Product<i32, String, f32> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            BinaryView bin = binaryWriteSerial(arena, &w);
+            Serializer r = binaryReadSerial(arena, bin);
+            serialize(&r, &copy);
+            TEST(copy.get<0>() == val.get<0>());
+            TEST(copy.get<1>() == val.get<1>());
+            TEST(copy.get<2>() == val.get<2>());
+        }
+    }
+
+    // ============================================================================
+    // Serialization: Sum
+    // ============================================================================
+    //
+    // Tests for serializing Sum<Ts...> via tag + active-element pattern.
+
+    {
+        // Round-trip Sum with first type active (i64)
+        {
+            Sum<i64, f64, String> val{i64{-42}};
+            Sum<i64, f64, String> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(copy.is<i64>());
+            TEST(copy.get<i64>() == -42);
+        }
+
+        // Round-trip Sum with second type active (f64)
+        {
+            Sum<i64, f64, String> val{f64{3.14}};
+            Sum<i64, f64, String> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(copy.is<f64>());
+            TEST(copy.get<f64>() == 3.14);
+        }
+
+        // Round-trip Sum with third type active (String)
+        {
+            Sum<i64, f64, String> val{String::create("world")};
+            Sum<i64, f64, String> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(copy.is<String>());
+            TEST(copy.get<String>() == String::create("world"));
+        }
+
+        // Round-trip empty Sum (tag == count)
+        {
+            Sum<i64, f64, String> val{};
+            Sum<i64, f64, String> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(!copy.is<i64>());
+            TEST(!copy.is<f64>());
+            TEST(!copy.is<String>());
+        }
+
+        // Round-trip Sum via binary format
+        {
+            Sum<i64, f64, String> val{f64{99.9}};
+            Sum<i64, f64, String> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            BinaryView bin = binaryWriteSerial(arena, &w);
+            Serializer r = binaryReadSerial(arena, bin);
+            serialize(&r, &copy);
+            TEST(copy.is<f64>());
+            TEST(copy.get<f64>() == 99.9);
+        }
+    }
+
+    // ============================================================================
+    // Serialization: Maybe
+    // ============================================================================
+    //
+    // Tests for serializing Maybe<T> via has-flag + value pattern.
+
+    {
+        // Round-trip Maybe with value (i64)
+        {
+            Maybe<i64> val{42};
+            Maybe<i64> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(copy.has);
+            TEST(*copy == 42);
+        }
+
+        // Round-trip Maybe with value (String)
+        {
+            Maybe<String> val{String::create("maybe")};
+            Maybe<String> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(copy.has);
+            TEST(*copy == val.val);
+        }
+
+        // Round-trip Maybe without value
+        {
+            Maybe<i64> val{};
+            Maybe<i64> copy{Maybe<i64>{99}};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+            TEST(!copy.has);
+        }
+
+        // Round-trip Maybe via binary format
+        {
+            Maybe<f32> val{2.5f};
+            Maybe<f32> copy{};
+            ArenaScope arena = getScratch();
+
+            Serializer w = serialWriter(arena);
+            serialize(&w, &val);
+            BinaryView bin = binaryWriteSerial(arena, &w);
+            Serializer r = binaryReadSerial(arena, bin);
+            serialize(&r, &copy);
+            TEST(copy.has);
+            TEST(*copy == 2.5f);
+        }
+    }
+
+    // ============================================================================
     // GPU API
     // ============================================================================
     //

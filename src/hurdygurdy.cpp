@@ -3724,7 +3724,7 @@ struct VPUniform {
     Mat4 view = {};
 };
 
-Camera cameraCreate()
+Camera Camera::create()
 {
     Camera camera{};
 
@@ -3737,66 +3737,79 @@ Camera cameraCreate()
     return camera;
 }
 
-void cameraSetPerspective(Camera* camera, f32 aspect, f32 fov, f32 near, f32 far)
+void Camera::setPerspective(f32 aspect, f32 fov, f32 near, f32 far)
 {
-    camera->type = CameraType_perspective;
-    camera->perspective.aspect = aspect;
-    camera->perspective.fov = fov;
-    camera->perspective.near = near;
-    camera->perspective.far = far;
+    projection = CameraPerspective{aspect, fov, near, far};
 }
 
-void cameraSetOrthographic(Camera* camera, f32 width, f32 height, f32 actualAspect)
+void Camera::setOrthographic(f32 width, f32 height, f32 actualAspect)
 {
-    camera->type = CameraType_orthographic;
-    camera->orthographic.left = 0;
-    camera->orthographic.right = width;
-    camera->orthographic.top = 0;
-    camera->orthographic.bottom = height;
-    camera->orthographic.near = 0;
-    camera->orthographic.far = 1;
+    projection = CameraOrthographic{0, width, 0, height, 0, 1};
 
     if (actualAspect != 0.0)
     {
+        CameraOrthographic& ortho = projection.get<CameraOrthographic>();
         if (actualAspect > static_cast<f32>(width) / static_cast<f32>(height))
         {
             f32 margin = actualAspect - static_cast<f32>(width) / static_cast<f32>(height);
-            camera->orthographic.left -= margin * width / 2.0f;
-            camera->orthographic.right += margin * width / 2.0f;
+            ortho.left -= margin * width / 2.0f;
+            ortho.right += margin * width / 2.0f;
         }
         else
         {
             f32 margin = 1.0f / actualAspect - static_cast<f32>(height) / static_cast<f32>(width);
-            camera->orthographic.top -= margin * height / 2.0f;
-            camera->orthographic.bottom += margin * height / 2.0f;
+            ortho.top -= margin * height / 2.0f;
+            ortho.bottom += margin * height / 2.0f;
         }
     }
 }
 
-void cameraUpdate(Camera* camera)
+void Camera::update()
 {
     VPUniform vp{};
-    vp.view = matView(camera->position, Vec3{1.0f}, camera->rotation);
-    if (camera->type == CameraType_perspective)
-    {
-        vp.proj = matPerspective(
-            camera->perspective.fov,
-            camera->perspective.aspect,
-            camera->perspective.near,
-            camera->perspective.far);
-    }
-    else
-    {
-        vp.proj = matOrthographic(
-            camera->orthographic.left,
-            camera->orthographic.right,
-            camera->orthographic.top,
-            camera->orthographic.bottom,
-            camera->orthographic.near,
-            camera->orthographic.far);
-    }
+    vp.view = matView(position, Vec3{1.0f}, rotation);
+    projection.match(
+        [&](CameraPerspective& persp)
+        {
+            vp.proj = matPerspective(
+                persp.fov,
+                persp.aspect,
+                persp.near,
+                persp.far);
+        },
+        [&](CameraOrthographic& ortho)
+        {
+            vp.proj = matOrthographic(
+                ortho.left,
+                ortho.right,
+                ortho.top,
+                ortho.bottom,
+                ortho.near,
+                ortho.far);
+        });
+    vpBuffer.write(&vp, 0, sizeof(vp));
+}
 
-    camera->vpBuffer.write(&vp, 0, sizeof(vp));
+template<>
+void serialize(Serializer* s, CameraPerspective* camera)
+{
+    serializeObject(s,
+        &camera->aspect,
+        &camera->fov,
+        &camera->near,
+        &camera->far);
+}
+
+template<>
+void serialize(Serializer* s, CameraOrthographic* camera)
+{
+    serializeObject(s,
+        &camera->left,
+        &camera->right,
+        &camera->top,
+        &camera->bottom,
+        &camera->near,
+        &camera->far);
 }
 
 template<>
@@ -3805,25 +3818,7 @@ void serialize(Serializer* s, Camera* camera)
     serializeBegin(s);
     serialize(s, &camera->rotation);
     serialize(s, &camera->position);
-    serialize(s, &camera->type);
-    if (camera->type == CameraType_perspective)
-    {
-        serializeObject(s,
-            &camera->perspective.aspect,
-            &camera->perspective.fov,
-            &camera->perspective.near,
-            &camera->perspective.far);
-    }
-    else
-    {
-        serializeObject(s,
-            &camera->orthographic.left,
-            &camera->orthographic.right,
-            &camera->orthographic.top,
-            &camera->orthographic.bottom,
-            &camera->orthographic.near,
-            &camera->orthographic.far);
-    }
+    serialize(s, &camera->projection);
     serializeEnd(s);
 }
 
