@@ -135,9 +135,9 @@ Use `grep` to find specific symbols.
         - TODO: effects
     - TODO: mixing
 - Rendering
-    - Camera
     - Texture
     - Mesh
+    - Camera
     - TODO: render graph
     - 2D renderer
         - Layer2D

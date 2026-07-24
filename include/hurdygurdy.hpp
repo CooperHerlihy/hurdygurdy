@@ -4062,11 +4062,11 @@ struct Array {
     /**
      * The number of vals
      */
-    u32 count = 0;
+    u64 count = 0;
     /**
      * The current max number of vals
      */
-    u32 capacity = 0;
+    u64 capacity = 0;
 
     /**
      * Construct empty
@@ -4076,7 +4076,7 @@ struct Array {
     /**
      * Construct with init size
      */
-    Array(u32 countVal, u32 capacityVal);
+    Array(u64 countVal, u64 capacityVal);
 
     /**
      * Free the array
@@ -4117,12 +4117,12 @@ struct Array {
     /**
      * Increase the size of the array, must be greater or equal to count
      */
-    void resize(u32 newCount);
+    void resize(u64 newCount);
 
     /**
      * Increase the capacity of the array to at least newCapacity
      */
-    void reserve(u32 newCapacity);
+    void reserve(u64 newCapacity);
 
     /**
      * Push a value to the end of the array
@@ -4137,22 +4137,22 @@ struct Array {
     /**
      * Insert a value at idx, shifting values over
      */
-    T* insertShift(u32 idx, T val = {});
+    T* insertShift(u64 idx, T val = {});
 
     /**
      * Remove the value from idx, shifting values over
      */
-    T removeShift(u32 idx);
+    T removeShift(u64 idx);
 
     /**
      * Insert a value at idx, moving the previous value to the end
      */
-    T* insertSwap(u32 idx, T val = {});
+    T* insertSwap(u64 idx, T val = {});
 
     /**
      * Remove the value from idx, swapping with the last value
      */
-    T removeSwap(u32 idx);
+    T removeSwap(u64 idx);
 
     /**
      * Use range for
@@ -4228,11 +4228,11 @@ struct ArrayTemp {
     /**
      * The number of vals
      */
-    u32 count = 0;
+    u64 count = 0;
     /**
      * The current max number of vals
      */
-    u32 capacity = 0;
+    u64 capacity = 0;
 
     /**
      * Construct empty
@@ -4242,7 +4242,7 @@ struct ArrayTemp {
     /**
      * Construct with init size
      */
-    ArrayTemp(Arena* arenaVal, u32 countVal, u32 capacityVal);
+    ArrayTemp(Arena* arenaVal, u64 countVal, u64 capacityVal);
 
     /**
      * Free the array
@@ -4283,12 +4283,12 @@ struct ArrayTemp {
     /**
      * Increase the size of the array, must be greater or equal to count
      */
-    void resize(u32 newCount);
+    void resize(u64 newCount);
 
     /**
      * Increase the capacity of the array to at least newCapacity
      */
-    void reserve(u32 newCapacity);
+    void reserve(u64 newCapacity);
 
     /**
      * Push a value to the end of the array
@@ -4303,22 +4303,22 @@ struct ArrayTemp {
     /**
      * Insert a value at idx, shifting values over
      */
-    T* insertShift(u32 idx, T val = {});
+    T* insertShift(u64 idx, T val = {});
 
     /**
      * Remove the value from idx, shifting values over
      */
-    T removeShift(u32 idx);
+    T removeShift(u64 idx);
 
     /**
      * Insert a value at idx, moving the previous value to the end
      */
-    T* insertSwap(u32 idx, T val = {});
+    T* insertSwap(u64 idx, T val = {});
 
     /**
      * Remove the value from idx, swapping with the last value
      */
-    T removeSwap(u32 idx);
+    T removeSwap(u64 idx);
 
     /**
      * Use range for
@@ -4391,19 +4391,19 @@ struct Queue {
     /**
      * The index of the front
      */
-    u32 front = 0;
+    u64 front = 0;
     /**
      * The index of the back
      */
-    u32 back = 0;
+    u64 back = 0;
     /**
      * The number of vals in the queue
      */
-    u32 count = 0;
+    u64 count = 0;
     /**
      * The max number of vals
      */
-    u32 capacity = 0;
+    u64 capacity = 0;
 
     /**
      * Construct empty
@@ -4413,7 +4413,7 @@ struct Queue {
     /**
      * Construct with init size
      */
-    Queue(u32 capacityVal);
+    Queue(u64 capacityVal);
 
     /**
      * Free the queue
@@ -4423,7 +4423,7 @@ struct Queue {
     /**
      * Increase the capacity of the queue to at least newCapacity
      */
-    void reserve(u32 newCapacity);
+    void reserve(u64 newCapacity);
 
     /**
      * Push a value to the front of the queue
@@ -4489,19 +4489,19 @@ struct QueueTemp {
     /**
      * The index of the front
      */
-    u32 front = 0;
+    u64 front = 0;
     /**
      * The index of the back
      */
-    u32 back = 0;
+    u64 back = 0;
     /**
      * The number of vals in the queue
      */
-    u32 count = 0;
+    u64 count = 0;
     /**
      * The max number of vals
      */
-    u32 capacity = 0;
+    u64 capacity = 0;
 
     /**
      * Construct empty
@@ -4511,7 +4511,7 @@ struct QueueTemp {
     /**
      * Construct with init size
      */
-    QueueTemp(Arena* arenaVal, u32 capacityVal);
+    QueueTemp(Arena* arenaVal, u64 capacityVal);
 
     /**
      * Free the queue
@@ -4521,7 +4521,7 @@ struct QueueTemp {
     /**
      * Increase the capacity of the queue to at least newCapacity
      */
-    void reserve(u32 newCapacity);
+    void reserve(u64 newCapacity);
 
     /**
      * Push a value to the front of the queue
@@ -4598,11 +4598,11 @@ struct Set {
     /**
      * The max number of vals
      */
-    u32 capacity = 0;
+    u64 capacity = 0;
     /**
      * The current number of values that are stored
      */
-    u32 count = 0;
+    u64 count = 0;
 
     /**
      * Construct empty
@@ -4617,7 +4617,7 @@ struct Set {
     /**
      * Construct with capacity
      */
-    Set(u32 initCapacity);
+    Set(u64 initCapacity);
 
     /**
      * Remove all elements
@@ -4627,7 +4627,7 @@ struct Set {
     /**
      * Change the capacity, must be greater than count
      */
-    void resize(u32 newCapacity);
+    void resize(u64 newCapacity);
 
     /**
      * Add a value to the set
@@ -4697,11 +4697,11 @@ struct SetTemp {
     /**
      * The max number of vals
      */
-    u32 capacity = 0;
+    u64 capacity = 0;
     /**
      * The current number of values that are stored
      */
-    u32 count = 0;
+    u64 count = 0;
 
     /**
      * Construct empty
@@ -4716,7 +4716,7 @@ struct SetTemp {
     /**
      * Construct with capacity
      */
-    SetTemp(Arena* arenaVal, u32 initCapacity);
+    SetTemp(Arena* arenaVal, u64 initCapacity);
 
     /**
      * Remove all elements
@@ -4726,7 +4726,7 @@ struct SetTemp {
     /**
      * Change the capacity, must be greater than or equal to count
      */
-    void resize(u32 newCapacity);
+    void resize(u64 newCapacity);
 
     /**
      * Add a value to the set
@@ -4797,11 +4797,11 @@ struct Map {
     /**
      * The max number of key value pairs
      */
-    u32 capacity = 0;
+    u64 capacity = 0;
     /**
      * The current number of values that are stored
      */
-    u32 count = 0;
+    u64 count = 0;
 
     /**
      * Construct empty
@@ -4816,7 +4816,7 @@ struct Map {
     /**
      * Construct with capacity
      */
-    Map(u32 initCapacity);
+    Map(u64 initCapacity);
 
     /**
      * Remove all elements
@@ -4826,7 +4826,7 @@ struct Map {
     /**
      * Change the capacity
      */
-    void resize(u32 newCapacity);
+    void resize(u64 newCapacity);
 
     /**
      * Add a key-value pair
@@ -4913,11 +4913,11 @@ struct MapTemp {
     /**
      * The max number of key value pairs
      */
-    u32 capacity = 0;
+    u64 capacity = 0;
     /**
      * The current number of values that are stored
      */
-    u32 count = 0;
+    u64 count = 0;
 
     /**
      * Construct empty
@@ -4932,7 +4932,7 @@ struct MapTemp {
     /**
      * Construct with capacity
      */
-    MapTemp(Arena* arenaVal, u32 initCapacity);
+    MapTemp(Arena* arenaVal, u64 initCapacity);
 
     /**
      * Remove all elements
@@ -4942,7 +4942,7 @@ struct MapTemp {
     /**
      * Change the capacity
      */
-    void resize(u32 newCapacity);
+    void resize(u64 newCapacity);
 
     /**
      * Add a key-value pair
@@ -5400,12 +5400,6 @@ inline AssetManager<T> assets{};
  */
 template<typename T>
 void assetLoadImpl(AssetData<T>* data);
-
-/**
- * Unload an asset, implemented per asset type, should be blocking
- */
-template<typename T>
-void assetUnloadImpl(AssetData<T>* data);
 
 /**
  * An asset reference
@@ -7917,6 +7911,10 @@ struct AudioPlayer {
  */
 struct TextureData {
     /**
+     * The pixel data, aligned to 16 bytes
+     */
+    void* pixels = nullptr;
+    /**
      * The width of the texture in pixels
      */
     u32 width = 0;
@@ -7931,11 +7929,41 @@ struct TextureData {
     /**
      * The format of each pixel
      */
-    Format format = {};
+    Format format = Format_undefined;
+
     /**
-     * The pixel data, aligned to 16 bytes
+     * Construct empty
      */
-    void* pixels = nullptr;
+    TextureData() noexcept = default;
+
+    /**
+     * Destroy the texture data
+     */
+    ~TextureData() noexcept;
+
+    /**
+     * Move construct
+     */
+    TextureData(TextureData&& other) noexcept
+        : pixels{std::exchange(other.pixels, nullptr)}
+        , width{std::exchange(other.width, 0)}
+        , height{std::exchange(other.height, 0)}
+        , depth{std::exchange(other.depth, 0)}
+        , format{std::exchange(other.format, Format_undefined)}
+    {}
+
+    /**
+     * Move assign
+     */
+    TextureData& operator=(TextureData&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~TextureData();
+            new (this) TextureData{std::move(other)};
+        }
+        return *this;
+    }
 };
 
 /**
@@ -7943,12 +7971,6 @@ struct TextureData {
  */
 template<>
 void assetLoadImpl(AssetData<TextureData>* data);
-
-/**
- * Texture asset unload implementation
- */
-template<>
-void assetUnloadImpl(AssetData<TextureData>* data);
 
 /**
  * Store an image to disc in the png format
@@ -8017,23 +8039,11 @@ struct MeshData {
     /**
      * The file index of the first vertex
      */
-    MeshVertex* vertices = nullptr;
+    Array<MeshVertex> vertices{};
     /**
      * The file index of the first geometry index
      */
-    u32* indices = nullptr;
-    /**
-     * The number of vertices
-     */
-    u32 vertexCount = 0;
-    /**
-     * The size of each vertex in bytes
-     */
-    u32 vertexWidth = 0;
-    /**
-     * The number of indices (4 bytes each)
-     */
-    u32 indexCount = 0;
+    Array<u32> indices;
     /**
      * How the vertices should be interpreted in sequence
      */
@@ -8045,12 +8055,6 @@ struct MeshData {
  */
 template<>
 void assetLoadImpl(AssetData<MeshData>* data);
-
-/**
- * Mesh asset unload implementation
- */
-template<>
-void assetUnloadImpl(AssetData<MeshData>* data);
 
 /**
  * Store the model data to disc in gltf format : TODO
@@ -9558,13 +9562,13 @@ SharedPtr<T> makeShared(Args&&... args)
 }
 
 template<typename T>
-Array<T>::Array(u32 countVal, u32 capacityVal)
+Array<T>::Array(u64 countVal, u64 capacityVal)
     : vals{heapAlloc<T>(capacityVal)}
     , count{countVal}
     , capacity{capacityVal}
 {
     HG_ASSERT(capacity >= count);
-    for (u32 i = 0; i < count; ++i)
+    for (u64 i = 0; i < count; ++i)
     {
         new (vals + i) T{};
     }
@@ -9573,7 +9577,7 @@ Array<T>::Array(u32 countVal, u32 capacityVal)
 template<typename T>
 Array<T>::~Array() noexcept
 {
-    for (u32 i = 0; i < count; ++i)
+    for (u64 i = 0; i < count; ++i)
     {
         vals[i].~T();
     }
@@ -9583,7 +9587,7 @@ Array<T>::~Array() noexcept
 template<typename T>
 void Array<T>::reset()
 {
-    for (u32 i = 0; i < count; ++i)
+    for (u64 i = 0; i < count; ++i)
     {
         vals[i].~T();
     }
@@ -9591,12 +9595,12 @@ void Array<T>::reset()
 }
 
 template<typename T>
-void Array<T>::resize(u32 newCount)
+void Array<T>::resize(u64 newCount)
 {
     if (newCount > capacity)
         reserve(newCount * 2);
 
-    for (u32 i = count; i < newCount; ++i)
+    for (u64 i = count; i < newCount; ++i)
     {
         new (vals + i) T{};
     }
@@ -9604,12 +9608,12 @@ void Array<T>::resize(u32 newCount)
 }
 
 template<typename T>
-void Array<T>::reserve(u32 newCapacity)
+void Array<T>::reserve(u64 newCapacity)
 {
     if (newCapacity > capacity)
     {
         T* newVals = heapAlloc<T>(newCapacity);
-        for (u32 i = 0; i < count; ++i)
+        for (u64 i = 0; i < count; ++i)
         {
             new (newVals + i) T{std::move(vals[i])};
             vals[i].~T();
@@ -9642,7 +9646,7 @@ T Array<T>::pop()
 }
 
 template<typename T>
-T* Array<T>::insertShift(u32 idx, T val)
+T* Array<T>::insertShift(u64 idx, T val)
 {
     HG_ASSERT(idx <= count);
 
@@ -9652,7 +9656,7 @@ T* Array<T>::insertShift(u32 idx, T val)
     if (idx < count)
     {
         new (vals + count) T{std::move(vals[count - 1])};
-        for (u32 i = count - 1; i >= idx + 1; --i)
+        for (u64 i = count - 1; i >= idx + 1; --i)
         {
             vals[i] = std::move(vals[i - 1]);
         }
@@ -9666,13 +9670,13 @@ T* Array<T>::insertShift(u32 idx, T val)
 }
 
 template<typename T>
-T Array<T>::removeShift(u32 idx)
+T Array<T>::removeShift(u64 idx)
 {
     HG_ASSERT(idx < count);
 
     --count;
     T ret = std::move(vals[idx]);
-    for (u32 i = idx; i < count; ++i)
+    for (u64 i = idx; i < count; ++i)
     {
         vals[i] = std::move(vals[i + 1]);
     }
@@ -9681,7 +9685,7 @@ T Array<T>::removeShift(u32 idx)
 }
 
 template<typename T>
-T* Array<T>::insertSwap(u32 idx, T val)
+T* Array<T>::insertSwap(u64 idx, T val)
 {
     HG_ASSERT(idx <= count);
 
@@ -9701,7 +9705,7 @@ T* Array<T>::insertSwap(u32 idx, T val)
 }
 
 template<typename T>
-T Array<T>::removeSwap(u32 idx)
+T Array<T>::removeSwap(u64 idx)
 {
     HG_ASSERT(idx < count);
 
@@ -9716,14 +9720,14 @@ T Array<T>::removeSwap(u32 idx)
 }
 
 template<typename T>
-ArrayTemp<T>::ArrayTemp(Arena* arenaVal, u32 countVal, u32 capacityVal)
+ArrayTemp<T>::ArrayTemp(Arena* arenaVal, u64 countVal, u64 capacityVal)
     : arena{arenaVal}
     , vals{arenaVal->alloc<T>(capacityVal)}
     , count{countVal}
     , capacity{capacityVal}
 {
     HG_ASSERT(capacity >= count);
-    for (u32 i = 0; i < count; ++i)
+    for (u64 i = 0; i < count; ++i)
     {
         new (vals + i) T{};
     }
@@ -9732,7 +9736,7 @@ ArrayTemp<T>::ArrayTemp(Arena* arenaVal, u32 countVal, u32 capacityVal)
 template<typename T>
 ArrayTemp<T>::~ArrayTemp() noexcept
 {
-    for (u32 i = 0; i < count; ++i)
+    for (u64 i = 0; i < count; ++i)
     {
         vals[i].~T();
     }
@@ -9741,7 +9745,7 @@ ArrayTemp<T>::~ArrayTemp() noexcept
 template<typename T>
 void ArrayTemp<T>::reset()
 {
-    for (u32 i = 0; i < count; ++i)
+    for (u64 i = 0; i < count; ++i)
     {
         vals[i].~T();
     }
@@ -9749,12 +9753,12 @@ void ArrayTemp<T>::reset()
 }
 
 template<typename T>
-void ArrayTemp<T>::resize(u32 newCount)
+void ArrayTemp<T>::resize(u64 newCount)
 {
     if (newCount > capacity)
         reserve(newCount * 2);
 
-    for (u32 i = count; i < newCount; ++i)
+    for (u64 i = count; i < newCount; ++i)
     {
         new (vals + i) T{};
     }
@@ -9762,14 +9766,14 @@ void ArrayTemp<T>::resize(u32 newCount)
 }
 
 template<typename T>
-void ArrayTemp<T>::reserve(u32 newCapacity)
+void ArrayTemp<T>::reserve(u64 newCapacity)
 {
     if (newCapacity > capacity)
     {
         if (!arena->extend(vals, capacity, newCapacity))
         {
             T* newVals = arena->alloc<T>(newCapacity);
-            for (u32 i = 0; i < count; ++i)
+            for (u64 i = 0; i < count; ++i)
             {
                 new (newVals + i) T{std::move(vals[i])};
                 vals[i].~T();
@@ -9802,7 +9806,7 @@ T ArrayTemp<T>::pop()
 }
 
 template<typename T>
-T* ArrayTemp<T>::insertShift(u32 idx, T val)
+T* ArrayTemp<T>::insertShift(u64 idx, T val)
 {
     HG_ASSERT(idx <= count);
 
@@ -9812,7 +9816,7 @@ T* ArrayTemp<T>::insertShift(u32 idx, T val)
     if (idx < count)
     {
         new (vals + count) T{std::move(vals[count - 1])};
-        for (u32 i = count - 1; i >= idx + 1; --i)
+        for (u64 i = count - 1; i >= idx + 1; --i)
         {
             vals[i] = std::move(vals[i - 1]);
         }
@@ -9826,13 +9830,13 @@ T* ArrayTemp<T>::insertShift(u32 idx, T val)
 }
 
 template<typename T>
-T ArrayTemp<T>::removeShift(u32 idx)
+T ArrayTemp<T>::removeShift(u64 idx)
 {
     HG_ASSERT(idx < count);
 
     --count;
     T ret = std::move(vals[idx]);
-    for (u32 i = idx; i < count; ++i)
+    for (u64 i = idx; i < count; ++i)
     {
         vals[i] = std::move(vals[i + 1]);
     }
@@ -9841,7 +9845,7 @@ T ArrayTemp<T>::removeShift(u32 idx)
 }
 
 template<typename T>
-T* ArrayTemp<T>::insertSwap(u32 idx, T val)
+T* ArrayTemp<T>::insertSwap(u64 idx, T val)
 {
     HG_ASSERT(idx <= count);
 
@@ -9861,7 +9865,7 @@ T* ArrayTemp<T>::insertSwap(u32 idx, T val)
 }
 
 template<typename T>
-T ArrayTemp<T>::removeSwap(u32 idx)
+T ArrayTemp<T>::removeSwap(u64 idx)
 {
     HG_ASSERT(idx < count);
 
@@ -9876,7 +9880,7 @@ T ArrayTemp<T>::removeSwap(u32 idx)
 }
 
 template<typename T>
-Queue<T>::Queue(u32 capacityVal)
+Queue<T>::Queue(u64 capacityVal)
     : vals{heapAlloc<T>(capacityVal)}
     , front{0}
     , back{0}
@@ -9890,7 +9894,7 @@ Queue<T>::~Queue() noexcept
     if (back != front)
         HG_WARN("Non-empty queue destroyed\n");
 
-    for (u32 i = front; i != back; i = (i + 1) % capacity)
+    for (u64 i = front; i != back; i = (i + 1) % capacity)
     {
         vals[i].~T();
     }
@@ -9898,14 +9902,14 @@ Queue<T>::~Queue() noexcept
 }
 
 template<typename T>
-void Queue<T>::reserve(u32 newCapacity)
+void Queue<T>::reserve(u64 newCapacity)
 {
     if (newCapacity > capacity)
     {
         T* newVals = heapAlloc<T>(newCapacity);
 
         T* nextVal = newVals;
-        for (u32 i = front; i != back; i = (i + 1) % capacity)
+        for (u64 i = front; i != back; i = (i + 1) % capacity)
         {
             new (nextVal++) T{std::move(vals[i])};
             vals[i].~T();
@@ -9964,7 +9968,7 @@ T Queue<T>::popBack()
 }
 
 template<typename T>
-QueueTemp<T>::QueueTemp(Arena* arenaVal, u32 capacityVal)
+QueueTemp<T>::QueueTemp(Arena* arenaVal, u64 capacityVal)
     : arena{arenaVal}
     , vals{arenaVal->alloc<T>(capacityVal)}
     , front{0}
@@ -9979,14 +9983,14 @@ QueueTemp<T>::~QueueTemp() noexcept
     if (back != front)
         HG_WARN("Non-empty queue destroyed\n");
 
-    for (u32 i = front; i != back; i = (i + 1) % capacity)
+    for (u64 i = front; i != back; i = (i + 1) % capacity)
     {
         vals[i].~T();
     }
 }
 
 template<typename T>
-void QueueTemp<T>::reserve(u32 newCapacity)
+void QueueTemp<T>::reserve(u64 newCapacity)
 {
     HG_ASSERT(arena != nullptr);
 
@@ -9996,7 +10000,7 @@ void QueueTemp<T>::reserve(u32 newCapacity)
         {
             if (front > back)
             {
-                for (u32 i = 0; i < front - back; ++i)
+                for (u64 i = 0; i < front - back; ++i)
                 {
                     new (vals + capacity + i) T{std::move(vals + back + i)};
                     vals[back + i].~T();
@@ -10009,7 +10013,7 @@ void QueueTemp<T>::reserve(u32 newCapacity)
             T* newVals = arena->alloc<T>(newCapacity);
 
             T* nextVal = newVals;
-            for (u32 i = front; i != back; i = (i + 1) % capacity)
+            for (u64 i = front; i != back; i = (i + 1) % capacity)
             {
                 new (nextVal++) T{std::move(vals[i])};
                 vals[i].~T();
@@ -10069,7 +10073,7 @@ T QueueTemp<T>::popBack()
 }
 
 template<typename V>
-Set<V>::Set(u32 initCapacity)
+Set<V>::Set(u64 initCapacity)
     : hasVal{heapAlloc<bool>(initCapacity)}
     , vals{heapAlloc<V>(initCapacity)}
     , capacity{initCapacity}
@@ -10090,7 +10094,7 @@ Set<V>::~Set() noexcept
 }
 
 template<typename V>
-void Set<V>::resize(u32 newSize)
+void Set<V>::resize(u64 newSize)
 {
     HG_ASSERT(newSize > count);
     if (newSize == capacity)
@@ -10098,7 +10102,7 @@ void Set<V>::resize(u32 newSize)
 
     Set<V> newSet{newSize};
 
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
             newSet.add(std::move(vals[i]));
@@ -10110,7 +10114,7 @@ void Set<V>::resize(u32 newSize)
 template<typename V>
 void Set<V>::reset()
 {
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
         {
@@ -10127,10 +10131,10 @@ void Set<V>::add(V val)
     if (capacity / 2 >= count)
         resize(capacity == 0 ? 128 : capacity * 2);
 
-    u32 idx = static_cast<u32>(hash(val) % capacity);
-    for (u32 dist = 0; hasVal[idx] && !(vals[idx] == val); ++dist)
+    u64 idx = static_cast<u64>(hash(val) % capacity);
+    for (u64 dist = 0; hasVal[idx] && !(vals[idx] == val); ++dist)
     {
-        u32 otherDist = static_cast<u32>(hash(vals[idx]) % capacity) - idx;
+        u64 otherDist = static_cast<u64>(hash(vals[idx]) % capacity) - idx;
         if (otherDist > capacity)
             otherDist += capacity;
 
@@ -10151,7 +10155,7 @@ void Set<V>::add(V val)
 template<typename V>
 void Set<V>::remove(const V& val)
 {
-    u32 idx = static_cast<u32>(hash(val) % capacity);
+    u64 idx = static_cast<u64>(hash(val) % capacity);
     while (hasVal[idx])
     {
         if (vals[idx] == val)
@@ -10161,7 +10165,7 @@ void Set<V>::remove(const V& val)
     if (!hasVal[idx])
         return;
 
-    u32 next = (idx + 1) % capacity;
+    u64 next = (idx + 1) % capacity;
     while (hasVal[next])
     {
         if (hash(vals[next]) % capacity != next)
@@ -10180,7 +10184,7 @@ void Set<V>::remove(const V& val)
 template<typename V>
 bool Set<V>::has(const V& val)
 {
-    for (u32 idx = static_cast<u32>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
+    for (u64 idx = static_cast<u64>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
     {
         if (vals[idx] == val)
             return true;
@@ -10192,7 +10196,7 @@ template<typename V>
 template<typename F> requires std::is_invocable_r_v<void, F, V*>
 void Set<V>::forEach(F fn)
 {
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
             fn(vals + i);
@@ -10200,7 +10204,7 @@ void Set<V>::forEach(F fn)
 }
 
 template<typename V>
-SetTemp<V>::SetTemp(Arena* arenaVal, u32 initCapacity)
+SetTemp<V>::SetTemp(Arena* arenaVal, u64 initCapacity)
     : arena{arenaVal}
     , hasVal{arenaVal->alloc<bool>(initCapacity)}
     , vals{arenaVal->alloc<V>(initCapacity)}
@@ -10220,7 +10224,7 @@ SetTemp<V>::~SetTemp() noexcept
 }
 
 template<typename V>
-void SetTemp<V>::resize(u32 newSize)
+void SetTemp<V>::resize(u64 newSize)
 {
     HG_ASSERT(newSize > count);
     if (newSize == capacity)
@@ -10228,7 +10232,7 @@ void SetTemp<V>::resize(u32 newSize)
 
     SetTemp<V> newSet{newSize};
 
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
             newSet->add(std::move(vals[i]));
@@ -10240,7 +10244,7 @@ void SetTemp<V>::resize(u32 newSize)
 template<typename V>
 void SetTemp<V>::reset()
 {
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
         {
@@ -10257,10 +10261,10 @@ void SetTemp<V>::add(V val)
     if (capacity / 2 >= count)
         resize(capacity == 0 ? 128 : capacity * 2);
 
-    u32 idx = static_cast<u32>(hash(val) % capacity);
-    for (u32 dist = 0; hasVal[idx] && !(vals[idx] == val); ++dist)
+    u64 idx = static_cast<u64>(hash(val) % capacity);
+    for (u64 dist = 0; hasVal[idx] && !(vals[idx] == val); ++dist)
     {
-        u32 otherDist = static_cast<u32>(hash(vals[idx]) % capacity) - idx;
+        u64 otherDist = static_cast<u64>(hash(vals[idx]) % capacity) - idx;
         if (otherDist > capacity)
             otherDist += capacity;
 
@@ -10281,7 +10285,7 @@ void SetTemp<V>::add(V val)
 template<typename V>
 void SetTemp<V>::remove(const V& val)
 {
-    u32 idx = static_cast<u32>(hash(val) % capacity);
+    u64 idx = static_cast<u64>(hash(val) % capacity);
     while (hasVal[idx])
     {
         if (vals[idx] == val)
@@ -10291,7 +10295,7 @@ void SetTemp<V>::remove(const V& val)
     if (!hasVal[idx])
         return;
 
-    u32 next = (idx + 1) % capacity;
+    u64 next = (idx + 1) % capacity;
     while (hasVal[next])
     {
         if (hash(vals[next]) % capacity != next)
@@ -10309,7 +10313,7 @@ void SetTemp<V>::remove(const V& val)
 template<typename V>
 bool SetTemp<V>::has(const V& val)
 {
-    for (u32 idx = static_cast<u32>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
+    for (u64 idx = static_cast<u64>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
     {
         if (vals[idx] == val)
             return true;
@@ -10321,7 +10325,7 @@ template<typename V>
 template<typename F> requires std::is_invocable_r_v<void, F, V*>
 void SetTemp<V>::forEach(F fn)
 {
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
             fn(vals + i);
@@ -10329,7 +10333,7 @@ void SetTemp<V>::forEach(F fn)
 }
 
 template<typename K, typename V>
-Map<K, V>::Map(u32 initCapacity)
+Map<K, V>::Map(u64 initCapacity)
     : hasVal{heapAlloc<bool>(initCapacity)}
     , keys{heapAlloc<K>(initCapacity)}
     , vals{heapAlloc<V>(initCapacity)}
@@ -10353,7 +10357,7 @@ Map<K, V>::~Map() noexcept
 }
 
 template<typename K, typename V>
-void Map<K, V>::resize(u32 newSize)
+void Map<K, V>::resize(u64 newSize)
 {
     HG_ASSERT(newSize > count);
     if (newSize == capacity)
@@ -10361,7 +10365,7 @@ void Map<K, V>::resize(u32 newSize)
 
     Map<K, V> newMap{newSize};
 
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
             newMap.add(std::move(keys[i]), std::move(vals[i]));
@@ -10373,7 +10377,7 @@ void Map<K, V>::resize(u32 newSize)
 template<typename K, typename V>
 void Map<K, V>::reset()
 {
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
         {
@@ -10391,10 +10395,10 @@ V* Map<K, V>::add(K key, V val)
     if (capacity / 2 >= count)
         resize(capacity == 0 ? 128 : capacity * 2);
 
-    u32 idx = static_cast<u32>(hash(key) % capacity);
-    for (u32 dist = 0; hasVal[idx] && !(keys[idx] == key); ++dist)
+    u64 idx = static_cast<u64>(hash(key) % capacity);
+    for (u64 dist = 0; hasVal[idx] && !(keys[idx] == key); ++dist)
     {
-        u32 otherDist = static_cast<u32>(hash(keys[idx]) % capacity) - idx;
+        u64 otherDist = static_cast<u64>(hash(keys[idx]) % capacity) - idx;
         if (otherDist > capacity)
             otherDist += capacity;
 
@@ -10419,7 +10423,7 @@ V* Map<K, V>::add(K key, V val)
 template<typename K, typename V>
 bool Map<K, V>::remove(const K& key, V* val)
 {
-    u32 idx = static_cast<u32>(hash(key) % capacity);
+    u64 idx = static_cast<u64>(hash(key) % capacity);
     while (hasVal[idx])
     {
         if (keys[idx] == key)
@@ -10432,7 +10436,7 @@ bool Map<K, V>::remove(const K& key, V* val)
     if (val != nullptr)
         *val = std::move(vals[idx]);
 
-    u32 next = (idx + 1) % capacity;
+    u64 next = (idx + 1) % capacity;
     while (hasVal[next])
     {
         if (hash(keys[next]) % capacity != next)
@@ -10455,7 +10459,7 @@ bool Map<K, V>::remove(const K& key, V* val)
 template<typename K, typename V>
 V* Map<K, V>::get(const K& key)
 {
-    for (u32 idx = static_cast<u32>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
+    for (u64 idx = static_cast<u64>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
     {
         if (keys[idx] == key)
             return vals + idx;
@@ -10467,7 +10471,7 @@ template<typename K, typename V>
 template<typename F> requires std::is_invocable_r_v<void, F, K*, V*>
 void Map<K, V>::forEach(F fn)
 {
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
             fn(&keys[i], &vals[i]);
@@ -10475,7 +10479,7 @@ void Map<K, V>::forEach(F fn)
 }
 
 template<typename K, typename V>
-MapTemp<K, V>::MapTemp(Arena* arenaVal, u32 initCapacity)
+MapTemp<K, V>::MapTemp(Arena* arenaVal, u64 initCapacity)
     : arena{arenaVal}
     , hasVal{arenaVal->alloc<bool>(initCapacity)}
     , keys{arenaVal->alloc<K>(initCapacity)}
@@ -10497,7 +10501,7 @@ MapTemp<K, V>::~MapTemp() noexcept
 }
 
 template<typename K, typename V>
-void MapTemp<K, V>::resize(u32 newSize)
+void MapTemp<K, V>::resize(u64 newSize)
 {
     HG_ASSERT(newSize > count);
     if (newSize == capacity)
@@ -10505,7 +10509,7 @@ void MapTemp<K, V>::resize(u32 newSize)
 
     MapTemp<K, V> newMapTemp{newSize};
 
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
             newMapTemp.add(std::move(keys[i]), std::move(vals[i]));
@@ -10517,7 +10521,7 @@ void MapTemp<K, V>::resize(u32 newSize)
 template<typename K, typename V>
 void MapTemp<K, V>::reset()
 {
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
         {
@@ -10535,10 +10539,10 @@ V* MapTemp<K, V>::add(K key, V val)
     if (capacity / 2 >= count)
         resize(capacity == 0 ? 128 : capacity * 2);
 
-    u32 idx = static_cast<u32>(hash(key) % capacity);
-    for (u32 dist = 0; hasVal[idx] && !(keys[idx] == key); ++dist)
+    u64 idx = static_cast<u64>(hash(key) % capacity);
+    for (u64 dist = 0; hasVal[idx] && !(keys[idx] == key); ++dist)
     {
-        u32 otherDist = static_cast<u32>(hash(keys[idx]) % capacity) - idx;
+        u64 otherDist = static_cast<u64>(hash(keys[idx]) % capacity) - idx;
         if (otherDist > capacity)
             otherDist += capacity;
 
@@ -10563,7 +10567,7 @@ V* MapTemp<K, V>::add(K key, V val)
 template<typename K, typename V>
 bool MapTemp<K, V>::remove(const K& key, V* val)
 {
-    u32 idx = static_cast<u32>(hash(key) % capacity);
+    u64 idx = static_cast<u64>(hash(key) % capacity);
     while (hasVal[idx])
     {
         if (keys[idx] == key)
@@ -10576,7 +10580,7 @@ bool MapTemp<K, V>::remove(const K& key, V* val)
     if (val != nullptr)
         *val = std::move(vals[idx]);
 
-    u32 next = (idx + 1) % capacity;
+    u64 next = (idx + 1) % capacity;
     while (hasVal[next])
     {
         if (hash(keys[next]) % capacity != next)
@@ -10599,7 +10603,7 @@ bool MapTemp<K, V>::remove(const K& key, V* val)
 template<typename K, typename V>
 V* MapTemp<K, V>::get(const K& key)
 {
-    for (u32 idx = static_cast<u32>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
+    for (u64 idx = static_cast<u64>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
     {
         if (keys[idx] == key)
             return vals + idx;
@@ -10611,7 +10615,7 @@ template<typename K, typename V>
 template<typename F> requires std::is_invocable_r_v<void, F, K*, V*>
 void MapTemp<K, V>::forEach(F fn)
 {
-    for (u32 i = 0; i < capacity; ++i)
+    for (u64 i = 0; i < capacity; ++i)
     {
         if (hasVal[i])
             fn(&keys[i], &vals[i]);
@@ -10688,12 +10692,6 @@ void assetLoadImpl(AssetData<T>* data)
 }
 
 template<typename T>
-void assetUnloadImpl(AssetData<T>* data)
-{
-    static_cast<void>(data);
-}
-
-template<typename T>
 Asset<T>::Asset(AssetData<T>* dataVal)
     : data{dataVal}
 {
@@ -10706,8 +10704,6 @@ Asset<T>::~Asset() noexcept
 {
     if (data != nullptr && --data->refCount == 0)
     {
-        assetUnloadImpl(data);
-
         if (data->path != "")
             assets<T>.map.remove(data->path);
 
@@ -10742,7 +10738,7 @@ void reload(const Asset<T>& asset)
 {
     if (asset->data != nullptr)
     {
-        assetUnloadImpl(asset.data);
+        asset.data = {};
         assetLoadImpl(asset.data);
     }
 }
@@ -10779,7 +10775,7 @@ void serialize(Serializer* s, T* val)
 
     if (s->writing)
     {
-        s->current->data = i64{*val};
+        s->current->data = static_cast<i64>(*val);
     }
     else
     {

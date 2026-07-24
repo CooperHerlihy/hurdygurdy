@@ -2175,7 +2175,7 @@ Handle handlePoolAlloc(HandlePool* pool)
     }
     else
     {
-        Handle handle = {pool->handles.count};
+        Handle handle = {static_cast<u32>(pool->handles.count)};
         pool->handles.push(handle);
         return handle;
     }
@@ -3505,7 +3505,7 @@ void assetLoadImpl(AssetData<Sound>* data)
 
 void AudioPlayer::update()
 {
-    for (u32 i = sounds.count - 1; i < sounds.count; --i)
+    for (u64 i = sounds.count - 1; i < sounds.count; --i)
     {
         if (sounds[i].queuedSize() == 0)
         {
@@ -3533,9 +3533,9 @@ void AudioPlayer::update()
             if (m.pos == m.sound->data.count)
                 m.pos = 0;
 
-            u32 toQueue = std::min(toPush - queue.count, static_cast<u32>(m.sound->data.count - m.pos));
+            u64 toQueue = std::min(toPush - queue.count, m.sound->data.count - m.pos);
             HG_ASSERT(queue.count + toQueue <= toPush);
-            u32 end = queue.count;
+            u64 end = queue.count;
             queue.count += toQueue;
             memcpy(&queue[end], &m.sound->data[m.pos], toQueue * sizeof(f32));
             m.pos += toQueue;
@@ -3640,10 +3640,9 @@ void assetLoadImpl(AssetData<TextureData>* data)
     data->asset.format = Format_r8g8b8a8_srgb;
 }
 
-template<>
-void assetUnloadImpl(AssetData<TextureData>* data)
+TextureData::~TextureData()
 {
-    free(data->asset.pixels);
+    std::free(pixels);
 }
 
 bool textureStorePng(TextureData* texture, StringView path)
@@ -3693,13 +3692,6 @@ void assetLoadImpl(AssetData<MeshData>* data)
     HG_PANIC("load gltf file : TODO\n");
 }
 
-template<>
-void assetUnloadImpl(AssetData<MeshData>* data)
-{
-    heapFree(data->asset.indices, data->asset.indexCount);
-    heapFree(data->asset.vertices, data->asset.vertexCount);
-}
-
 void meshStoreGltf(MeshData* data, StringView path, Fence* fence)
 {
     static_cast<void>(data);
@@ -3712,12 +3704,10 @@ template<>
 void assetLoadImpl(AssetData<Mesh>* data)
 {
     Asset<MeshData> mesh = load<MeshData>(data->path);
-    if (mesh->vertices == nullptr || mesh->indices == nullptr)
-        return;
 
-    data->asset.vertexCount = mesh->vertexCount;
-    data->asset.vertexWidth = mesh->vertexWidth;
-    data->asset.indexCount = mesh->indexCount;
+    data->asset.vertexCount = static_cast<u32>(mesh->vertices.count);
+    data->asset.vertexWidth = sizeof(MeshVertex);
+    data->asset.indexCount = static_cast<u32>(mesh->indices.count);
 
     data->asset.vertexBuffer = GpuBuffer{
         data->asset.vertexCount * data->asset.vertexWidth, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst};
@@ -3725,8 +3715,8 @@ void assetLoadImpl(AssetData<Mesh>* data)
     data->asset.indexBuffer = GpuBuffer{
         data->asset.indexCount * sizeof(u32), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst};
 
-    data->asset.vertexBuffer.write(mesh->vertices, 0, data->asset.vertexCount * data->asset.vertexWidth);
-    data->asset.indexBuffer.write(mesh->indices, 0, data->asset.indexCount * sizeof(u32));
+    data->asset.vertexBuffer.write(mesh->vertices.vals, 0, data->asset.vertexCount * data->asset.vertexWidth);
+    data->asset.indexBuffer.write(mesh->indices.vals, 0, data->asset.indexCount * sizeof(u32));
 }
 
 template<>
@@ -3945,7 +3935,7 @@ Layer2D layerCreate2D()
     layer.instances = Array<Render2DInstance>{0, 1024};
     layer.instanceBuffer = GpuBuffer{layer.instances.capacity * sizeof(Render2DInstance),
         GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
-    layer.instanceCapacity = layer.instances.capacity;
+    layer.instanceCapacity = static_cast<u32>(layer.instances.capacity);
     layer.transform = Mat4{1.0f};
     layer.changed = true;
     return layer;
@@ -3979,7 +3969,7 @@ static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, const Gpu
 
             layer->instanceBuffer = GpuBuffer{layer->instances.capacity * sizeof(Render2DInstance),
                 GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate};
-            layer->instanceCapacity = layer->instances.capacity;
+            layer->instanceCapacity = static_cast<u32>(layer->instances.capacity);
         }
 
         layer->instanceBuffer.write(layer->instances.vals, 0, layer->instances.count * sizeof(Render2DInstance));
@@ -3996,7 +3986,7 @@ static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, const Gpu
 
     gpuPushConstants(cmd, pipeline, &push, sizeof(push));
 
-    gpuDraw(cmd, 0, 6, 0, layer->instances.count);
+    gpuDraw(cmd, 0, 6, 0, static_cast<u32>(layer->instances.count));
 }
 
 void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer)
@@ -4066,7 +4056,7 @@ u32 atlasAdd2D(Atlas2D* atlas, Rect sprite)
 {
     HG_ASSERT(atlas != nullptr);
 
-    u32 idx = atlas->sprites.count;
+    u32 idx = static_cast<u32>(atlas->sprites.count);
     atlas->sprites.push(sprite);
     return idx;
 }
@@ -4075,7 +4065,7 @@ u32 atlasAddGrid2D(Atlas2D* atlas, Rect grid, u32 width, u32 height)
 {
     HG_ASSERT(atlas != nullptr);
 
-    u32 idx = atlas->sprites.count;
+    u32 idx = static_cast<u32>(atlas->sprites.count);
 
     Vec2 spriteSize = (grid.end - grid.begin) / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
     Vec2 pos = grid.begin;

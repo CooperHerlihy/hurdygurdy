@@ -2255,7 +2255,7 @@ GpuPipeline::GpuPipeline(const GpuGraphicsPipelineCreateInfo& config)
 
     VkPipelineRenderingCreateInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    renderingInfo.colorAttachmentCount = colorFormats.count;
+    renderingInfo.colorAttachmentCount = static_cast<u32>(colorFormats.count);
     renderingInfo.pColorAttachmentFormats = colorFormats.vals;
     renderingInfo.depthAttachmentFormat = depthFormat;
     renderingInfo.stencilAttachmentFormat = stencilFormat;
@@ -2591,9 +2591,9 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = bufferBarriers.count;
+    dep.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.count);
     dep.pBufferMemoryBarriers = bufferBarriers.vals;
-    dep.imageMemoryBarrierCount = imageBarriers.count;
+    dep.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.count);
     dep.pImageMemoryBarriers = imageBarriers.vals;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
@@ -2779,9 +2779,9 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = bufferBarriers.count;
+    dep.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.count);
     dep.pBufferMemoryBarriers = bufferBarriers.vals;
-    dep.imageMemoryBarrierCount = imageBarriers.count;
+    dep.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.count);
     dep.pImageMemoryBarriers = imageBarriers.vals;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
@@ -3687,12 +3687,12 @@ void gpuFrameEnd(GpuCmd* cmd)
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.waitSemaphoreCount = frame->windows.count;
+    submit.waitSemaphoreCount = static_cast<u32>(frame->windows.count);
     submit.pWaitSemaphores = imageAvailableSemaphores;
     submit.pWaitDstStageMask = waitStages;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = reinterpret_cast<VkCommandBuffer*>(&cmd);
-    submit.signalSemaphoreCount = frame->windows.count;
+    submit.signalSemaphoreCount = static_cast<u32>(frame->windows.count);
     submit.pSignalSemaphores = readyToPresentSemaphores;
 
     vkQueueSubmit(vk.queue, 1, &submit, frame->fence);
@@ -3701,9 +3701,9 @@ void gpuFrameEnd(GpuCmd* cmd)
     {
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.waitSemaphoreCount = frame->windows.count;
+        presentInfo.waitSemaphoreCount = static_cast<u32>(frame->windows.count);
         presentInfo.pWaitSemaphores = readyToPresentSemaphores;
-        presentInfo.swapchainCount = frame->windows.count;
+        presentInfo.swapchainCount = static_cast<u32>(frame->windows.count);
         presentInfo.pSwapchains = swapchains;
         presentInfo.pImageIndices = imageIndices;
 
@@ -3736,8 +3736,8 @@ void initImGui(
     imguiInfo.QueueFamily = vk.queueFamily;
     imguiInfo.Queue = vk.queue;
     imguiInfo.DescriptorPoolSize = 1000;
-    imguiInfo.MinImageCount = window.data->images.count;
-    imguiInfo.ImageCount = window.data->images.count;
+    imguiInfo.MinImageCount = static_cast<u32>(window.data->images.count);
+    imguiInfo.ImageCount = static_cast<u32>(window.data->images.count);
     imguiInfo.MinAllocationSize = 1 << 20;
     imguiInfo.UseDynamicRendering = true;
     imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType
