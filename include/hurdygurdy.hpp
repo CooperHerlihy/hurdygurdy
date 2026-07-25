@@ -625,7 +625,16 @@ struct Product<T, Ts...> {
      * Construct as a list
      */
     template<typename... Rest>
-    Product(T x, Rest&&... xs)
+    Product(const T& x, Rest&&... xs)
+        : first{x}
+        , rest{std::forward<Rest>(xs)...}
+    {}
+
+    /**
+     * Construct as a list by rvalue reference
+     */
+    template<typename... Rest>
+    Product(T&& x, Rest&&... xs)
         : first{std::move(x)}
         , rest{std::forward<Rest>(xs)...}
     {}
@@ -699,7 +708,14 @@ union SumUntagged<T, Ts...> {
     /**
      * Construct an element, base case
      */
-    SumUntagged(T val)
+    SumUntagged(const T& val)
+        : first{val}
+    {}
+
+    /**
+     * Construct an element by rvalue reference, base case
+     */
+    SumUntagged(T&& val)
         : first{std::move(val)}
     {}
 
@@ -1050,13 +1066,16 @@ struct Maybe
     {};
 
     /**
-     * Construct with a value
+     * Construct by lvalue
      */
     Maybe(const T& val)
         : has{true}
         , val{val}
     {}
 
+    /**
+     * Construct by rvalue
+     */
     Maybe(T&& val)
         : has{true}
         , val{std::move(val)}
