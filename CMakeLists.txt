@@ -21,7 +21,8 @@ if(MSVC)
     # C4702 fires spuriously in the Asset<T>::Asset constructor initializer on
     # optimized builds (MSVC proves pool.alloc() never returns null, then warns
     # about the "unreachable" else-branch that doesn't exist)
-    add_compile_options(/wd4702)
+    # C4127 flags conditionals which could be compile time, but are at runtime
+    add_compile_options(/wd4702 /wd4127)
     set(STRICT_FLAGS /W4 /WX)
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
@@ -145,7 +146,6 @@ target_include_directories(hurdygurdy_core
 target_link_libraries(hurdygurdy_core
     PUBLIC ${SDL3_TARGET}
 )
-# PCH disabled — ccache handles caching more efficiently
 target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_imgui OBJECT ${IMGUI_SOURCES} ${IMGUI_BACKEND_SOURCES})
@@ -157,7 +157,6 @@ target_include_directories(hurdygurdy_imgui
 target_link_libraries(hurdygurdy_imgui
     PUBLIC ${SDL3_TARGET}
 )
-# PCH disabled
 target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
 
@@ -179,7 +178,6 @@ foreach(tgt test editor minimal)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
     target_include_directories(${tgt} PRIVATE ${CMAKE_BINARY_DIR})
-    # PCH disabled
     target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
 endforeach()
 

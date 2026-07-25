@@ -91,7 +91,7 @@ HurdyGurdy& HurdyGurdy::operator=(HurdyGurdy&&) noexcept
     return *this;
 }
 
-HurdyGurdy::~HurdyGurdy()
+HurdyGurdy::~HurdyGurdy() noexcept
 {
     if (--initialized == 0)
     {
@@ -3640,7 +3640,7 @@ void assetLoadImpl(AssetData<TextureData>* data)
     data->asset.format = Format_r8g8b8a8_srgb;
 }
 
-TextureData::~TextureData()
+TextureData::~TextureData() noexcept
 {
     std::free(pixels);
 }

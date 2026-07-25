@@ -57,11 +57,11 @@
 /**
  * The value of pi
  */
-#define hgPi 3.1415926535897932
+#define HG_PI 3.1415926535897932
 /**
  * The value of Euler's number
  */
-#define hgEuler 2.7182818284590452
+#define HG_EULER 2.7182818284590452
 
 /**
  * Square a value
@@ -194,7 +194,7 @@ float hgNoiseVec1D(uint seed, float pos)
  */
 vec2 hgNoiseVec2D(uint seed, vec2 pos)
 {
-    float rot = 2.0 * hgPi * hgNoiseNorm(seed, pos);
+    float rot = 2.0 * HG_PI * hgNoiseNorm(seed, pos);
     return vec2(cos(rot), sin(rot));
 }
 
@@ -624,14 +624,14 @@ vec3 hgTransformNormalMap(vec3 mapNormal, vec3 vertexNormal, vec4 vertexTangent)
 /**
  * Approximate the luma of a color, not to be confused with luminance
  */
-float luma(vec3 color) {
+float hgLuma(vec3 color) {
     return dot(color, vec3(0.299, 0.587, 0.114));
 }
 
 /**
  * Approximate the luminance of a color, not to be confused with luma
  */
-float luminance(vec3 color) {
+float hgLuminance(vec3 color) {
     return dot(color, vec3(0.2126, 0.7152, 0.0722));
 }
 
@@ -639,7 +639,7 @@ float luminance(vec3 color) {
  * Tonemap from hdr to ldr using the Reinhard model
  */
 vec3 hgReinhardTonemap(vec3 color) {
-    return color / (vec3(1.0) + luminance(color));
+    return color / (vec3(1.0) + hgLuminance(color));
 }
 
 vec3 hgUncharted2TonemapInter(vec3 x) {

@@ -35,6 +35,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <concepts>
 #include <thread>
 #include <type_traits>
@@ -397,9 +398,6 @@ struct StringView {
 
     /**
      * Implicit constexpr conversion from c string
-     *
-     * Calls strlen internally. The resulting StringView is only valid
-     * for the lifetime of the pointed-to string.
      */
     constexpr StringView(const char* cStr)
         : chars{cStr}, length{0}
@@ -7660,62 +7658,62 @@ struct Window {
     /**
      * Returns the window's current image, or nullptr if unavailable this frame
      */
-    GpuView* imageView();
+    GpuView* imageView() const;
 
     /**
      * Returns the window's pixel format
      */
-    Format imageFormat();
+    Format imageFormat() const;
 
     /**
      * Returns whether the window was closed
      */
-    bool wasClosed();
+    bool wasClosed() const;
 
     /**
      * Returns whether the mouse is focused on the window
      */
-    bool isFocused();
+    bool isFocused() const;
 
     /**
      * Get the window's width in pixels
      */
-    u32 width();
+    u32 width() const;
 
     /**
      * Get the window's width in pixels
      */
-    u32 height();
+    u32 height() const;
 
     /**
      * Returns the current x position of the mouse relative to the window
      */
-    f32 mouseX();
+    f32 mouseX() const;
 
     /**
      * Returns the current y position of the mouse relative to the window
      */
-    f32 mouseY();
+    f32 mouseY() const;
 
     /**
      * Returns the change in mouse x position relative to the window height
      */
-    f32 mouseDX();
+    f32 mouseDX() const;
 
     /**
      * Returns the change in mouse y position relative to the window height
      */
-    f32 mouseDY();
+    f32 mouseDY() const;
 
     /**
      * Returns whether the key is currently down
      */
-    bool isButtonDown(Button key);
+    bool isButtonDown(Button key) const;
 
     /**
      * Get the key events since last event processing
      */
-    Span<WindowEvent> events();
+    Span<WindowEvent> events() const;
 
     /**
      * Move construct
@@ -7867,7 +7865,7 @@ struct AudioPlayerMusic {
     /**
      * The current position in the sound
      */
-    u32 pos = 0;
+    u64 pos = 0;
     /**
      * Whether the music is currently playing or paused
      */
@@ -10034,7 +10032,6 @@ void QueueTemp<T>::reserve(u64 newCapacity)
                 vals[i].~T();
             }
 
-            heapFree(vals, capacity);
             vals = newVals;
             front = 0;
             back = count;
@@ -10143,7 +10140,7 @@ void Set<V>::reset()
 template<typename V>
 void Set<V>::add(V val)
 {
-    if (capacity >= count / 2)
+    if (count >= capacity / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u64 idx = static_cast<u64>(hash(val) % capacity);
@@ -10273,7 +10270,7 @@ void SetTemp<V>::reset()
 template<typename V>
 void SetTemp<V>::add(V val)
 {
-    if (capacity >= count / 2)
+    if (count >= capacity / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u64 idx = static_cast<u64>(hash(val) % capacity);
@@ -10407,7 +10404,7 @@ void Map<K, V>::reset()
 template<typename K, typename V>
 V* Map<K, V>::add(K key, V val)
 {
-    if (capacity >= count / 2)
+    if (count >= capacity / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u64 idx = static_cast<u64>(hash(key) % capacity);
@@ -10551,7 +10548,7 @@ void MapTemp<K, V>::reset()
 template<typename K, typename V>
 V* MapTemp<K, V>::add(K key, V val)
 {
-    if (capacity >= count / 2)
+    if (count >= capacity / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
 
     u64 idx = static_cast<u64>(hash(key) % capacity);
@@ -10753,7 +10750,7 @@ void reload(const Asset<T>& asset)
 {
     if (asset.data != nullptr)
     {
-        asset.data = {};
+        *asset = {};
         assetLoadImpl(asset.data);
     }
 }

@@ -5926,7 +5926,7 @@ int main()
         GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
         struct Push {
-            uint dataIdx;
+            u32 dataIdx;
         };
 
         GpuGraphicsPipelineCreateInfo ci{};

@@ -3056,8 +3056,8 @@ struct WindowData {
         , sdlWindow{std::exchange(other.sdlWindow, nullptr)}
         , width{std::exchange(other.width, 0)}
         , height{std::exchange(other.height, 0)}
-        , mouseX{std::exchange(other.mouseX, 0)}
-        , mouseY{std::exchange(other.mouseY, 0)}
+        , mouseX{std::exchange(other.mouseX, 0.0f)}
+        , mouseY{std::exchange(other.mouseY, 0.0f)}
         , wasClosed{std::exchange(other.wasClosed, false)}
     {
         memcpy(isKeyDown, other.isKeyDown, sizeof(isKeyDown));
@@ -3709,62 +3709,62 @@ Window::~Window() noexcept = default;
 Window::Window(Window&& other) noexcept = default;
 Window& Window::operator=(Window&& other) noexcept = default;
 
-GpuView* Window::imageView()
+GpuView* Window::imageView() const
 {
     return data->imageIdx < data->images.count ? &data->views[data->imageIdx] : nullptr;
 }
 
-Format Window::imageFormat()
+Format Window::imageFormat() const
 {
     return data->format;
 }
 
-bool Window::wasClosed()
+bool Window::wasClosed() const
 {
     return data->wasClosed;
 }
 
-bool Window::isFocused()
+bool Window::isFocused() const
 {
     return SDL_GetMouseFocus() == data->sdlWindow;
 }
 
-u32 Window::width()
+u32 Window::width() const
 {
     return data->width;
 }
 
-u32 Window::height()
+u32 Window::height() const
 {
     return data->height;
 }
 
-f32 Window::mouseX()
+f32 Window::mouseX() const
 {
     return data->mouseX;
 }
 
-f32 Window::mouseY()
+f32 Window::mouseY() const
 {
     return data->mouseY;
 }
 
-f32 Window::mouseDX()
+f32 Window::mouseDX() const
 {
     return windowState.mouseDX / static_cast<f32>(data->height);
 }
 
-f32 Window::mouseDY()
+f32 Window::mouseDY() const
 {
     return windowState.mouseDY / static_cast<f32>(data->height);
 }
 
-bool Window::isButtonDown(Button key)
+bool Window::isButtonDown(Button key) const
 {
     return data->isKeyDown[key];
 }
 
-Span<WindowEvent> Window::events()
+Span<WindowEvent> Window::events() const
 {
     return data->events;
 }
@@ -5757,7 +5757,7 @@ Maybe<Library> Library::load(StringView path)
 
     Maybe<Library> lib = some<Library>();
     lib->lib = static_cast<void*>(LoadLibraryA(cstr));
-    if (lib == nullptr)
+    if (lib->lib == nullptr)
     {
         setError("Could not load dynamic library \"%s\"", cstr);
         return {};
@@ -5777,7 +5777,7 @@ Maybe<void*> Library::findFunction(StringView name)
     ArenaScope scratch = getScratch();
     char* cstr = cString(scratch, name);
 
-    void* fn = GetProcAddress(reinterpret_cast<HMODULE>(lib), cstr);
+    void* fn = reinterpret_cast<void*>(GetProcAddress(reinterpret_cast<HMODULE>(lib), cstr));
     if (fn == nullptr)
     {
         setError("Could not load function symbol \"%s\"", cstr);
