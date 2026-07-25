@@ -1052,7 +1052,12 @@ struct Maybe
     /**
      * Construct with a value
      */
-    Maybe(T val)
+    Maybe(const T& val)
+        : has{true}
+        , val{val}
+    {}
+
+    Maybe(T&& val)
         : has{true}
         , val{std::move(val)}
     {}
@@ -1087,7 +1092,12 @@ struct Maybe
     /**
      * Return the value, or a default value if it does not exist
      */
-    T orElse(T defaultVal);
+    T orElse(const T& defaultVal);
+
+    /**
+     * Return the value, or a default value by rvalue reference
+     */
+    T orElse(T&& defaultVal);
 
     /**
      * Expect there to be a value, or panic
@@ -4124,9 +4134,19 @@ struct Array {
     void reserve(u64 newCapacity);
 
     /**
+     * Default-construct a value at the end of the array
+     */
+    T* push();
+
+    /**
      * Push a value to the end of the array
      */
-    T* push(T val = {});
+    T* push(const T& val);
+
+    /**
+     * Push a value by rvalue reference
+     */
+    T* push(T&& val);
 
     /**
      * Pop a value from the end of the array
@@ -4136,7 +4156,12 @@ struct Array {
     /**
      * Insert a value at idx, shifting values over
      */
-    T* insertShift(u64 idx, T val = {});
+    T* insertShift(u64 idx, const T& val);
+
+    /**
+     * Insert a value by rvalue reference at idx, shifting values over
+     */
+    T* insertShift(u64 idx, T&& val);
 
     /**
      * Remove the value from idx, shifting values over
@@ -4146,7 +4171,12 @@ struct Array {
     /**
      * Insert a value at idx, moving the previous value to the end
      */
-    T* insertSwap(u64 idx, T val = {});
+    T* insertSwap(u64 idx, const T& val);
+
+    /**
+     * Insert a value by rvalue reference at idx, moving the previous value to the end
+     */
+    T* insertSwap(u64 idx, T&& val);
 
     /**
      * Remove the value from idx, swapping with the last value
@@ -4290,9 +4320,19 @@ struct ArrayTemp {
     void reserve(u64 newCapacity);
 
     /**
+     * Default-construct a value at the end of the array
+     */
+    T* push();
+
+    /**
      * Push a value to the end of the array
      */
-    T* push(T val = {});
+    T* push(const T& val);
+
+    /**
+     * Push a value by rvalue reference
+     */
+    T* push(T&& val);
 
     /**
      * Pop a value from the end of the array
@@ -4302,7 +4342,12 @@ struct ArrayTemp {
     /**
      * Insert a value at idx, shifting values over
      */
-    T* insertShift(u64 idx, T val = {});
+    T* insertShift(u64 idx, const T& val);
+
+    /**
+     * Insert a value by rvalue reference at idx, shifting values over
+     */
+    T* insertShift(u64 idx, T&& val);
 
     /**
      * Remove the value from idx, shifting values over
@@ -4312,7 +4357,12 @@ struct ArrayTemp {
     /**
      * Insert a value at idx, moving the previous value to the end
      */
-    T* insertSwap(u64 idx, T val = {});
+    T* insertSwap(u64 idx, const T& val);
+
+    /**
+     * Insert a value by rvalue reference at idx, moving the previous value to the end
+     */
+    T* insertSwap(u64 idx, T&& val);
 
     /**
      * Remove the value from idx, swapping with the last value
@@ -4427,12 +4477,22 @@ struct Queue {
     /**
      * Push a value to the front of the queue
      */
-    void pushFront(T val);
+    void pushFront(const T& val);
+
+    /**
+     * Push a value by rvalue reference to the front of the queue
+     */
+    void pushFront(T&& val);
 
     /**
      * Push a value to the back of the queue
      */
-    void pushBack(T val);
+    void pushBack(const T& val);
+
+    /**
+     * Push a value by rvalue reference to the back of the queue
+     */
+    void pushBack(T&& val);
 
     /**
      * Pop a value from the front of the queue
@@ -4525,12 +4585,22 @@ struct QueueTemp {
     /**
      * Push a value to the front of the queue
      */
-    void pushFront(T val);
+    void pushFront(const T& val);
+
+    /**
+     * Push a value by rvalue reference to the front of the queue
+     */
+    void pushFront(T&& val);
 
     /**
      * Push a value to the back of the queue
      */
-    void pushBack(T val);
+    void pushBack(const T& val);
+
+    /**
+     * Push a value by rvalue reference to the back of the queue
+     */
+    void pushBack(T&& val);
 
     /**
      * Pop a value from the front of the queue
@@ -4631,7 +4701,12 @@ struct Set {
     /**
      * Add a value to the set
      */
-    void add(V val);
+    void add(const V& val);
+
+    /**
+     * Add a value by rvalue reference to the set
+     */
+    void add(V&& val);
 
     /**
      * Remove a value from the set
@@ -4730,7 +4805,12 @@ struct SetTemp {
     /**
      * Add a value to the set
      */
-    void add(V val);
+    void add(const V& val);
+
+    /**
+     * Add a value by rvalue reference to the set
+     */
+    void add(V&& val);
 
     /**
      * Remove a value from the set
@@ -4830,7 +4910,12 @@ struct Map {
     /**
      * Add a key-value pair
      */
-    V* add(K key, V val);
+    V* add(const K& key, const V& val);
+
+    /**
+     * Add a key-value pair by rvalue reference
+     */
+    V* add(K&& key, V&& val);
 
     /**
      * Remove a key-value pair
@@ -4946,7 +5031,12 @@ struct MapTemp {
     /**
      * Add a key-value pair
      */
-    V* add(K key, V val);
+    V* add(const K& key, const V& val);
+
+    /**
+     * Add a key-value pair by rvalue reference
+     */
+    V* add(K&& key, V&& val);
 
     /**
      * Remove a key-value pair
@@ -9437,7 +9527,23 @@ void setError(StringView errorFmt, Ts... args)
 }
 
 template<typename T>
-T Maybe<T>::orElse(T defaultVal)
+T Maybe<T>::orElse(const T& defaultVal)
+{
+    if (has)
+    {
+        T tmp = std::move(val);
+        val.~T();
+        has = false;
+        return tmp;
+    }
+    else
+    {
+        return defaultVal;
+    }
+}
+
+template<typename T>
+T Maybe<T>::orElse(T&& defaultVal)
 {
     if (has)
     {
@@ -9638,7 +9744,27 @@ void Array<T>::reserve(u64 newCapacity)
 }
 
 template<typename T>
-T* Array<T>::push(T val)
+T* Array<T>::push()
+{
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    new (vals + count) T{};
+    return vals + count++;
+}
+
+template<typename T>
+T* Array<T>::push(const T& val)
+{
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    new (vals + count) T{val};
+    return vals + count++;
+}
+
+template<typename T>
+T* Array<T>::push(T&& val)
 {
     if (count == capacity)
         reserve(capacity == 0 ? 64 : capacity * 2);
@@ -9659,7 +9785,31 @@ T Array<T>::pop()
 }
 
 template<typename T>
-T* Array<T>::insertShift(u64 idx, T val)
+T* Array<T>::insertShift(u64 idx, const T& val)
+{
+    HG_ASSERT(idx <= count);
+
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    if (idx < count)
+    {
+        new (vals + count) T{std::move(vals[count - 1])};
+        for (u64 i = count - 1; i >= idx + 1; --i)
+        {
+            vals[i] = std::move(vals[i - 1]);
+        }
+        vals[idx] = val;
+    }
+    else
+    {
+        new (vals + count) T{val};
+    }
+    return vals + count++;
+}
+
+template<typename T>
+T* Array<T>::insertShift(u64 idx, T&& val)
 {
     HG_ASSERT(idx <= count);
 
@@ -9698,7 +9848,27 @@ T Array<T>::removeShift(u64 idx)
 }
 
 template<typename T>
-T* Array<T>::insertSwap(u64 idx, T val)
+T* Array<T>::insertSwap(u64 idx, const T& val)
+{
+    HG_ASSERT(idx <= count);
+
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    if (idx < count)
+    {
+        new (vals + count) T{std::move(vals[idx])};
+        vals[idx] = val;
+    }
+    else
+    {
+        new (vals + count) T{val};
+    }
+    return vals + count++;
+}
+
+template<typename T>
+T* Array<T>::insertSwap(u64 idx, T&& val)
 {
     HG_ASSERT(idx <= count);
 
@@ -9798,7 +9968,27 @@ void ArrayTemp<T>::reserve(u64 newCapacity)
 }
 
 template<typename T>
-T* ArrayTemp<T>::push(T val)
+T* ArrayTemp<T>::push()
+{
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    new (vals + count) T{};
+    return vals + count++;
+}
+
+template<typename T>
+T* ArrayTemp<T>::push(const T& val)
+{
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    new (vals + count) T{val};
+    return vals + count++;
+}
+
+template<typename T>
+T* ArrayTemp<T>::push(T&& val)
 {
     if (count == capacity)
         reserve(capacity == 0 ? 64 : capacity * 2);
@@ -9819,7 +10009,31 @@ T ArrayTemp<T>::pop()
 }
 
 template<typename T>
-T* ArrayTemp<T>::insertShift(u64 idx, T val)
+T* ArrayTemp<T>::insertShift(u64 idx, const T& val)
+{
+    HG_ASSERT(idx <= count);
+
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    if (idx < count)
+    {
+        new (vals + count) T{std::move(vals[count - 1])};
+        for (u64 i = count - 1; i >= idx + 1; --i)
+        {
+            vals[i] = std::move(vals[i - 1]);
+        }
+        vals[idx] = val;
+    }
+    else
+    {
+        new (vals + count) T{val};
+    }
+    return vals + count++;
+}
+
+template<typename T>
+T* ArrayTemp<T>::insertShift(u64 idx, T&& val)
 {
     HG_ASSERT(idx <= count);
 
@@ -9858,7 +10072,27 @@ T ArrayTemp<T>::removeShift(u64 idx)
 }
 
 template<typename T>
-T* ArrayTemp<T>::insertSwap(u64 idx, T val)
+T* ArrayTemp<T>::insertSwap(u64 idx, const T& val)
+{
+    HG_ASSERT(idx <= count);
+
+    if (count == capacity)
+        reserve(capacity == 0 ? 64 : capacity * 2);
+
+    if (idx < count)
+    {
+        new (vals + count) T{std::move(vals[idx])};
+        vals[idx] = val;
+    }
+    else
+    {
+        new (vals + count) T{val};
+    }
+    return vals + count++;
+}
+
+template<typename T>
+T* ArrayTemp<T>::insertSwap(u64 idx, T&& val)
 {
     HG_ASSERT(idx <= count);
 
@@ -9937,7 +10171,17 @@ void Queue<T>::reserve(u64 newCapacity)
 }
 
 template<typename T>
-void Queue<T>::pushFront(T val)
+void Queue<T>::pushFront(const T& val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    front = (front == 0 ? capacity : front) - 1;
+    new (vals + front) T{val};
+}
+
+template<typename T>
+void Queue<T>::pushFront(T&& val)
 {
     if (++count >= capacity)
         reserve(capacity == 0 ? 128 : capacity * 2);
@@ -9947,7 +10191,57 @@ void Queue<T>::pushFront(T val)
 }
 
 template<typename T>
-void Queue<T>::pushBack(T val)
+void QueueTemp<T>::pushFront(const T& val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    front = (front == 0 ? capacity : front) - 1;
+    new (vals + front) T{val};
+}
+
+template<typename T>
+void QueueTemp<T>::pushFront(T&& val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    front = (front == 0 ? capacity : front) - 1;
+    new (vals + front) T{std::move(val)};
+}
+
+template<typename T>
+void Queue<T>::pushBack(const T& val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    new (vals + back) T{val};
+    back = (back + 1) % capacity;
+}
+
+template<typename T>
+void Queue<T>::pushBack(T&& val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    new (vals + back) T{std::move(val)};
+    back = (back + 1) % capacity;
+}
+
+template<typename T>
+void QueueTemp<T>::pushBack(const T& val)
+{
+    if (++count >= capacity)
+        reserve(capacity == 0 ? 128 : capacity * 2);
+
+    new (vals + back) T{val};
+    back = (back + 1) % capacity;
+}
+
+template<typename T>
+void QueueTemp<T>::pushBack(T&& val)
 {
     if (++count >= capacity)
         reserve(capacity == 0 ? 128 : capacity * 2);
@@ -10040,25 +10334,7 @@ void QueueTemp<T>::reserve(u64 newCapacity)
     }
 }
 
-template<typename T>
-void QueueTemp<T>::pushFront(T val)
-{
-    if (++count >= capacity)
-        reserve(capacity == 0 ? 128 : capacity * 2);
 
-    front = (front == 0 ? capacity : front) - 1;
-    new (vals + front) T{std::move(val)};
-}
-
-template<typename T>
-void QueueTemp<T>::pushBack(T val)
-{
-    if (++count >= capacity)
-        reserve(capacity == 0 ? 128 : capacity * 2);
-
-    new (vals + back) T{std::move(val)};
-    back = (back + 1) % capacity;
-}
 
 template<typename T>
 T QueueTemp<T>::popFront()
@@ -10138,7 +10414,35 @@ void Set<V>::reset()
 }
 
 template<typename V>
-void Set<V>::add(V val)
+void Set<V>::add(const V& val)
+{
+    V v = val;
+    if (count >= capacity / 2)
+        resize(capacity == 0 ? 128 : capacity * 2);
+
+    u64 idx = static_cast<u64>(hash(v) % capacity);
+    for (u64 dist = 0; hasVal[idx] && !(vals[idx] == v); ++dist)
+    {
+        u64 otherDist = static_cast<u64>(hash(vals[idx]) % capacity) - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
+
+        if (otherDist < dist)
+        {
+            std::swap(v, vals[idx]);
+            dist = otherDist;
+        }
+
+        idx = (idx + 1) % capacity;
+    }
+
+    new (vals + idx) V{std::move(v)};
+    hasVal[idx] = true;
+    ++count;
+}
+
+template<typename V>
+void Set<V>::add(V&& val)
 {
     if (count >= capacity / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
@@ -10268,7 +10572,35 @@ void SetTemp<V>::reset()
 }
 
 template<typename V>
-void SetTemp<V>::add(V val)
+void SetTemp<V>::add(const V& val)
+{
+    V v = val;
+    if (count >= capacity / 2)
+        resize(capacity == 0 ? 128 : capacity * 2);
+
+    u64 idx = static_cast<u64>(hash(v) % capacity);
+    for (u64 dist = 0; hasVal[idx] && !(vals[idx] == v); ++dist)
+    {
+        u64 otherDist = static_cast<u64>(hash(vals[idx]) % capacity) - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
+
+        if (otherDist < dist)
+        {
+            std::swap(v, vals[idx]);
+            dist = otherDist;
+        }
+
+        idx = (idx + 1) % capacity;
+    }
+
+    new (vals + idx) V{std::move(v)};
+    hasVal[idx] = true;
+    ++count;
+}
+
+template<typename V>
+void SetTemp<V>::add(V&& val)
 {
     if (count >= capacity / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
@@ -10402,7 +10734,40 @@ void Map<K, V>::reset()
 }
 
 template<typename K, typename V>
-V* Map<K, V>::add(K key, V val)
+V* Map<K, V>::add(const K& key, const V& val)
+{
+    K k = key;
+    V v = val;
+    if (count >= capacity / 2)
+        resize(capacity == 0 ? 128 : capacity * 2);
+
+    u64 idx = static_cast<u64>(hash(k) % capacity);
+    for (u64 dist = 0; hasVal[idx] && !(keys[idx] == k); ++dist)
+    {
+        u64 otherDist = static_cast<u64>(hash(keys[idx]) % capacity) - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
+
+        if (otherDist < dist)
+        {
+            std::swap(k, keys[idx]);
+            std::swap(v, vals[idx]);
+            dist = otherDist;
+        }
+
+        idx = (idx + 1) % capacity;
+    }
+
+    hasVal[idx] = true;
+    new (keys + idx) K{std::move(k)};
+    new (vals + idx) V{std::move(v)};
+    ++count;
+
+    return vals + idx;
+}
+
+template<typename K, typename V>
+V* Map<K, V>::add(K&& key, V&& val)
 {
     if (count >= capacity / 2)
         resize(capacity == 0 ? 128 : capacity * 2);
@@ -10546,7 +10911,40 @@ void MapTemp<K, V>::reset()
 }
 
 template<typename K, typename V>
-V* MapTemp<K, V>::add(K key, V val)
+V* MapTemp<K, V>::add(const K& key, const V& val)
+{
+    K k = key;
+    V v = val;
+    if (count >= capacity / 2)
+        resize(capacity == 0 ? 128 : capacity * 2);
+
+    u64 idx = static_cast<u64>(hash(k) % capacity);
+    for (u64 dist = 0; hasVal[idx] && !(keys[idx] == k); ++dist)
+    {
+        u64 otherDist = static_cast<u64>(hash(keys[idx]) % capacity) - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
+
+        if (otherDist < dist)
+        {
+            std::swap(k, keys[idx]);
+            std::swap(v, vals[idx]);
+            dist = otherDist;
+        }
+
+        idx = (idx + 1) % capacity;
+    }
+
+    hasVal[idx] = true;
+    new (keys + idx) K{std::move(k)};
+    new (vals + idx) V{std::move(v)};
+    ++count;
+
+    return vals + idx;
+}
+
+template<typename K, typename V>
+V* MapTemp<K, V>::add(K&& key, V&& val)
 {
     if (count >= capacity / 2)
         resize(capacity == 0 ? 128 : capacity * 2);

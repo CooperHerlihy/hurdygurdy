@@ -1334,6 +1334,36 @@ int main()
             TEST(!b.has);
             TEST(Lifecycle::stats.alive == 0);
         }
+
+        // Value constructor from lvalue: one copy, zero moves
+        {
+            Lifecycle::stats.reset();
+            {
+                Lifecycle val;
+                TEST(Lifecycle::stats.alive == 1);
+                Maybe<Lifecycle> m = val;
+                TEST(m.has);
+                TEST(Lifecycle::stats.alive == 2);
+                TEST(Lifecycle::stats.copies == 1);
+                TEST(Lifecycle::stats.moves == 0);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
+
+        // Value constructor from rvalue: zero copies, one move
+        {
+            Lifecycle::stats.reset();
+            {
+                Lifecycle val;
+                TEST(Lifecycle::stats.alive == 1);
+                Maybe<Lifecycle> m = std::move(val);
+                TEST(m.has);
+                TEST(Lifecycle::stats.alive == 1);
+                TEST(Lifecycle::stats.copies == 0);
+                TEST(Lifecycle::stats.moves == 1);
+            }
+            TEST(Lifecycle::stats.alive == 0);
+        }
     }
 
     // ============================================================================

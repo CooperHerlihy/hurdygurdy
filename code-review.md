@@ -18,12 +18,6 @@ Review conducted against modern C++20 guidelines, following the project's own co
 
 ## 2. Public API Header (`include/hurdygurdy.hpp`)
 
-### Critical
-
-| Issue | Location | Detail |
-|-------|----------|--------|
-| **`Maybe::Maybe(T val)` takes by value, then moves into union** | `hpp:1058-1061` | Fine for small types, but for large types this is a guaranteed extra move. Worse: the union's `val` member has no active member when `Maybe()` default-constructs, but `~Maybe()` calls `val.~T()` only if `has`. This is a legitimate union lifetime pattern, but the default constructor leaves `val` uninitialized — UB if `T` has a non-trivial destructor and `has` is somehow `true` on a default-constructed `Maybe`. |
-
 ### High
 
 | Issue | Location | Detail |
@@ -36,7 +30,7 @@ Review conducted against modern C++20 guidelines, following the project's own co
 
 | Issue | Location | Detail |
 |-------|----------|--------|
-| **`UniquePtr` / `SharedPtr` are hand-rolled** | `hpp` (containers section) | These are implemented with raw `heapAlloc`/`heapFree`. The custom allocator is justified for arena-awareness, but `Share‌dPtr` lacks weak references and thread-safety guarantees that `std::shared_ptr` provides. This is a project choice, but the lack of weak references means cycles can never be broken. |
+| **`UniquePtr` / `SharedPtr` are hand-rolled** | `hpp` (containers section) | These are implemented with raw `heapAlloc`/`heapFree`. The custom allocator is justified for arena-awareness, but `SharedPtr` lacks weak references and thread-safety guarantees that `std::shared_ptr` provides. This is a project choice, but the lack of weak references means cycles can never be broken. |
 | **`Pool<T>::free` uses `goto`** | `hpp:10693` | The `goto found` pattern can be trivially replaced with a `break` out of the for-loop into a `if (found) { ... }` block. |
 | **`#ifdef`/`#ifndef` nesting in config macros** | `hpp:80-110` | The logic is: `#ifdef HG_DEBUG_MODE` → set flags unless `HG_NO_*` defined; `#ifdef HG_RELEASE_MODE` → unset flags unless `HG_*` defined. This is confusing and leads to double-negatives. A simpler approach: let the user define `HG_LOGGING`, `HG_ASSERTIONS`, `HG_VK_DEBUG_MESSENGER` explicitly, and default them based on `NDEBUG`. |
 
