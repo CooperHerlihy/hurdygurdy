@@ -1,5 +1,10 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_math.hpp"
+
+namespace hg {
+
 /**
  * A 2D circle
  */
@@ -171,3 +176,6 @@ Maybe<Hit2D> intersectLineCircle(Line2D line, Circle circle);
  * Intersect a line and a rect
  */
 Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect);
+
+} // namespace hg
+

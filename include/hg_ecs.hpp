@@ -1,5 +1,7 @@
 #pragma once
 
+namespace hg {
+
 // /**
 //  * An entity in the ecs
 //  */
@@ -886,4 +888,96 @@
 //  * - cmd The command buffer to record to, must not be nullptr
 //  */
 // void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
+
+// template<typename T, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, T*>
+// void ecsForEachSingle(Ecs* ecs, Fn& fn)
+// {
+//     Entity* e = ecsEntities<T>(ecs);
+//     Entity* end = e + ecsCount<T>(ecs);
+//     T* c = ecsComponents<T>(ecs);
+//     for (; e != end; ++e, ++c)
+//     {
+//         fn(*e, c);
+//     }
+// }
+//
+// template<typename... Ts, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, Ts*...>
+// void ecsForEachMulti(Ecs* ecs, Fn& fn)
+// {
+//     u64 id = ecsFindSmallest<Ts...>(ecs);
+//     Component* system = ecs->components.get(id);
+//     HG_ASSERT(system != nullptr);
+//
+//     Entity* e = system->entities.vals + 1;
+//     Entity* end = e + system->entities.count - 1;
+//     for (; e != end; ++e)
+//     {
+//         if (ecsHasAll<Ts...>(ecs, *e))
+//             fn(*e, ecsGet<Ts>(ecs, *e)...);
+//     }
+// }
+//
+// template<typename... Ts, typename Fn> requires (sizeof...(Ts) != 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
+// void ecsForEach(Ecs* ecs, Fn fn)
+// {
+//     if constexpr (sizeof...(Ts) == 1)
+//     {
+//         ecsForEachSingle<Ts...>(ecs, fn);
+//     } else {
+//         ecsForEachMulti<Ts...>(ecs, fn);
+//     }
+// }
+//
+// template<typename T, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, T*>
+// void ecsForParSingle(Ecs* ecs, Fn& fn)
+// {
+//     struct Capture {
+//         Ecs* ecs;
+//         Fn* fn;
+//     };
+//     Capture capture{ecs, &fn};
+//
+//     forPar(0, ecsCount<T>(ecs), &capture, [](void* pcapture, u64 idx)
+//     {
+//         Capture* capture = static_cast<Capture*>(pcapture);
+//         (*capture->fn)(
+//             ecsEntities<T>(capture->ecs)[idx],
+//             &ecsComponents<T>(capture->ecs)[idx]);
+//     });
+// }
+//
+// template<typename... Ts, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, Ts*...>
+// void ecsForParMulti(Ecs* ecs, Fn& fn)
+// {
+//     Component* system = ecs->components.get(ecsFindSmallest<Ts...>(ecs));
+//     HG_ASSERT(system != nullptr);
+//
+//     struct Capture {
+//         Ecs* ecs;
+//         Component* system;
+//         Fn* fn;
+//     };
+//     Capture capture{ecs, system, &fn};
+//
+//     forPar(1, system->entities.count, &capture, [](void* pcapture, u64 idx)
+//     {
+//         Capture* capture = static_cast<Capture*>(pcapture);
+//         Entity e = capture->system->entities[idx];
+//         if (ecsHasAll<Ts...>(capture->ecs, e))
+//             (*capture->fn)(e, ecsGet<Ts>(capture->ecs, e)...);
+//     });
+// }
+//
+// template<typename... Ts, typename Fn> requires (sizeof...(Ts) > 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
+// void ecsForPar(Ecs* ecs, Fn fn)
+// {
+//     if constexpr (sizeof...(Ts) == 1)
+//     {
+//         ecsForParSingle<Ts...>(ecs, fn);
+//     } else {
+//         ecsForParMulti<Ts...>(ecs, fn);
+//     }
+// }
+
+} // namespace hg
 

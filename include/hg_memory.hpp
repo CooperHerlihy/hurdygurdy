@@ -1,5 +1,9 @@
 #pragma once
 
+#include "hg_types.hpp"
+
+namespace hg {
+
 /**
  * Allocates memory from a general purpose allocator
  *
@@ -292,3 +296,6 @@ struct ArenaScope {
  * - A scratch arena, never nullptr
  */
 ArenaScope getScratch(Arena const* const* conflicts = nullptr, u32 count = 0);
+
+} // namespace hg
+

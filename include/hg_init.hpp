@@ -1,5 +1,12 @@
 #pragma once
 
+#include "hg_types.hpp"
+
+namespace hg {
+
+/**
+ * A scope guard to deinitialize the library when all users are finished
+ */
 struct HurdyGurdy {
     ~HurdyGurdy() noexcept;
     HurdyGurdy() noexcept;
@@ -9,4 +16,10 @@ struct HurdyGurdy {
     HurdyGurdy& operator=(HurdyGurdy&& other) noexcept;
 };
 
+/**
+ * Initialize the HurdyGurdy library
+ */
 Maybe<HurdyGurdy> init();
+
+} // namespace hg
+

@@ -1,5 +1,11 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_containers.hpp"
+#include "hg_assets.hpp"
+
+namespace hg {
+
 /**
  * AudioStream implementation data
  */
@@ -166,3 +172,6 @@ struct AudioPlayer {
      */
     void playSound(const Asset<Sound>& sound, f32 gain = 1.0f);
 };
+
+} // namespace hg
+

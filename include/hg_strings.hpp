@@ -1,5 +1,12 @@
 #pragma once
 
+#include <cstring>
+
+#include "hg_types.hpp"
+#include "hg_memory.hpp"
+
+namespace hg {
+
 /**
  * Compare strings
  */
@@ -280,4 +287,7 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
+
+
+} // namespace hg
 

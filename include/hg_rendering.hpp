@@ -1,5 +1,17 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_concurrency.hpp"
+#include "hg_math.hpp"
+#include "hg_geometry_2d.hpp"
+#include "hg_containers.hpp"
+#include "hg_assets.hpp"
+#include "hg_serialization.hpp"
+#include "hg_gpu.hpp"
+#include "hg_window.hpp"
+
+namespace hg {
+
 /**
  * A texture asset
  */
@@ -604,4 +616,7 @@ void beginImGuiFrame();
  * - cmd The command buffer to record to
  */
 void renderImGui(GpuCmd* cmd);
+
+
+} // namespace hg
 

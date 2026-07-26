@@ -1,5 +1,9 @@
 #pragma once
 
+#include "hg_types.hpp"
+
+namespace hg {
+
 /**
  * A dynamically loaded library
  */
@@ -52,3 +56,6 @@ struct Library {
     Library(const Library&) = delete;
     Library& operator=(const Library&) = delete;
 };
+
+} // namespace hg
+

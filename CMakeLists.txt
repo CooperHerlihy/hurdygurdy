@@ -127,7 +127,6 @@ set(IMGUI_BACKEND_SOURCES
 )
 
 set(CORE_SOURCES
-    src/hurdygurdy.cpp
     src/platform.cpp
     src/core.cpp
     src/concurrency.cpp
@@ -140,7 +139,6 @@ set(CORE_SOURCES
     src/asset_io.cpp
     src/camera.cpp
     src/render2d.cpp
-    src/vulkan_stubs.cpp
     src/dynlib.cpp
 )
 

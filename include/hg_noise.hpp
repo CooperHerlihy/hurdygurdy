@@ -1,5 +1,10 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_math.hpp"
+
+namespace hg {
+
 /**
  * Generate white noise
  */
@@ -79,3 +84,6 @@ u32 rngNext(Rng* rng);
  * Get the next 64 bit random value
  */
 u64 rngNext64(Rng* rng);
+
+} // namespace hg
+

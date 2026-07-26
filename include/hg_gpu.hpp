@@ -1,5 +1,10 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_containers.hpp"
+
+namespace hg {
+
 /**
  * Wait for the GPU to finish work
  */
@@ -1302,3 +1307,6 @@ void gpuSetViewport(GpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near =
  * Set the rendering scissor, should be called after gpuRenderPassBegin
  */
 void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
+
+} // namespace hg
+

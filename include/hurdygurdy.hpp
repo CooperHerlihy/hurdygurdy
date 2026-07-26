@@ -33,47 +33,26 @@
 #include <cstdio>
 #include <cstring>
 
-#include <algorithm>
-#include <atomic>
-#include <bit>
-#include <concepts>
-#include <thread>
-#include <type_traits>
-#include <utility>
+#include "hg_core.hpp"
+#include "hg_types.hpp"
+#include "hg_error.hpp"
+#include "hg_init.hpp"
+#include "hg_utility.hpp"
+#include "hg_memory.hpp"
+#include "hg_concurrency.hpp"
+#include "hg_math.hpp"
+#include "hg_geometry_2d.hpp"
+#include "hg_geometry_3d.hpp"
+#include "hg_noise.hpp"
+#include "hg_strings.hpp"
+#include "hg_containers.hpp"
+#include "hg_assets.hpp"
+#include "hg_serialization.hpp"
+#include "hg_timing.hpp"
+#include "hg_dynlib.hpp"
+#include "hg_gpu.hpp"
+#include "hg_window.hpp"
+#include "hg_audio.hpp"
+#include "hg_rendering.hpp"
+#include "hg_ecs.hpp"
 
-// ============================================================================
-// Contents
-// ============================================================================
-// Include order respects inter-section dependencies. Config and macros must
-// come before all others. Core types must precede error handling and memory.
-// Template method bodies must be last.
-// ============================================================================
-
-namespace hg {
-
-#include "hurdygurdy/config.hpp"
-#include "hurdygurdy/macros.hpp"
-#include "hurdygurdy/core.hpp"
-#include "hurdygurdy/error.hpp"
-#include "hurdygurdy/init.hpp"
-#include "hurdygurdy/utility.hpp"
-#include "hurdygurdy/memory.hpp"
-#include "hurdygurdy/concurrency.hpp"
-#include "hurdygurdy/math.hpp"
-#include "hurdygurdy/geometry_2d.hpp"
-#include "hurdygurdy/geometry_3d.hpp"
-#include "hurdygurdy/noise.hpp"
-#include "hurdygurdy/strings.hpp"
-#include "hurdygurdy/containers.hpp"
-#include "hurdygurdy/asset.hpp"
-#include "hurdygurdy/serialization.hpp"
-#include "hurdygurdy/timing.hpp"
-#include "hurdygurdy/dynlib.hpp"
-#include "hurdygurdy/gpu.hpp"
-#include "hurdygurdy/window.hpp"
-#include "hurdygurdy/audio.hpp"
-#include "hurdygurdy/rendering.hpp"
-#include "hurdygurdy/ecs.hpp"
-#include "hurdygurdy/templates.hpp"
-
-} // namespace hg

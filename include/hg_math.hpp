@@ -1,5 +1,9 @@
 #pragma once
 
+#include "hg_types.hpp"
+
+namespace hg {
+
 /**
  * The value of Pi
  */
@@ -1273,3 +1277,6 @@ Mat4 matOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far
  * - far The far plane of the projection, must be greater than near
  */
 Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far);
+
+} // namespace hg
+

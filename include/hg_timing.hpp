@@ -1,5 +1,10 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_memory.hpp"
+
+namespace hg {
+
 /**
  * A high precision clock for timers and game deltas
  */
@@ -108,3 +113,6 @@ enum PerfScale : u32 {
  * Logs performance statistics to stdout
  */
 void perfLog(StringView title, const PerfStats* stats, PerfScale scale);
+
+} // namespace hg
+

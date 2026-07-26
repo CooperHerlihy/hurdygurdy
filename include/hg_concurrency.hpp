@@ -1,5 +1,14 @@
 #pragma once
 
+#include <atomic>
+#include <thread>
+#include <type_traits>
+#include <utility>
+
+#include "hg_types.hpp"
+
+namespace hg {
+
 /**
  * A spinlock mutex for basic thread synchronization
  */
@@ -185,4 +194,13 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
  * - fn The function to use to iterate, takes the index
  */
 template<typename F> requires std::is_invocable_r_v<void, F, u64>
-void forPar(u64 begin, u64 end, F fn);
+void forPar(u64 begin, u64 end, F fn)
+{
+    forPar(begin, end, &fn, [](void* pfn, u64 idx)
+    {
+        (*static_cast<F*>(pfn))(idx);
+    });
+}
+
+} // namespace hg
+

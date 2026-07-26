@@ -1,6 +1,7 @@
 #include "hurdygurdy.hpp"
 #include "internal.hpp"
 
+#include <algorithm>
 #include <random>
 
 namespace hg {

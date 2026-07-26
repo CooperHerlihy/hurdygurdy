@@ -1,5 +1,10 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_math.hpp"
+
+namespace hg {
+
  /**
 
  * A 3D sphere
@@ -214,3 +219,6 @@ Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri);
  * Intersect a line and a plane
  */
 Maybe<Hit3D> intersectLinePlane(Line3D line, Plane plane);
+
+} // namespace hg
+

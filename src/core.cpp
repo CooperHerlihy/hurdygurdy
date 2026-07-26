@@ -1,4 +1,8 @@
-#include "hurdygurdy.hpp"
+#include "hg_types.hpp"
+#include "hg_init.hpp"
+#include "hg_utility.hpp"
+#include "hg_containers.hpp"
+
 #include "internal.hpp"
 
 namespace hg {
@@ -22,6 +26,7 @@ void logError()
 {
     std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", (int)errorLength, errorData);
 }
+
 static u32 initialized = 0;
 
 Maybe<HurdyGurdy> init()
@@ -84,6 +89,7 @@ HurdyGurdy::~HurdyGurdy() noexcept
         internal::deinitPlatform();
     }
 }
+
 void BinaryView::read(u64 idx, void* dst, u64 len) const
 {
     HG_ASSERT(idx + len <= size);
@@ -119,7 +125,7 @@ Arena::~Arena() noexcept
 
 void* Arena::alloc(u64 size, u64 alignment)
 {
-    u64 newHead = align(static_cast<u64>(head), alignment) + size;
+    u64 newHead = alignUp(static_cast<u64>(head), alignment) + size;
     if (newHead > capacity)
     {
         setError("Arena out of memory");

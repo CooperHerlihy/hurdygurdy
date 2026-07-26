@@ -1,3 +1,5 @@
+#undef HG_NO_LOGGING
+#define HG_LOGGING 1
 #include "hurdygurdy.hpp"
 
 #define TEST(cond) do { \
@@ -102,7 +104,7 @@ int main()
 {
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
-    HG_LOG("Tests begun\n");
+    std::printf("HurdyGurdy: Tests begun\n");
 
     Clock timer{};
 
@@ -1399,23 +1401,23 @@ int main()
 
     // align: already aligned
     {
-        TEST(align(0, 4) == 0);
-        TEST(align(4, 4) == 4);
-        TEST(align(1024, 256) == 1024);
+        TEST(alignUp(0, 4) == 0);
+        TEST(alignUp(4, 4) == 4);
+        TEST(alignUp(1024, 256) == 1024);
     }
 
     // align: needs rounding up
     {
-        TEST(align(1, 4) == 4);
-        TEST(align(3, 4) == 4);
-        TEST(align(5, 4) == 8);
-        TEST(align(1025, 256) == 1280);
+        TEST(alignUp(1, 4) == 4);
+        TEST(alignUp(3, 4) == 4);
+        TEST(alignUp(5, 4) == 8);
+        TEST(alignUp(1025, 256) == 1280);
     }
 
     // align: alignment of 1 (no-op)
     {
-        TEST(align(0, 1) == 0);
-        TEST(align(42, 1) == 42);
+        TEST(alignUp(0, 1) == 0);
+        TEST(alignUp(42, 1) == 42);
     }
 
     // endianReverse16
@@ -9755,6 +9757,6 @@ int main()
 //
 //    HG_WARN("Mesh test : TODO\n");
 
-    HG_LOG("All tests passed in %fms\n", timer.tick() * 1000.0f);
+    std::printf("HurdyGurdy: All tests passed in %fms\n", timer.tick() * 1000.0f);
 }
 

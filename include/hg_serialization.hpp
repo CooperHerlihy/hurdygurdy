@@ -1,5 +1,14 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_memory.hpp"
+#include "hg_math.hpp"
+#include "hg_strings.hpp"
+#include "hg_containers.hpp"
+#include "hg_assets.hpp"
+
+namespace hg {
+
 /**
  * A serialized data node
  */
@@ -102,31 +111,73 @@ void serializeVoid(Serializer* s, Span<void> data);
  * Serialize a value, should be overridden
  */
 template<typename T>
-void serialize(Serializer* s, T* val);
+void serialize(Serializer* s, T* val)
+{
+    serializeVoid(s, {val, sizeof(*val)});
+}
 
 /**
  * Serialize an object conveniently
  */
 template<typename... Ts>
-void serializeObject(Serializer* s, Ts*... vals);
+void serializeObject(Serializer* s, Ts*... vals)
+{
+    serializeBegin(s);
+    (serialize(s, vals), ...);
+    serializeEnd(s);
+}
 
 /**
  * Serialize an array of values
  */
 template<typename T, u64 N>
-void serialize(Serializer* s, T (*arr)[N]);
+void serialize(Serializer* s, T (*arr)[N])
+{
+    serializeBegin(s);
+    for (u64 i = 0; i < N; ++i)
+    {
+        serialize(s, &(*arr)[i]);
+    }
+    serializeEnd(s);
+}
 
 /**
  * Integer serialization
  */
 template<std::integral T>
-void serialize(Serializer* s, T* val);
+void serialize(Serializer* s, T* val)
+{
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->data = static_cast<i64>(*val);
+    }
+    else
+    {
+        HG_ASSERT(s->current->data.is<i64>());
+        *val = static_cast<T>(s->current->data.get<i64>());
+    }
+}
 
 /**
  * Float serialization
  */
 template<std::floating_point T>
-void serialize(Serializer* s, T* val);
+void serialize(Serializer* s, T* val)
+{
+    serializeNodeStart(s);
+
+    if (s->writing)
+    {
+        s->current->data = f64{*val};
+    }
+    else
+    {
+        HG_ASSERT(s->current->data.is<f64>());
+        *val = static_cast<T>(s->current->data.get<f64>());
+    }
+}
 
 /**
  * bool serialization
@@ -186,19 +237,65 @@ void serialize(Serializer* s, Quat* val);
  * Product serialization
  */
 template<typename... Ts>
-void serialize(Serializer* s, Product<Ts...>* product);
+void serialize(Serializer* s, Product<Ts...>* product)
+{
+    if constexpr (sizeof...(Ts) > 0)
+    {
+        [&]<u64... Is>(std::index_sequence<Is...>)
+        {
+            serializeObject(s, &product->template get<Is>()...);
+        }(std::index_sequence_for<Ts...>{});
+    }
+}
 
 /**
  * Sum serialization
  */
 template<typename... Ts>
-void serialize(Serializer* s, Sum<Ts...>* sum);
+void serialize(Serializer* s, Sum<Ts...>* sum)
+{
+    serializeBegin(s);
+    u32 tag = sum->tag;
+    serialize(s, &tag);
+    if (tag < sum->count)
+    {
+        if (!s->writing && tag != sum->tag)
+        {
+            sum->tag = tag;
+            sum->call([&](auto& val) { new (&val) std::remove_cvref_t<decltype(val)>{}; });
+        }
+        sum->call([&](auto& val) { serialize(s, &val); });
+    }
+    else
+    {
+        if (!s->writing)
+            *sum = {};
+    }
+    serializeEnd(s);
+}
 
 /**
  * Maybe serialization
  */
 template<typename T>
-void serialize(Serializer* s, Maybe<T>* maybe);
+void serialize(Serializer* s, Maybe<T>* maybe)
+{
+    serializeBegin(s);
+    bool has = maybe->has;
+    serialize(s, &has);
+    if (has)
+    {
+        if (!s->writing && !maybe->has)
+            *maybe = some<T>();
+        serialize(s, &maybe->val);
+    }
+    else
+    {
+        if (!s->writing)
+            *maybe = {};
+    }
+    serializeEnd(s);
+}
 
 /**
  * String serialization
@@ -216,31 +313,142 @@ void serialize(Serializer* s, Binary* val);
  * UniquePtr serialization
  */
 template<typename T>
-void serialize(Serializer* s, UniquePtr<T>* ptr);
+void serialize(Serializer* s, UniquePtr<T>* ptr)
+{
+    serializeBegin(s);
+    bool has = *ptr != nullptr;
+    serialize(s, &has);
+    if (has)
+    {
+        if (!s->writing)
+            *ptr = makeUnique<T>();
+        serialize(s, ptr->ptr);
+    }
+    serializeEnd(s);
+}
 
 /**
  * Array serialization
  */
 template<typename T>
-void serialize(Serializer* s, Array<T>* arr);
+void serialize(Serializer* s, Array<T>* arr)
+{
+    serializeBegin(s);
+    if (s->writing)
+    {
+        serialize(s, &arr->count);
+        serialize(s, &arr->capacity);
+    }
+    else
+    {
+        u32 count;
+        u32 capacity;
+        serialize(s, &count);
+        serialize(s, &capacity);
+        *arr = Array<T>{count, capacity};
+    }
+    for (u32 i = 0; i < arr->count; ++i)
+    {
+        serialize(s, arr->vals + i);
+    }
+    serializeEnd(s);
+}
 
 /**
  * Set serialization
  */
 template<typename V>
-void serialize(Serializer* s, Set<V>* set);
+void serialize(Serializer* s, Set<V>* set)
+{
+    serializeBegin(s);
+
+    if (s->writing)
+    {
+        serialize(s, &set->capacity);
+        serialize(s, &set->count);
+
+        set->forEach([&](V* val)
+        {
+            serialize(s, val);
+        });
+    }
+    else
+    {
+        u32 capacity;
+        u32 count;
+        serialize(s, &capacity);
+        serialize(s, &count);
+
+        *set = Set<V>{capacity};
+        for (u32 i = 0; i < count; ++i)
+        {
+            V val;
+            serialize(s, &val);
+            set->add(val);
+        }
+    }
+
+    serializeEnd(s);
+}
 
 /**
  * Map serialization
  */
 template<typename K, typename V>
-void serialize(Serializer* s, Map<K, V>* set);
+void serialize(Serializer* s, Map<K, V>* map)
+{
+    serializeBegin(s);
+
+    if (s->writing)
+    {
+        serialize(s, &map->capacity);
+        serialize(s, &map->count);
+
+        map->forEach([&](K* key, V* val)
+        {
+            serializeObject(s, key, val);
+        });
+    }
+    else
+    {
+        u32 capacity;
+        u32 count;
+        serialize(s, &capacity);
+        serialize(s, &count);
+
+        *map = Map<K, V>{capacity};
+        for (u32 i = 0; i < count; ++i)
+        {
+            K key;
+            V val;
+            serializeObject(s, &key, &val);
+            map->add(std::move(key), std::move(val));
+        }
+    }
+
+    serializeEnd(s);
+}
 
 /**
  * Asset serialization
  */
 template<typename T>
-void serialize(Serializer* s, Asset<T>* asset);
+void serialize(Serializer* s, Asset<T>* asset)
+{
+    if (s->writing)
+    {
+        serialize(s, &asset->data->path);
+    }
+    else
+    {
+        String path;
+        serialize(s, &path);
+        if (path != "")
+            *asset = load<T>(path);
+        else
+            *asset = {};
+    }
+}
 
 /**
  * Write serialized data in a binary format
@@ -410,3 +618,6 @@ struct JsonValue : Sum<JsonObject, JsonArray, StringView, f64, bool> {
 StringView writeJson(Arena* arena, const JsonObject& json);
 
 JsonObject readJson(Arena* arena, StringView json);
+
+} // namespace hg
+

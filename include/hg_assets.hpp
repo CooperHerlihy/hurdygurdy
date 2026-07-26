@@ -1,5 +1,11 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_strings.hpp"
+#include "hg_containers.hpp"
+
+namespace hg {
+
 /**
  * The data associated with assets
  */
@@ -44,7 +50,11 @@ inline AssetManager<T> assets{};
  * Load an asset, implemented per asset type, should be blocking
  */
 template<typename T>
-void assetLoadImpl(AssetData<T>* data);
+void assetLoadImpl(AssetData<T>* data)
+{
+    static_cast<void>(data);
+    static_assert(false, "Asset type cannot be loaded without template specialization");
+}
 
 /**
  * An asset reference
@@ -64,12 +74,26 @@ struct Asset {
     /**
      * Create a new asset reference
      */
-    Asset(AssetData<T>* dataVal);
+    Asset(AssetData<T>* dataVal)
+        : data{dataVal}
+    {
+        if (data != nullptr)
+            ++data->refCount;
+    }
 
     /**
      * Destroy the asset reference
      */
-    ~Asset() noexcept;
+    ~Asset() noexcept
+    {
+        if (data != nullptr && --data->refCount == 0)
+        {
+            if (data->path != "")
+                assets<T>.map.remove(data->path);
+
+            assets<T>.pool.free(data);
+        }
+    }
 
     /**
      * Dereference to access asset
@@ -159,19 +183,42 @@ bool operator!=(const Asset<T>& lhs, std::nullptr_t)
  * Create a unique empty asset (does not load)
  */
 template<typename T>
-Asset<T> newAsset();
+Asset<T> newAsset()
+{
+    return assets<T>.pool.alloc();
+}
 
 /**
  * Load an asset (or create a new reference)
  */
 template<typename T>
-Asset<T> load(StringView path);
+Asset<T> load(StringView path)
+{
+    AssetData<T>** asset = assets<T>.map.get(path);
+    if (asset != nullptr)
+        return *asset;
+
+    AssetData<T>* data = assets<T>.pool.alloc();
+
+    data->path = String::create(path);
+    assets<T>.map.add(data->path, data);
+
+    assetLoadImpl(data);
+    return data;
+}
 
 /**
  * Hot reload an asset
  */
 template<typename T>
-void reload(const Asset<T>& asset);
+void reload(const Asset<T>& asset)
+{
+    if (asset.data != nullptr)
+    {
+        *asset = {};
+        assetLoadImpl(asset.data);
+    }
+}
 
 /**
  * Binary asset load implementation
@@ -186,3 +233,6 @@ void assetLoadImpl(AssetData<Binary>* data);
  * - Whether the write succeeded
  */
 bool binaryStore(BinaryView bin, StringView path);
+
+} // namespace hg
+

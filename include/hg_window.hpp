@@ -1,5 +1,11 @@
 #pragma once
 
+#include "hg_types.hpp"
+#include "hg_containers.hpp"
+#include "hg_gpu.hpp"
+
+namespace hg {
+
 /**
  * Processes all events since startup or the last call to process events
  */
@@ -322,3 +328,6 @@ GpuCmd* gpuFrameBegin(Span<Window*> windows);
  * - cmd The command buffer given from beginFrame
  */
 void gpuFrameEnd(GpuCmd* cmd);
+
+} // namespace hg
+
