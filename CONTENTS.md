@@ -3,167 +3,79 @@
 Implementation files use the same order as header files.
 Use `grep` to find specific symbols.
 
-## hurdygurdy.hpp
+## include/hurdygurdy.hpp
+
+Umbrella header. Includes all sub-headers in order.
+
+## include/hurdygurdy/
 
 - Config Macros
-    - platform detection
-    - TODO: cpu feature detection ???
-    - library feature config
+    - config.hpp - platform detection
 - Core Types
-    - i32, u8, f64, etc.
-    - StringView
-    - BinaryView
-    - Span
-    - Product
-    - Sum
-    - Maybe
+    - core.hpp - i32, u8, f64, etc., StringView, BinaryView, Span, Product, Sum, Maybe
 - Error Handling
+    - error.hpp - getError, setError, logError
 - Utility Macros
-    - HG_MACRO_CONCAT
-    - HG_DEFER
-    - HG_LOG
-    - HG_WARN
-    - HG_PANIC
-    - HG_ASSERT
+    - macros.hpp - HG_MACRO_CONCAT, HG_DEFER, HG_LOG, HG_WARN, HG_PANIC, HG_ASSERT
 - Initialization
-    - HurdyGurdy (scope guard)
+    - init.hpp - HurdyGurdy scope guard
 - Core types (Implementations)
 - Utility Functions
+    - utility.hpp - isPowerOf2, align, endianReverse
 - Memory
-    - heap alloc/realloc/free
-    - Arena
-    - ArenaScope
-    - scratch
+    - memory.hpp - heap alloc/realloc/free, Arena, ArenaScope, scratch
 - Concurrency
-    - Spinlock
-    - Fence
-    - thread pool
-    - parallel for
+    - concurrency.hpp - Spinlock, Fence, thread pool, parallel for
 - Math
-    - constants and util functions
-    - Vec2/3/4
-    - Mat2/3/4
-    - Complex
-    - Quat
-    - model view projection matrices
+    - math.hpp - constants and util functions, Vec2/3/4, Mat2/3/4, Complex, Quat, model view projection matrices
 - Geometry 2D
-    - Circle
-    - Rect (aabb)
-    - Ray
-    - Line
+    - geometry_2d.hpp - Circle, Rect, Ray, Line
 - Geometry 3D
-    - Sphere
-    - Box (aabb)
-    - Tri
-    - Plane
-    - Ray
-    - Line
+    - geometry_3d.hpp - Sphere, Box, Tri, Plane, Ray, Line
 - Noise & RNG
-    - white noise
-    - TODO: value noise
-    - TODO: gradient noise
-    - true random
-    - random number generator
+    - noise.hpp - white noise, value noise, perlin noise, true random, Rng
 - Strings
-    - cString
-    - StringBuilder
-    - TODO: format
-    - String (owning)
-    - parsing
-        - TODO: utf8
-        - TODO: split, join, trim, search, replace
+    - strings.hpp - cString, StringBuilder, String, parsing
 - Containers
-    - BinaryBuilder
-    - Binary (owning)
-    - UniquePtr
-    - SharedPtr
-    - Array
-    - ArrayTemp
-    - TODO: ArrayAny (void) ???
-    - Queue
-    - QueueTemp
-    - Set
-    - SetTemp
-    - Map
-    - MapTemp
-    - Pool (allocator)
-    - HandlePool
-- TODO: Algorithms ???
+    - containers.hpp - BinaryBuilder, Binary, UniquePtr, SharedPtr, Array, Queue, Set, Map, Pool, HandlePool
 - Asset System
-    - Asset
-    - Asset Manager
-    - load impl template
-    - unload impl template
-    - TODO: streaming ???
-    - TODO: dependency tracking ???
+    - asset.hpp - Asset, AssetManager, load/unload templates
 - Serialization
-    - Serializer
-    - binary format
-    - TODO: text format
-- TODO: JSON
+    - serialization.hpp - Serializer, binary format, JSON
 - Timing
-    - Clock
-    - Perf
-    - TODO: profiling tools
-- TODO: Filesystem
-    - paths
-    - files
-    - directories
-    - watch
-    - archiving
-    - compression
-- TODO: Networking
+    - timing.hpp - Clock, Perf
 - Dynamic Library
-- TODO: Process
-- TODO: Console
+    - dynlib.hpp - Library
 - GPU
-    - Format enum
-    - GpuBuffer
-    - GpuImage
-    - GpuView
-    - GpuPipeline
-    - GpuCmd (command buffer)
-    - barriers and passes
+    - gpu.hpp - Format enum, GpuBuffer, GpuImage, GpuView, GpuPipeline, GpuCmd, barriers and passes
 - Windowing & Input
-    - state queries
-    - event queue
+    - window.hpp - Button, WindowEvent, Window, gpuFrameBegin/End
 - Audio
-    - AudioStream (primitive)
-    - TODO: recording
-    - Sound (asset)
-    - AudioPlayer (high level)
-        - TODO: effects
-    - TODO: mixing
+    - audio.hpp - AudioStream, Sound, AudioPlayer
 - Rendering
-    - Texture
-    - Mesh
-    - Camera
-    - TODO: render graph
-    - 2D renderer
-        - Layer2D
-        - Sprite2D
-        - Atlas2D
-        - Tilemap2D
-        - TODO: font and text
-    - TODO: 3D renderer ???
-    - TODO: post processing
-        - color grading
-        - tone mapping
-        - antialiasing
-        - SSAO
-        - bloom
-        - depth of field
-    - ImGui
-- TODO: UI
-- TODO: Animation
-- TODO: Physics
-- TODO: Particles
-- TODO: ECS
-    - Entity
-    - Ecs
-    - Node (hierarchy)
-    - Transform
-    - old 3D rendering
+    - rendering.hpp - Texture, Mesh, Camera, 2D renderer (Sprite2D, Atlas2D, Tilemap2D, Layer2D), ImGui
+- ECS (commented out)
+    - ecs.hpp - Entity, Ecs, Node, Transform, old 3D rendering
+- Template Implementations
+    - templates.hpp - out-of-line template bodies
+
+## src/
+
+- core.cpp - error handling, init, Arena, heap alloc, scratch
+- concurrency.cpp - SpinLock, Fence, thread pool, forPar
+- math.cpp - math ops, 2D/3D geometry, noise
+- strings.cpp - StringBuilder, String, parsing
+- containers.cpp - BinaryBuilder, Binary, HandlePool
+- serialization.cpp - Serializer, binary serial
+- timing.cpp - Clock, Perf, sleep
+- audio.cpp - Sound asset loading, AudioPlayer
+- asset_io.cpp - Texture, Mesh, Binary file I/O
+- camera.cpp - Camera create/update
+- render2d.cpp - Renderer 2D init, Atlas, Tilemap, Layer
+- platform.cpp - Vulkan/SDL/platform init, GPU ops, windowing, ImGui
+- vulkan_stubs.cpp - C-linkage Vulkan PFN stubs
+- dynlib.cpp - Library::load/findFunction
+- hurdygurdy.cpp - JSON parser (commented out), ECS (commented out)
 
 ## hurdygurdy.glsl
 

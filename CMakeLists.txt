@@ -129,6 +129,19 @@ set(IMGUI_BACKEND_SOURCES
 set(CORE_SOURCES
     src/hurdygurdy.cpp
     src/platform.cpp
+    src/core.cpp
+    src/concurrency.cpp
+    src/math.cpp
+    src/strings.cpp
+    src/containers.cpp
+    src/serialization.cpp
+    src/timing.cpp
+    src/audio.cpp
+    src/asset_io.cpp
+    src/camera.cpp
+    src/render2d.cpp
+    src/vulkan_stubs.cpp
+    src/dynlib.cpp
 )
 
 set(MISC_VENDOR_SOURCES
