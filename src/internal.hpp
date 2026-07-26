@@ -23,16 +23,6 @@ void deinitPlatform();
 Span<StringView> platformGetVulkanExtensions(Arena* arena);
 
 /**
- * Initialize synchronization and threads
- */
-void initConcurrency();
-
-/**
- * Deinitialize synchronization and threads
- */
-void deinitConcurrency();
-
-/**
  * Initializes the graphics subsystem, loading all global Vulkan resources
  *
  * Returns

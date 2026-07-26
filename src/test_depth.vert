@@ -1,4 +1,4 @@
-#version 460
+#version 450
 
 layout(push_constant) uniform Push {
     float depth;

@@ -522,7 +522,7 @@ float hgPerlin1D(uint seed, float scale, float pos, float tile)
     float t = fract(pos);
     return mix(
         hgNoiseVec1D(seed, pos0) * t,
-        hgNoiseVec1D(seed, pos1) * 1.0 - t,
+        hgNoiseVec1D(seed, pos1) * (t - 1.0),
         hgSmoothQuintic(t));
 }
 
@@ -765,6 +765,6 @@ float hgBlinnPhong(
         ? hgBlinnPhongSpecular(normal, lightDir, viewDir, shininess)
         : 0.0;
     return ambient + diffuse * kdiffuse + specular * kspecular;
-};
+}
 
 #endif

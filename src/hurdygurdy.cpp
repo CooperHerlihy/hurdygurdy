@@ -41,27 +41,23 @@ Maybe<HurdyGurdy> init()
     if (initialized > 0)
         return some<HurdyGurdy>();
 
-    internal::initConcurrency();
-
     if (!internal::initPlatform())
-        goto platformFailed;
+        return {};
 
     if (!internal::initGpu())
-        goto gpuFailed;
+    {
+        internal::deinitPlatform();
+        return {};
+    }
 
     if (!internal::initAudio())
-        goto audioFailed;
+    {
+        internal::deinitGpu();
+        internal::deinitPlatform();
+        return {};
+    }
 
     return some<HurdyGurdy>();
-
-audioFailed:
-    internal::deinitGpu();
-gpuFailed:
-    internal::deinitPlatform();
-platformFailed:
-    internal::deinitConcurrency();
-
-    return {};
 }
 
 HurdyGurdy::HurdyGurdy() noexcept
@@ -98,7 +94,6 @@ HurdyGurdy::~HurdyGurdy() noexcept
         internal::deinitAudio();
         internal::deinitGpu();
         internal::deinitPlatform();
-        internal::deinitConcurrency();
     }
 }
 
@@ -108,10 +103,9 @@ void BinaryView::read(u64 idx, void* dst, u64 len) const
     memcpy(dst, static_cast<const u8*>(data) + idx, len);
 }
 
-void* heapAlloc(u64 size, u64 alignment)
+void* heapAlloc(u64 size, u64 align)
 {
-    static_cast<void>(alignment);
-    void* alloc = malloc(size);
+    void* alloc = align <= 16 ? malloc(size) : aligned_alloc(align, size);
     if (alloc == nullptr)
         HG_PANIC("malloc out of memory");
     return alloc;
@@ -185,105 +179,6 @@ next:
     return scratchArenas.push(Arena{((u64)1 << 28) - 1});
 }
 
-struct ThreadWork {
-    Fence* fence = nullptr;
-    void* data = nullptr;
-    void (*fn)(void*) = nullptr;
-};
-
-struct ThreadPoolState {
-    Array<ThreadWork> work{};
-    Array<std::atomic_bool> hasWork{};
-
-    std::atomic<u32> workCount = 0;
-    std::atomic<u32> tail = 0;
-    std::atomic<u32> workingTail = 0;
-    std::atomic<u32> head = 0;
-    std::atomic<u32> workingHead = 0;
-
-    std::mutex mtx{};
-    std::condition_variable_any cv{};
-    Array<std::jthread> threads{};
-};
-
-static ThreadPoolState threadPool{};
-
-static bool threadPoolExecute()
-{
-    u32 idx = threadPool.workingTail.load();
-    do {
-        if (idx == threadPool.head.load())
-            return false;
-    } while (!threadPool.workingTail.compare_exchange_weak(idx, (idx + 1) & (threadPool.work.count - 1)));
-
-    ThreadWork work = threadPool.work[idx];
-    threadPool.hasWork[idx].store(false);
-
-    u32 t = threadPool.tail.load();
-    while (t != threadPool.head.load() && !threadPool.hasWork[t].load())
-    {
-        u32 next = (t + 1) & (threadPool.work.count - 1);
-        threadPool.tail.compare_exchange_strong(t, next);
-        t = next;
-    }
-
-    --threadPool.workCount;
-
-    HG_ASSERT(work.fn != nullptr);
-    work.fn(work.data);
-
-    if (work.fence != nullptr)
-        work.fence->signal();
-    return true;
-}
-
-void internal::initConcurrency()
-{
-    u32 workCapacity = 4096;
-    threadPool.work = {workCapacity, workCapacity};
-    threadPool.hasWork = {workCapacity, workCapacity};
-    for (std::atomic_bool& hasWork : threadPool.hasWork)
-    {
-        hasWork.store(false);
-    }
-
-    threadPool.workCount.store(0);
-    threadPool.tail.store(0);
-    threadPool.workingTail.store(0);
-    threadPool.head.store(0);
-    threadPool.workingHead.store(0);
-
-    auto threadFn = [](std::stop_token st) {
-        while (!st.stop_requested())
-        {
-            static constexpr u32 spinCount = 128;
-            for (u32 j = 0; j < spinCount; ++j)
-            {
-                if (!threadPoolExecute())
-                    _mm_pause();
-            }
-
-            std::unique_lock lock{threadPool.mtx};
-            threadPool.cv.wait(lock, st, [&] {
-                return threadPool.workCount.load() > 0 || st.stop_requested();
-            });
-        }
-    };
-
-    u32 threadCount = std::max((u32)1, std::thread::hardware_concurrency() - 1);
-    threadPool.threads.reserve(threadCount);
-    for (u32 i = 0; i < threadCount; ++i)
-    {
-        threadPool.threads.push(std::jthread{threadFn});
-    }
-}
-
-void internal::deinitConcurrency()
-{
-    threadPool.~ThreadPoolState();
-    new (&threadPool) ThreadPoolState{};
-}
-
 void SpinLock::acquire()
 {
     bool acquiredLocal = false;
@@ -340,12 +235,111 @@ void Fence::waitIndefinite()
     }
 }
 
+struct ThreadWork {
+    Fence* fence = nullptr;
+    void* data = nullptr;
+    void (*fn)(void*) = nullptr;
+};
+
+struct ThreadPoolState {
+    Array<ThreadWork> work{};
+    Array<std::atomic_bool> hasWork{};
+
+    std::atomic<u32> workCount = 0;
+    std::atomic<u32> tail = 0;
+    std::atomic<u32> workingTail = 0;
+    std::atomic<u32> head = 0;
+    std::atomic<u32> workingHead = 0;
+
+    std::mutex mtx{};
+    std::condition_variable_any cv{};
+    Array<std::jthread> threads{};
+
+    ThreadPoolState() noexcept = default;
+
+    ThreadPoolState(u64 workCapacity, u32 threadCount)
+    {
+        work = {workCapacity, workCapacity};
+        hasWork = {workCapacity, workCapacity};
+        for (std::atomic_bool& hw : hasWork)
+            hw.store(false);
+
+        workCount.store(0);
+        tail.store(0);
+        workingTail.store(0);
+        head.store(0);
+        workingHead.store(0);
+
+        auto threadFn = [this](std::stop_token st) {
+            while (!st.stop_requested())
+            {
+                static constexpr u32 spinCount = 128;
+                for (u32 j = 0; j < spinCount; ++j)
+                {
+                    if (!execute())
+                        _mm_pause();
+                }
+
+                std::unique_lock lock{mtx};
+                cv.wait(lock, st, [&] {
+                    return workCount.load() > 0 || st.stop_requested();
+                });
+            }
+        };
+
+        threads.reserve(threadCount);
+        for (u32 i = 0; i < threadCount; ++i)
+            threads.push(std::jthread{threadFn});
+    }
+
+    ThreadPoolState(ThreadPoolState&&) = delete;
+    ThreadPoolState& operator=(ThreadPoolState&&) = delete;
+    ThreadPoolState(const ThreadPoolState&) = delete;
+    ThreadPoolState& operator=(const ThreadPoolState&) = delete;
+
+    bool execute()
+    {
+        u32 idx = workingTail.load();
+        do {
+            if (idx == head.load())
+                return false;
+        } while (!workingTail.compare_exchange_weak(idx, (idx + 1) & (work.count - 1)));
+
+        ThreadWork w = work[idx];
+        hasWork[idx].store(false);
+
+        u32 t = tail.load();
+        while (t != head.load() && !hasWork[t].load())
+        {
+            u32 next = (t + 1) & (work.count - 1);
+            tail.compare_exchange_strong(t, next);
+            t = next;
+        }
+
+        --workCount;
+
+        HG_ASSERT(w.fn != nullptr);
+        w.fn(w.data);
+
+        if (w.fence != nullptr)
+            w.fence->signal();
+        return true;
+    }
+};
+
+static ThreadPoolState& threadPool()
+{
+    static ThreadPoolState pool{4096, std::max(
+        (u32)1, std::thread::hardware_concurrency() - 1)};
+    return pool;
+}
+
 bool helpThreads(Fence* fence, f64 timeout)
 {
     Clock c{};
     while (!fence->isComplete() && (timeout -= c.tick()) > 0)
     {
-        if (!threadPoolExecute())
+        if (!threadPool().execute())
             _mm_pause();
     }
     return fence->isComplete();
@@ -353,27 +347,29 @@ bool helpThreads(Fence* fence, f64 timeout)
 
 void callPar(Fence* fence, void* data, void (*fn)(void* data))
 {
+    ThreadPoolState& pool = threadPool();
+
     HG_ASSERT(fn != nullptr);
     if (fence != nullptr)
         fence->add();
 
-    u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.work.count - 1);
+    u32 idx = pool.workingHead.fetch_add(1) & (pool.work.count - 1);
 
-    threadPool.work[idx].fence = fence;
-    threadPool.work[idx].data = data;
-    threadPool.work[idx].fn = fn;
-    threadPool.hasWork[idx].store(true);
+    pool.work[idx].fence = fence;
+    pool.work[idx].data = data;
+    pool.work[idx].fn = fn;
+    pool.hasWork[idx].store(true);
 
-    u32 h = threadPool.head.load();
-    while (threadPool.hasWork[h].load())
+    u32 h = pool.head.load();
+    while (pool.hasWork[h].load())
     {
-        u32 next = (h + 1) & (threadPool.work.count - 1);
-        threadPool.head.compare_exchange_strong(h, next);
+        u32 next = (h + 1) & (pool.work.count - 1);
+        pool.head.compare_exchange_strong(h, next);
         h = next;
     }
 
-    ++threadPool.workCount;
-    threadPool.cv.notify_one();
+    ++pool.workCount;
+    pool.cv.notify_one();
 }
 
 void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
@@ -383,7 +379,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
 
     ArenaScope scratch = getScratch();
 
-    u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f64>(end - begin) / (8.0 * static_cast<f64>(threadPool.threads.count))));
+    u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f64>(end - begin) / (8.0 * static_cast<f64>(threadPool().threads.count))));
 
     Fence fence{};
     for (u64 i = begin; i < end; i += chunkSize)

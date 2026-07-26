@@ -1,4 +1,4 @@
-#version 460
+#version 450
 #include "hurdygurdy.glsl"
 
 layout(push_constant) uniform Push {
