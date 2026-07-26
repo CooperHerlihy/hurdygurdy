@@ -1746,7 +1746,7 @@ f32 noiseVec1D(u32 seed, f32 pos)
 
 Vec2 noiseVec2D(u32 seed, Vec2 pos)
 {
-    f32 rot = 2.0f * static_cast<f32>(HG_PI) * noiseNorm2D(seed, pos);
+    f32 rot = 2.0f * pif * noiseNorm2D(seed, pos);
     return Vec2(cosf(rot), sinf(rot));
 }
 

@@ -1705,19 +1705,42 @@ void forPar(u64 begin, u64 end, F fn);
 /**
  * The value of Pi
  */
-#define HG_PI 3.1415926535897932
+static constexpr f64 pi = 3.1415926535897932;
+
+/**
+ * The value of Pi
+ */
+static constexpr f32 pif = static_cast<f32>(pi);
+
 /**
  * The value of Euler's number
  */
-#define HG_EULER 2.7182818284590452
+static constexpr f64 euler = 2.7182818284590452;
+
+/**
+ * The value of Pi
+ */
+static constexpr f32 eulerf = static_cast<f32>(euler);
+
 /**
  * The value of square root 2
  */
-#define HG_ROOT2 1.4142135623730951
+static constexpr f64 root2 = 1.4142135623730951;
+
+/**
+ * The value of Pi
+ */
+static constexpr f32 root2f = static_cast<f32>(root2);
+
 /**
  * The value of square root 3
  */
-#define HG_ROOT3 1.7320508075688772
+static constexpr f64 root3 = 1.7320508075688772;
+
+/**
+ * The value of Pi
+ */
+static constexpr f32 root3f = static_cast<f32>(root3);
 
 /**
  * Returns base to the positive integer exp power
@@ -8279,7 +8302,7 @@ struct Camera {
      */
     void setPerspective(
         f32 aspect,
-        f32 fov = static_cast<f32>(HG_PI) / 2.0f,
+        f32 fov = pif / 2.0f,
         f32 near = 0.01f,
         f32 far = 1000.0f);
 

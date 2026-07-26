@@ -26,7 +26,7 @@ int main()
 
     for (u32 i = 0; i < std::size(musicData); ++i)
     {
-        f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
+        f32 t = static_cast<f32>(i) * pif * 2.0f / 8000.0f;
         musicData[i] = 0;
         for (u32 j = 1; j <= 64; ++j)
         {
@@ -43,7 +43,7 @@ int main()
 
     for (u32 i = 0; i < std::size(soundData); ++i)
     {
-        f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
+        f32 t = static_cast<f32>(i) * pif * 2.0f / 8000.0f;
         soundData[i] = noiseNorm(42u, t) / (t + 0.1f);
     }
 

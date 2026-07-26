@@ -118,7 +118,7 @@ int main()
 //     camera = cameraAdd(ecs, player);
 //
 //     camera->type = CameraType_perspective;
-//     camera->perspective.fov = static_cast<f32>(HG_PI) * 0.5f;
+//     camera->perspective.fov = pif * 0.5f;
 //     camera->perspective.near = 0.01f;
 //     camera->perspective.far = 1000.0f;
 //
@@ -616,7 +616,7 @@ int main()
 //     {
 //
 //         // saw harmonics
-//         f32 t = static_cast<f32>(i) * static_cast<f32>(HG_PI) * 2.0f / 8000.0f;
+//         f32 t = static_cast<f32>(i) * pif * 2.0f / 8000.0f;
 //         audioData[i] = 0;
 //         for (u32 j = 1; j <= 64; ++j)
 //         {
@@ -625,7 +625,7 @@ int main()
 //         }
 //
 //         // // square harmonics
-//         // f32 t = (f32)i * (f32)HG_PI * 2.0f / 8000.0f;
+//         // f32 t = (f32)i * (f32)pi * 2.0f / 8000.0f;
 //         // audioData[i] = 0;
 //         // for (u32 j = 1; j <= 64; ++j)
 //         // {
@@ -652,7 +652,7 @@ int main()
 //     // {
 //     //
 //     //     // // saw harmonics
-//     //     // f32 t = (f32)i * (f32)HG_PI * 2.0f / 8000.0f;
+//     //     // f32 t = (f32)i * (f32)pi * 2.0f / 8000.0f;
 //     //     // audioBase[i] = 0;
 //     //     // for (u32 j = 1; j <= 64; ++j)
 //     //     // {
@@ -661,7 +661,7 @@ int main()
 //     //     // }
 //     //
 //     //     // // square harmonics
-//     //     // f32 t = (f32)i * (f32)HG_PI * 2.0f / 8000.0f;
+//     //     // f32 t = (f32)i * (f32)pi * 2.0f / 8000.0f;
 //     //     // audioBase[i] = 0;
 //     //     // for (u32 j = 1; j <= 64; ++j)
 //     //     // {

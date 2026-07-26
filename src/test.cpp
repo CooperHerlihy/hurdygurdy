@@ -2792,10 +2792,9 @@ int main()
 
         // quatAxisAngle / vecRot3
         {
-            f32 pi = static_cast<f32>(HG_PI);
             Quat id = quatAxisAngle({0, 0, 1}, 0.0f);
             TEST(std::abs(id.r - 1.0f) < FLT_EPSILON);
-            Quat q90 = quatAxisAngle({0, 0, 1}, pi / 2.0f);
+            Quat q90 = quatAxisAngle({0, 0, 1}, pif / 2.0f);
             Vec3 r = vecRot3(q90, {1, 0, 0});
             TEST(std::abs(r.x) < FLT_EPSILON);
             TEST(std::abs(r.y - 1.0f) < FLT_EPSILON);
@@ -2815,7 +2814,7 @@ int main()
 
         // matRot3 consistency with vecRot3
         {
-            Quat q = quatAxisAngle({0, 0, 1}, static_cast<f32>(HG_PI) / 3.0f);
+            Quat q = quatAxisAngle({0, 0, 1}, pif / 3.0f);
             Vec3 v{1, 2, 3};
             Vec3 rv = vecRot3(q, v);
             Vec3 rm = matRot3(q, Mat3{1.0f}) * v;
@@ -7645,7 +7644,7 @@ int main()
 //     {
 //         Mat3 identityMat = Mat3{1.0f};
 //         Vec3 upVec{0.0f, -1.0f, 0.0f};
-//         Quat rotation = quatAxisAngle({0.0f, 0.0f, -1.0f}, -static_cast<f32>(HG_PI) * 0.5f);
+//         Quat rotation = quatAxisAngle({0.0f, 0.0f, -1.0f}, -pif * 0.5f);
 //
 //         Vec3 rotatedVec = vecRot3(rotation, upVec);
 //         Mat3 rotatedMat = matRot3(rotation, identityMat);
