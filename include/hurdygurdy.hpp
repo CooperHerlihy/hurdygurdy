@@ -625,7 +625,7 @@ struct Product<T, Ts...> {
      * Construct as a list
      */
     template<typename... Rest>
-    Product(const T& x, Rest&&... xs)
+    constexpr Product(const T& x, Rest&&... xs)
         : first{x}
         , rest{std::forward<Rest>(xs)...}
     {}
@@ -634,7 +634,7 @@ struct Product<T, Ts...> {
      * Construct as a list by rvalue reference
      */
     template<typename... Rest>
-    Product(T&& x, Rest&&... xs)
+    constexpr Product(T&& x, Rest&&... xs)
         : first{std::move(x)}
         , rest{std::forward<Rest>(xs)...}
     {}
@@ -643,7 +643,7 @@ struct Product<T, Ts...> {
      * Get an element by index
      */
     template<u64 N> requires (N < count)
-    auto& get()
+    constexpr auto& get()
     {
         if constexpr (N == 0)
             return first;
@@ -655,7 +655,7 @@ struct Product<T, Ts...> {
      * Set an element by index
      */
     template<u64 N, typename U> requires (N < count)
-    auto& set(U&& val)
+    constexpr auto& set(U&& val)
     {
         if constexpr (N == 0)
             return first = std::forward<U>(val);
@@ -698,24 +698,24 @@ union SumUntagged<T, Ts...> {
     /**
      * Construct empty
      */
-    SumUntagged() noexcept {}
+    constexpr SumUntagged() noexcept {}
 
     /**
      * Destructor does nothing
      */
-    ~SumUntagged() noexcept {}
+    constexpr ~SumUntagged() noexcept {}
 
     /**
      * Construct an element, base case
      */
-    SumUntagged(const T& val)
+    constexpr SumUntagged(const T& val)
         : first{val}
     {}
 
     /**
      * Construct an element by rvalue reference, base case
      */
-    SumUntagged(T&& val)
+    constexpr SumUntagged(T&& val)
         : first{std::move(val)}
     {}
 
@@ -723,7 +723,7 @@ union SumUntagged<T, Ts...> {
      * Construct an element, expanding recursively
      */
     template<typename U> requires (std::same_as<std::remove_cvref_t<U>, Ts> || ...)
-    SumUntagged(U&& val)
+    constexpr SumUntagged(U&& val)
         : rest{std::forward<U>(val)}
     {}
 
@@ -731,7 +731,7 @@ union SumUntagged<T, Ts...> {
      * Get an element by type
      */
     template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    auto& get()
+    constexpr auto& get()
     {
         if constexpr (std::same_as<U, T>)
             return first;
@@ -743,7 +743,7 @@ union SumUntagged<T, Ts...> {
      * Get an element by type, as const
      */
     template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    const auto& get() const
+    constexpr const auto& get() const
     {
         if constexpr (std::same_as<U, T>)
             return first;
@@ -755,7 +755,7 @@ union SumUntagged<T, Ts...> {
      * Get an element by index
      */
     template<u64 N> requires (N < count)
-    auto& getN()
+    constexpr auto& getN()
     {
         if constexpr (N == 0)
             return first;
@@ -767,7 +767,7 @@ union SumUntagged<T, Ts...> {
      * Get an element by index, as const
      */
     template<u64 N> requires (N < count)
-    const auto& getN() const
+    constexpr const auto& getN() const
     {
         if constexpr (N == 0)
             return first;
@@ -854,7 +854,7 @@ struct Sum<T, Ts...> {
      * Construct an element by type
      */
     template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    Sum(U&& val)
+    constexpr Sum(U&& val)
         : tag{typeIdx<std::remove_cvref_t<U>>}
         , data{std::forward<U>(val)}
     {}
@@ -922,7 +922,7 @@ struct Sum<T, Ts...> {
      * Return whether the type is active
      */
     template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    bool is() const
+    constexpr bool is() const
     {
         return tag == typeIdx<U>;
     }
@@ -931,7 +931,7 @@ struct Sum<T, Ts...> {
      * Returns whether the type at index is active
      */
     template<u64 N> requires (N < count)
-    bool isN() const
+    constexpr bool isN() const
     {
         return tag == N;
     }
@@ -940,7 +940,7 @@ struct Sum<T, Ts...> {
      * Returns the data for the type, assuming it is active
      */
     template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    auto& get()
+    constexpr auto& get()
     {
         HG_ASSERT(tag == typeIdx<U>);
         return data.template get<U>();
@@ -950,7 +950,7 @@ struct Sum<T, Ts...> {
      * Returns the data for the type, assuming it is active, as const
      */
     template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    auto& get() const
+    constexpr auto& get() const
     {
         HG_ASSERT(tag == typeIdx<U>);
         return data.template get<U>();
@@ -960,7 +960,7 @@ struct Sum<T, Ts...> {
      * Returns the data for the index, assuming it is active
      */
     template<u64 N> requires (N < count)
-    auto& getN()
+    constexpr auto& getN()
     {
         HG_ASSERT(tag == N);
         return data.template getN<N>();
@@ -970,7 +970,7 @@ struct Sum<T, Ts...> {
      * Returns the data for the index, assuming it is active, as const
      */
     template<u64 N> requires (N < count)
-    auto& getN() const
+    constexpr auto& getN() const
     {
         HG_ASSERT(tag == N);
         return data.template getN<N>();
@@ -1072,14 +1072,14 @@ struct Maybe
     /**
      * Construct empty
      */
-    Maybe() noexcept
+    constexpr Maybe() noexcept
         : has{false}
     {};
 
     /**
      * Construct by lvalue
      */
-    Maybe(const T& val)
+    constexpr Maybe(const T& val)
         : has{true}
         , val{val}
     {}
@@ -1087,7 +1087,7 @@ struct Maybe
     /**
      * Construct by rvalue
      */
-    Maybe(T&& val)
+    constexpr Maybe(T&& val)
         : has{true}
         , val{std::move(val)}
     {}
@@ -1095,7 +1095,7 @@ struct Maybe
     /**
      * Destroy the value, if it exists
      */
-    ~Maybe() noexcept
+    constexpr ~Maybe() noexcept
     {
         if (has)
             val.~T();
@@ -1104,7 +1104,7 @@ struct Maybe
     /**
      * Dereference
      */
-    T& operator*()
+    constexpr T& operator*()
     {
         HG_ASSERT(has);
         return val;
@@ -1113,7 +1113,7 @@ struct Maybe
     /**
      * Dereference
      */
-    T* operator->()
+    constexpr T* operator->()
     {
         HG_ASSERT(has);
         return &val;
@@ -4258,7 +4258,7 @@ struct Array {
     /**
      * Use range for
      */
-    T* begin()
+    constexpr T* begin()
     {
         return vals;
     }
@@ -4266,7 +4266,7 @@ struct Array {
     /**
      * Use range for
      */
-    T* end()
+    constexpr T* end()
     {
         return vals + count;
     }
@@ -4274,7 +4274,7 @@ struct Array {
     /**
      * Use range for
      */
-    const T* begin() const
+    constexpr const T* begin() const
     {
         return vals;
     }
@@ -4282,7 +4282,7 @@ struct Array {
     /**
      * Use range for
      */
-    const T* end() const
+    constexpr const T* end() const
     {
         return vals + count;
     }
@@ -4444,7 +4444,7 @@ struct ArrayTemp {
     /**
      * Use range for
      */
-    T* begin()
+    constexpr T* begin()
     {
         return vals;
     }
@@ -4452,7 +4452,7 @@ struct ArrayTemp {
     /**
      * Use range for
      */
-    T* end()
+    constexpr T* end()
     {
         return vals + count;
     }
@@ -4460,7 +4460,7 @@ struct ArrayTemp {
     /**
      * Use range for
      */
-    const T* begin() const
+    constexpr const T* begin() const
     {
         return vals;
     }
@@ -4468,7 +4468,7 @@ struct ArrayTemp {
     /**
      * Use range for
      */
-    const T* end() const
+    constexpr const T* end() const
     {
         return vals + count;
     }
