@@ -179,6 +179,9 @@ foreach(tgt test editor minimal)
     target_link_libraries(${tgt} hurdygurdy)
     target_include_directories(${tgt} PRIVATE ${CMAKE_BINARY_DIR})
     target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
+    if(tgt STREQUAL test)
+        target_compile_definitions(${tgt} PRIVATE HG_LOGGING=1)
+    endif()
 endforeach()
 
 install(TARGETS hurdygurdy

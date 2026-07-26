@@ -3986,6 +3986,7 @@ struct UniquePtr {
      */
     T& operator*() const
     {
+        HG_ASSERT(ptr != nullptr);
         return *ptr;
     }
 
@@ -3994,6 +3995,7 @@ struct UniquePtr {
      */
     T* operator->() const
     {
+        HG_ASSERT(ptr != nullptr);
         return ptr;
     }
 
@@ -4016,6 +4018,9 @@ struct UniquePtr {
         }
         return *this;
     }
+
+    UniquePtr(const UniquePtr&) = delete;
+    UniquePtr& operator=(const UniquePtr&) = delete;
 };
 
 /**
@@ -4032,13 +4037,23 @@ UniquePtr<T> makeUnique(Args&&... args);
 template<typename T>
 struct SharedPtr {
     /**
-     * The reference count
+     * The smart pointer data
      */
-    u64* refCount = nullptr;
+    struct Block {
+        /**
+         * The reference count
+         */
+        u64 refCount;
+        /**
+         * The value pointed to
+         */
+        T val;
+    };
+
     /**
-     * The pointer
+     * The data block
      */
-    T* ptr = nullptr;
+    Block* ptr = nullptr;
 
     /**
      * Construct empty
@@ -4065,7 +4080,7 @@ struct SharedPtr {
      */
     operator T*() const
     {
-        return ptr;
+        return ptr ? &ptr->val : nullptr;
     }
 
     /**
@@ -4073,7 +4088,8 @@ struct SharedPtr {
      */
     T& operator*() const
     {
-        return *ptr;
+        HG_ASSERT(ptr != nullptr);
+        return ptr->val;
     }
 
     /**
@@ -4081,7 +4097,8 @@ struct SharedPtr {
      */
     T* operator->() const
     {
-        return ptr;
+        HG_ASSERT(ptr != nullptr);
+        return &ptr->val;
     }
 
     /**
@@ -4089,7 +4106,6 @@ struct SharedPtr {
      */
     SharedPtr(SharedPtr&& other) noexcept
         : ptr{std::exchange(other.ptr, nullptr)}
-        , refCount{std::exchange(other.refCount, nullptr)}
     {}
 
     /**
@@ -4104,6 +4120,9 @@ struct SharedPtr {
         }
         return *this;
     }
+
+    SharedPtr(const SharedPtr&) = delete;
+    SharedPtr& operator=(const SharedPtr&) = delete;
 };
 
 /**
@@ -5562,7 +5581,7 @@ struct Asset {
     }
 
     /**
-     * Dereference to access asset
+     * Dereference underlying
      */
     T* operator->() const
     {
@@ -9704,12 +9723,10 @@ UniquePtr<T> makeUnique(Args&&... args)
 template<typename T>
 SharedPtr<T>::~SharedPtr() noexcept
 {
-    if (refCount != nullptr && --refCount == 0)
+    if (ptr != nullptr && --ptr->refCount == 0)
     {
-        HG_ASSERT(ptr != nullptr);
-        ptr->~T();
-        heapFree(ptr, 1);
-        heapFree(refCount, 1);
+        ptr->val.~T();
+        heapFree(ptr, sizeof(Block));
     }
 }
 
@@ -9717,19 +9734,19 @@ template<typename T>
 SharedPtr<T> SharedPtr<T>::clone() const
 {
     SharedPtr other{};
-    other.refCount = refCount;
     other.ptr = ptr;
-    ++*refCount;
+    ++ptr->refCount;
     return other;
 }
 
 template<typename T, typename... Args>
 SharedPtr<T> makeShared(Args&&... args)
 {
+    using Block = SharedPtr<T>::Block;
+
     SharedPtr<T> ptr{};
-    ptr.refCount = heapAlloc<u64>(1);
-    ptr.ptr = new (heapAlloc<T>(1)) T{std::forward<Args>(args)...};
-    *ptr.refCount = 1;
+    ptr.ptr = new (heapAlloc(sizeof(Block), alignof(Block)))
+        Block{1, std::forward<Args>(args)...};
     return ptr;
 }
 

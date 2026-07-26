@@ -1,5 +1,3 @@
-#undef HG_NO_LOGGING
-#define HG_LOGGING 1
 #include "hurdygurdy.hpp"
 
 #define TEST(cond) do { \
@@ -104,7 +102,7 @@ int main()
 {
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
-    std::printf("HurdyGurdy: Tests begun\n");
+    HG_LOG("Tests begun\n");
 
     Clock timer{};
 
@@ -9757,6 +9755,6 @@ int main()
 //
 //    HG_WARN("Mesh test : TODO\n");
 
-    std::printf("HurdyGurdy: All tests passed in %fms\n", timer.tick() * 1000.0f);
+    HG_LOG("All tests passed in %fms\n", timer.tick() * 1000.0f);
 }
 
