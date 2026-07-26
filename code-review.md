@@ -18,13 +18,6 @@ Review conducted against modern C++20 guidelines, following the project's own co
 
 ## 2. Public API Header (`include/hurdygurdy.hpp`)
 
-### High
-
-| Issue | Location | Detail |
-|-------|----------|--------|
-| **`Sum<T, Ts...>::call` is recursive with no base case** | `hpp:852-862` | The function template `call<N>` recurses up to `count` instantiations and uses runtime `if (N == tag)`. This generates O(N) function instantiations per `call` site. For a sum type with many alternatives, this can bloat code size. C++20 `consteval` dispatch or an array of function pointers would be better. |
-| **`Overload` deduction guide uses C++17 CTAD** | `hpp:800-802` | Fine for C++17, but in C++20 the `Overload` pattern is better expressed as a variadic lambda or a fold expression over `std::invoke`. |
-
 ### Medium
 
 | Issue | Location | Detail |

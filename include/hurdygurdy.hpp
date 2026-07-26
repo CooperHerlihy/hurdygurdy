@@ -862,16 +862,28 @@ struct Sum<T, Ts...> {
     /**
      * Call a function with the current active element
      */
-    template<u64 N = 0, typename F>
+    template<typename F>
     auto call(F&& f)
     {
-        if constexpr (N < count)
+        using R = decltype(f(data.template getN<0>()));
+        using RawF = std::remove_reference_t<F>;
+        using Func = R (*)(Sum*, RawF*);
+
+        return [&]<u64... Is>(std::index_sequence<Is...>)
         {
-            if (N == tag)
-                return f(data.template getN<N>());
-            else
-                return call<N + 1>(std::forward<F>(f));
-        }
+            static constexpr Func table[count + 1] = {
+                +[](Sum* self, RawF* fn) -> R
+                {
+                    return std::forward<F>(*fn)(self->data.template getN<Is>());
+                }...,
+                +[](Sum*, RawF*) -> R
+                {
+                    if constexpr (!std::is_void_v<R>)
+                        HG_PANIC("call on empty Sum");
+                }
+            };
+            return table[tag < count ? tag : count](this, &f);
+        }(std::make_index_sequence<count>{});
     }
 
     /**
@@ -888,11 +900,10 @@ struct Sum<T, Ts...> {
      */
     ~Sum() noexcept
     {
-        if (tag < count)
-            call([](auto& val)
-            {
-                std::destroy_at(&val);
-            });
+        call([](auto& val)
+        {
+            std::destroy_at(&val);
+        });
     }
 
     /**

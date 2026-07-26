@@ -2261,6 +2261,7 @@ Serializer serialWriter(Arena* arena)
     s.root = arena->alloc<SerialNode>(1);
     s.root->parent = nullptr;
     s.root->next = nullptr;
+    new (&s.root->data) SerialData{};
     s.parent = nullptr;
     s.current = nullptr;
     s.writing = true;
@@ -2288,15 +2289,17 @@ void serializeNodeStart(Serializer* s)
             s->current = s->current->next;
             s->current->parent = s->parent;
             s->current->next = nullptr;
+            new (&s->current->data) SerialData{};
         }
         else
         {
             if (s->parent != nullptr)
             {
                 s->current = s->arena->alloc<SerialNode>(1);
-                s->parent->data.get<SerialObject>().firstChild = s->current;
                 s->current->parent = s->parent;
                 s->current->next = nullptr;
+                new (&s->current->data) SerialData{};
+                s->parent->data.get<SerialObject>().firstChild = s->current;
             }
             else
             {
