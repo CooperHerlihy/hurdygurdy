@@ -1,5 +1,5 @@
-#include "hurdygurdy.hpp"
-#include "internal.hpp"
+#include "hg_render2d.hpp"
+#include <cstdio>
 
 namespace hg {
 

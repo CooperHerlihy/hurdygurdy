@@ -66,6 +66,7 @@ set(VulkanHeaders_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/Vulkan-Headers/include)
 set(INCLUDE_DIRS
     ${CMAKE_BINARY_DIR}
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/vendor
     ${CMAKE_SOURCE_DIR}/vendor/imgui
     ${CMAKE_SOURCE_DIR}/vendor/imgui/backends
@@ -126,11 +127,23 @@ set(IMGUI_BACKEND_SOURCES
     ${CMAKE_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_vulkan.cpp
 )
 
+set(VULKAN_SOURCES
+    src/vulkan/vulkan.cpp
+    src/vulkan/loader.cpp
+    src/vulkan/gpu.cpp
+    src/vulkan/window.cpp
+)
+
 set(CORE_SOURCES
     src/platform.cpp
-    src/core.cpp
+    src/error.cpp
+    src/init.cpp
+    src/memory.cpp
     src/concurrency.cpp
     src/math.cpp
+    src/geometry_2d.cpp
+    src/geometry_3d.cpp
+    src/noise.cpp
     src/strings.cpp
     src/containers.cpp
     src/serialization.cpp
@@ -140,6 +153,7 @@ set(CORE_SOURCES
     src/camera.cpp
     src/render2d.cpp
     src/dynlib.cpp
+    ${VULKAN_SOURCES}
 )
 
 set(MISC_VENDOR_SOURCES

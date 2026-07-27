@@ -4,7 +4,7 @@
 #include <utility>
 #include <memory>
 
-#include "hg_core.hpp"
+#include "hg_macros.hpp"
 
 namespace hg {
 

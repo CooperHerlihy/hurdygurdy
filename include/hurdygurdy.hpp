@@ -33,7 +33,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "hg_core.hpp"
+#include "hg_macros.hpp"
 #include "hg_types.hpp"
 #include "hg_error.hpp"
 #include "hg_init.hpp"
@@ -41,8 +41,8 @@
 #include "hg_memory.hpp"
 #include "hg_concurrency.hpp"
 #include "hg_math.hpp"
-#include "hg_geometry_2d.hpp"
-#include "hg_geometry_3d.hpp"
+#include "hg_geometry2d.hpp"
+#include "hg_geometry3d.hpp"
 #include "hg_noise.hpp"
 #include "hg_strings.hpp"
 #include "hg_containers.hpp"
@@ -53,6 +53,7 @@
 #include "hg_gpu.hpp"
 #include "hg_window.hpp"
 #include "hg_audio.hpp"
-#include "hg_rendering.hpp"
+#include "hg_render2d.hpp"
+#include "hg_imgui.hpp"
 #include "hg_ecs.hpp"
 

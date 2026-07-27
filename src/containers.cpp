@@ -1,7 +1,13 @@
-#include "hurdygurdy.hpp"
-#include "internal.hpp"
+#include "hg_containers.hpp"
+#include <cstdio>
 
 namespace hg {
+
+void BinaryView::read(u64 idx, void* dst, u64 len) const
+{
+    HG_ASSERT(idx + len <= size);
+    memcpy(dst, static_cast<const u8*>(data) + idx, len);
+}
 
 void BinaryBuilder::read(u64 idx, void* dst, u64 len)
 {

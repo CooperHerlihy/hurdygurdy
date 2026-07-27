@@ -1,5 +1,9 @@
-#include "hurdygurdy.hpp"
-#include "internal.hpp"
+#include "hg_timing.hpp"
+#include <cstdio>
+#include <ctime>
+#include <thread>
+#include <chrono>
+#include <cmath>
 
 namespace hg {
 

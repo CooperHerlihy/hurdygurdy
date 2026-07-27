@@ -1,5 +1,6 @@
-#include "hurdygurdy.hpp"
-#include "internal.hpp"
+#include "hg_strings.hpp"
+#include <cstdio>
+#include <cstdlib>
 
 namespace hg {
 

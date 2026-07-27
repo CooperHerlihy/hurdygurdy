@@ -1,4 +1,7 @@
-#include "hurdygurdy.hpp"
+#include "hg_dynlib.hpp"
+#include "hg_strings.hpp"
+#include "hg_error.hpp"
+#include "hg_memory.hpp"
 
 namespace hg {
 

@@ -1,5 +1,5 @@
-#include "hurdygurdy.hpp"
-#include "internal.hpp"
+#include "hg_render2d.hpp"
+#include "hg_error.hpp"
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include <cstdio>
