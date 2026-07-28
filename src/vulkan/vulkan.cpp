@@ -1,11 +1,15 @@
-#include "backend.hpp"
+#include "vulkan_backend.hpp"
 
 #include "internal.hpp"
 #include "hg_error.hpp"
 
-#include <cmath>
+#include <SDL3/SDL_vulkan.h>
+
+#include <imgui.h>
+#include <backends/imgui_impl_vulkan.h>
 
 namespace hg {
+using namespace vulkan;
 
 static const char* deviceExtensions[]{
     "VK_KHR_swapchain",
@@ -473,7 +477,7 @@ static u32 vkFormatToSize(VkFormat format)
 
 u32 formatToSize(Format format)
 {
-    return vulkan::vkFormatToSize(vulkan::formatToVk(format));
+    return vkFormatToSize(formatToVk(format));
 }
 
 namespace vulkan {
@@ -903,7 +907,7 @@ bool initGpu()
 {
     ArenaScope scratch = getScratch();
 
-    if (!vulkan::loadVulkan())
+    if (!loadVulkan())
         goto loadFailed;
 
     {
@@ -915,154 +919,494 @@ bool initGpu()
         ++exts.count;
         exts[exts.count - 1] = "VK_EXT_debug_utils";
 #endif
-        vulkan::vk.instance = vulkan::createInstance(exts);
-        if (vulkan::vk.instance == nullptr)
+        vk.instance = createInstance(exts);
+        if (vk.instance == nullptr)
             goto instanceFailed;
     }
-    if (!vulkan::loadVulkanInstanceFuncs(vulkan::vk.instance))
+    if (!loadVulkanInstanceFuncs(vk.instance))
         goto loadInstanceFailed;
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    vulkan::vk.debugMessenger = vulkan::createDebugUtilsMessenger();
-    if (vulkan::vk.debugMessenger == nullptr)
+    vk.debugMessenger = createDebugUtilsMessenger();
+    if (vk.debugMessenger == nullptr)
         goto debugMessengerFailed;
 #endif
 
-    vulkan::vk.physicalDevice = vulkan::findPhysicalDevice();
-    if (vulkan::vk.physicalDevice == nullptr)
+    vk.physicalDevice = findPhysicalDevice();
+    if (vk.physicalDevice == nullptr)
         goto physicalDeviceFailed;
 
-    vulkan::findQueueFamily(vulkan::vk.physicalDevice, &vulkan::vk.queueFamily,
+    findQueueFamily(vk.physicalDevice, &vk.queueFamily,
         VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
-    if (vulkan::vk.queueFamily == (u32)-1)
+    if (vk.queueFamily == (u32)-1)
         goto queueFamilyFailed;
 
-    vulkan::vk.device = vulkan::createDevice();
-    if (vulkan::vk.device == nullptr)
+    vk.device = createDevice();
+    if (vk.device == nullptr)
         goto deviceFailed;
 
-    if (!vulkan::loadVulkanDeviceFuncs(vulkan::vk.device))
+    if (!loadVulkanDeviceFuncs(vk.device))
         goto loadDeviceFailed;
 
-    vkGetDeviceQueue(vulkan::vk.device, vulkan::vk.queueFamily, 0, &vulkan::vk.queue);
-    if (vulkan::vk.queue == nullptr)
+    vkGetDeviceQueue(vk.device, vk.queueFamily, 0, &vk.queue);
+    if (vk.queue == nullptr)
         goto queueFailed;
 
-    vulkan::vk.vma = vulkan::createVma();
-    if (vulkan::vk.vma == nullptr)
+    vk.vma = createVma();
+    if (vk.vma == nullptr)
         goto vmaFailed;
 
     {
         VkCommandPoolCreateInfo cmdPoolInfo{};
         cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        cmdPoolInfo.queueFamilyIndex = vulkan::vk.queueFamily;
+        cmdPoolInfo.queueFamilyIndex = vk.queueFamily;
 
-        [[maybe_unused]]         VkResult result = vkCreateCommandPool(vulkan::vk.device, &cmdPoolInfo, nullptr, &vulkan::vk.cmdPool);
-        if (vulkan::vk.cmdPool == nullptr)
-            HG_PANIC("Could not create Vulkan command pool: %s\n", vulkan::vkResultToStr(result));
+        [[maybe_unused]]         VkResult result = vkCreateCommandPool(vk.device, &cmdPoolInfo, nullptr, &vk.cmdPool);
+        if (vk.cmdPool == nullptr)
+            HG_PANIC("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
     }
 
-    vulkan::vk.bindlessPool = vulkan::createBindlessDescriptorPool();
-    vulkan::vk.bindlessLayout = vulkan::createBindlessDescriptorLayout();
+    vk.bindlessPool = createBindlessDescriptorPool();
+    vk.bindlessLayout = createBindlessDescriptorLayout();
     {
         VkDescriptorSetAllocateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        info.descriptorPool = vulkan::vk.bindlessPool;
+        info.descriptorPool = vk.bindlessPool;
         info.descriptorSetCount = 1;
-        info.pSetLayouts = &vulkan::vk.bindlessLayout;
+        info.pSetLayouts = &vk.bindlessLayout;
 
-        [[maybe_unused]]         VkResult result = vkAllocateDescriptorSets(vulkan::vk.device, &info, &vulkan::vk.bindlessSet);
-        if (vulkan::vk.bindlessSet == nullptr)
-            HG_PANIC("Could not allocate bindless VkDescriptorSet: %s\n", vulkan::vkResultToStr(result));
+        [[maybe_unused]]         VkResult result = vkAllocateDescriptorSets(vk.device, &info, &vk.bindlessSet);
+        if (vk.bindlessSet == nullptr)
+            HG_PANIC("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
     }
 
-    for (u32 i = 0; i < vulkan::DescriptorType_count; ++i)
+    for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vulkan::vk.descriptorPools[i] = handlePoolCreate();
+        vk.descriptorPools[i] = handlePoolCreate();
     }
 
-    vulkan::vk.samplers = Map<vulkan::SamplerInfo, VkSampler>(
+    vk.samplers = Map<SamplerInfo, VkSampler>(
         2 *
         GpuFilter_count *
         GpuSamplerEdgeMode_count *
         GpuSamplerBorder_count);
 
-    vulkan::vk.frameCount = 2;
-    vulkan::vk.currentFrame = 0;
-    vulkan::vk.frames = heapAlloc<vulkan::Frame>(vulkan::vk.frameCount);
-    for (u32 i = 0; i < vulkan::vk.frameCount; ++i)
+    vk.frameCount = 2;
+    vk.currentFrame = 0;
+    vk.frames = heapAlloc<Frame>(vk.frameCount);
+    for (u32 i = 0; i < vk.frameCount; ++i)
     {
-        new (vulkan::vk.frames + i) vulkan::Frame{vulkan::createFrame()};
+        new (vk.frames + i) Frame{createFrame()};
     }
 
     return true;
 
 vmaFailed:
 queueFailed:
-    vkDestroyDevice(vulkan::vk.device, nullptr);
+    vkDestroyDevice(vk.device, nullptr);
 loadDeviceFailed:
 deviceFailed:
 queueFamilyFailed:
 physicalDeviceFailed:
 #ifdef HG_VK_DEBUG_MESSENGER
-    vkDestroyDebugUtilsMessengerEXT(vulkan::vk.instance, vulkan::vk.debugMessenger, nullptr);
+    vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
 debugMessengerFailed:
 #endif
 loadInstanceFailed:
-    vkDestroyInstance(vulkan::vk.instance, nullptr);
+    vkDestroyInstance(vk.instance, nullptr);
 instanceFailed:
-    vulkan::unloadVulkan();
+    unloadVulkan();
 loadFailed:
     return false;
 }
 
 void deinitGpu()
 {
-    for (u32 i = 0; i < vulkan::vk.frameCount; ++i)
+    for (u32 i = 0; i < vk.frameCount; ++i)
     {
-        vkDestroyFence(vulkan::vk.device, vulkan::vk.frames[i].fence, nullptr);
-        vkDestroyCommandPool(vulkan::vk.device, vulkan::vk.frames[i].cmdPool, nullptr);
-        vulkan::vk.frames[i].windows = {};
+        vkDestroyFence(vk.device, vk.frames[i].fence, nullptr);
+        vkDestroyCommandPool(vk.device, vk.frames[i].cmdPool, nullptr);
+        vk.frames[i].swapchains = {};
     }
-    heapFree(vulkan::vk.frames, vulkan::vk.frameCount);
+    heapFree(vk.frames, vk.frameCount);
 
-    vulkan::vk.samplers.forEach([](vulkan::SamplerInfo*, VkSampler* sampler)
+    vk.samplers.forEach([](SamplerInfo*, VkSampler* sampler)
     {
-        vkDestroySampler(vulkan::vk.device, *sampler, nullptr);
+        vkDestroySampler(vk.device, *sampler, nullptr);
     });
-    vulkan::vk.samplers = {};
+    vk.samplers = {};
 
-    for (u32 i = 0; i < vulkan::DescriptorType_count; ++i)
+    for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        handlePoolDestroy(&vulkan::vk.descriptorPools[i]);
+        handlePoolDestroy(&vk.descriptorPools[i]);
     }
 
-    vkDestroyDescriptorSetLayout(vulkan::vk.device, vulkan::vk.bindlessLayout, nullptr);
-    vkDestroyDescriptorPool(vulkan::vk.device, vulkan::vk.bindlessPool, nullptr);
+    vkDestroyDescriptorSetLayout(vk.device, vk.bindlessLayout, nullptr);
+    vkDestroyDescriptorPool(vk.device, vk.bindlessPool, nullptr);
 
-    vkDestroyCommandPool(vulkan::vk.device, vulkan::vk.cmdPool, nullptr);
+    vkDestroyCommandPool(vk.device, vk.cmdPool, nullptr);
 
-    vmaDestroyAllocator(vulkan::vk.vma);
+    vmaDestroyAllocator(vk.vma);
 
-    vkDestroyDevice(vulkan::vk.device, nullptr);
+    vkDestroyDevice(vk.device, nullptr);
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    vkDestroyDebugUtilsMessengerEXT(vulkan::vk.instance, vulkan::vk.debugMessenger, nullptr);
+    vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
 #endif
 
-    vkDestroyInstance(vulkan::vk.instance, nullptr);
+    vkDestroyInstance(vk.instance, nullptr);
 
-    vulkan::unloadVulkan();
+    unloadVulkan();
+}
+
+Swapchain::Swapchain() noexcept = default;
+Swapchain::~Swapchain() noexcept = default;
+Swapchain::Swapchain(Swapchain&& other) noexcept = default;
+Swapchain& Swapchain::operator=(Swapchain&& other) noexcept = default;
+
+u32 Swapchain::width() const
+{
+    return data ? data->width : 0;
+}
+
+u32 Swapchain::height() const
+{
+    return data ? data->height : 0;
+}
+
+Format Swapchain::format() const
+{
+    return data ? data->format : Format_undefined;
+}
+
+GpuView* Swapchain::currentView() const
+{
+    return (data && data->imageIdx < data->images.count)
+        ? &data->views[data->imageIdx]
+        : nullptr;
+}
+
+u32 Swapchain::imageCount() const
+{
+    return data ? static_cast<u32>(data->images.count) : 0;
+}
+
+SwapchainData::~SwapchainData()
+{
+    for (GpuImage& image : images)
+    {
+        image.data->image = nullptr;
+    }
+    for (VkSemaphore semaphore : readyToPresent)
+    {
+        vkDestroySemaphore(vk.device, semaphore, nullptr);
+    }
+    for (VkSemaphore semaphore : imageAvailable)
+    {
+        vkDestroySemaphore(vk.device, semaphore, nullptr);
+    }
+    vkDestroySwapchainKHR(vk.device, swapchain, nullptr);
+    if (surface != nullptr)
+        vkDestroySurfaceKHR(vk.instance, surface, nullptr);
+}
+
+static Format findSwapchainFormat(VkSurfaceKHR surface)
+{
+    HG_ASSERT(surface != nullptr);
+
+    ArenaScope scratch = getScratch();
+
+    u32 formatCount = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(
+        vk.physicalDevice, surface, &formatCount, nullptr);
+    VkSurfaceFormatKHR* formats = scratch.alloc<VkSurfaceFormatKHR>(formatCount);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(
+        vk.physicalDevice, surface, &formatCount, formats);
+
+    for (u32 i = 0; i < formatCount; ++i)
+    {
+        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
+            return Format_r8g8b8a8_srgb;
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
+            return Format_b8g8r8a8_srgb;
+    }
+    HG_PANIC("No supported swapchain formats\n");
+}
+
+static GpuPresentMode findSwapchainPresentMode(
+    VkSurfaceKHR surface,
+    GpuPresentMode desiredMode)
+{
+    HG_ASSERT(surface != nullptr);
+
+    ArenaScope scratch = getScratch();
+
+    if (desiredMode == GpuPresentMode_fifo)
+        return desiredMode;
+
+    u32 modeCount = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(
+        vk.physicalDevice, surface, &modeCount, nullptr);
+    VkPresentModeKHR* presentModes = scratch.alloc<VkPresentModeKHR>(modeCount);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(
+        vk.physicalDevice, surface, &modeCount, presentModes);
+
+    for (u32 i = 0; i < modeCount; ++i)
+    {
+        if (presentModes[i] == presentModeToVk(desiredMode))
+            return desiredMode;
+    }
+    return GpuPresentMode_fifo;
+}
+
+void Swapchain::resize(u32 newWidth, u32 newHeight)
+{
+    HG_ASSERT(data != nullptr);
+
+    ArenaScope scratch = getScratch();
+
+    vkQueueWaitIdle(vk.queue);
+
+    for (u32 i = 0; i < data->images.count; ++i)
+    {
+        if (data->views[i].data != nullptr)
+            vkDestroyImageView(vk.device, data->views[i].data->view, nullptr);
+
+        if (data->readyToPresent[i] != nullptr)
+        {
+            vkDestroySemaphore(vk.device, data->readyToPresent[i], nullptr);
+            data->readyToPresent[i] = nullptr;
+        }
+    }
+
+    for (u32 i = 0; i < vk.frameCount; ++i)
+    {
+        if (data->imageAvailable[i] != nullptr)
+        {
+            vkDestroySemaphore(vk.device, data->imageAvailable[i], nullptr);
+            data->imageAvailable[i] = nullptr;
+        }
+    }
+
+    VkSwapchainKHR oldSwapchain = data->swapchain;
+
+    data->width = newWidth;
+    data->height = newHeight;
+
+    VkSurfaceCapabilitiesKHR capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+        vk.physicalDevice, data->surface, &capabilities);
+
+    if (capabilities.currentExtent.width != (u32)-1)
+        data->width = capabilities.currentExtent.width;
+    if (capabilities.currentExtent.height != (u32)-1)
+        data->height = capabilities.currentExtent.height;
+
+    if (data->width != 0 && data->height != 0)
+    {
+        VkSwapchainCreateInfoKHR swapchainInfo{};
+        swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        swapchainInfo.surface = data->surface;
+        swapchainInfo.minImageCount =
+            std::min(capabilities.minImageCount, capabilities.maxImageCount - 1) + 1;
+        swapchainInfo.imageFormat = formatToVk(data->format);
+        swapchainInfo.imageExtent = {data->width, data->height};
+        swapchainInfo.imageArrayLayers = 1;
+        swapchainInfo.imageUsage = data->imageUsage;
+        swapchainInfo.preTransform = capabilities.currentTransform;
+        swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapchainInfo.presentMode = presentModeToVk(data->presentMode);
+        swapchainInfo.clipped = VK_TRUE;
+        swapchainInfo.oldSwapchain = oldSwapchain;
+
+        [[maybe_unused]]
+        VkResult result = vkCreateSwapchainKHR(
+            vk.device, &swapchainInfo, nullptr, &data->swapchain);
+        if (data->swapchain == nullptr)
+            HG_PANIC("Failed to create swapchain: %s\n",
+                vkResultToStr(result));
+
+        u32 swapImageCount;
+        vkGetSwapchainImagesKHR(
+            vk.device, data->swapchain, &swapImageCount, nullptr);
+
+        if (data->images.count != swapImageCount)
+        {
+            data->images.resize(swapImageCount);
+            data->views.resize(swapImageCount);
+            data->readyToPresent.resize(swapImageCount);
+        }
+
+        VkImage* swapImages = scratch.alloc<VkImage>(swapImageCount);
+        vkGetSwapchainImagesKHR(
+            vk.device, data->swapchain, &swapImageCount, swapImages);
+
+        for (u32 i = 0; i < data->images.count; ++i)
+        {
+            if (data->images[i].data == nullptr)
+                data->images[i].data = makeUnique<GpuImageData>();
+            data->images[i].data->image = swapImages[i];
+            data->images[i].data->dimensions = 2;
+            data->images[i].data->format = data->format;
+            data->images[i].data->width = data->width;
+            data->images[i].data->height = data->height;
+            data->images[i].data->depth = 1;
+            data->images[i].data->mipLevels = 1;
+            data->images[i].data->arrayLayers = 1;
+            data->images[i].data->msaaSamples = 1;
+
+            VkImageViewCreateInfo viewInfo{};
+            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            viewInfo.image = swapImages[i];
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.format = formatToVk(data->format);
+            viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+            if (data->views[i].data == nullptr)
+                data->views[i].data = makeUnique<GpuViewData>();
+
+            [[maybe_unused]]
+            VkResult viewResult = vkCreateImageView(
+                vk.device, &viewInfo, nullptr, &data->views[i].data->view);
+            if (data->views[i].data->view == nullptr)
+                HG_PANIC("Could not create VkImageView: %s\n",
+                    vkResultToStr(viewResult));
+
+            data->views[i].data->image = data->images[i].data;
+            data->views[i].data->type = GpuViewType_2D;
+            data->views[i].data->aspectFlags = GpuAspect_color;
+            data->views[i].data->baseMipLevel = 0;
+            data->views[i].data->levelCount = 1;
+            data->views[i].data->baseArrayLayer = 0;
+            data->views[i].data->layerCount = 1;
+
+            VkSemaphoreCreateInfo semaphoreInfo{};
+            semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+            [[maybe_unused]]
+            VkResult readyResult = vkCreateSemaphore(
+                vk.device, &semaphoreInfo, nullptr, &data->readyToPresent[i]);
+            if (data->readyToPresent[i] == nullptr)
+                HG_PANIC("Could not create VkSemaphore: %s\n",
+                    vkResultToStr(readyResult));
+        }
+
+        for (u32 i = 0; i < vk.frameCount; ++i)
+        {
+            VkSemaphoreCreateInfo semaphoreInfo{};
+            semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+            [[maybe_unused]]
+            VkResult availableResult = vkCreateSemaphore(
+                vk.device, &semaphoreInfo, nullptr, &data->imageAvailable[i]);
+            if (data->imageAvailable[i] == nullptr)
+                HG_PANIC("Could not create VkSemaphore: %s\n",
+                    vkResultToStr(availableResult));
+        }
+    }
+    else
+    {
+        data->swapchain = nullptr;
+    }
+
+    data->imageIdx = (u32)-1;
+
+    vkDestroySwapchainKHR(vk.device, oldSwapchain, nullptr);
+}
+
+Swapchain Swapchain::create(
+    void* platformWindow,
+    u32 width,
+    u32 height,
+    GpuPresentMode preferredPresentMode,
+    GpuImageUsageFlags imageUsage)
+{
+    VkSurfaceKHR surface;
+    if (!SDL_Vulkan_CreateSurface((SDL_Window*)platformWindow, vk.instance, nullptr, &surface))
+    {
+        setError(SDL_GetError());
+        return {};
+    }
+
+    Swapchain swap;
+    swap.data = makeUnique<SwapchainData>();
+    swap.data->surface = surface;
+    swap.data->format = findSwapchainFormat(surface);
+    swap.data->presentMode = findSwapchainPresentMode(surface, preferredPresentMode);
+    swap.data->imageUsage = imageUsage;
+    swap.data->imageAvailable = Array<VkSemaphore>{
+        vk.frameCount, vk.frameCount};
+
+    for (u32 i = 0; i < vk.frameCount; ++i)
+    {
+        swap.data->imageAvailable[i] = nullptr;
+    }
+
+    swap.resize(width, height);
+    return swap;
+}
+
+void initImGuiGpu(
+    const Swapchain& swap,
+    Format colorFormat,
+    Format depthFormat,
+    Format stencilFormat)
+{
+    HG_ASSERT(colorFormat != Format_undefined);
+
+    ArenaScope scratch = getScratch();
+
+    VkFormat colorVkFormat = formatToVk(colorFormat);
+    VkFormat depthVkFormat = formatToVk(depthFormat);
+    VkFormat stencilVkFormat = formatToVk(stencilFormat);
+
+    ImGui_ImplVulkan_InitInfo imguiInfo{};
+    imguiInfo.Instance = vk.instance;
+    imguiInfo.PhysicalDevice = vk.physicalDevice;
+    imguiInfo.Device = vk.device;
+    imguiInfo.QueueFamily = vk.queueFamily;
+    imguiInfo.Queue = vk.queue;
+    imguiInfo.DescriptorPoolSize = 1000;
+    imguiInfo.MinImageCount = swap.imageCount();
+    imguiInfo.ImageCount = swap.imageCount();
+    imguiInfo.MinAllocationSize = 1 << 20;
+    imguiInfo.UseDynamicRendering = true;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType
+        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &colorVkFormat;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = depthVkFormat;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = stencilVkFormat;
+
+    ImGui_ImplVulkan_Init(&imguiInfo);
+}
+
+void deinitImGuiGpu()
+{
+    ImGui_ImplVulkan_Shutdown();
+}
+
+void beginImGuiFrameGpu()
+{
+    ImGui_ImplVulkan_NewFrame();
 }
 
 } // namespace internal
 
-u32 getMaxMipmaps(u32 width, u32 height, u32 depth)
+void* createImGuiTexture(const GpuView& view, GpuLayout layout)
 {
-    u32 max = width > height ? width : height;
-    max = max > depth ? max : depth;
-    return max == 0 ? 0 : static_cast<u32>(std::log2(static_cast<f32>(max))) + 1;
+    return ImGui_ImplVulkan_AddTexture(view.data->sampler, view.data->view, gpuLayoutToVk(layout));
+}
+
+void destroyImGuiTexture(void* texture)
+{
+    ImGui_ImplVulkan_RemoveTexture(static_cast<VkDescriptorSet>(texture));
+}
+
+void renderImGui(GpuCmd* cmd)
+{
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), reinterpret_cast<VkCommandBuffer>(cmd));
 }
 
 } // namespace hg

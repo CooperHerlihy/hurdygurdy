@@ -1,7 +1,14 @@
-#include "backend.hpp"
+#include "vulkan_backend.hpp"
+
+#include <cmath>
 
 namespace hg {
 using namespace vulkan;
+
+void gpuWaitIdle()
+{
+    vkQueueWaitIdle(vk.queue);
+}
 
 GpuBuffer GpuBuffer::create(u64 size, GpuBufferUsageFlags usageFlags, GpuMemoryUsage memoryUsage)
 {
@@ -690,6 +697,13 @@ void GpuView::genMipmaps()
     data->lastStage = GpuStage_transfer;
     data->lastAccess = GpuAccess_transferRead;
     data->lastLayout = GpuLayout_transferSrc;
+}
+
+u32 getMaxMipmaps(u32 width, u32 height, u32 depth)
+{
+    u32 max = width > height ? width : height;
+    max = max > depth ? max : depth;
+    return max == 0 ? 0 : static_cast<u32>(std::log2(static_cast<f32>(max))) + 1;
 }
 
 static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
@@ -1468,9 +1482,125 @@ void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
     vkCmdSetScissor(reinterpret_cast<VkCommandBuffer>(cmd), 0, 1, &scissor);
 }
 
-void gpuWaitIdle()
+GpuCmd* gpuFrameBegin(Span<Window*> windows)
 {
-    vkQueueWaitIdle(vk.queue);
+    Frame* frame = &vk.frames[vk.currentFrame];
+
+    vkWaitForFences(vk.device, 1, &frame->fence, VK_TRUE, UINT64_MAX);
+    vkResetFences(vk.device, 1, &frame->fence);
+
+    frame->swapchains.reset();
+    for (u32 i = 0; i < windows.count; ++i)
+    {
+        internal::Swapchain& swap = *reinterpret_cast<internal::Swapchain*>(windows[i]->data.ptr);
+        if (swap.data->swapchain == nullptr)
+            continue;
+
+        VkResult result = vkAcquireNextImageKHR(
+            vk.device,
+            swap.data->swapchain,
+            UINT64_MAX,
+            swap.data->imageAvailable[vk.currentFrame],
+            nullptr,
+            &swap.data->imageIdx);
+
+        if (result == VK_SUCCESS)
+        {
+            frame->swapchains.push(&swap);
+        }
+        else if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+        {
+            swap.resize(swap.data->width, swap.data->height);
+            swap.data->imageIdx = (u32)-1;
+        }
+        else
+        {
+            HG_PANIC("Could not acquire next image: %s\n", vkResultToStr(result));
+        }
+    }
+
+    vkResetCommandPool(vk.device, frame->cmdPool, 0);
+
+    VkCommandBufferAllocateInfo cmdInfo{};
+    cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdInfo.commandPool = frame->cmdPool;
+    cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdInfo.commandBufferCount = 1;
+
+    VkCommandBuffer cmd = nullptr;
+    vkAllocateCommandBuffers(vk.device, &cmdInfo, &cmd);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(cmd, &beginInfo);
+    return reinterpret_cast<GpuCmd*>(cmd);
+}
+
+void gpuFrameEnd(GpuCmd* cmd)
+{
+    HG_ASSERT(cmd != nullptr);
+
+    ArenaScope scratch = getScratch();
+
+    Frame* frame = &vk.frames[vk.currentFrame];
+
+    ArrayTemp<GpuImageBarrier> presentBarriers = ArrayTemp<GpuImageBarrier>{
+        scratch, 0, frame->swapchains.count};
+    for (internal::Swapchain* swap : frame->swapchains)
+    {
+        GpuImageBarrier* barrier = presentBarriers.push();
+        barrier->image = &swap->data->views[swap->data->imageIdx];
+        barrier->nextLayout = GpuLayout_presentSrc;
+    }
+    gpuMemoryBarrier(cmd, {}, presentBarriers);
+
+    vkEndCommandBuffer(reinterpret_cast<VkCommandBuffer>(cmd));
+
+    ArrayTemp<VkPipelineStageFlags> waitStages{scratch, 0, frame->swapchains.count};
+    ArrayTemp<VkSemaphore> imageAvailableSemaphores{scratch, 0, frame->swapchains.count};
+    ArrayTemp<VkSemaphore> readyToPresentSemaphores{scratch, 0, frame->swapchains.count};
+
+    ArrayTemp<VkSwapchainKHR> swapchains{scratch, 0, frame->swapchains.count};
+    ArrayTemp<u32> imageIndices{scratch, 0, frame->swapchains.count};
+
+    for (internal::Swapchain* swap : frame->swapchains)
+    {
+        waitStages.push(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+        imageAvailableSemaphores.push(swap->data->imageAvailable[vk.currentFrame]);
+        readyToPresentSemaphores.push(swap->data->readyToPresent[swap->data->imageIdx]);
+        swapchains.push(swap->data->swapchain);
+        imageIndices.push(swap->data->imageIdx);
+        swap->data->imageIdx = (u32)-1;
+    }
+
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.waitSemaphoreCount = static_cast<u32>(imageAvailableSemaphores.count);
+    submit.pWaitSemaphores = imageAvailableSemaphores.vals;
+    submit.pWaitDstStageMask = waitStages.vals;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = reinterpret_cast<VkCommandBuffer*>(&cmd);
+    submit.signalSemaphoreCount = static_cast<u32>(readyToPresentSemaphores.count);
+    submit.pSignalSemaphores = readyToPresentSemaphores.vals;
+
+    vkQueueSubmit(vk.queue, 1, &submit, frame->fence);
+
+    if (frame->swapchains.count > 0)
+    {
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = static_cast<u32>(readyToPresentSemaphores.count);
+        presentInfo.pWaitSemaphores = readyToPresentSemaphores.vals;
+        presentInfo.swapchainCount = static_cast<u32>(swapchains.count);
+        presentInfo.pSwapchains = swapchains.vals;
+        presentInfo.pImageIndices = imageIndices.vals;
+
+        vkQueuePresentKHR(vk.queue, &presentInfo);
+    }
+
+    vk.currentFrame = (vk.currentFrame + 1) % vk.frameCount;
 }
 
 } // namespace hg

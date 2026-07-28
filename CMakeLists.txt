@@ -128,10 +128,9 @@ set(IMGUI_BACKEND_SOURCES
 )
 
 set(VULKAN_SOURCES
-    src/vulkan/vulkan.cpp
     src/vulkan/loader.cpp
+    src/vulkan/vulkan.cpp
     src/vulkan/gpu.cpp
-    src/vulkan/window.cpp
 )
 
 set(CORE_SOURCES
@@ -153,6 +152,8 @@ set(CORE_SOURCES
     src/camera.cpp
     src/render2d.cpp
     src/dynlib.cpp
+    src/imgui.cpp
+    src/sdl/window.cpp
     ${VULKAN_SOURCES}
 )
 

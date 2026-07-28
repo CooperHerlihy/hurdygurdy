@@ -2,45 +2,66 @@
 
 #include "hg_types.hpp"
 #include "hg_memory.hpp"
+#include "hg_gpu.hpp"
+#include "hg_window.hpp"
+#include "hg_containers.hpp"
 
 namespace hg {
 
 namespace internal {
 
-/**
- * Initialize for the platform
- */
 bool initPlatform();
-
-/**
- * Deinitialize for the platform
- */
 void deinitPlatform();
 
-/**
- * Get Vulkan extensions for the platform
- */
 Span<StringView> platformGetVulkanExtensions(Arena* arena);
-
-/**
- * Initialize the gpu
- */
 bool initGpu();
-
-/**
- * Deinitialize the gpu
- */
 void deinitGpu();
 
-/**
- * Initialize audio
- */
 bool initAudio();
-
-/**
- * Deinitialize audio
- */
 void deinitAudio();
+
+struct SwapchainData;
+
+struct Swapchain {
+    UniquePtr<SwapchainData> data = nullptr;
+
+    Swapchain() noexcept;
+    ~Swapchain() noexcept;
+
+    u32 width() const;
+    u32 height() const;
+    Format format() const;
+    GpuView* currentView() const;
+    u32 imageCount() const;
+
+    static Swapchain create(
+        void* platformWindow,
+        u32 width,
+        u32 height,
+        GpuPresentMode presentMode,
+        GpuImageUsageFlags imageUsage);
+
+    void resize(u32 width, u32 height);
+
+    Swapchain(Swapchain&& other) noexcept;
+    Swapchain& operator=(Swapchain&& other) noexcept;
+
+    Swapchain(const Swapchain&) = delete;
+    Swapchain& operator=(const Swapchain&) = delete;
+};
+
+void initImGuiWindow(const Window& window);
+void initImGuiGpu(
+    const Swapchain& swap,
+    Format colorFormat,
+    Format depthFormat = Format_undefined,
+    Format stencilFormat = Format_undefined);
+
+void deinitImGuiWindow();
+void deinitImGuiGpu();
+
+void beginImGuiFrameWindow();
+void beginImGuiFrameGpu();
 
 } // namespace internal
 

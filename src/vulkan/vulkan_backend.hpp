@@ -1,18 +1,11 @@
 #pragma once
 
 #include "hg_containers.hpp"
-#include "hg_dynlib.hpp"
 #include "hg_gpu.hpp"
-#include "hg_window.hpp"
+#include "internal.hpp"
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
-
-#include "SDL3/SDL.h"
-#include <SDL3/SDL_vulkan.h>
-
-// Data struct definitions in hg namespace (match forward decls in public headers)
-// Vulkan-specific helpers/internals in hg::vulkan namespace
 
 namespace hg {
 
@@ -184,6 +177,57 @@ struct GpuPipelineData
     GpuPipelineData& operator=(const GpuPipelineData&) = delete;
 };
 
+namespace internal {
+
+struct SwapchainData
+{
+    VkSurfaceKHR surface = nullptr;
+    VkSwapchainKHR swapchain = nullptr;
+    Array<GpuImage> images{};
+    Array<GpuView> views{};
+    Array<VkSemaphore> imageAvailable{};
+    Array<VkSemaphore> readyToPresent{};
+    u32 imageIdx = (u32)-1;
+    u32 width = 0;
+    u32 height = 0;
+    Format format = Format_undefined;
+    GpuImageUsageFlags imageUsage = {};
+    GpuPresentMode presentMode = {};
+
+    SwapchainData() = default;
+    ~SwapchainData();
+
+    SwapchainData(SwapchainData&& other) noexcept
+        : surface{std::exchange(other.surface, nullptr)}
+        , swapchain{std::exchange(other.swapchain, nullptr)}
+        , images{std::exchange(other.images, {})}
+        , views{std::exchange(other.views, {})}
+        , imageAvailable{std::exchange(other.imageAvailable, {})}
+        , readyToPresent{std::exchange(other.readyToPresent, {})}
+        , imageIdx{std::exchange(other.imageIdx, (u32)-1)}
+        , width{std::exchange(other.width, 0)}
+        , height{std::exchange(other.height, 0)}
+        , format{std::exchange(other.format, Format_undefined)}
+        , imageUsage{std::exchange(other.imageUsage, {})}
+        , presentMode{std::exchange(other.presentMode, {})}
+    {}
+
+    SwapchainData& operator=(SwapchainData&& other) noexcept
+    {
+        if (this != &other)
+        {
+            this->~SwapchainData();
+            new (this) SwapchainData{std::move(other)};
+        }
+        return *this;
+    }
+
+    SwapchainData(const SwapchainData&) = delete;
+    SwapchainData& operator=(const SwapchainData&) = delete;
+};
+
+} // namespace internal
+
 namespace vulkan {
 
 enum DescriptorType : u32
@@ -211,7 +255,7 @@ constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
 
 struct Frame
 {
-    Array<WindowData*> windows = {};
+    Array<internal::Swapchain*> swapchains = {};
     VkCommandPool cmdPool = nullptr;
     VkFence fence = nullptr;
 };
@@ -436,8 +480,6 @@ inline GpuViewType imageDimensionsToHgView(u32 dimensions)
             HG_PANIC("Invalid image dimensions: %d\n", dimensions);
     }
 }
-
-// Non-inline declarations (implemented in .cpp files)
 
 const char* vkResultToStr(VkResult result);
 
