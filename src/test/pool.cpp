@@ -77,59 +77,54 @@ void testPool()
 
     // handlePoolCreate returns a valid pool with handle 0 reserved (null handle)
     {
-        HandlePool pool = handlePoolCreate();
-        HG_DEFER(handlePoolDestroy(&pool));
-        TEST(handleNull.id == 0);
+        HandlePool pool = HandlePool::create();
+        TEST(nullHandle.id == 0);
         TEST(pool.handles.count == 1);
     }
 
     // handlePoolAlloc returns sequential handles
     {
-        HandlePool pool = handlePoolCreate();
-        HG_DEFER(handlePoolDestroy(&pool));
-        Handle a = handlePoolAlloc(&pool);
-        Handle b = handlePoolAlloc(&pool);
-        TEST(handlePoolAlive(&pool, a));
-        TEST(handlePoolAlive(&pool, b));
-        TEST(handleIdx(a) == 1);
-        TEST(handleIdx(b) == 2);
+        HandlePool pool = HandlePool::create();
+        Handle a = pool.alloc();
+        Handle b = pool.alloc();
+        TEST(pool.alive(a));
+        TEST(pool.alive(b));
+        TEST(a.idx() == 1);
+        TEST(b.idx() == 2);
     }
 
     // handlePoolFree invalidates handle
     {
-        HandlePool pool = handlePoolCreate();
-        HG_DEFER(handlePoolDestroy(&pool));
-        Handle a = handlePoolAlloc(&pool);
-        TEST(handlePoolAlive(&pool, a));
-        handlePoolFree(&pool, a);
-        TEST(!handlePoolAlive(&pool, a));
+        HandlePool pool = HandlePool::create();
+        Handle a = pool.alloc();
+        TEST(pool.alive(a));
+        pool.free(a);
+        TEST(!pool.alive(a));
     }
 
     // Freed handle is reused with incremented generation
     {
-        HandlePool pool = handlePoolCreate();
-        HG_DEFER(handlePoolDestroy(&pool));
-        Handle a = handlePoolAlloc(&pool);
-        u32 idx = handleIdx(a);
-        handlePoolFree(&pool, a);
-        Handle b = handlePoolAlloc(&pool);
-        TEST(handleIdx(b) == idx);
+        HandlePool pool = HandlePool::create();
+        Handle a = pool.alloc();
+        u32 idx = a.idx();
+        pool.free(a);
+        Handle b = pool.alloc();
+        TEST(b.idx() == idx);
         TEST(b.id != a.id);
-        TEST(handlePoolAlive(&pool, b));
-        TEST(!handlePoolAlive(&pool, a));
+        TEST(pool.alive(b));
+        TEST(!pool.alive(a));
     }
 
     // handlePoolReset invalidates all handles
     {
-        HandlePool pool = handlePoolCreate();
-        HG_DEFER(handlePoolDestroy(&pool));
-        Handle a = handlePoolAlloc(&pool);
-        Handle b = handlePoolAlloc(&pool);
-        handlePoolReset(&pool);
-        TEST(!handlePoolAlive(&pool, a));
-        TEST(!handlePoolAlive(&pool, b));
-        Handle c = handlePoolAlloc(&pool);
-        TEST(handleIdx(c) == 1);
+        HandlePool pool = HandlePool::create();
+        Handle a = pool.alloc();
+        Handle b = pool.alloc();
+        pool.reset();
+        TEST(!pool.alive(a));
+        TEST(!pool.alive(b));
+        Handle c = pool.alloc();
+        TEST(c.idx() == 1);
     }
 }
 

@@ -2,67 +2,49 @@
 
 namespace hg {
 
-HandlePool handlePoolCreate()
+HandlePool HandlePool::create()
 {
     HandlePool handles{};
     handles.handles = Array<Handle>{0, 1024};
     handles.freed = Array<Handle>{0, 1024};
-
-    handlePoolAlloc(&handles);
-
+    handles.alloc();
     return handles;
 }
 
-void handlePoolDestroy(HandlePool* pool)
+void HandlePool::reset()
 {
-    HG_ASSERT(pool != nullptr);
-
-    pool->handles = {};
-    pool->freed = {};
+    handles.count = 0;
+    freed.count = 0;
+    alloc();
 }
 
-void handlePoolReset(HandlePool* pool)
+Handle HandlePool::alloc()
 {
-    HG_ASSERT(pool != nullptr);
-
-    pool->handles.count = 0;
-    pool->freed.count = 0;
-
-    handlePoolAlloc(pool);
-}
-
-Handle handlePoolAlloc(HandlePool* pool)
-{
-    HG_ASSERT(pool != nullptr);
-
-    if (pool->freed.count > 0)
+    if (freed.count > 0)
     {
-        Handle handle = pool->freed.pop();
-        pool->handles[handleIdx(handle)] = handle;
+        Handle handle = freed.pop();
+        handles[handle.idx()] = handle;
         return handle;
     }
     else
     {
-        Handle handle = {static_cast<u32>(pool->handles.count)};
-        pool->handles.push(handle);
+        Handle handle = {static_cast<u32>(handles.count)};
+        handles.push(handle);
         return handle;
     }
 }
 
-bool handlePoolAlive(HandlePool* pool, Handle handle)
+bool HandlePool::alive(Handle handle)
 {
-    HG_ASSERT(pool != nullptr);
-
-    u32 idx = handleIdx(handle);
-    return handle != handleNull && idx < pool->handles.count && pool->handles[idx] == handle;
+    u32 idx = handle.idx();
+    return handle != nullHandle && idx < handles.count && handles[idx] == handle;
 }
 
-void handlePoolFree(HandlePool* pool, Handle handle)
+void HandlePool::free(Handle handle)
 {
-    HG_ASSERT(pool != nullptr);
-    HG_ASSERT(handlePoolAlive(pool, handle));
-    pool->handles[handleIdx(handle)] = handleNull;
-    pool->freed.push(handleNextGeneration(handle));
+    HG_ASSERT(alive(handle));
+    handles[handle.idx()] = nullHandle;
+    freed.push(handle.nextGeneration());
 }
 
 } // namespace hg

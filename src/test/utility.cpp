@@ -2,7 +2,17 @@
 
 void testUtils()
 {
-    // isPowerOf2: powers of two
+    // ============================================================================
+    // Utility
+    // ============================================================================
+    //
+    // Utility functions: isPowerOf2, alignUp, endianReverse16/32/64.
+
+    // ------------------------------------------------------------------
+    // isPowerOf2
+    // ------------------------------------------------------------------
+
+    // Powers of two
     {
         TEST(isPowerOf2(1));
         TEST(isPowerOf2(2));
@@ -11,7 +21,7 @@ void testUtils()
         TEST(isPowerOf2(0x80000000ull));
     }
 
-    // isPowerOf2: not powers of two
+    // Not powers of two
     {
         TEST(!isPowerOf2(0));
         TEST(!isPowerOf2(3));
@@ -20,14 +30,18 @@ void testUtils()
         TEST(!isPowerOf2(0x80000001ull));
     }
 
-    // align: already aligned
+    // ------------------------------------------------------------------
+    // alignUp
+    // ------------------------------------------------------------------
+
+    // Already aligned
     {
         TEST(alignUp(0, 4) == 0);
         TEST(alignUp(4, 4) == 4);
         TEST(alignUp(1024, 256) == 1024);
     }
 
-    // align: needs rounding up
+    // Needs rounding up
     {
         TEST(alignUp(1, 4) == 4);
         TEST(alignUp(3, 4) == 4);
@@ -35,11 +49,15 @@ void testUtils()
         TEST(alignUp(1025, 256) == 1280);
     }
 
-    // align: alignment of 1 (no-op)
+    // Alignment of 1 is a no-op
     {
         TEST(alignUp(0, 1) == 0);
         TEST(alignUp(42, 1) == 42);
     }
+
+    // ------------------------------------------------------------------
+    // endianReverse
+    // ------------------------------------------------------------------
 
     // endianReverse16
     {

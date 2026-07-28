@@ -84,16 +84,16 @@ u32 GpuBuffer::uniformDescriptor()
 {
     HG_ASSERT(data->usage & GpuBufferUsage_uniformBuffer);
     GpuDescriptor desc = data->uniformDesc;
-    HG_ASSERT(handlePoolAlive(&vk.descriptorPools[DescriptorType_uniformBuffer], desc));
-    return handleIdx(desc);
+    HG_ASSERT(vk.descriptorPools[DescriptorType_uniformBuffer].alive(desc));
+    return desc.idx();
 }
 
 u32 GpuBuffer::storageDescriptor()
 {
     HG_ASSERT(data->usage & GpuBufferUsage_storageBuffer);
     GpuDescriptor desc = data->storageDesc;
-    HG_ASSERT(handlePoolAlive(&vk.descriptorPools[DescriptorType_storageBuffer], desc));
-    return handleIdx(desc);
+    HG_ASSERT(vk.descriptorPools[DescriptorType_storageBuffer].alive(desc));
+    return desc.idx();
 }
 
 void GpuBuffer::write(const void* src, u64 offset, u64 size)
@@ -344,16 +344,16 @@ u32 GpuView::samplerDescriptor()
 {
     HG_ASSERT(data->image->usage & GpuImageUsage_sampled);
     GpuDescriptor desc = data->samplerDesc;
-    HG_ASSERT(handlePoolAlive(&vk.descriptorPools[DescriptorType_combinedImageSampler], desc));
-    return handleIdx(desc);
+    HG_ASSERT(vk.descriptorPools[DescriptorType_combinedImageSampler].alive(desc));
+    return desc.idx();
 }
 
 u32 GpuView::storageDescriptor()
 {
     HG_ASSERT(data->image->usage & GpuImageUsage_storage);
     GpuDescriptor desc = data->storageDesc;
-    HG_ASSERT(handlePoolAlive(&vk.descriptorPools[DescriptorType_storageImage], desc));
-    return handleIdx(desc);
+    HG_ASSERT(vk.descriptorPools[DescriptorType_storageImage].alive(desc));
+    return desc.idx();
 }
 
 void GpuView::write(const void* src)

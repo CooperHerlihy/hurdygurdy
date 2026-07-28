@@ -8,14 +8,6 @@ void testSpan()
     //
     // Span is a non-owning typed view (pointer + count). Supports array,
     // ptr+count, begin+end constructors, indexing, and range-for.
-    //
-    // Functions covered:
-    // - Span() — default
-    // - Span(T*, u64) — ptr + count
-    // - Span(T*, T*) — begin + end
-    // - Span(T (&)[N]) — array constructor
-    // - operator[]
-    // - begin() / end()
 
     // Default-constructed Span is empty
     {

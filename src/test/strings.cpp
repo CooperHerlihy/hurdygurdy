@@ -8,10 +8,6 @@ void testStrings()
     //
     // StringView is a non-owning view into a string (chars + length).
     // Equality compares length first, then memcmp.
-    //
-    // Functions covered:
-    // - operator==(StringView, StringView)
-    // - operator!=(StringView, StringView)
 
     // Equal strings
     {

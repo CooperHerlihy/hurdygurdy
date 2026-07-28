@@ -141,12 +141,41 @@ struct Handle {
      * The handle id
      */
     u32 id = 0;
+
+    /**
+     * The number of bits in a handle used for the index
+     */
+    static constexpr u32 idxBits = 24;
+
+    /**
+     * Get the index from a handle
+     */
+    constexpr u32 idx()
+    {
+        return id & ((1 << idxBits) - 1);
+    }
+
+    /**
+     * Get the generation from a handle
+     */
+    constexpr u32 generation()
+    {
+        return id & ~(((u32)1 << idxBits) - (u32)1);
+    }
+
+    /**
+     * Returns a new handle at the same index
+     */
+    constexpr Handle nextGeneration()
+    {
+        return {id + (1 << idxBits)};
+    }
 };
 
 /**
  * The null handle
  */
-static constexpr Handle handleNull = Handle{0};
+static constexpr Handle nullHandle = Handle{0};
 
 /**
  * Compare handles
@@ -174,35 +203,6 @@ constexpr u64 hash(Handle val)
 }
 
 /**
- * The number of bits in a handle used for the index
- */
-static constexpr u32 handleIdxBits = 24;
-
-/**
- * Get the index from a handle
- */
-constexpr u32 handleIdx(Handle handle)
-{
-    return handle.id & ((1 << handleIdxBits) - 1);
-}
-
-/**
- * Get the generation from a handle
- */
-constexpr u32 handleGeneration(Handle handle)
-{
-    return handle.id & ~(((u32)1 << handleIdxBits) - (u32)1);
-}
-
-/**
- * Returns a new handle at the same index
- */
-constexpr Handle handleNextGeneration(Handle handle)
-{
-    return {handle.id + (1 << handleIdxBits)};
-}
-
-/**
  * A handle pool
  */
 struct HandlePool {
@@ -214,39 +214,34 @@ struct HandlePool {
      * The freed handles
      */
     Array<Handle> freed = {};
+
+    /**
+     * Create a new object pool
+     */
+    static HandlePool create();
+
+    /**
+     * Reset a handle pool
+     */
+    void reset();
+
+    /**
+     * Allocate an index from the pool
+     */
+    Handle alloc();
+
+    /**
+     * Returns whether a handle is alive in the pool
+     */
+    bool alive(Handle handle);
+
+    /**
+     * Free an index back into a pool
+     *
+     * Note, the object handle must be valid and alive
+     */
+    void free(Handle handle);
 };
-
-/**
- * Create a new object pool
- */
-HandlePool handlePoolCreate();
-
-/**
- * Destroy a handle pool
- */
-void handlePoolDestroy(HandlePool* pool);
-
-/**
- * Reset a handle pool
- */
-void handlePoolReset(HandlePool* pool);
-
-/**
- * Allocate an index from the pool
- */
-Handle handlePoolAlloc(HandlePool* pool);
-
-/**
- * Returns whether a handle is alive in the pool
- */
-bool handlePoolAlive(HandlePool* pool, Handle handle);
-
-/**
- * Free an index back into a pool
- *
- * Note, the object handle must be valid and alive
- */
-void handlePoolFree(HandlePool* pool, Handle handle);
 
 } // namespace hg
 

@@ -1,14 +1,15 @@
 #include "tests.hpp"
 
-// ============================================================================
-// Concurrency
-// ============================================================================
-//
-// SpinLock is a basic spinlock mutex.  Fence is a completion counter.
-// callPar pushes work to a thread pool.  forPar iterates in parallel over
-// a range.  helpThreads processes work items while waiting on a fence.
 void testConcurrency()
 {
+    // ============================================================================
+    // Concurrency
+    // ============================================================================
+    //
+    // SpinLock is a basic spinlock mutex.  Fence is a completion counter.
+    // callPar pushes work to a thread pool.  forPar iterates in parallel over
+    // a range.  helpThreads processes work items while waiting on a fence.
+
     // ------------------------------------------------------------------
     // SpinLock — single-threaded basics
     // ------------------------------------------------------------------

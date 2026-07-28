@@ -9,21 +9,6 @@ void testSerialization()
     // Tests for the serialization API: serialWriter, serialReader,
     // serialize primitives, serializeObject, binaryWriteSerial,
     // binaryReadSerial, jsonWriteSerial.
-    //
-    // Functions covered:
-    // - serialWriter / serialReader
-    // - serializeNodeStart
-    // - serializeBegin / serializeEnd
-    // - serializeVoid (default T*)
-    // - serializeObject
-    // - serialize(bool*), integral T*, floating_point T*
-    // - serialize(Vec2/3/4*), serialize(Mat2/3/4*)
-    // - serialize(Complex*), serialize(Quat*)
-    // - serialize(String*), serialize(Binary*)
-    // - serialize(T (*arr)[N])
-    // - serialize(Array<T>*), serialize(Set<V>*), serialize(Map<K, V>*)
-    // - binaryWriteSerial / binaryReadSerial
-    // - jsonWriteSerial
 
     // Primitives: bool, integer, floating-point
     {

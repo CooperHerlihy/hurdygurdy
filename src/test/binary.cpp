@@ -8,12 +8,6 @@ void testBinary()
     //
     // BinaryView is a non-owning view into binary data (data pointer + size).
     // read() and read<T>() copy bytes out at an offset.
-    //
-    // Functions covered:
-    // - BinaryView() — default constructor
-    // - BinaryView(void*, u64) — ptr+size constructor
-    // - read(u64, void*, u64)
-    // - read<T>(u64)
 
     // Default-constructed BinaryView is empty
     {
@@ -176,16 +170,6 @@ void testBinary()
     // ============================================================================
     //
     // Binary is an owning, heap-allocated, move-only binary data block.
-    //
-    // Functions covered:
-    // - Binary() — default
-    // - Binary::create(BinaryView) — factory
-    // - ~Binary() — destructor
-    // - Binary(Binary&&) — move construct
-    // - Binary& operator=(Binary&&) — move assign
-    // - read(u64, void*, u64)
-    // - read<T>(u64)
-    // - operator BinaryView()
 
     // Default-constructed Binary is empty
     {

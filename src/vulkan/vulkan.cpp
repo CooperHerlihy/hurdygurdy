@@ -805,7 +805,7 @@ GpuDescriptor createBufferDescriptor(
 
     ArenaScope scratch = getScratch();
 
-    GpuDescriptor desc = handlePoolAlloc(&vk.descriptorPools[type]);
+    GpuDescriptor desc = vk.descriptorPools[type].alloc();
 
     VkDescriptorBufferInfo bufferInfo{buffer.data->buffer, offset, range};
 
@@ -813,7 +813,7 @@ GpuDescriptor createBufferDescriptor(
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = vk.bindlessSet;
     write.dstBinding = type;
-    write.dstArrayElement = handleIdx(desc);
+    write.dstArrayElement = desc.idx();
     write.descriptorCount = 1;
     write.descriptorType = descriptorTypeToVk(type);
     write.pBufferInfo = &bufferInfo;
@@ -834,7 +834,7 @@ GpuDescriptor createImageDescriptor(
 
     ArenaScope scratch = getScratch();
 
-    GpuDescriptor desc = handlePoolAlloc(&vk.descriptorPools[type]);
+    GpuDescriptor desc = vk.descriptorPools[type].alloc();
 
     VkDescriptorImageInfo imageInfo{
         imageView.data->sampler,
@@ -846,7 +846,7 @@ GpuDescriptor createImageDescriptor(
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = vk.bindlessSet;
     write.dstBinding = type;
-    write.dstArrayElement = handleIdx(desc);
+    write.dstArrayElement = desc.idx();
     write.descriptorCount = 1;
     write.descriptorType = descriptorTypeToVk(type);
     write.pBufferInfo = nullptr;
@@ -860,8 +860,8 @@ GpuDescriptor createImageDescriptor(
 
 void descriptorDestroy(GpuDescriptor desc, DescriptorType type)
 {
-    if (desc != handleNull)
-        handlePoolFree(&vk.descriptorPools[type], desc);
+    if (desc != nullHandle)
+        vk.descriptorPools[type].free(desc);
 }
 
 static VkSampler samplerCreate(SamplerInfo* desc)
@@ -987,7 +987,7 @@ bool initGpu()
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vk.descriptorPools[i] = handlePoolCreate();
+        vk.descriptorPools[i] = HandlePool::create();
     }
 
     vk.samplers = Map<SamplerInfo, VkSampler>(
@@ -1043,7 +1043,7 @@ void deinitGpu()
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        handlePoolDestroy(&vk.descriptorPools[i]);
+        vk.descriptorPools[i].reset();
     }
 
     vkDestroyDescriptorSetLayout(vk.device, vk.bindlessLayout, nullptr);

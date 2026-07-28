@@ -1,19 +1,20 @@
 #include "tests.hpp"
 
-// ============================================================================
-// Error Handling
-// ============================================================================
-//
-// The error handling API provides thread-local error state using a
-// 4096-byte buffer per thread. Errors are set via setError() (either
-// a plain StringView or a printf-style format string) and retrieved
-// via getError(). logError() prints the current error to stderr.
-//
-// The API is used throughout the engine for recoverable failures
-// (e.g., init failures, file load failures) and pairs with Maybe<T>
-// for functions that can fail.
 void testError()
 {
+    // ============================================================================
+    // Error Handling
+    // ============================================================================
+    //
+    // The error handling API provides thread-local error state using a
+    // 4096-byte buffer per thread. Errors are set via setError() (either
+    // a plain StringView or a printf-style format string) and retrieved
+    // via getError(). logError() prints the current error to stderr.
+    //
+    // The API is used throughout the engine for recoverable failures
+    // (e.g., init failures, file load failures) and pairs with Maybe<T>
+    // for functions that can fail.
+
     // ------------------------------------------------------------------
     // setError / getError: plain string
     // ------------------------------------------------------------------

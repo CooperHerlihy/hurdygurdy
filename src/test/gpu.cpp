@@ -1,14 +1,5 @@
 #include "tests.hpp"
 
-// ============================================================================
-// GPU API
-// ============================================================================
-//
-// Tests for the GPU abstraction layer (GpuBuffer, GpuImage, GpuView,
-// GpuPipeline, command buffers, barriers, compute, offscreen rendering).
-//
-// All GPU tests use offscreen resources; no window is needed.
-
 #include "test/compute.comp.spv.h"
 #include "test/tri.vert.spv.h"
 #include "test/tri.frag.spv.h"
@@ -27,6 +18,15 @@
 
 void testGpu()
 {
+    // ============================================================================
+    // GPU API
+    // ============================================================================
+    //
+    // Tests for the GPU abstraction layer (GpuBuffer, GpuImage, GpuView,
+    // GpuPipeline, command buffers, barriers, compute, offscreen rendering).
+    //
+    // All GPU tests use offscreen resources; no window is needed.
+
     Span<const u8> shTriVert    = {test_tri_vert_spv,      sizeof(test_tri_vert_spv)};
     Span<const u8> shTriFrag    = {test_tri_frag_spv,      sizeof(test_tri_frag_spv)};
     Span<const u8> shDepthVert  = {test_depth_vert_spv,    sizeof(test_depth_vert_spv)};
