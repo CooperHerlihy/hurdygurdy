@@ -80,7 +80,7 @@ Root files:
 - `containers.cpp` - BinaryView, BinaryBuilder, Binary, HandlePool
 - `serialization.cpp` - Serializer, binary serial
 - `timing.cpp` - Clock, Perf
-- `audio.cpp` - Sound/streaming audio, AudioPlayer, AudioStream
+- `audio.cpp` - Sound asset, AudioPlayer
 - `asset_io.cpp` - Texture/Mesh/Binary file I/O
 - `camera.cpp` - Camera create/update
 - `render2d.cpp` - Renderer 2D, Atlas, Tilemap, Layer
@@ -96,7 +96,10 @@ Root files:
 - `vulkan.cpp` - internal infrastructure: VulkanState, init/deinit, format tables, samplers, descriptors
 - `loader.cpp` - dynamic Vulkan library loading, function pointer population, vulkanFuncs/libvulkan storage
 - `gpu.cpp` - public API impl: GpuBuffer/Image/View/Pipeline, cmds, barriers, render/compute passes
+
+`src/sdl/` - SDL implementation:
 - `window.cpp` - Window create, processEvents, ImGui integration, swapchain, gpuFrameBegin/End
+- `audio_stream.cpp` - AudioStream primitive
 
 ## Conventions
 

@@ -154,6 +154,7 @@ set(CORE_SOURCES
     src/dynlib.cpp
     src/imgui.cpp
     src/sdl/window.cpp
+    src/sdl/audio_stream.cpp
     ${VULKAN_SOURCES}
 )
 
