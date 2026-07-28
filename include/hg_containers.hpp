@@ -416,7 +416,7 @@ SharedPtr<T> makeShared(Args&&... args)
 
     SharedPtr<T> ptr{};
     ptr.ptr = new (heapAlloc(sizeof(Block), alignof(Block)))
-        Block{1, std::forward<Args>(args)...};
+        Block{1, T{std::forward<Args>(args)...}};
     return ptr;
 }
 
@@ -513,14 +513,22 @@ struct Array {
      */
     void resize(u64 newCount)
     {
-        if (newCount > capacity)
-            reserve(newCount * 2);
-
-        for (u64 i = count; i < newCount; ++i)
+        if (newCount < count)
         {
-            new (vals + i) T{};
+            for (u64 i = newCount; i < count; ++i)
+                vals[i].~T();
+            count = newCount;
         }
-        count = newCount;
+
+        if (newCount > count)
+        {
+            if (newCount > capacity)
+                reserve(newCount * 2);
+
+            for (u64 i = count; i < newCount; ++i)
+                new (vals + i) T{};
+            count = newCount;
+        }
     }
 
     /**
@@ -876,14 +884,22 @@ struct ArrayTemp {
      */
     void resize(u64 newCount)
     {
-        if (newCount > capacity)
-            reserve(newCount * 2);
-
-        for (u64 i = count; i < newCount; ++i)
+        if (newCount < count)
         {
-            new (vals + i) T{};
+            for (u64 i = newCount; i < count; ++i)
+                vals[i].~T();
+            count = newCount;
         }
-        count = newCount;
+
+        if (newCount > count)
+        {
+            if (newCount > capacity)
+                reserve(newCount * 2);
+
+            for (u64 i = count; i < newCount; ++i)
+                new (vals + i) T{};
+            count = newCount;
+        }
     }
 
     /**
@@ -1227,15 +1243,30 @@ struct Queue {
     }
 
     /**
+     * Default-construct a value in place at the front of the queue
+     */
+    T* pushFront()
+    {
+        if (count == capacity)
+            reserve(capacity == 0 ? 128 : capacity * 2);
+
+        front = (front == 0 ? capacity : front) - 1;
+        new (vals + front) T{};
+        ++count;
+        return vals + front;
+    }
+
+    /**
      * Push a value to the front of the queue
      */
     void pushFront(const T& val)
     {
-        if (++count >= capacity)
+        if (count == capacity)
             reserve(capacity == 0 ? 128 : capacity * 2);
 
         front = (front == 0 ? capacity : front) - 1;
         new (vals + front) T{val};
+        ++count;
     }
 
     /**
@@ -1243,11 +1274,27 @@ struct Queue {
      */
     void pushFront(T&& val)
     {
-        if (++count >= capacity)
+        if (count == capacity)
             reserve(capacity == 0 ? 128 : capacity * 2);
 
         front = (front == 0 ? capacity : front) - 1;
         new (vals + front) T{std::move(val)};
+        ++count;
+    }
+
+    /**
+     * Default-construct a value in place at the back of the queue
+     */
+    T* pushBack()
+    {
+        if (count == capacity)
+            reserve(capacity == 0 ? 128 : capacity * 2);
+
+        new (vals + back) T{};
+        T* ret = vals + back;
+        back = (back + 1) % capacity;
+        ++count;
+        return ret;
     }
 
     /**
@@ -1255,11 +1302,12 @@ struct Queue {
      */
     void pushBack(const T& val)
     {
-        if (++count >= capacity)
+        if (count == capacity)
             reserve(capacity == 0 ? 128 : capacity * 2);
 
         new (vals + back) T{val};
         back = (back + 1) % capacity;
+        ++count;
     }
 
     /**
@@ -1267,11 +1315,12 @@ struct Queue {
      */
     void pushBack(T&& val)
     {
-        if (++count >= capacity)
+        if (count == capacity)
             reserve(capacity == 0 ? 128 : capacity * 2);
 
         new (vals + back) T{std::move(val)};
         back = (back + 1) % capacity;
+        ++count;
     }
 
     /**
@@ -1406,11 +1455,11 @@ struct QueueTemp {
                 {
                     for (u64 i = 0; i < front - back; ++i)
                     {
-                        new (vals + capacity + i) T{std::move(vals + back + i)};
+                        new (vals + capacity + i) T{std::move(vals[back + i])};
                         vals[back + i].~T();
                     }
+                    back += capacity;
                 }
-                back += capacity;
             }
             else
             {
@@ -1432,15 +1481,30 @@ struct QueueTemp {
     }
 
     /**
+     * Default-construct a value in place at the front of the queue
+     */
+    T* pushFront()
+    {
+        if (count == capacity)
+            reserve(capacity == 0 ? 128 : capacity * 2);
+
+        front = (front == 0 ? capacity : front) - 1;
+        new (vals + front) T{};
+        ++count;
+        return vals + front;
+    }
+
+    /**
      * Push a value to the front of the queue
      */
     void pushFront(const T& val)
     {
-        if (++count >= capacity)
+        if (count == capacity)
             reserve(capacity == 0 ? 128 : capacity * 2);
 
         front = (front == 0 ? capacity : front) - 1;
         new (vals + front) T{val};
+        ++count;
     }
 
     /**
@@ -1448,11 +1512,27 @@ struct QueueTemp {
      */
     void pushFront(T&& val)
     {
-        if (++count >= capacity)
+        if (count == capacity)
             reserve(capacity == 0 ? 128 : capacity * 2);
 
         front = (front == 0 ? capacity : front) - 1;
         new (vals + front) T{std::move(val)};
+        ++count;
+    }
+
+    /**
+     * Default-construct a value in place at the back of the queue
+     */
+    T* pushBack()
+    {
+        if (count == capacity)
+            reserve(capacity == 0 ? 128 : capacity * 2);
+
+        new (vals + back) T{};
+        T* ret = vals + back;
+        back = (back + 1) % capacity;
+        ++count;
+        return ret;
     }
 
     /**
@@ -1460,11 +1540,12 @@ struct QueueTemp {
      */
     void pushBack(const T& val)
     {
-        if (++count >= capacity)
+        if (count == capacity)
             reserve(capacity == 0 ? 128 : capacity * 2);
 
         new (vals + back) T{val};
         back = (back + 1) % capacity;
+        ++count;
     }
 
     /**
@@ -1472,11 +1553,12 @@ struct QueueTemp {
      */
     void pushBack(T&& val)
     {
-        if (++count >= capacity)
+        if (count == capacity)
             reserve(capacity == 0 ? 128 : capacity * 2);
 
         new (vals + back) T{std::move(val)};
         back = (back + 1) % capacity;
+        ++count;
     }
 
     /**
@@ -1499,8 +1581,8 @@ struct QueueTemp {
     T popBack()
     {
         HG_ASSERT(count > 0);
-        --count;
 
+        --count;
         back = (back == 0 ? capacity : back) - 1;
         T ret = std::move(vals[back]);
         vals[back].~T();
@@ -1659,9 +1741,12 @@ struct Set {
             idx = (idx + 1) % capacity;
         }
 
-        new (vals + idx) V{std::move(v)};
-        hasVal[idx] = true;
-        ++count;
+        if (!hasVal[idx])
+        {
+            new (vals + idx) V{std::move(v)};
+            hasVal[idx] = true;
+            ++count;
+        }
     }
 
     /**
@@ -1688,9 +1773,12 @@ struct Set {
             idx = (idx + 1) % capacity;
         }
 
-        new (vals + idx) V{std::move(val)};
-        hasVal[idx] = true;
-        ++count;
+        if (!hasVal[idx])
+        {
+            new (vals + idx) V{std::move(val)};
+            hasVal[idx] = true;
+            ++count;
+        }
     }
 
     /**
@@ -1829,7 +1917,7 @@ struct SetTemp {
         , capacity{initCapacity}
         , count{0}
     {
-        reset();
+        memset(hasVal, 0, capacity);
     }
 
     /**
@@ -1853,11 +1941,12 @@ struct SetTemp {
      */
     void resize(u64 newCapacity)
     {
+        HG_ASSERT(arena != nullptr);
         HG_ASSERT(newCapacity > count);
         if (newCapacity == capacity)
             return;
 
-        SetTemp<V> newSet{newCapacity};
+        SetTemp<V> newSet{arena, newCapacity};
 
         for (u64 i = 0; i < capacity; ++i)
         {
@@ -1893,9 +1982,12 @@ struct SetTemp {
             idx = (idx + 1) % capacity;
         }
 
-        new (vals + idx) V{std::move(v)};
-        hasVal[idx] = true;
-        ++count;
+        if (!hasVal[idx])
+        {
+            new (vals + idx) V{std::move(v)};
+            hasVal[idx] = true;
+            ++count;
+        }
     }
 
     /**
@@ -1922,9 +2014,12 @@ struct SetTemp {
             idx = (idx + 1) % capacity;
         }
 
-        new (vals + idx) V{std::move(val)};
-        hasVal[idx] = true;
-        ++count;
+        if (!hasVal[idx])
+        {
+            new (vals + idx) V{std::move(val)};
+            hasVal[idx] = true;
+            ++count;
+        }
     }
 
     /**
@@ -2134,10 +2229,17 @@ struct Map {
             idx = (idx + 1) % capacity;
         }
 
-        hasVal[idx] = true;
-        new (keys + idx) K{std::move(k)};
-        new (vals + idx) V{std::move(v)};
-        ++count;
+        if (!hasVal[idx])
+        {
+            hasVal[idx] = true;
+            new (keys + idx) K{std::move(k)};
+            new (vals + idx) V{std::move(v)};
+            ++count;
+        }
+        else
+        {
+            vals[idx] = std::move(v);
+        }
 
         return vals + idx;
     }
@@ -2167,10 +2269,17 @@ struct Map {
             idx = (idx + 1) % capacity;
         }
 
-        hasVal[idx] = true;
-        new (keys + idx) K{std::move(key)};
-        new (vals + idx) V{std::move(val)};
-        ++count;
+        if (!hasVal[idx])
+        {
+            hasVal[idx] = true;
+            new (keys + idx) K{std::move(key)};
+            new (vals + idx) V{std::move(val)};
+            ++count;
+        }
+        else
+        {
+            vals[idx] = std::move(val);
+        }
 
         return vals + idx;
     }
@@ -2370,11 +2479,12 @@ struct MapTemp {
      */
     void resize(u64 newCapacity)
     {
+        HG_ASSERT(arena != nullptr);
         HG_ASSERT(newCapacity > count);
         if (newCapacity == capacity)
             return;
 
-        MapTemp<K, V> newMapTemp{newCapacity};
+        MapTemp<K, V> newMapTemp{arena, newCapacity};
 
         for (u64 i = 0; i < capacity; ++i)
         {
@@ -2412,10 +2522,17 @@ struct MapTemp {
             idx = (idx + 1) % capacity;
         }
 
-        hasVal[idx] = true;
-        new (keys + idx) K{std::move(k)};
-        new (vals + idx) V{std::move(v)};
-        ++count;
+        if (!hasVal[idx])
+        {
+            hasVal[idx] = true;
+            new (keys + idx) K{std::move(k)};
+            new (vals + idx) V{std::move(v)};
+            ++count;
+        }
+        else
+        {
+            vals[idx] = std::move(v);
+        }
 
         return vals + idx;
     }
@@ -2445,10 +2562,17 @@ struct MapTemp {
             idx = (idx + 1) % capacity;
         }
 
-        hasVal[idx] = true;
-        new (keys + idx) K{std::move(key)};
-        new (vals + idx) V{std::move(val)};
-        ++count;
+        if (!hasVal[idx])
+        {
+            hasVal[idx] = true;
+            new (keys + idx) K{std::move(key)};
+            new (vals + idx) V{std::move(val)};
+            ++count;
+        }
+        else
+        {
+            vals[idx] = std::move(val);
+        }
 
         return vals + idx;
     }

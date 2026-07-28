@@ -33,12 +33,6 @@ cmake --workflow --preset debug && .\build\test
 
 ## Contents
 
-Root files:
-- `README.md` - build instructions (update when build changes)
-- `AGENTS.md` - agent instructions (update when structure changes)
-- `flake.nix` - development environment
-- `CMakeLists.txt` - build system
-
 `include/` - public headers:
 - `hurdygurdy.hpp` - umbrella, includes all sub-headers
 - `hurdygurdy.glsl` - shared GLSL header
