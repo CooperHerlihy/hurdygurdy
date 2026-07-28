@@ -1,17 +1,14 @@
 {
     inputs = {
         nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-        # for Vulkan validation layers, because latest version is broken
-        nixpkgs-vvl.url = "github:nixos/nixpkgs/49928bd4ad0aa8fb021c1ac71e8dc5921abf9783";
     };
 
-    outputs = { self, nixpkgs, nixpkgs-vvl, ... }: let
+    outputs = { self, nixpkgs, ... }: let
         systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
         forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
     in {
         devShells = forAllSystems (system: let
             pkgs = nixpkgs.legacyPackages.${system};
-            pkgs-vvl = nixpkgs-vvl.legacyPackages.${system};
 
             debug = pkgs.writeShellScriptBin "debug" "cmake --workflow --preset debug && ./build/test";
             release = pkgs.writeShellScriptBin "release" "cmake --workflow --preset release && ./build/release/test";
@@ -31,7 +28,7 @@
                     ccache
 
                     shaderc
-                    pkgs-vvl.vulkan-validation-layers
+                    vulkan-validation-layers
 
                     gdb
                     valgrind
