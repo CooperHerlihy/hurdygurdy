@@ -44,12 +44,9 @@
                     tsan
                 ];
 
-                buildInputs = with pkgs; [
+                LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
+                    vulkan-loader
                     sdl3
-                ];
-
-                LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-                    pkgs.vulkan-loader
                 ];
             };
         });
@@ -71,6 +68,13 @@
                 hash = "sha256-ocCgBM2uHDhdur81VKuKJNoa0TEvhfjhjfJlycC5YpI=";
             };
 
+            sdl3-src = pkgs.fetchFromGitHub {
+                owner = "libsdl-org";
+                repo = "SDL";
+                rev = "release-3.4.10";
+                hash = "sha256-6Dph2eLiJUmpQzPWe8EuY5LrWhrFwde2f2dwfgCcWNw=";
+            };
+
         in {
             default = pkgs.clang19Stdenv.mkDerivation {
                 name = "hurdygurdy";
@@ -84,23 +88,22 @@
                     shaderc
                 ];
 
-                buildInputs = with pkgs; [
-                    sdl3
-                ];
-
                 cmakeBuildType = "Release";
 
                 preConfigure = ''
-                    rm -rf vendor/imgui vendor/Vulkan-Headers
+                    rm -rf vendor/imgui vendor/Vulkan-Headers vendor/SDL
                     cp -r ${vulkan-headers-src} vendor/Vulkan-Headers
                     cp -r ${imgui-src} vendor/imgui
+                    cp -r ${sdl3-src} vendor/SDL
                     chmod -R u+w vendor/Vulkan-Headers
                     chmod -R u+w vendor/imgui
+                    chmod -R u+w vendor/SDL
                 '';
 
                 postFixup = ''
                     for bin in $out/bin/*; do
                         patchelf --add-rpath ${pkgs.vulkan-loader}/lib $bin
+                        patchelf --add-rpath ${pkgs.sdl3}/lib $bin
                     done
                 '';
             };

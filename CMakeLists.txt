@@ -42,26 +42,8 @@ else()
     endif()
 endif()
 
-find_package(SDL3 QUIET)
-if(SDL3_FOUND)
-    set(SDL3_TARGET SDL3::SDL3)
-    message(STATUS "SDL3 found via CMake config")
-else()
-    message(STATUS "SDL3 not found on system, downloading from GitHub...")
-    include(FetchContent)
-    set(SDL_STATIC ON CACHE BOOL "" FORCE)
-    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(sdl3
-        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG release-3.4.10
-        GIT_SHALLOW TRUE
-    )
-    FetchContent_MakeAvailable(sdl3)
-    set(SDL3_TARGET SDL3::SDL3)
-endif()
-
 set(VulkanHeaders_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/Vulkan-Headers/include)
+set(SDL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/SDL/include)
 
 set(INCLUDE_DIRS
     ${CMAKE_BINARY_DIR}
@@ -70,6 +52,7 @@ set(INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/vendor
     ${CMAKE_SOURCE_DIR}/vendor/imgui
     ${CMAKE_SOURCE_DIR}/vendor/imgui/backends
+    ${SDL_INCLUDE_DIR}
 )
 
 add_executable(embed src/embed.c)
@@ -133,8 +116,14 @@ set(VULKAN_SOURCES
     src/vulkan/gpu.cpp
 )
 
+set(SDL_SOURCES
+    src/sdl/loader.cpp
+    src/sdl/sdl.cpp
+    src/sdl/window.cpp
+    src/sdl/audio.cpp
+)
+
 set(CORE_SOURCES
-    src/platform.cpp
     src/error.cpp
     src/init.cpp
     src/memory.cpp
@@ -153,8 +142,7 @@ set(CORE_SOURCES
     src/render2d.cpp
     src/dynlib.cpp
     src/imgui.cpp
-    src/sdl/window.cpp
-    src/sdl/audio_stream.cpp
+    ${SDL_SOURCES}
     ${VULKAN_SOURCES}
 )
 
@@ -170,9 +158,7 @@ target_include_directories(hurdygurdy_core
         ${INCLUDE_DIRS}
         ${VulkanHeaders_INCLUDE_DIR}
 )
-target_link_libraries(hurdygurdy_core
-    PUBLIC ${SDL3_TARGET}
-)
+
 target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_imgui OBJECT ${IMGUI_SOURCES} ${IMGUI_BACKEND_SOURCES})
@@ -181,9 +167,7 @@ target_include_directories(hurdygurdy_imgui
         ${INCLUDE_DIRS}
         ${VulkanHeaders_INCLUDE_DIR}
 )
-target_link_libraries(hurdygurdy_imgui
-    PUBLIC ${SDL3_TARGET}
-)
+
 target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
 
@@ -193,9 +177,7 @@ target_include_directories(hurdygurdy_misc
         ${INCLUDE_DIRS}
         ${VulkanHeaders_INCLUDE_DIR}
 )
-target_link_libraries(hurdygurdy_misc
-    PUBLIC ${SDL3_TARGET}
-)
+
 target_compile_options(hurdygurdy_misc PRIVATE ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy STATIC)
