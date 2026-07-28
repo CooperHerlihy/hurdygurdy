@@ -32,29 +32,29 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 `include/` - public headers:
 - `hurdygurdy.hpp` - umbrella, includes all sub-headers
 - `hurdygurdy.glsl` - shared GLSL header
-- `hg_macros.hpp` - config/detection macros, HG_DEFER, HG_LOG, HG_WARN, HG_PANIC, HG_ASSERT
-- `hg_types.hpp` - u8..f64, StringView, Span, Product, Sum, Maybe
-- `hg_error.hpp` - getError, setError, logError
-- `hg_init.hpp` - HurdyGurdy scope guard
-- `hg_utility.hpp` - isPowerOf2, align, endianReverse
-- `hg_memory.hpp` - Arena, ArenaScope, heapAlloc/Free, scratch
-- `hg_concurrency.hpp` - SpinLock, Fence, forPar, callPar
-- `hg_math.hpp` - Vec2/3/4, Mat2/3/4, Complex, Quat
-- `hg_geometry2d.hpp` - Circle, Rect, Ray2D, Line2D
-- `hg_geometry3d.hpp` - Sphere, Box, Tri, Plane, Ray3D, Line3D
-- `hg_noise.hpp` - Rng, noise functions
-- `hg_strings.hpp` - String, StringBuilder, parsing
-- `hg_containers.hpp` - Array, Queue, Set, Map, Pool, HandlePool
-- `hg_assets.hpp` - AssetT, AssetManagerT, load/reload
-- `hg_serialization.hpp` - Serializer, binary format
-- `hg_timing.hpp` - Clock, Perf
-- `hg_dynlib.hpp` - Library dynamic loading
-- `hg_gpu.hpp` - Format, GpuBuffer, GpuImage, GpuPipeline, GpuCmd
-- `hg_window.hpp` - Button, Window, input/event types
-- `hg_audio.hpp` - AudioStream, Sound, AudioPlayer
-- `hg_render2d.hpp` - Texture, Mesh, Camera, Sprite2D, Atlas2D, Layer2D
-- `hg_imgui.hpp` - ImGui impl for HurdyGurdy
-- `hg_ecs.hpp` - ECS (commented out)
+- `hg/macros.hpp` - config/detection macros, HG_DEFER, HG_LOG, HG_WARN, HG_PANIC, HG_ASSERT
+- `hg/types.hpp` - u8..f64, StringView, Span, Product, Sum, Maybe
+- `hg/error.hpp` - getError, setError, logError
+- `hg/init.hpp` - HurdyGurdy scope guard
+- `hg/utility.hpp` - isPowerOf2, align, endianReverse
+- `hg/memory.hpp` - Arena, ArenaScope, heapAlloc/Free, scratch
+- `hg/concurrency.hpp` - SpinLock, Fence, forPar, callPar
+- `hg/math.hpp` - Vec2/3/4, Mat2/3/4, Complex, Quat
+- `hg/geometry2d.hpp` - Circle, Rect, Ray2D, Line2D
+- `hg/geometry3d.hpp` - Sphere, Box, Tri, Plane, Ray3D, Line3D
+- `hg/noise.hpp` - Rng, noise functions
+- `hg/strings.hpp` - String, StringBuilder, parsing
+- `hg/containers.hpp` - Array, Queue, Set, Map, Pool, HandlePool
+- `hg/assets.hpp` - AssetT, AssetManagerT, load/reload
+- `hg/serialization.hpp` - Serializer, binary format
+- `hg/timing.hpp` - Clock, Perf
+- `hg/dynlib.hpp` - Library dynamic loading
+- `hg/gpu.hpp` - Format, GpuBuffer, GpuImage, GpuPipeline, GpuCmd
+- `hg/window.hpp` - Button, Window, input/event types
+- `hg/audio.hpp` - AudioStream, Sound, AudioPlayer
+- `hg/render2d.hpp` - Texture, Mesh, Camera, Sprite2D, Atlas2D, Layer2D
+- `hg/imgui.hpp` - ImGui impl for HurdyGurdy
+- `hg/ecs.hpp` - ECS (commented out)
 
 `src/` - implementation:
 - `internal.hpp` - internal declarations (platform/gpu/audio init)

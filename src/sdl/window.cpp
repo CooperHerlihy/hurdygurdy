@@ -1,6 +1,6 @@
 #include "internal.hpp"
 
-#include "hg_error.hpp"
+#include "hg/error.hpp"
 
 #include <SDL3/SDL.h>
 

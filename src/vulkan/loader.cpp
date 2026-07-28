@@ -1,7 +1,7 @@
 #include "vulkan_backend.hpp"
 
-#include "hg_error.hpp"
-#include "hg_dynlib.hpp"
+#include "hg/error.hpp"
+#include "hg/dynlib.hpp"
 
 namespace hg {
 namespace vulkan {

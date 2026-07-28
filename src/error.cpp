@@ -1,4 +1,6 @@
-#include "hg_error.hpp"
+#include "hg/error.hpp"
+
+#include <algorithm>
 
 namespace hg {
 

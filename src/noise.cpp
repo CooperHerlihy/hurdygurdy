@@ -1,4 +1,5 @@
-#include "hg_noise.hpp"
+#include "hg/noise.hpp"
+
 #include <random>
 #include <cmath>
 

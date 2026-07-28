@@ -1,6 +1,4 @@
-#include "hg_strings.hpp"
-#include <cstdio>
-#include <cstdlib>
+#include "hg/strings.hpp"
 
 namespace hg {
 

@@ -129,15 +129,15 @@ set(CORE_SOURCES
     src/memory.cpp
     src/concurrency.cpp
     src/math.cpp
-    src/geometry_2d.cpp
-    src/geometry_3d.cpp
+    src/geometry2d.cpp
+    src/geometry3d.cpp
     src/noise.cpp
     src/strings.cpp
     src/containers.cpp
     src/serialization.cpp
-    src/timing.cpp
+    src/time.cpp
     src/audio.cpp
-    src/asset_io.cpp
+    src/assets.cpp
     src/camera.cpp
     src/render2d.cpp
     src/dynlib.cpp

@@ -1,5 +1,4 @@
-#include "hg_render2d.hpp"
-#include <cstdio>
+#include "hg/render2d.hpp"
 
 namespace hg {
 

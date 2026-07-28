@@ -612,7 +612,7 @@ int main()
 //
 //     Arena* arena = getScratch();
 //
-//     for (u32 i = 0; i < std::size(audioData); ++i)
+//     for (u32 i = 0; i < size(audioData); ++i)
 //     {
 //
 //         // saw harmonics

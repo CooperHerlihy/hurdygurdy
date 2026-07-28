@@ -1,4 +1,4 @@
-#include "hg_audio.hpp"
+#include "hg/audio.hpp"
 
 namespace hg {
 

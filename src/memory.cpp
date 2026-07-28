@@ -1,7 +1,7 @@
-#include "hg_memory.hpp"
-#include "hg_error.hpp"
-#include "hg_utility.hpp"
-#include "hg_containers.hpp"
+#include "hg/memory.hpp"
+#include "hg/error.hpp"
+#include "hg/utility.hpp"
+#include "hg/containers.hpp"
 
 namespace hg {
 

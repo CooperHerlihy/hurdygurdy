@@ -1,10 +1,12 @@
 #pragma once
 
-#include "hg_types.hpp"
-#include "hg_memory.hpp"
-#include "hg_gpu.hpp"
-#include "hg_window.hpp"
-#include "hg_containers.hpp"
+#include "hg/inttypes.hpp"
+#include "hg/span.hpp"
+#include "hg/memory.hpp"
+#include "hg/strings.hpp"
+#include "hg/gpu.hpp"
+#include "hg/window.hpp"
+#include "hg/smart_ptr.hpp"
 
 namespace hg {
 

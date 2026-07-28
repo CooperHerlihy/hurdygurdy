@@ -1,4 +1,5 @@
-#include "hg_init.hpp"
+#include "hg/init.hpp"
+
 #include "internal.hpp"
 
 namespace hg {

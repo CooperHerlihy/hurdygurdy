@@ -1,6 +1,7 @@
 #include "internal.hpp"
-#include "hg_audio.hpp"
-#include "hg_error.hpp"
+
+#include "hg/audio.hpp"
+#include "hg/error.hpp"
 
 #include <SDL3/SDL_audio.h>
 

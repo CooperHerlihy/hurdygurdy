@@ -1,7 +1,7 @@
-#include "hg_math.hpp"
+#include "hg/math.hpp"
+
 #include <cmath>
 #include <cfloat>
-#include <cstdio>
 
 namespace hg {
 

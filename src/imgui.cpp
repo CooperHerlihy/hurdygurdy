@@ -1,4 +1,4 @@
-#include "hg_imgui.hpp"
+#include "hg/imgui.hpp"
 
 #include "internal.hpp"
 

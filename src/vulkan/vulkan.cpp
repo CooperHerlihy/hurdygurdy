@@ -1,7 +1,9 @@
-#include "vulkan_backend.hpp"
+#include "vulkan_internal.hpp"
 
 #include "internal.hpp"
-#include "hg_error.hpp"
+#include "hg/error.hpp"
+#include "hg/utility.hpp"
+#include "hg/array.hpp"
 
 #include <SDL3/SDL_vulkan.h>
 
@@ -509,7 +511,7 @@ static VkInstance createInstance(Span<StringView> extensions)
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
-    instanceInfo.enabledLayerCount = static_cast<u32>(std::size(layers));
+    instanceInfo.enabledLayerCount = static_cast<u32>(size(layers));
     instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
@@ -596,7 +598,7 @@ static VkPhysicalDevice findPhysicalDevice()
         extProps.resize(propCount);
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &propCount, extProps.vals);
 
-        for (u32 j = 0; j < static_cast<u32>(std::size(deviceExtensions)); j++)
+        for (u32 j = 0; j < static_cast<u32>(size(deviceExtensions)); j++)
         {
             for (u32 k = 0; k < propCount; k++)
             {
@@ -675,7 +677,7 @@ static VkDevice createDevice()
     deviceInfo.pNext = &synchronization2Feature;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueInfo;
-    deviceInfo.enabledExtensionCount = static_cast<u32>(std::size(deviceExtensions));
+    deviceInfo.enabledExtensionCount = static_cast<u32>(size(deviceExtensions));
     deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     deviceInfo.pEnabledFeatures = &features;
 
@@ -720,7 +722,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     info.maxSets = 1;
-    info.poolSizeCount = static_cast<u32>(std::size(sizes));
+    info.poolSizeCount = static_cast<u32>(size(sizes));
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
@@ -747,14 +749,14 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    flagsInfo.bindingCount = static_cast<u32>(std::size(bindings));
+    flagsInfo.bindingCount = static_cast<u32>(size(bindings));
     flagsInfo.pBindingFlags = flags;
 
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &flagsInfo;
     info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    info.bindingCount = static_cast<u32>(std::size(bindings));
+    info.bindingCount = static_cast<u32>(size(bindings));
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;

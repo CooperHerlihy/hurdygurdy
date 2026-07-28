@@ -1,6 +1,6 @@
-#include "hg_concurrency.hpp"
-#include "hg_containers.hpp"
-#include "hg_timing.hpp"
+#include "hg/concurrency.hpp"
+#include "hg/array.hpp"
+#include "hg/time.hpp"
 
 #include <cmath>
 #include <condition_variable>
