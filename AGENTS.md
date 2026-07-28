@@ -14,10 +14,10 @@ C++20 game engine. Vulkan 1.3, SDL3, Dear ImGui.
 ### Linux / macOS
 
 ```
-debug: cmake --workflow --preset debug && ./build/test
-san: cmake --workflow --preset san && LSAN_OPTIONS=detect_leaks=0 ./build/san/test
-tsan: cmake --workflow --preset tsan && TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/test
-valgrind: valgrind --leak-check=full ./build/test
+debug: cmake --workflow --preset debug && ./build/tests
+san: cmake --workflow --preset san && LSAN_OPTIONS=detect_leaks=0 ./build/san/tests
+tsan: cmake --workflow --preset tsan && TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/tests
+valgrind: valgrind --leak-check=full ./build/tests
 ```
 
 Driver library leaks suppressed via LSAN_OPTIONS.
@@ -25,11 +25,7 @@ TSan false-positive: lock-order-inversion between SDL3 audio and PipeWire - thir
 
 ### Windows
 
-Open a **Visual Studio 2022 x64 developer shell** first, then:
-
-```
-cmake --workflow --preset debug && .\build\test
-```
+Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 
 ## Contents
 
@@ -81,7 +77,6 @@ cmake --workflow --preset debug && .\build\test
 - `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
 - `dynlib.cpp` - Library::load/findFunction
 - `vk_mem_alloc.cpp` - VMA vendor source
-- `test.cpp` - tests (monolithic)
 - `editor.cpp` - example editor
 - `minimal.cpp` - example minimal
 
@@ -97,6 +92,11 @@ cmake --workflow --preset debug && .\build\test
 - `loader.cpp` - SDL wrapper function stubs (forwarding to dynamically loaded symbols)
 - `window.cpp` - Window create, processEvents, swapchain, gpuFrameBegin/End
 - `audio.cpp` - AudioStream/AudioPlayer impl
+
+`src/test` - tests:
+- `tests.hpp` - internal header for tests
+- `tests.cpp` - monolithic c++ tests
+- `*.cpp` - tests, named after headers
 
 ## Conventions
 

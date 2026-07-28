@@ -10,10 +10,10 @@
         devShells = forAllSystems (system: let
             pkgs = nixpkgs.legacyPackages.${system};
 
-            debug = pkgs.writeShellScriptBin "debug" "cmake --workflow --preset debug && ./build/test";
-            release = pkgs.writeShellScriptBin "release" "cmake --workflow --preset release && ./build/release/test";
-            san = pkgs.writeShellScriptBin "san" "cmake --workflow --preset san && LSAN_OPTIONS=detect_leaks=0 ./build/san/test";
-            tsan = pkgs.writeShellScriptBin "tsan" "cmake --workflow --preset tsan && TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/test";
+            debug = pkgs.writeShellScriptBin "debug" "cmake --workflow --preset debug && ./build/tests";
+            release = pkgs.writeShellScriptBin "release" "cmake --workflow --preset release && ./build/release/tests";
+            san = pkgs.writeShellScriptBin "san" "cmake --workflow --preset san && LSAN_OPTIONS=detect_leaks=0 ./build/san/tests";
+            tsan = pkgs.writeShellScriptBin "tsan" "cmake --workflow --preset tsan && TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/tests";
         in {
             default = pkgs.mkShell.override {
                 stdenv = pkgs.clang19Stdenv;

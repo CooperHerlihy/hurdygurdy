@@ -1,5 +1,4 @@
 #include "hg_render2d.hpp"
-#include <cstdio>
 
 namespace hg {
 
@@ -17,15 +16,15 @@ struct RenderPush2D {
     u32 instIdx = 0;
 };
 
-#include "render2d.vert.spv.h"
-#include "render2d.frag.spv.h"
-#include "debug2d.frag.spv.h"
+#include "shaders/render2d.vert.spv.h"
+#include "shaders/render2d.frag.spv.h"
+#include "shaders/debug2d.frag.spv.h"
 
 void initRenderer2D(Format colorFormat)
 {
     GpuGraphicsPipelineCreateInfo pipelineConfig{};
-    pipelineConfig.vertexShader = {render2d_vert_spv, sizeof(render2d_vert_spv)};
-    pipelineConfig.fragmentShader = {render2d_frag_spv, sizeof(render2d_frag_spv)};
+    pipelineConfig.vertexShader = {shaders_render2d_vert_spv, sizeof(shaders_render2d_vert_spv)};
+    pipelineConfig.fragmentShader = {shaders_render2d_frag_spv, sizeof(shaders_render2d_frag_spv)};
     pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
     pipelineConfig.colorAttachmentFormats = {&colorFormat, 1};
     bool enableColorBlend = true;
@@ -33,7 +32,7 @@ void initRenderer2D(Format colorFormat)
 
     render2D.pipeline = GpuPipeline::graphics(pipelineConfig);
 
-    pipelineConfig.fragmentShader = {debug2d_frag_spv, sizeof(debug2d_frag_spv)};
+    pipelineConfig.fragmentShader = {shaders_debug2d_frag_spv, sizeof(shaders_debug2d_frag_spv)};
     pipelineConfig.topology = GpuTopology_lineStrip;
 
     render2D.debugPipeline = GpuPipeline::graphics(pipelineConfig);
@@ -46,7 +45,8 @@ void initRenderer2D(Format colorFormat)
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    render2D.defaultTex.image = GpuImage::create(2, 2, Format_r8g8b8a8_srgb, GpuImageUsage_sampled | GpuImageUsage_transferDst);
+    render2D.defaultTex.image = GpuImage::create(2, 2, Format_r8g8b8a8_srgb,
+        GpuImageUsage_sampled | GpuImageUsage_transferDst);
     render2D.defaultTex.view = GpuView::create(render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
     render2D.defaultTex.view.write(defaultColors);
 }

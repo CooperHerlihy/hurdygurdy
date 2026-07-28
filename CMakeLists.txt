@@ -58,30 +58,30 @@ set(INCLUDE_DIRS
 add_executable(embed src/embed.c)
 
 set(SHADERS
-    render2d.vert
-    render2d.frag
-    debug2d.frag
-    skybox.vert
-    skybox.frag
-    sprite.vert
-    sprite.frag
-    model.vert
-    model.frag
-    test_compute.comp
-    test_tri.vert
-    test_tri.frag
-    test_sampler.frag
-    test_mul.comp
-    test_buf_to_img.comp
-    test_uniform.vert
-    test_uniform.frag
-    test_storage_img.comp
-    test_depth.vert
-    test_depth.frag
-    test_instance.vert
-    test_instance.frag
-    test_blur.comp
-    test_invert.frag
+    shaders/render2d.vert
+    shaders/render2d.frag
+    shaders/debug2d.frag
+    shaders/skybox.vert
+    shaders/skybox.frag
+    shaders/sprite.vert
+    shaders/sprite.frag
+    shaders/model.vert
+    shaders/model.frag
+    test/compute.comp
+    test/tri.vert
+    test/tri.frag
+    test/sampler.frag
+    test/mul.comp
+    test/buf_to_img.comp
+    test/uniform.vert
+    test/uniform.frag
+    test/storage_img.comp
+    test/depth.vert
+    test/depth.frag
+    test/instance.vert
+    test/instance.frag
+    test/blur.comp
+    test/invert.frag
 )
 
 set(SHADER_HEADERS)
@@ -96,7 +96,7 @@ foreach(shader ${SHADERS})
         DEPENDS embed
             ${CMAKE_SOURCE_DIR}/src/${shader}
             ${CMAKE_SOURCE_DIR}/include/hurdygurdy.glsl
-        COMMENT "Compiling ${shader} -> header"
+        COMMENT "Compiling ${shader}"
     )
 
     list(APPEND SHADER_HEADERS ${spv_h})
@@ -183,21 +183,42 @@ target_compile_options(hurdygurdy_misc PRIVATE ${CLANG_VENDOR_FLAGS})
 add_library(hurdygurdy STATIC)
 target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_misc)
 
-foreach(tgt test editor minimal)
+add_executable(tests
+    src/test/tests.cpp
+    src/test/types.cpp
+    src/test/error.cpp
+    src/test/utility.cpp
+    src/test/memory.cpp
+    src/test/concurrency.cpp
+    src/test/math.cpp
+    src/test/geometry2d.cpp
+    src/test/geometry3d.cpp
+    src/test/noise.cpp
+    src/test/strings.cpp
+    src/test/containers.cpp
+    src/test/assets.cpp
+    src/test/serialization.cpp
+    src/test/gpu.cpp
+    src/test/render2d.cpp
+    src/test/ecs.cpp
+)
+target_link_libraries(tests hurdygurdy)
+target_include_directories(tests PRIVATE ${CMAKE_BINARY_DIR})
+target_compile_options(tests PRIVATE ${STRICT_FLAGS})
+target_compile_definitions(tests PRIVATE HG_LOGGING=1)
+
+foreach(tgt minimal editor)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
     target_include_directories(${tgt} PRIVATE ${CMAKE_BINARY_DIR})
     target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
-    if(tgt STREQUAL test)
-        target_compile_definitions(${tgt} PRIVATE HG_LOGGING=1)
-    endif()
 endforeach()
 
 install(TARGETS hurdygurdy
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS test editor minimal
+install(TARGETS tests minimal editor
     RUNTIME DESTINATION bin
 )
 
