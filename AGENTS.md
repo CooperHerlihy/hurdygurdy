@@ -84,7 +84,7 @@ Root files:
 - `asset_io.cpp` - Texture/Mesh/Binary file I/O
 - `camera.cpp` - Camera create/update
 - `render2d.cpp` - Renderer 2D, Atlas, Tilemap, Layer
-- `platform.cpp` - SDL init/deinit, platformGetVulkanExtensions
+- `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
 - `dynlib.cpp` - Library::load/findFunction
 - `vk_mem_alloc.cpp` - VMA vendor source
 - `test.cpp` - tests (monolithic)
@@ -98,8 +98,11 @@ Root files:
 - `gpu.cpp` - public API impl: GpuBuffer/Image/View/Pipeline, cmds, barriers, render/compute passes
 
 `src/sdl/` - SDL implementation:
-- `window.cpp` - Window create, processEvents, ImGui integration, swapchain, gpuFrameBegin/End
-- `audio_stream.cpp` - AudioStream primitive
+- `sdl_backend.hpp` - internal header, SdlFuncs struct, extern libsdl/sdlFuncs
+- `sdl.cpp` - dynamic SDL library loading, init/deinit
+- `loader.cpp` - SDL wrapper function stubs (forwarding to dynamically loaded symbols)
+- `window.cpp` - Window create, processEvents, swapchain, gpuFrameBegin/End
+- `audio.cpp` - AudioStream/AudioPlayer impl
 
 ## Conventions
 
