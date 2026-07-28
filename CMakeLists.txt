@@ -133,12 +133,12 @@ set(CORE_SOURCES
     src/geometry3d.cpp
     src/noise.cpp
     src/strings.cpp
-    src/containers.cpp
+    src/binary.cpp
+    src/pool.cpp
     src/serialization.cpp
     src/time.cpp
     src/audio.cpp
     src/assets.cpp
-    src/camera.cpp
     src/render2d.cpp
     src/dynlib.cpp
     src/imgui.cpp

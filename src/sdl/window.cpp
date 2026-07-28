@@ -1,6 +1,9 @@
-#include "internal.hpp"
+#include "hg/window.hpp"
 
+#include "internal.hpp"
 #include "hg/error.hpp"
+#include "hg/array.hpp"
+#include "hg/map.hpp"
 
 #include <SDL3/SDL.h>
 

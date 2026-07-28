@@ -1,4 +1,4 @@
-#include "sdl/sdl_backend.hpp"
+#include "sdl/sdl_internal.hpp"
 
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"

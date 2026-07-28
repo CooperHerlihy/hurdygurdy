@@ -1,4 +1,4 @@
-#include "hg/timing.hpp"
+#include "hg/time.hpp"
 
 #include <cstdio>
 #include <ctime>

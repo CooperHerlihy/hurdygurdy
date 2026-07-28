@@ -22,14 +22,18 @@ struct BinaryView {
     u64 size = 0;
 
     /**
-     * Read a section of data
+     * Read data at index into a buffer
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     * - dst A pointer to store the read data
+     * - size The size in bytes to read
      */
     void read(u64 idx, void* dst, u64 len) const
     {
         HG_ASSERT(idx + len <= size);
         memcpy(dst, static_cast<const u8*>(data) + idx, len);
     }
-
 
     /**
      * Read a section of data
@@ -90,7 +94,11 @@ struct BinaryBuilder {
      * - dst A pointer to store the read data
      * - size The size in bytes to read
      */
-    void read(u64 idx, void* dst, u64 len);
+    void read(u64 idx, void* dst, u64 len) const
+    {
+        HG_ASSERT(idx + len <= size);
+        memcpy(dst, static_cast<const u8*>(data) + idx, len);
+    }
 
     /**
      * Read data of arbitrary type from the file

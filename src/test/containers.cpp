@@ -8,18 +8,6 @@ void testContainers()
     //
     // BinaryBuilder is an arena-backed builder for binary data. Supports
     // resize, append, overwrite, read, and implicit BinaryView conversion.
-    //
-    // Functions covered:
-    // - BinaryBuilder() — default
-    // - BinaryBuilder(Arena*, u64) — arena + optional initial size
-    // - operator BinaryView()
-    // - read(u64, void*, u64)
-    // - read<T>(u64)
-    // - resize(u64)
-    // - overwrite(u64, const void*, u64)
-    // - overwrite<T>(u64, const T&)
-    // - append(const void*, u64)
-    // - append<T>(const T&)
 
     // Default-constructed builder has null arena
     {

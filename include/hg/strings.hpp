@@ -24,7 +24,7 @@ struct StringView {
     /**
      * Construct empty
      */
-    StringView() = default;
+    constexpr StringView() = default;
 
     /**
      * Construct from pointer and length

@@ -27,27 +27,48 @@ TSan false-positive: lock-order-inversion between SDL3 audio and PipeWire - thir
 
 Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 
+## Conventions
+
+- 4-space indent. Braces: next line for code blocks, same line for types/init.
+- `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros.
+- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`. No `int`/`size_t`/`std::*`.
+- RAII, no failing constructors, use static create(), delete copy ctors, use foo.clone().
+- Assert with `HG_ASSERT`. Recoverable errors: `setError()` and `Maybe<T>`. Unrecoverable: `HG_PANIC`.
+- Memory: hg:: temp containers > scratch arena > hg:: containers > heapAlloc/heapFree. Never std:: containers
+- Concurrency: forPar() > callPar() > std:: primitives.
+
 ## Contents
 
 `include/` - public headers:
 - `hurdygurdy.hpp` - umbrella, includes all sub-headers
 - `hurdygurdy.glsl` - shared GLSL header
 - `hg/macros.hpp` - config/detection macros, HG_DEFER, HG_LOG, HG_WARN, HG_PANIC, HG_ASSERT
-- `hg/types.hpp` - u8..f64, StringView, Span, Product, Sum, Maybe
+- `hg/inttypes.hpp` - u8..f64
+- `hg/span.hpp`
+- `hg/product.hpp`
+- `hg/sum.hpp`
+- `hg/maybe.hpp`
 - `hg/error.hpp` - getError, setError, logError
-- `hg/init.hpp` - HurdyGurdy scope guard
-- `hg/utility.hpp` - isPowerOf2, align, endianReverse
+- `hg/init.hpp`
+- `hg/utility.hpp` - size, isPowerOf2, align, endianReverse
 - `hg/memory.hpp` - Arena, ArenaScope, heapAlloc/Free, scratch
 - `hg/concurrency.hpp` - SpinLock, Fence, forPar, callPar
 - `hg/math.hpp` - Vec2/3/4, Mat2/3/4, Complex, Quat
 - `hg/geometry2d.hpp` - Circle, Rect, Ray2D, Line2D
 - `hg/geometry3d.hpp` - Sphere, Box, Tri, Plane, Ray3D, Line3D
 - `hg/noise.hpp` - Rng, noise functions
-- `hg/strings.hpp` - String, StringBuilder, parsing
-- `hg/containers.hpp` - Array, Queue, Set, Map, Pool, HandlePool
+- `hg/strings.hpp` - StringView, StringBuiler, String
+- `hg/binary.hpp` - BinaryView, BinaryBuiler, Binary
+- `hg/smart_ptr.hpp` - UniquePtr, makeUnique, SharedPtr, makeShared
+- `hg/array.hpp` - Array, ArrayTemp
+- `hg/queue.hpp` - Queue, QueueTemp
+- `hg/hash.hpp` - hgHash template declaration
+- `hg/set.hpp` - Set, SetTemp
+- `hg/map.hpp` - Map, MapTemp
+- `hg/pool.hpp` - Pool, HandlePool
 - `hg/assets.hpp` - AssetT, AssetManagerT, load/reload
 - `hg/serialization.hpp` - Serializer, binary format
-- `hg/timing.hpp` - Clock, Perf
+- `hg/time.hpp` - Clock, Perf
 - `hg/dynlib.hpp` - Library dynamic loading
 - `hg/gpu.hpp` - Format, GpuBuffer, GpuImage, GpuPipeline, GpuCmd
 - `hg/window.hpp` - Button, Window, input/event types
@@ -57,54 +78,43 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/ecs.hpp` - ECS (commented out)
 
 `src/` - implementation:
-- `internal.hpp` - internal declarations (platform/gpu/audio init)
-- `error.cpp` - getError, setError, logError
-- `init.cpp` - init(), HurdyGurdy ctor/dtor
-- `memory.cpp` - heapAlloc/Free, Arena, scratch
-- `concurrency.cpp` - SpinLock, Fence, thread pool, forPar
-- `math.cpp` - Vec/Mat/Complex/Quat operations, camera matrices
-- `geometry_2d.cpp` - Circle/Rect/Ray2D/Line2D intersection
-- `geometry_3d.cpp` - Sphere/Box/Tri/Plane/Ray3D/Line3D intersection
-- `noise.cpp` - noise functions, Rng, trueRandom
-- `strings.cpp` - StringBuilder, String, parsing
-- `containers.cpp` - BinaryView, BinaryBuilder, Binary, HandlePool
-- `serialization.cpp` - Serializer, binary serial
-- `timing.cpp` - Clock, Perf
-- `audio.cpp` - Sound asset, AudioPlayer
-- `asset_io.cpp` - Texture/Mesh/Binary file I/O
-- `camera.cpp` - Camera create/update
-- `render2d.cpp` - Renderer 2D, Atlas, Tilemap, Layer
+- `internal.hpp` - internal header (platform/gpu/audio init)
+- `error.cpp`
+- `init.cpp`
+- `memory.cpp`
+- `concurrency.cpp`
+- `math.cpp`
+- `geometry_2d.cpp`
+- `geometry_3d.cpp`
+- `noise.cpp`
+- `strings.cpp`
+- `binary.cpp`
+- `pool.cpp`
+- `asset.cpp`
+- `serialization.cpp`
+- `timing.cpp`
+- `audio.cpp`
+- `render2d.cpp`
 - `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
-- `dynlib.cpp` - Library::load/findFunction
-- `vk_mem_alloc.cpp` - VMA vendor source
-- `editor.cpp` - example editor
-- `minimal.cpp` - example minimal
+- `dynlib.cpp`
+- `editor.cpp` - example editor app
+- `minimal.cpp` - minimal example app
 
 `src/vulkan/` - Vulkan implementation:
-- `backend.hpp` - shared internal header, data structs, VulkanFuncs, inline helpers
+- `vulkan_internal.hpp` - internal header, data structs, VulkanFuncs, inline helpers
 - `vulkan.cpp` - internal infrastructure: VulkanState, init/deinit, format tables, samplers, descriptors
-- `loader.cpp` - dynamic Vulkan library loading, function pointer population, vulkanFuncs/libvulkan storage
+- `loader.cpp` - dynamic Vulkan library loading, function pointer population
 - `gpu.cpp` - public API impl: GpuBuffer/Image/View/Pipeline, cmds, barriers, render/compute passes
 
 `src/sdl/` - SDL implementation:
-- `sdl_backend.hpp` - internal header, SdlFuncs struct, extern libsdl/sdlFuncs
-- `sdl.cpp` - dynamic SDL library loading, init/deinit
-- `loader.cpp` - SDL wrapper function stubs (forwarding to dynamically loaded symbols)
+- `sdl_internal.hpp` - internal header, SdlFuncs struct, extern libsdl/sdlFuncs
+- `sdl.cpp` - init/deinit
+- `loader.cpp` - dynamic SDL library loading, function pointer population
 - `window.cpp` - Window create, processEvents, swapchain, gpuFrameBegin/End
 - `audio.cpp` - AudioStream/AudioPlayer impl
 
 `src/test` - tests:
-- `tests.hpp` - internal header for tests
-- `tests.cpp` - monolithic c++ tests
-- `*.cpp` - tests, named after headers
-
-## Conventions
-
-- 4-space indent. Braces: next line for code blocks, same line for types/init.
-- `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros.
-- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`. No `int`/`size_t`/`std::*`.
-- RAII, no failing constructors, delete copy ctors, use foo.clone().
-- Assert with `HG_ASSERT`. Recoverable errors: `setError()` and `Option<T>`. Unrecoverable: `HG_PANIC`.
-- Memory: scratch arena > hg:: containers > heapAlloc/heapFree. Never std:: containers
-- Concurrency: forPar() > callPar() > std::*.
+- `tests.hpp` - internal header
+- `tests.cpp` - runs all tests
+- `*.cpp` - tests, named like headers
 

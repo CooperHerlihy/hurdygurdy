@@ -1,4 +1,7 @@
-#include "vulkan_backend.hpp"
+#include "hg/gpu.hpp"
+
+#include "vulkan_internal.hpp"
+#include "hg/utility.hpp"
 
 #include <cmath>
 
@@ -488,7 +491,7 @@ void GpuView::writeCubemap(const void* src)
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = static_cast<u32>(std::size(transferBarriers));
+    transferDep.imageMemoryBarrierCount = static_cast<u32>(hg::size(transferBarriers));
     transferDep.pImageMemoryBarriers = transferBarriers;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &transferDep);
@@ -537,7 +540,7 @@ void GpuView::writeCubemap(const void* src)
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         data->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        static_cast<u32>(std::size(regions)),
+        static_cast<u32>(hg::size(regions)),
         regions);
 
     gpuCmdEnd(cmd);
@@ -851,7 +854,7 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = static_cast<u32>(std::size(dynamicStates));
+    dynamicState.dynamicStateCount = static_cast<u32>(size(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
     ArrayTemp<VkFormat> colorFormats{scratch, 0, static_cast<u32>(config.colorAttachmentFormats.count)};
@@ -872,7 +875,7 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = static_cast<u32>(std::size(shaderStages));
+    pipelineInfo.stageCount = static_cast<u32>(size(shaderStages));
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputState;
     pipelineInfo.pInputAssemblyState = &inputAssemblyState;

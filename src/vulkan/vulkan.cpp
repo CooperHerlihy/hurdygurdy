@@ -10,6 +10,8 @@
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
 
+#include <algorithm>
+
 namespace hg {
 using namespace vulkan;
 

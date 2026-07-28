@@ -1,5 +1,7 @@
 #include "hg/audio.hpp"
 
+#include <algorithm>
+
 namespace hg {
 
 template<>
