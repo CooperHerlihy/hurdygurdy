@@ -8,7 +8,10 @@ int main()
 
     Clock timer{};
 
-    testTypes();
+    testSpan();
+    testProduct();
+    testSum();
+    testMaybe();
     testError();
     testUtils();
     testMemory();
@@ -18,7 +21,13 @@ int main()
     testGeometry3D();
     testNoise();
     testStrings();
-    testContainers();
+    testBinary();
+    testSmartPtr();
+    testArray();
+    testQueue();
+    testSet();
+    testMap();
+    testPool();
     testAssets();
     testSerialization();
     testGpu();

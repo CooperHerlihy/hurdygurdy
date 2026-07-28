@@ -185,7 +185,10 @@ target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygu
 
 add_executable(tests
     src/test/tests.cpp
-    src/test/types.cpp
+    src/test/span.cpp
+    src/test/product.cpp
+    src/test/sum.cpp
+    src/test/maybe.cpp
     src/test/error.cpp
     src/test/utility.cpp
     src/test/memory.cpp
@@ -195,7 +198,13 @@ add_executable(tests
     src/test/geometry3d.cpp
     src/test/noise.cpp
     src/test/strings.cpp
-    src/test/containers.cpp
+    src/test/binary.cpp
+    src/test/smart_ptr.cpp
+    src/test/array.cpp
+    src/test/queue.cpp
+    src/test/set.cpp
+    src/test/map.cpp
+    src/test/pool.cpp
     src/test/assets.cpp
     src/test/serialization.cpp
     src/test/gpu.cpp

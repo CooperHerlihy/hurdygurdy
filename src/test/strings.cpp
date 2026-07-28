@@ -3,6 +3,134 @@
 void testStrings()
 {
     // ============================================================================
+    // StringView operators
+    // ============================================================================
+    //
+    // StringView is a non-owning view into a string (chars + length).
+    // Equality compares length first, then memcmp.
+    //
+    // Functions covered:
+    // - operator==(StringView, StringView)
+    // - operator!=(StringView, StringView)
+
+    // Equal strings
+    {
+        StringView a{"hello"};
+        StringView b{"hello"};
+        TEST(a == b);
+        TEST(!(a != b));
+    }
+
+    // Different strings
+    {
+        StringView a{"hello"};
+        StringView b{"world"};
+        TEST(a != b);
+        TEST(!(a == b));
+    }
+
+    // Empty strings are equal
+    {
+        StringView a{};
+        StringView b{};
+        TEST(a == b);
+    }
+
+    // Empty vs non-empty
+    {
+        StringView a{};
+        StringView b{"x"};
+        TEST(a != b);
+    }
+
+    // Same content, different pointer (should still compare equal)
+    {
+        const char* s1 = "abcdef";
+        const char* s2 = "abcdef";
+        StringView a{s1, 3};
+        StringView b{s2, 3};
+        TEST(a == b);
+    }
+
+    // Different lengths, same prefix
+    {
+        StringView a{"hello", 5};
+        StringView b{"hello world", 5};
+        TEST(a == b);
+    }
+
+    // Different lengths, same prefix (one longer)
+    {
+        StringView a{"hello world", 11};
+        StringView b{"hello", 5};
+        TEST(a != b);
+    }
+
+    // nullptr handling — constructing from nullptr gives empty view
+    {
+        const char* nullStr = nullptr;
+        StringView sv{nullStr};
+        TEST(sv.chars == nullptr);
+        TEST(sv.length == 0);
+
+        StringView empty{};
+        TEST(sv == empty);
+    }
+
+    // StringView from (ptr, length) with zero length
+    {
+        const char* data = "hello";
+        StringView sv{data, u64{0}};
+        TEST(sv.length == 0);
+        TEST(StringView{} == sv);
+    }
+
+    // StringView from begin/end pointers
+    {
+        const char* data = "hello world";
+        StringView sv{data + 6, data + 11};
+        TEST(sv == "world");
+    }
+
+    // StringView from begin/end with equal pointers (empty range)
+    {
+        const char* data = "hello";
+        StringView sv{data, data};
+        TEST(sv.length == 0);
+    }
+
+    // StringView indexing
+    {
+        StringView sv{"hello"};
+        TEST(sv[0] == 'h');
+        TEST(sv[1] == 'e');
+        TEST(sv[2] == 'l');
+        TEST(sv[3] == 'l');
+        TEST(sv[4] == 'o');
+    }
+
+    // StringView range-for
+    {
+        StringView sv{"abc"};
+        char result[4]{};
+        u64 i = 0;
+        for (char c : sv)
+        {
+            result[i] = c;
+            ++i;
+        }
+        result[i] = '\0';
+        TEST(StringView{result} == "abc");
+    }
+
+    // StringView from const char* implicit conversion (long string)
+    {
+        StringView sv{"this is a fairly long string that should work fine"};
+        TEST(sv.length == 50);
+        TEST(sv == "this is a fairly long string that should work fine");
+    }
+
+    // ============================================================================
     // cString
     // ============================================================================
     //

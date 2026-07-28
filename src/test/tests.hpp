@@ -148,7 +148,10 @@ inline void serialize(Serializer* s, Lifecycle* val)
 
 }
 
-void testTypes();
+void testSpan();
+void testProduct();
+void testSum();
+void testMaybe();
 void testError();
 void testUtils();
 void testMemory();
@@ -158,7 +161,13 @@ void testGeometry2D();
 void testGeometry3D();
 void testNoise();
 void testStrings();
-void testContainers();
+void testBinary();
+void testSmartPtr();
+void testArray();
+void testQueue();
+void testSet();
+void testMap();
+void testPool();
 void testAssets();
 void testSerialization();
 void testGpu();
