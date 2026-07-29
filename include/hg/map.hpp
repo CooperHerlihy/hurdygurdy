@@ -199,6 +199,9 @@ struct Map {
      */
     bool remove(const K& key, V* val = nullptr)
     {
+        if (capacity == 0)
+            return false;
+
         u64 idx = static_cast<u64>(hash(key) % capacity);
         while (hasVal[idx])
         {
@@ -237,6 +240,9 @@ struct Map {
      */
     bool has(const K& key)
     {
+        if (capacity == 0)
+            return false;
+
         for (u64 idx = static_cast<u64>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (keys[idx] == key)
@@ -250,6 +256,9 @@ struct Map {
      */
     V* get(const K& key)
     {
+        if (capacity == 0)
+            return nullptr;
+
         for (u64 idx = static_cast<u64>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (keys[idx] == key)
@@ -492,6 +501,9 @@ struct MapTemp {
      */
     bool remove(const K& key, V* val = nullptr)
     {
+        if (capacity == 0)
+            return false;
+
         u64 idx = static_cast<u64>(hash(key) % capacity);
         while (hasVal[idx])
         {
@@ -530,6 +542,9 @@ struct MapTemp {
      */
     bool has(const K& key)
     {
+        if (capacity == 0)
+            return false;
+
         for (u64 idx = static_cast<u64>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (keys[idx] == key)
@@ -543,6 +558,9 @@ struct MapTemp {
      */
     V* get(const K& key)
     {
+        if (capacity == 0)
+            return nullptr;
+
         for (u64 idx = static_cast<u64>(hash(key) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (keys[idx] == key)
