@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/ecs.hpp"
 
 struct EntityRefComp {
     Entity target;

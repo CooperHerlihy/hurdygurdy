@@ -1,4 +1,6 @@
 #include "tests.hpp"
+#include "hg/memory.hpp"
+#include "hg/error.hpp"
 
 void testMemory()
 {

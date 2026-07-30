@@ -1,7 +1,13 @@
 #pragma once
 #undef HG_NO_LOGGING
 #define HG_LOGGING 1
-#include "hurdygurdy.hpp"
+#include "hg/macros.hpp"
+#include "hg/inttypes.hpp"
+#include "hg/hash.hpp"
+#include "hg/serialization.hpp"
+
+#include <cfloat>
+#include <cmath>
 
 #define TEST(cond) do { \
     if (!(cond)) \

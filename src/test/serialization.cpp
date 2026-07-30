@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/serialization.hpp"
 
 void testSerialization()
 {

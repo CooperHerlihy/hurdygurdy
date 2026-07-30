@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/assets.hpp"
 
 #include <cstdio>
 #include <sys/stat.h>

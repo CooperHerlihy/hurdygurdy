@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/smart_ptr.hpp"
 
 void testSmartPtr()
 {

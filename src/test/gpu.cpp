@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/gpu.hpp"
 
 #include "test/compute.comp.spv.h"
 #include "test/tri.vert.spv.h"

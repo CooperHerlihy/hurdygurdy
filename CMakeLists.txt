@@ -210,6 +210,9 @@ add_executable(tests
     src/test/ecs.cpp
 )
 target_link_libraries(tests hurdygurdy)
+target_precompile_headers(tests PRIVATE
+    <hurdygurdy.hpp>
+)
 target_include_directories(tests PRIVATE ${CMAKE_BINARY_DIR})
 target_compile_options(tests PRIVATE ${STRICT_FLAGS})
 target_compile_definitions(tests PRIVATE HG_LOGGING=1)

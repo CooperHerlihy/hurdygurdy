@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/set.hpp"
 
 void testSet()
 {

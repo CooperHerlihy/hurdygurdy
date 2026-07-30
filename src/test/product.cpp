@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/product.hpp"
 
 void testProduct()
 {

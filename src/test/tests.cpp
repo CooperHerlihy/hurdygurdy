@@ -1,4 +1,6 @@
 #include "tests.hpp"
+#include "hg/init.hpp"
+#include "hg/time.hpp"
 
 int main()
 {

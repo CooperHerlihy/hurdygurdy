@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/geometry2d.hpp"
 
 void testGeometry2D()
 {
