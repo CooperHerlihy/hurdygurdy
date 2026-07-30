@@ -40,16 +40,16 @@ else()
     endif()
 endif()
 
-set(VulkanHeaders_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/Vulkan-Headers/include)
-set(SDL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/SDL/include)
+set(VulkanHeaders_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/Vulkan-Headers/include)
+set(SDL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
 
 set(INCLUDE_DIRS
-    ${CMAKE_BINARY_DIR}
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/vendor
-    ${CMAKE_SOURCE_DIR}/vendor/imgui
-    ${CMAKE_SOURCE_DIR}/vendor/imgui/backends
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends
     ${SDL_INCLUDE_DIR}
 )
 
@@ -84,16 +84,16 @@ set(SHADERS
 
 set(SHADER_HEADERS)
 foreach(shader ${SHADERS})
-    set(spv ${CMAKE_BINARY_DIR}/${shader}.spv)
-    set(spv_h ${CMAKE_BINARY_DIR}/${shader}.spv.h)
+    set(spv ${CMAKE_CURRENT_BINARY_DIR}/${shader}.spv)
+    set(spv_h ${CMAKE_CURRENT_BINARY_DIR}/${shader}.spv.h)
 
     add_custom_command(
         OUTPUT ${spv_h}
-        COMMAND glslc -o ${spv} ${CMAKE_SOURCE_DIR}/src/${shader} -I${CMAKE_SOURCE_DIR}/include
+        COMMAND glslc -o ${spv} ${CMAKE_CURRENT_SOURCE_DIR}/src/${shader} -I${CMAKE_CURRENT_SOURCE_DIR}/include
         COMMAND embed ${spv} ${shader}.spv ${spv_h}
         DEPENDS embed
-            ${CMAKE_SOURCE_DIR}/src/${shader}
-            ${CMAKE_SOURCE_DIR}/include/hurdygurdy.glsl
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/${shader}
+            ${CMAKE_CURRENT_SOURCE_DIR}/include/hurdygurdy.glsl
         COMMENT "Compiling ${shader}"
     )
 
@@ -102,10 +102,10 @@ endforeach()
 
 add_custom_target(shaders DEPENDS ${SHADER_HEADERS})
 
-file(GLOB IMGUI_SOURCES ${CMAKE_SOURCE_DIR}/vendor/imgui/*.cpp)
+file(GLOB IMGUI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/*.cpp)
 set(IMGUI_BACKEND_SOURCES
-    ${CMAKE_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_sdl3.cpp
-    ${CMAKE_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_vulkan.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_sdl3.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_vulkan.cpp
 )
 
 set(VULKAN_SOURCES
@@ -213,14 +213,14 @@ target_link_libraries(tests hurdygurdy)
 target_precompile_headers(tests PRIVATE
     <hurdygurdy.hpp>
 )
-target_include_directories(tests PRIVATE ${CMAKE_BINARY_DIR})
+target_include_directories(tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_options(tests PRIVATE ${STRICT_FLAGS})
 target_compile_definitions(tests PRIVATE HG_LOGGING=1)
 
 foreach(tgt minimal editor)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
-    target_include_directories(${tgt} PRIVATE ${CMAKE_BINARY_DIR})
+    target_include_directories(${tgt} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
     target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
 endforeach()
 

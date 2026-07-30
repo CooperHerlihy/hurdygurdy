@@ -66,24 +66,37 @@ u32 trueRandom();
  * A pseudo random number generator
  */
 struct Rng {
+    /**
+     * The generator seed
+     */
     u32 seed = 0;
+    /**
+     * The current position
+     */
     u32 pos = 0;
+
+    /**
+     * Construct without seeding
+     */
+    Rng() noexcept = default;
+
+    /**
+     * Construct with seed
+     */
+    Rng(u32 seedVal) noexcept
+        : seed{seedVal}
+    {}
+
+    /**
+     * Get the next random value
+     */
+    u32 next();
+
+    /**
+     * Get the next 64 bit random value
+     */
+    u64 next64();
 };
-
-/**
- * Set the rng seed
- */
-void rngSeed(Rng* rng, u32 seed);
-
-/**
- * Get the next random value
- */
-u32 rngNext(Rng* rng);
-
-/**
- * Get the next 64 bit random value
- */
-u64 rngNext64(Rng* rng);
 
 } // namespace hg
 

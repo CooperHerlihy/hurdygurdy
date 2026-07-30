@@ -89,19 +89,14 @@ u32 trueRandom()
     return trueRandom();
 }
 
-void rngSeed(Rng* rng, u32 seed)
+u32 Rng::next()
 {
-    rng->seed = seed;
+    return pos = noise(seed, pos);
 }
 
-u32 rngNext(Rng* rng)
+u64 Rng::next64()
 {
-    return rng->pos = noise(rng->seed, rng->pos);
-}
-
-u64 rngNext64(Rng* rng)
-{
-    return (static_cast<u64>(rngNext(rng)) << 32) | static_cast<u64>(rngNext(rng));
+    return (static_cast<u64>(next()) << 32) | static_cast<u64>(next());
 }
 
 } // namespace hg
