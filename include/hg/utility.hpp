@@ -3,6 +3,8 @@
 #include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
 
+#include <concepts>
+
 namespace hg {
 
 /**
@@ -17,10 +19,22 @@ constexpr u64 size(const T& val)
 /**
  * Returns the size of a c style array in elements
  */
-template<typename T, u64 N >
+template<typename T, u64 N>
 constexpr u64 size(const T (&)[N])
 {
     return N;
+}
+
+/**
+ * Returns the index of T in a set of types First through Rest
+ */
+template<typename T, typename First, typename... Rest> requires (std::same_as<T, First> || (std::same_as<T, Rest> || ...))
+constexpr u64 idxOf()
+{
+    if constexpr (std::same_as<T, First>)
+        return 0;
+    else
+        return 1 + idxOf<T, Rest...>();
 }
 
 /**

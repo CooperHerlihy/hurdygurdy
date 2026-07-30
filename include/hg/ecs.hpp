@@ -1,983 +1,662 @@
 #pragma once
 
+#include "hg/utility.hpp"
+#include "hg/concurrency.hpp"
+#include "hg/product.hpp"
+#include "hg/pool.hpp"
+// #include "hg/serialization.hpp"
+
 namespace hg {
 
-// /**
-//  * An entity in the ecs
-//  */
-// struct Entity {
-//     /**
-//      * The entity handle
-//      */
-//     Handle handle = {};
-// };
-//
-// /**
-//  */
-// static constexpr Entity entityNull = Entity{};
-//
-// /**
-//  * Compare entities
-//  */
-// constexpr bool operator==(Entity lhs, Entity rhs)
-// {
-//     return lhs.handle.id == rhs.handle.id;
-// }
-//
-// /**
-//  * Compare entities
-//  */
-// constexpr bool operator!=(Entity lhs, Entity rhs)
-// {
-//     return lhs.handle.id != rhs.handle.id;
-// }
-//
-// /**
-//  * Hashing for entities
-//  */
-// template<>
-// constexpr u64 hash(Entity e)
-// {
-//     return hash(e.handle.id);
-// }
-//
-// /**
-//  * The unique component id for a type
-//  */
-// template<typename T>
-// inline u64 componentId = (u64)-1;
-//
-// /**
-//  * The function called on removing the component, may be overridden
-//  */
-// template<typename T>
-// void ecsDtor(T* component)
-// {
-//     static_cast<void>(component);
-// }
-//
+/**
+ * An entity in the ecs
+ */
+struct Entity {
+    /**
+     * The entity handle
+     */
+    Handle handle = nullHandle;
+};
+
+/**
+ * The null entity
+ */
+static constexpr Entity nullEntity = Entity{};
+
+/**
+ * Compare entities
+ */
+constexpr bool operator==(Entity lhs, Entity rhs)
+{
+    return lhs.handle.id == rhs.handle.id;
+}
+
+/**
+ * Compare entities
+ */
+constexpr bool operator!=(Entity lhs, Entity rhs)
+{
+    return lhs.handle.id != rhs.handle.id;
+}
+
+/**
+ * Hashing for entities
+ */
+template<>
+constexpr u64 hash(Entity e)
+{
+    return hash(e.handle.id);
+}
+
+/**
+ * A component in an entity component system
+ */
+template<typename T>
+struct EcsComponent {
+    /**
+     * indices[e.handle.idx()] is the index into components, or -1 if none
+     */
+    Array<u32> indices{};
+    /**
+     * entities[idx] is the entity that owns that index
+     */
+    Array<Entity> entities{};
+    /**
+     * The component data
+     */
+    Array<T> components{};
+
+    /**
+     * Default-construct a component on an entity
+     *
+     * Note, the entity must not already have the component
+     */
+    T& add(Entity e)
+    {
+        HG_ASSERT(!has(e));
+
+        if (e.handle.idx() >= indices.count)
+        {
+            u64 oldCount = indices.count;
+            indices.resize(e.handle.idx() + 1);
+            for (u64 i = oldCount; i < indices.count; ++i)
+            {
+                indices[i] = (u32)-1;
+            }
+        }
+
+        u64 idx = entities.count;
+        indices[e.handle.idx()] = (u32)idx;
+        entities.push(e);
+        return components.push();
+    }
+
+    /**
+     * Copy-construct a component on an entity
+     *
+     * Note, the entity must not already have the component
+     */
+    T& add(Entity e, const T& val)
+    {
+        HG_ASSERT(!has(e));
+
+        if (e.handle.idx() >= indices.count)
+        {
+            u64 oldCount = indices.count;
+            indices.resize(e.handle.idx() + 1);
+            for (u64 i = oldCount; i < indices.count; ++i)
+            {
+                indices[i] = (u32)-1;
+            }
+        }
+
+        u64 idx = entities.count;
+        indices[e.handle.idx()] = (u32)idx;
+        entities.push(e);
+        return components.push(val);
+    }
+
+    /**
+     * Move-construct a component on an entity
+     *
+     * Note, the entity must not already have the component
+     */
+    T& add(Entity e, T&& val)
+    {
+        HG_ASSERT(!has(e));
+
+        if (e.handle.idx() >= indices.count)
+        {
+            u64 oldCount = indices.count;
+            indices.resize(e.handle.idx() + 1);
+            for (u64 i = oldCount; i < indices.count; ++i)
+            {
+                indices[i] = (u32)-1;
+            }
+        }
+
+        u64 idx = entities.count;
+        indices[e.handle.idx()] = (u32)idx;
+        entities.push(e);
+        return components.push(std::move(val));
+    }
+
+    /**
+     * Remove a component from an entity
+     *
+     * Note, the entity must have the component to remove
+     */
+    void remove(Entity e)
+    {
+        u32 idx = indices[e.handle.idx()];
+        indices[e.handle.idx()] = (u32)-1;
+        entities.removeSwap(idx);
+        components.removeSwap(idx);
+
+        if (idx < entities.count)
+        {
+            Entity moved = entities[idx];
+            indices[moved.handle.idx()] = idx;
+        }
+    }
+
+    /**
+     * Returns whether an entity has a component
+     */
+    bool has(Entity e) const
+    {
+        return e.handle.idx() < indices.count && indices[e.handle.idx()] != (u32)-1;
+    }
+
+    /**
+     * Get a component from an entity
+     *
+     * Note, the entity must have the component
+     */
+    T& get(Entity e)
+    {
+        HG_ASSERT(has(e));
+        return components[indices[e.handle.idx()]];
+    }
+
+    /**
+     * Get a component from an entity (const)
+     *
+     * Note, the entity must have the component
+     */
+    const T& get(Entity e) const
+    {
+        HG_ASSERT(has(e));
+        return components[indices[e.handle.idx()]];
+    }
+
+    /**
+     * Get the entity associated with a component
+     */
+    Entity getEntity(const T& c) const
+    {
+        return entities[static_cast<u32>(&c - components.vals)];
+    }
+};
+
+/**
+ * An entity component system
+ */
+template<typename... Ts>
+struct Ecs {
+    /**
+     * The entity pool
+     */
+    HandlePool entities;
+    /**
+     * The component systems
+     */
+    Product<EcsComponent<Ts>...> systems{};
+
+    /**
+     * Create an empty entity component system
+     */
+    static Ecs create()
+    {
+        Ecs ecs{};
+        ecs.entities = HandlePool::create();
+        return ecs;
+    }
+
+    /**
+     * Get the component system for a type
+     */
+    template<typename T>
+    EcsComponent<T>& getComponentSystem()
+    {
+        return systems.template get<idxOf<T, Ts...>()>();
+    }
+
+    /**
+     * Get the component system for a type (const)
+     */
+    template<typename T>
+    const EcsComponent<T>& getComponentSystem() const
+    {
+        return systems.template get<idxOf<T, Ts...>()>();
+    }
+
+    /**
+     * Despawn all entities
+     */
+    void reset()
+    {
+        (clear<Ts>(), ...);
+        entities.reset();
+    }
+
+    /**
+     * Remove component type from all entities
+     */
+    template<typename T>
+    void clear()
+    {
+        EcsComponent<T>& s = getComponentSystem<T>();
+        s.indices.reset();
+        s.entities.reset();
+        s.components.reset();
+    }
+
+    /**
+     * Spawn a new entity with no components
+     */
+    Entity spawn()
+    {
+        return {entities.alloc()};
+    }
+
+    /**
+     * Despawn an entity, destroying all components
+     */
+    void despawn(Entity e)
+    {
+        HG_ASSERT(alive(e));
+        systems.forEach([&](auto& c)
+        {
+            if (c.has(e))
+                c.remove(e);
+        });
+        entities.free(e.handle);
+    }
+
+    /**
+     * Returns whether an entity is still alive
+     */
+    bool alive(Entity e) const
+    {
+        return entities.alive(e.handle);
+    }
+
+    /**
+     * Default-construct a component on an entity
+     *
+     * Note, the entity must not already have the component
+     */
+    template<typename T>
+    T& add(Entity e)
+    {
+        HG_ASSERT(alive(e));
+        return getComponentSystem<T>().add(e);
+    }
+
+    /**
+     * Copy-construct a component on an entity
+     *
+     * Note, the entity must not already have the component
+     */
+    template<typename T>
+    T& add(Entity e, const T& val)
+    {
+        HG_ASSERT(alive(e));
+        return getComponentSystem<T>().add(e, val);
+    }
+
+    /**
+     * Move-construct a component on an entity
+     *
+     * Note, the entity must not already have the component
+     */
+    template<typename T>
+    T& add(Entity e, T&& val)
+    {
+        HG_ASSERT(alive(e));
+        return getComponentSystem<T>().add(e, std::move(val));
+    }
+
+    /**
+     * Remove a component from an entity
+     *
+     * Note, the entity must have the component to remove
+     */
+    template<typename T>
+    void remove(Entity e)
+    {
+        HG_ASSERT(alive(e));
+        getComponentSystem<T>().remove(e);
+    }
+
+    /**
+     * Default-construct components for multiple types at once
+     *
+     * Note, the entity must not already have any of the components
+     */
+    template<typename... Us> requires (sizeof...(Us) > 1)
+    void add(Entity e)
+    {
+        HG_ASSERT(alive(e));
+        (getComponentSystem<Us>().add(e), ...);
+    }
+
+    /**
+     * Forward-construct components for multiple types at once
+     *
+     * Each argument corresponds positionally to a component type.
+     * Note, the entity must not already have any of the components
+     */
+    template<typename... Us> requires (sizeof...(Us) > 1)
+    void add(Entity e, Us&&... vals)
+    {
+        HG_ASSERT(alive(e));
+        (getComponentSystem<Us>().add(e, std::forward<Us>(vals)), ...);
+    }
+
+    /**
+     * Remove components for multiple types at once
+     *
+     * Note, the entity must have all the components to remove
+     */
+    template<typename... Us> requires (sizeof...(Us) > 1)
+    void remove(Entity e)
+    {
+        HG_ASSERT(alive(e));
+        (getComponentSystem<Us>().remove(e), ...);
+    }
+
+    /**
+     * Returns whether an entity has a component
+     */
+    template<typename T>
+    bool has(Entity e) const
+    {
+        HG_ASSERT(alive(e));
+        return getComponentSystem<T>().has(e);
+    }
+
+    /**
+     * Returns whether an entity has all components in a type list
+     */
+    template<typename... Us>
+    bool hasAll(Entity e) const
+    {
+        return (has<Us>(e) && ...);
+    }
+
+    /**
+     * Returns whether an entity has any component in a type list
+     */
+    template<typename... Us>
+    bool hasAny(Entity e) const
+    {
+        return (has<Us>(e) || ...);
+    }
+
+    /**
+     * Get a component from an entity
+     *
+     * Note, the entity must have the component
+     */
+    template<typename T>
+    T& get(Entity e)
+    {
+        HG_ASSERT(alive(e));
+        return getComponentSystem<T>().get(e);
+    }
+
+    /**
+     * Get a component from an entity (const)
+     *
+     * Note, the entity must have the component
+     */
+    template<typename T>
+    const T& get(Entity e) const
+    {
+        HG_ASSERT(alive(e));
+        return getComponentSystem<T>().get(e);
+    }
+
+    /**
+     * Get the entity associated with a component
+     */
+    template<typename T>
+    Entity getEntity(const T& c) const
+    {
+        return getComponentSystem<T>().getEntity(c);
+    }
+
+    /**
+     * Returns the number of active components of a type
+     */
+    template<typename T>
+    u64 count() const
+    {
+        return getComponentSystem<T>().components.count;
+    }
+
+    /**
+     * Returns all entities with a component type
+     */
+    template<typename T>
+    Span<const Entity> getEntities() const
+    {
+        return getComponentSystem<T>().entities;
+    }
+
+    /**
+     * Returns all components of a type
+     */
+    template<typename T>
+    Span<T> getComponents()
+    {
+        return getComponentSystem<T>().components;
+    }
+
+    /**
+     * Returns all components of a type (const)
+     */
+    template<typename T>
+    Span<const T> getComponents() const
+    {
+        return getComponentSystem<T>().components;
+    }
+
+    /**
+     * Calls a function for each entity with a component type
+     */
+    template<typename F, typename T>
+    void forEach(F fn)
+    {
+        EcsComponent<T>& s = getComponentSystem<T>();
+
+        Entity* e = s.entities.vals;
+        T* c = s.components.vals;
+        T* end = c + s.components.count;
+        for (; c != end; ++c, ++e)
+        {
+            fn(*e, *c);
+        }
+    }
+
+    /**
+     * Calls a function for each entity with a component type (const)
+     */
+    template<typename F, typename T>
+    void forEach(F fn) const
+    {
+        const EcsComponent<T>& s = getComponentSystem<T>();
+
+        const Entity* e = s.entities.vals;
+        const T* c = s.components.vals;
+        const T* end = c + s.components.count;
+        for (; c != end; ++c, ++e)
+        {
+            fn(*e, *c);
+        }
+    }
+
+    /**
+     * Calls a function in parallel for each entity with a component type
+     */
+    template<typename F, typename T>
+    void forEachPar(F fn)
+    {
+        EcsComponent<T>& s = getComponentSystem<T>();
+
+        Entity* e = s.entities.vals;
+        T* c = s.components.vals;
+        forPar(0, s.components.count, [&](u64 idx)
+        {
+            fn(e[idx], c[idx]);
+        });
+    }
+
+    /**
+     * Returns the smallest list of entities with at least one of the types
+     */
+    template<typename... Us>
+    Span<Entity> getSmallestEntities()
+    {
+        Span<Entity> ret{nullptr, (u64)-1};
+        ([&]()
+        {
+            Span<Entity> es = getComponentSystem<Us>().entities;
+            if (es.count < ret.count)
+                ret = es;
+        }(), ...);
+        return ret;
+    }
+
+    /**
+     * Returns the smallest list of entities with at least one of the types (const)
+     */
+    template<typename... Us>
+    Span<const Entity> getSmallestEntities() const
+    {
+        Span<const Entity> ret{nullptr, (u64)-1};
+        ([&]()
+        {
+            Span<const Entity> es = getComponentSystem<Us>().entities;
+            if (es.count < ret.count)
+                ret = es;
+        }(), ...);
+        return ret;
+    }
+
+    /**
+     * Calls a function for each entity with a list of components
+     */
+    template<typename F, typename... Us> requires (sizeof...(Us) > 1)
+    void forEach(F fn)
+    {
+        for (Entity e : getSmallestEntities<Us...>())
+        {
+            if (hasAll<Us...>(e))
+                fn(e, get<Us>(e)...);
+        }
+    }
+
+    /**
+     * Calls a function for each entity with a list of components (const)
+     */
+    template<typename F, typename... Us> requires (sizeof...(Us) > 1)
+    void forEach(F fn) const
+    {
+        for (Entity e : getSmallestEntities<Us...>())
+        {
+            if (hasAll<Us...>(e))
+                fn(e, get<Us>(e)...);
+        }
+    }
+
+    /**
+     * Calls a function in parallel for each entity with a list of components
+     */
+    template<typename F, typename... Us> requires (sizeof...(Us) > 1)
+    void forEachPar(F fn)
+    {
+        Span<const Entity> entrySpan = getSmallestEntities<Us...>();
+        forPar(0, entrySpan.count, [&](u64 idx)
+        {
+            Entity e = entrySpan[idx];
+            if (hasAll<Us...>(e))
+                fn(e, get<Us>(e)...);
+        });
+    }
+};
+
 // /**
 //  * The serializer for an ecs
 //  */
 // union EntitySerializer {
 //     /**
-//      * The indices of entities
+//      * The indices of entities, if writing
 //      */
 //     u32* entityToIdx;
 //     /**
-//      * The entities by index
+//      * The entities by index, if reading
 //      */
 //     Entity* idxToEntity;
+//
+//     constexpr u32 getIdx(Entity e)
+//     {
+//         return entityToIdx[e.handle.idx()];
+//     }
+//
+//     constexpr Entity getEntity(u32 idx)
+//     {
+//         return idxToEntity[idx];
+//     }
 // };
 //
 // /**
-//  * The default serialization for a component, should be overridden
+//  * Ecs serialization
+//  */
+// template<typename... Ts>
+// void serialize(Serializer* s, Ecs<Ts...>* ecs)
+// {
+// }
+//
+// /**
+//  * The default serialization for a component, may be overridden
 //  */
 // template<typename T>
-// void ecsSerialize(Serializer* s, T* val, EntitySerializer* entities)
+// void ecsSerialize(Serializer* s, T* val, EntitySerializer* ecs)
 // {
 //     serialize(s, val);
-//     static_cast<void>(entities);
+//     static_cast<void>(ecs);
 // }
 //
 // /**
 //  * Entity ecs serialization
 //  */
-// void entitySerialize(Serializer* s, Entity* val, EntitySerializer* ecs);
-//
-// /**
-//  * A system of components
-//  */
-// struct Component {
-//     /**
-//      * The name of the component type
-//      */
-//     String name = {};
-//     /**
-//      * The component lookup from entity index
-//      */
-//     Array<u32> indices = {};
-//     /**
-//      * The entity lookup from component index
-//      */
-//     Array<Entity> entities = {};
-//     /**
-//      * The component data
-//      */
-//     ArrayAny components = {};
-//     /**
-//      * The function called on removing the component
-//      */
-//     void (*dtor)(void* component) = nullptr;
-//     /**
-//      * The function called on serializing the component
-//      *
-//      * Parameters
-//      * - s The serializer
-//      * - The value to serialize
-//      * - ecs The ecs serializer data, if needed
-//      */
-//     void (*serialize)(Serializer* s, void* val, EntitySerializer* ecs) = nullptr;
-// };
-//
-// /**
-//  * An entity component system
-//  */
-// struct Ecs {
-//     /**
-//      * The entity pool
-//      */
-//     HandlePool entities = {};
-//     /**
-//      * The component systems
-//      */
-//     Map<u64, Component> components = {};
-// };
-//
-// /**
-//  * Create a new entity component system
-//  */
-// Ecs ecsCreate();
-//
-// /**
-//  * Destroy an entity component system
-//  */
-// void ecsDestroy(Ecs* ecs);
-//
-// /**
-//  * Destroy all entities, leave components registered
-//  */
-// void ecsReset(Ecs* ecs);
-//
-// /**
-//  * Ecs serialization
-//  */
 // template<>
-// void serialize(Serializer* s, Ecs* ecs);
-//
-// /**
-//  * The config to register a component
-//  */
-// struct EcsRegisterComponent {
-//     /**
-//      * The name of the component to create
-//      *
-//      * Note, the componentId is derived from this name
-//      */
-//     StringView name = {};
-//     /**
-//      * The width of the component data in bytes
-//      */
-//     u32 width = 0;
-//     /**
-//      * The alignment of the component data in bytes
-//      */
-//     u32 align = 0;
-//     /**
-//      * The function called on removing the component
-//      */
-//     void (*dtor)(void* component) = nullptr;
-//     /**
-//      * The function called on serializing the component
-//      */
-//     void (*serialize)(Serializer* s, void* val, EntitySerializer* ecs) = nullptr;
-// };
-//
-// /**
-//  * Register a new component type
-//  */
-// void ecsRegisterComponent(Ecs* ecs, EcsRegisterComponent* config);
-//
-// /**
-//  * Register a new component type, creating the name from the type
-//  */
-// #define HG_ECS_REGISTER_TYPE(ecs, T) \
-//     do { \
-//         componentId<T> = hash(#T); \
-//         EcsRegisterComponent registerComponent_##T{}; \
-//         registerComponent_##T.name = #T; \
-//         registerComponent_##T.width = sizeof(T); \
-//         registerComponent_##T.align = alignof(T); \
-//         registerComponent_##T.dtor = [](void* component) \
-//         { \
-//             ecsDtor<T>(static_cast<T*>(component)); \
-//         }; \
-//         registerComponent_##T.serialize = []( \
-//             Serializer* s, \
-//             void* val, \
-//             EntitySerializer* entities) \
-//         { \
-//             ecsSerialize<T>(s, static_cast<T*>(val), entities); \
-//         }; \
-//         ecsRegisterComponent(ecs, &registerComponent_##T); \
-//     } while (0)
-//
-// /**
-//  * Unregister a component
-//  */
-// void ecsUnregisterComponent(Ecs* ecs, u64 componentId);
-//
-// /**
-//  * Unregister a component
-//  */
-// template<typename T>
-// void ecsUnregisterComponent(Ecs* ecs)
+// inline void ecsSerialize(Serializer* s, Entity* e, EntitySerializer* ecs)
 // {
-//     ecsUnregisterComponent(ecs, componentId<T>);
-// }
-//
-// /**
-//  * Returns the name of the component type
-//  */
-// StringView ecsComponentName(Ecs* ecs, u64 componentId);
-//
-// /**
-//  * Return a new entity
-//  */
-// Entity ecsSpawn(Ecs* ecs);
-//
-// /**
-//  * Destroy an entity
-//  *
-//  * Note, this function will invalidate iterators
-//  */
-// void ecsDespawn(Ecs* ecs, Entity e);
-//
-// /**
-//  * Return whether an entity is alive
-//  */
-// bool ecsAlive(Ecs* ecs, Entity e);
-//
-// /**
-//  * Add a component to an entity
-//  *
-//  * Note, the entity must not have a component of this type already
-//  *
-//  * Returns
-//  * - A pointer to the created component
-//  */
-// void* ecsAdd(Ecs* ecs, Entity e, u64 componentId);
-//
-// /**
-//  * Add a component to an entity
-//  *
-//  * Note, the entity must not have a component of this type already
-//  *
-//  * Returns
-//  * - A pointer to the created component
-//  */
-// template<typename T>
-// T* ecsAdd(Ecs* ecs, Entity e)
-// {
-//     return static_cast<T*>(ecsAdd(ecs, e, componentId<T>));
-// }
-//
-// /**
-//  * Remove a component from an entity
-//  *
-//  * Note, this function will invalidate iterators
-//  */
-// void ecsRemove(Ecs* ecs, Entity e, u64 componentId);
-//
-// /**
-//  * Remove a component from an entity
-//  *
-//  * Note, this function will invalidate iterators
-//  */
-// template<typename T>
-// void ecsRemove(Ecs* ecs, Entity e)
-// {
-//     ecsRemove(ecs, e, componentId<T>);
-// }
-//
-// /**
-//  * Check whether an entity has a component or not
-//  */
-// bool ecsHas(Ecs* ecs, Entity e, u64 componentId);
-//
-// /**
-//  * Check whether an entity has a component or not
-//  */
-// template<typename T>
-// bool ecsHas(Ecs* ecs, Entity e)
-// {
-//     return ecsHas(ecs, e, componentId<T>);
-// }
-//
-// /**
-//  * Return whether the entity has all given components
-//  */
-// template<typename... Ts>
-// bool ecsHasAll(Ecs* ecs, Entity e)
-// {
-//     return (ecsHas<Ts>(ecs, e) && ...);
-// }
-//
-// /**
-//  * Return whether the entity has any of the given components
-//  */
-// template<typename... Ts>
-// bool ecsHasAny(Ecs* ecs, Entity e)
-// {
-//     return (ecsHas<Ts>(ecs, e) || ...);
-// }
-//
-// /**
-//  * Get a pointer to the entity's component
-//  *
-//  * Note, the entity must have the component
-//  *
-//  * Returns
-//  * - A pointer to the entity's component, will never be nullptr
-//  */
-// void* ecsGet(Ecs* ecs, Entity e, u64 componentId);
-//
-// /**
-//  * Get a reference to the entity's component
-//  *
-//  * Note, the entity must have the component
-//  *
-//  * Returns
-//  * - A reference to the entity's component
-//  */
-// template<typename T>
-// T* ecsGet(Ecs* ecs, Entity e)
-// {
-//     return static_cast<T*>(ecsGet(ecs, e, componentId<T>));
-// }
-//
-// /**
-//  * Get the entity from it's component
-//  *
-//  * Parameters
-//  * - c The component to lookup, must be a valid component
-//  * - componentId The id of the component
-//  */
-// Entity ecsGetEntity(Ecs* ecs, const void* c, u64 componentId);
-//
-// /**
-//  * Get the entity from it's component
-//  *
-//  * Parameters
-//  * - c The component to lookup, must be a valid component
-//  */
-// template<typename T>
-// Entity ecsGetEntity(Ecs* ecs, const T* c)
-// {
-//     return ecsGetEntity(ecs, static_cast<const void*>(c), componentId<T>);
-// }
-//
-// /**
-//  * Return a pointer to all entities of type
-//  */
-// Entity* ecsEntities(Ecs* ecs, u64 componentId);
-//
-// /**
-//  * Return a pointer to all entities of type
-//  */
-// template<typename T>
-// Entity* ecsEntities(Ecs* ecs)
-// {
-//     return ecsEntities(ecs, componentId<T>);
-// }
-//
-// /**
-//  * Return a pointer to all components of type
-//  */
-// void* ecsComponents(Ecs* ecs, u64 componentId);
-//
-// /**
-//  * Return a pointer to all components of type
-//  */
-// template<typename T>
-// T* ecsComponents(Ecs* ecs)
-// {
-//     return static_cast<T*>(ecsComponents(ecs, componentId<T>));
-// }
-//
-// /**
-//  * Return the number of active components of a type
-//  */
-// u32 ecsCount(Ecs* ecs, u64 componentId);
-//
-// /**
-//  * Return the number of active components of a type
-//  */
-// template<typename T>
-// u32 ecsCount(Ecs* ecs)
-// {
-//     return ecsCount(ecs, componentId<T>);
-// }
-//
-// /**
-//  * Find the id of the system with the fewest elements
-//  */
-// u64 ecsFindSmallest(Ecs* ecs, u64* ids, u32 idCount);
-//
-// /**
-//  * Find the id of the system with the fewest elements
-//  */
-// template<typename... Ts> requires (sizeof...(Ts) > 0)
-// u64 ecsFindSmallest(Ecs* ecs)
-// {
-//     u32 index = 0;
-//     u64 ids[sizeof...(Ts)];
-//     ((ids[index++] = componentId<Ts>), ...);
-//     return ecsFindSmallest(ecs, ids, sizeof...(Ts));
-// }
-//
-// /**
-//  * Iterate over all entities with the given components
-//  *
-//  * Note, calls the single or multi version from the number of components
-//  *
-//  * Parameters
-//  * - function The function to call
-//  */
-// template<typename... Ts, typename Fn> requires (sizeof...(Ts) != 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
-// void ecsForEach(Ecs* ecs, Fn fn);
-//
-// /**
-//  * Iterate over all entities with the given components
-//  *
-//  * Note, calls the single of multi version from the number of components
-//  *
-//  * The function receives as parameters:
-//  * - The entity id
-//  * - A reference to each component...
-//  *
-//  * Parameters
-//  * - chunkSize The number of executions per group
-//  * - fn The function to call
-//  */
-// template<typename... Ts, typename Fn> requires (sizeof...(Ts) > 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
-// void ecsForPar(Ecs* ecs, Fn fn);
-//
-// /**
-//  * Sort components
-//  *
-//  * Parameters
-//  * - componentId The component system to sort
-//  * - data The data passed to compare
-//  * - compare The comparison function
-//  */
-// void ecsSort(Ecs* ecs, u64 componentId, void* data, bool (*compare)(void*, Ecs* ecs, Entity lhs, Entity rhs));
-//
-// /**
-//  * Sort components
-//  *
-//  * Parameters
-//  * - data The data passed to compare
-//  * - compare The comparison function
-//  */
-// template<typename T>
-// void ecsSort(Ecs* ecs, void* data, bool (*compare)(void*, Ecs* ecs, Entity lhs, Entity rhs))
-// {
-//     ecsSort(ecs, componentId<T>, data, compare);
-// }
-//
-// /**
-//  * A node component for entities in a hierarchy
-//  */
-// struct Node {
-//     /**
-//      * The entity's parent, if any
-//      */
-//     Entity parent{};
-//     /**
-//      * The next child of this entity's parent
-//      */
-//     Entity nextSibling{};
-//     /**
-//      * The previous child of this entity's parent
-//      */
-//     Entity prevSibling{};
-//     /**
-//      * The first of this entity's children, forming a linked list
-//      */
-//     Entity firstChild{};
-// };
-//
-// /**
-//  * Node serialization implementation
-//  */
-// template<>
-// void ecsSerialize(Serializer* s, Node* node, EntitySerializer* ecs);
-//
-// /**
-//  * Add an empty node to an entity
-//  */
-// Node* nodeAdd(Ecs* ecs, Entity e);
-//
-// /**
-//  * Remove the entity from its hierarchy
-//  *
-//  * Parameters
-//  * - ecs The ecs
-//  * - e The entity to detach, must be alive
-//  */
-// void nodeDetach(Ecs* ecs, Entity e);
-//
-// /**
-//  * Destroy the entity and all its children in a hierarchy
-//  *
-//  * Parameters
-//  * - ecs The ecs
-//  * - e The entity to destroy to, must be alive
-//  */
-// void nodeDestroy(Ecs* ecs, Entity e);
-//
-// /**
-//  * Add a new child to an entity in a hierarchy
-//  *
-//  * Parameters
-//  * - ecs The ecs
-//  * - parent The parent to add to, must be alive
-//  * - child The child to add, must be alive
-//  */
-// void nodeAddChild(Ecs* ecs, Entity parent, Entity child);
-//
-// /**
-//  * The transform component for entities in absolute space
-//  */
-// struct Transform {
-//     /**
-//      * The entity's transform model matrix in world space
-//      */
-//     Mat4 mat{1.0f};
-//     /**
-//      * The entity's position relative to its parent
-//      * - x: -left, +right
-//      * - y: -up, +down
-//      * - z: -backward, +forward
-//      */
-//     Vec3 position{0.0f, 0.0f, 0.0f};
-//     /**
-//      * The entity's scaling relative to its parent
-//      * - x: horizonatal
-//      * - y: vertical
-//      * - z: depth
-//      */
-//     Vec3 scale{1.0f, 1.0f, 1.0f};
-//     /**
-//      * The entity's rotation relative to its parent
-//      */
-//     Quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
-// };
-//
-// /**
-//  * Transform serialization impl
-//  */
-// template<>
-// void serialize(Serializer* s, Transform* node);
-//
-// /**
-//  * Add an identity transform to an entity
-//  */
-// Transform* transformAdd(
-//     Ecs* ecs,
-//     Entity e,
-//     Vec3 position = Vec3{0.0f},
-//     Vec3 scale = Vec3{1.0f},
-//     Quat rotation = Quat{1.0f});
-//
-// /**
-//  * Get the position from Transform mat
-//  */
-// constexpr Vec3 transformWorldPos(Transform& tf)
-// {
-//     return Vec3{tf.mat.w};
-// }
-//
-// /**
-//  * Update Transform for the entity and its children to the TransformLocal
-//  */
-// void transformUpdate(Ecs* ecs, Entity e);
-//
-// /**
-//  * An audio source component
-//  */
-// struct AudioSource {
-//     /**
-//      * The audio player for this source, should not be modified
-//      */
-//     AudioStream* player = nullptr;
-//     /**
-//      * The audio to play from
-//      */
-//     Asset<Sound> audio = nullptr;
-//     /**
-//      * The current position in the audio data
-//      */
-//     u64 position = 0;
-//     /**
-//      * Whether the source should repeat playing
-//      */
-//     bool repeat = false;
-// };
-//
-// /**
-//  * AudioSource serialization
-//  */
-// template<>
-// void serialize(Serializer* s, AudioSource* src);
-//
-// /**
-//  * Add an audio source to an entity
-//  */
-// AudioSource* audioSourceAdd(Ecs* ecs, Entity e, Asset<Sound>* audio, bool repeat);
-//
-// /**
-//  * AudioSource ecs destructor
-//  */
-// template<>
-// void ecsDtor(AudioSource* src);
-//
-// /**
-//  * Update all audio sources, playing sound if needed
-//  */
-// void audioUpdate(Ecs* ecs, Entity listener);
-//
-// /**
-//  * Camera ecs add implementation
-//  */
-// Camera* cameraAdd(Ecs* ecs, Entity e);
-//
-// /**
-//  * Camera ecs destructor
-//  */
-// template<>
-// void ecsDtor(Camera* camera);
-//
-// /**
-//  * Update the camera's gpu side data, must have a camera and transform
-//  */
-// void cameraUpdateEcs(Ecs* ecs, Entity e);
-//
-// /**
-//  * Initialize the sprite pipeline
-//  *
-//  * Parameters
-//  * - colorFormat The format of the color attachment, must not be undefined
-//  * - depthFormat The format of the depth attachment, must not be undefined
-//  */
-// void spritesInit(Format colorFormat, Format depthFormat);
-//
-// /**
-//  * Deinitialize the sprite pipeline
-//  */
-// void spritesDeinit();
-//
-// /**
-//  * A sprite component
-//  */
-// struct Sprite {
-//     /**
-//      * The texture to draw from
-//      */
-//     Asset<Texture> texture = nullptr;
-//     /**
-//      * The beginning coordinate to read from texture, [0.0, 1.0]
-//      */
-//     Vec2 uvPos{0.0f, 0.0f};
-//     /**
-//      * The size of the region to read from texture, [0.0, 1.0]
-//      */
-//     Vec2 uvSize{1.0f, 1.0f};
-// };
-//
-// /**
-//  * Sprite serialization
-//  */
-// template<>
-// void serialize(Serializer* s, Sprite* sprite);
-//
-// /**
-//  * Add a sprite to an entity
-//  *
-//  * Parameters
-//  * - ecs The ecs
-//  * - e The entity to add to
-//  * - texture A copy of the sprite's texture
-//  */
-// Sprite* spriteAdd(
-//     Ecs* ecs,
-//     Entity e,
-//     Asset<Texture>* texture,
-//     Vec2 uvPos = Vec2{0.0f},
-//     Vec2 uvSize = Vec2{1.0f});
-//
-// /**
-//  * Sprite ecs destructor
-//  */
-// template<>
-// void ecsDtor(Sprite* sprite);
-//
-// /**
-//  * Issue draw commands for all Sprite2D components in the ecs
-//  *
-//  * Parameters
-//  * - ecs The ecs to draw
-//  * - camera The camera entity to use
-//  * - cmd The command buffer to record to, must not be nullptr
-//  */
-// void spritesDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
-//
-// /**
-//  * Initialize the skybox pipeline
-//  *
-//  * Parameters
-//  * - colorFormat The format of the color attachment, must not be undefined
-//  * - depthFormat The format of the depth attachment, if used
-//  */
-// void skyboxInit(Format colorFormat, Format depthFormat);
-//
-// /**
-//  * Deinitialize the skybox pipeline
-//  */
-// void skyboxDeinit();
-//
-// /**
-//  * A skybox component
-//  */
-// struct Skybox {
-//     /**
-//      * The cubemap texture
-//      */
-//     Asset<Texture> texture = nullptr;
-// };
-//
-// /**
-//  * Skybox serialization
-//  */
-// template<>
-// void serialize(Serializer* s, Skybox* skybox);
-//
-// /**
-//  * Add a skybox to an entity
-//  *
-//  * Parameters
-//  * - ecs The ecs
-//  * - e The entity to add to
-//  * - texture A copy of the skybox's texture
-//  */
-// Skybox* skyboxAdd(Ecs* ecs, Entity e, Asset<Texture>* texture);
-//
-// /**
-//  * Skybox ecs destructor
-//  */
-// template<>
-// void ecsDtor(Skybox* skybox);
-//
-// /**
-//  * Draw a skybox from a texture
-//  *
-//  * Parameters
-//  * - ecs The ecs with the camera
-//  * - camera The camera entity to use
-//  * - cmd The command buffer to record to, must not be nullptr
-//  */
-// void skyboxDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
-//
-// /**
-//  * A directional light component
-//  */
-// struct DirLight {
-//     /**
-//      * The direction of the light
-//      */
-//     Vec3 dir = {};
-//     /**
-//      * The color of the light
-//      */
-//     Vec4 color = {};
-// };
-//
-// /**
-//  * DirLight serialization
-//  */
-// template<>
-// void serialize(Serializer* s, DirLight* light);
-//
-// /**
-//  * Add a directional light to an entity
-//  */
-// DirLight* dirLightAdd(Ecs* ecs, Entity e, Vec3 dir, Vec4 color);
-//
-// /**
-//  * A point light component, should have a transform
-//  */
-// struct PointLight {
-//     /**
-//      * The color of the light
-//      */
-//     Vec4 color = {};
-// };
-//
-// /**
-//  * PointLight serialization
-//  */
-// template<>
-// void serialize(Serializer* s, PointLight* light);
-//
-// /**
-//  * Add a point light to an entity
-//  */
-// PointLight* pointLightAdd(Ecs* ecs, Entity e, Vec4 color);
-//
-// /**
-//  * Initialize the 3D model pipeline
-//  *
-//  * Parameters
-//  * - colorFormat The format of the color attachment, must not be undefined
-//  * - depthFormat The format of the depth attachment, must not be undefined
-//  */
-// void modelsInit(Format colorFormat, Format depthFormat);
-//
-// /**
-//  * Deinitialize the 3D model pipeline
-//  */
-// void modelsDeinit();
-//
-// /**
-//  * A 3D model component
-//  */
-// struct Model {
-//     /**
-//      * The model to render
-//      */
-//     Asset<Mesh> mesh = nullptr;
-//     /**
-//      * The model's color map
-//      */
-//     Asset<Texture> colorMap = nullptr;
-//     /**
-//      * The model's normal map
-//      */
-//     Asset<Texture> normalMap = nullptr;
-// };
-//
-// /**
-//  * Model serialization
-//  */
-// template<>
-// void serialize(Serializer* s, Model* model);
-//
-// /**
-//  * Add a model to an entity
-//  */
-// Model* modelAdd(
-//     Ecs* ecs,
-//     Entity e,
-//     Asset<Mesh>* mesh,
-//     Asset<Texture>* colorMap,
-//     Asset<Texture>* normalMap);
-//
-// /**
-//  * Model ecs destructor
-//  */
-// template<>
-// void ecsDtor(Model* model);
-//
-// /**
-//  * Issue draw commands for all Model3D components in the ecs
-//  *
-//  * Parameters
-//  * - ecs The ecs to draw
-//  * - camera The camera entity to use
-//  * - cmd The command buffer to record to, must not be nullptr
-//  */
-// void modelsDraw(Ecs* ecs, Entity camera, GpuCmd* cmd);
-
-// template<typename T, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, T*>
-// void ecsForEachSingle(Ecs* ecs, Fn& fn)
-// {
-//     Entity* e = ecsEntities<T>(ecs);
-//     Entity* end = e + ecsCount<T>(ecs);
-//     T* c = ecsComponents<T>(ecs);
-//     for (; e != end; ++e, ++c)
+//     if (s->writing)
 //     {
-//         fn(*e, c);
+//         u32 idx = ecs->getIdx(*e);
+//         serializeObject(s, &idx);
 //     }
-// }
-//
-// template<typename... Ts, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, Ts*...>
-// void ecsForEachMulti(Ecs* ecs, Fn& fn)
-// {
-//     u64 id = ecsFindSmallest<Ts...>(ecs);
-//     Component* system = ecs->components.get(id);
-//     HG_ASSERT(system != nullptr);
-//
-//     Entity* e = system->entities.vals + 1;
-//     Entity* end = e + system->entities.count - 1;
-//     for (; e != end; ++e)
+//     else
 //     {
-//         if (ecsHasAll<Ts...>(ecs, *e))
-//             fn(*e, ecsGet<Ts>(ecs, *e)...);
-//     }
-// }
-//
-// template<typename... Ts, typename Fn> requires (sizeof...(Ts) != 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
-// void ecsForEach(Ecs* ecs, Fn fn)
-// {
-//     if constexpr (sizeof...(Ts) == 1)
-//     {
-//         ecsForEachSingle<Ts...>(ecs, fn);
-//     } else {
-//         ecsForEachMulti<Ts...>(ecs, fn);
-//     }
-// }
-//
-// template<typename T, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, T*>
-// void ecsForParSingle(Ecs* ecs, Fn& fn)
-// {
-//     struct Capture {
-//         Ecs* ecs;
-//         Fn* fn;
-//     };
-//     Capture capture{ecs, &fn};
-//
-//     forPar(0, ecsCount<T>(ecs), &capture, [](void* pcapture, u64 idx)
-//     {
-//         Capture* capture = static_cast<Capture*>(pcapture);
-//         (*capture->fn)(
-//             ecsEntities<T>(capture->ecs)[idx],
-//             &ecsComponents<T>(capture->ecs)[idx]);
-//     });
-// }
-//
-// template<typename... Ts, typename Fn> requires std::is_invocable_r_v<void, Fn, Entity, Ts*...>
-// void ecsForParMulti(Ecs* ecs, Fn& fn)
-// {
-//     Component* system = ecs->components.get(ecsFindSmallest<Ts...>(ecs));
-//     HG_ASSERT(system != nullptr);
-//
-//     struct Capture {
-//         Ecs* ecs;
-//         Component* system;
-//         Fn* fn;
-//     };
-//     Capture capture{ecs, system, &fn};
-//
-//     forPar(1, system->entities.count, &capture, [](void* pcapture, u64 idx)
-//     {
-//         Capture* capture = static_cast<Capture*>(pcapture);
-//         Entity e = capture->system->entities[idx];
-//         if (ecsHasAll<Ts...>(capture->ecs, e))
-//             (*capture->fn)(e, ecsGet<Ts>(capture->ecs, e)...);
-//     });
-// }
-//
-// template<typename... Ts, typename Fn> requires (sizeof...(Ts) > 0) && std::is_invocable_r_v<void, Fn, Entity, Ts*...>
-// void ecsForPar(Ecs* ecs, Fn fn)
-// {
-//     if constexpr (sizeof...(Ts) == 1)
-//     {
-//         ecsForParSingle<Ts...>(ecs, fn);
-//     } else {
-//         ecsForParMulti<Ts...>(ecs, fn);
+//         u32 idx;
+//         serializeObject(s, &idx);
+//         *e = ecs->getEntity(idx);
 //     }
 // }
 
 } // namespace hg
-

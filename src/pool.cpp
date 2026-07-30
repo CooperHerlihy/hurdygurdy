@@ -34,7 +34,7 @@ Handle HandlePool::alloc()
     }
 }
 
-bool HandlePool::alive(Handle handle)
+bool HandlePool::alive(Handle handle) const
 {
     u32 idx = handle.idx();
     return handle != nullHandle && idx < handles.count && handles[idx] == handle;

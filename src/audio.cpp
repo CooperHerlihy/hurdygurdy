@@ -64,11 +64,11 @@ void AudioPlayer::playMusic(const Asset<Sound>& musicSrc)
         }
     }
 
-    AudioPlayerMusic* track = music.push();
-    track->stream = {musicSrc->frequency, musicSrc->channels};
-    track->sound = musicSrc.clone();
-    track->pos = 0;
-    track->playing = true;
+    AudioPlayerMusic& track = music.push();
+    track.stream = {musicSrc->frequency, musicSrc->channels};
+    track.sound = musicSrc.clone();
+    track.pos = 0;
+    track.playing = true;
 }
 
 void AudioPlayer::killMusic(const Asset<Sound>& musicSrc)
@@ -109,9 +109,9 @@ void AudioPlayer::setMusicGain(const Asset<Sound>& musicSrc, f32 gain)
 
 void AudioPlayer::playSound(const Asset<Sound>& sound, f32 gain)
 {
-    AudioStream* stream = sounds.push({sound->frequency, sound->channels});
-    stream->setGain(gain);
-    stream->push(sound->data);
+    AudioStream& stream = sounds.push({sound->frequency, sound->channels});
+    stream.setGain(gain);
+    stream.push(sound->data);
 }
 
 } // namespace hg

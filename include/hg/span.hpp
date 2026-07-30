@@ -25,6 +25,14 @@ struct Span {
     constexpr Span() noexcept = default;
 
     /**
+     * Implicit conversion to const span
+     */
+    constexpr operator Span<const T>() const
+    {
+        return {data, count};
+    }
+
+    /**
      * Construct from pointer and count
      */
     constexpr Span(T* dataVal, u64 countVal)

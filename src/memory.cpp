@@ -80,7 +80,7 @@ next:
         continue;
     }
 
-    return scratchArenas.push(Arena{((u64)1 << 28) - 1});
+    return &scratchArenas.push(Arena{((u64)1 << 28) - 1});
 }
 
 } // namespace hg

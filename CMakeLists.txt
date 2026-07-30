@@ -137,8 +137,8 @@ set(CORE_SOURCES
     src/time.cpp
     src/audio.cpp
     src/assets.cpp
-    src/render2d.cpp
     src/dynlib.cpp
+    src/render2d.cpp
     src/imgui.cpp
     ${SDL_SOURCES}
     ${VULKAN_SOURCES}

@@ -62,7 +62,7 @@ struct Array {
     /**
      * Implicit convert to span
      */
-    constexpr operator Span<T>() const
+    constexpr operator Span<T>()
     {
         return {vals, count};
     }
@@ -78,7 +78,17 @@ struct Array {
     /**
      * Convenience to index into the array with debug bounds checking
      */
-    constexpr T& operator[](u64 idx) const
+    constexpr T& operator[](u64 idx)
+    {
+        HG_ASSERT(vals != nullptr);
+        HG_ASSERT(idx < count);
+        return vals[idx];
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking (const)
+     */
+    constexpr const T& operator[](u64 idx) const
     {
         HG_ASSERT(vals != nullptr);
         HG_ASSERT(idx < count);
@@ -142,37 +152,37 @@ struct Array {
     /**
      * Default-construct a value at the end of the array
      */
-    T* push()
+    T& push()
     {
         if (count == capacity)
             reserve(capacity == 0 ? 64 : capacity * 2);
 
         new (vals + count) T{};
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
      * Push a value to the end of the array
      */
-    T* push(const T& val)
+    T& push(const T& val)
     {
         if (count == capacity)
             reserve(capacity == 0 ? 64 : capacity * 2);
 
         new (vals + count) T{val};
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
      * Push a value by rvalue reference
      */
-    T* push(T&& val)
+    T& push(T&& val)
     {
         if (count == capacity)
             reserve(capacity == 0 ? 64 : capacity * 2);
 
         new (vals + count) T{std::move(val)};
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
@@ -191,7 +201,7 @@ struct Array {
     /**
      * Insert a value at idx, shifting values over
      */
-    T* insertShift(u64 idx, const T& val)
+    T& insertShift(u64 idx, const T& val)
     {
         HG_ASSERT(idx <= count);
 
@@ -211,13 +221,13 @@ struct Array {
         {
             new (vals + count) T{val};
         }
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
      * Insert a value by rvalue reference at idx, shifting values over
      */
-    T* insertShift(u64 idx, T&& val)
+    T& insertShift(u64 idx, T&& val)
     {
         HG_ASSERT(idx <= count);
 
@@ -237,7 +247,7 @@ struct Array {
         {
             new (vals + count) T{std::move(val)};
         }
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
@@ -260,7 +270,7 @@ struct Array {
     /**
      * Insert a value at idx, moving the previous value to the end
      */
-    T* insertSwap(u64 idx, const T& val)
+    T& insertSwap(u64 idx, const T& val)
     {
         HG_ASSERT(idx <= count);
 
@@ -276,13 +286,13 @@ struct Array {
         {
             new (vals + count) T{val};
         }
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
      * Insert a value by rvalue reference at idx, moving the previous value to the end
      */
-    T* insertSwap(u64 idx, T&& val)
+    T& insertSwap(u64 idx, T&& val)
     {
         HG_ASSERT(idx <= count);
 
@@ -298,7 +308,7 @@ struct Array {
         {
             new (vals + count) T{std::move(val)};
         }
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
@@ -433,7 +443,7 @@ struct ArrayTemp {
     /**
      * Implicit convert to span
      */
-    constexpr operator Span<T>() const
+    constexpr operator Span<T>()
     {
         return {vals, count};
     }
@@ -449,7 +459,17 @@ struct ArrayTemp {
     /**
      * Convenience to index into the array with debug bounds checking
      */
-    constexpr T& operator[](u64 idx) const
+    constexpr T& operator[](u64 idx)
+    {
+        HG_ASSERT(vals != nullptr);
+        HG_ASSERT(idx < count);
+        return vals[idx];
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking (const)
+     */
+    constexpr const T& operator[](u64 idx) const
     {
         HG_ASSERT(vals != nullptr);
         HG_ASSERT(idx < count);
@@ -515,37 +535,37 @@ struct ArrayTemp {
     /**
      * Default-construct a value at the end of the array
      */
-    T* push()
+    T& push()
     {
         if (count == capacity)
             reserve(capacity == 0 ? 64 : capacity * 2);
 
         new (vals + count) T{};
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
      * Push a value to the end of the array
      */
-    T* push(const T& val)
+    T& push(const T& val)
     {
         if (count == capacity)
             reserve(capacity == 0 ? 64 : capacity * 2);
 
         new (vals + count) T{val};
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
      * Push a value by rvalue reference
      */
-    T* push(T&& val)
+    T& push(T&& val)
     {
         if (count == capacity)
             reserve(capacity == 0 ? 64 : capacity * 2);
 
         new (vals + count) T{std::move(val)};
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
@@ -564,7 +584,7 @@ struct ArrayTemp {
     /**
      * Insert a value at idx, shifting values over
      */
-    T* insertShift(u64 idx, const T& val)
+    T& insertShift(u64 idx, const T& val)
     {
         HG_ASSERT(idx <= count);
 
@@ -584,13 +604,13 @@ struct ArrayTemp {
         {
             new (vals + count) T{val};
         }
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
      * Insert a value by rvalue reference at idx, shifting values over
      */
-    T* insertShift(u64 idx, T&& val)
+    T& insertShift(u64 idx, T&& val)
     {
         HG_ASSERT(idx <= count);
 
@@ -610,7 +630,7 @@ struct ArrayTemp {
         {
             new (vals + count) T{std::move(val)};
         }
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
@@ -633,7 +653,7 @@ struct ArrayTemp {
     /**
      * Insert a value at idx, moving the previous value to the end
      */
-    T* insertSwap(u64 idx, const T& val)
+    T& insertSwap(u64 idx, const T& val)
     {
         HG_ASSERT(idx <= count);
 
@@ -649,13 +669,13 @@ struct ArrayTemp {
         {
             new (vals + count) T{val};
         }
-        return vals + count++;
+        return vals[count++];
     }
 
     /**
      * Insert a value by rvalue reference at idx, moving the previous value to the end
      */
-    T* insertSwap(u64 idx, T&& val)
+    T& insertSwap(u64 idx, T&& val)
     {
         HG_ASSERT(idx <= count);
 
@@ -671,7 +691,7 @@ struct ArrayTemp {
         {
             new (vals + count) T{std::move(val)};
         }
-        return vals + count++;
+        return vals[count++];
     }
 
     /**

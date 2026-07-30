@@ -823,17 +823,17 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
 
     for (u32 i = 0; i < config.colorAttachmentFormats.count; ++i)
     {
-        VkPipelineColorBlendAttachmentState* attachment = colorBlendAttachments.push();
-        attachment->blendEnable = config.colorBlendEnables.data != nullptr
+        VkPipelineColorBlendAttachmentState& attachment = colorBlendAttachments.push();
+        attachment.blendEnable = config.colorBlendEnables.data != nullptr
             ? config.colorBlendEnables[i]
             : VK_FALSE;
-        attachment->srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        attachment->dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        attachment->colorBlendOp = VK_BLEND_OP_ADD;
-        attachment->srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        attachment->dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        attachment->alphaBlendOp = VK_BLEND_OP_ADD;
-        attachment->colorWriteMask
+        attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        attachment.colorBlendOp = VK_BLEND_OP_ADD;
+        attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        attachment.colorWriteMask
             = VK_COLOR_COMPONENT_R_BIT
             | VK_COLOR_COMPONENT_G_BIT
             | VK_COLOR_COMPONENT_B_BIT
@@ -1056,15 +1056,15 @@ void gpuMemoryBarrier(
 
     for (const GpuBufferBarrier& barrier : bufferBarriers)
     {
-        VkBufferMemoryBarrier2* vkBarrier = vkBufferBarriers.push();
+        VkBufferMemoryBarrier2& vkBarrier = vkBufferBarriers.push();
 
-        vkBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        vkBarrier->srcStageMask = gpuStageToVk(barrier.buffer->data->lastStage);
-        vkBarrier->srcAccessMask = gpuAccessToVk(barrier.buffer->data->lastAccess);
-        vkBarrier->dstStageMask = gpuStageToVk(barrier.nextStage);
-        vkBarrier->dstAccessMask = gpuAccessToVk(barrier.nextAccess);
-        vkBarrier->buffer = barrier.buffer->data->buffer;
-        vkBarrier->size = barrier.buffer->data->size;
+        vkBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        vkBarrier.srcStageMask = gpuStageToVk(barrier.buffer->data->lastStage);
+        vkBarrier.srcAccessMask = gpuAccessToVk(barrier.buffer->data->lastAccess);
+        vkBarrier.dstStageMask = gpuStageToVk(barrier.nextStage);
+        vkBarrier.dstAccessMask = gpuAccessToVk(barrier.nextAccess);
+        vkBarrier.buffer = barrier.buffer->data->buffer;
+        vkBarrier.size = barrier.buffer->data->size;
 
         barrier.buffer->data->lastStage = barrier.nextStage;
         barrier.buffer->data->lastAccess = barrier.nextAccess;
@@ -1072,17 +1072,17 @@ void gpuMemoryBarrier(
 
     for (const GpuImageBarrier& barrier : imageBarriers)
     {
-        VkImageMemoryBarrier2* vkBarrier = vkImageBarriers.push();
+        VkImageMemoryBarrier2& vkBarrier = vkImageBarriers.push();
 
-        vkBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        vkBarrier->srcStageMask = gpuStageToVk(barrier.image->data->lastStage);
-        vkBarrier->srcAccessMask = gpuAccessToVk(barrier.image->data->lastAccess);
-        vkBarrier->dstStageMask = gpuStageToVk(barrier.nextStage);
-        vkBarrier->dstAccessMask = gpuAccessToVk(barrier.nextAccess);
-        vkBarrier->oldLayout = gpuLayoutToVk(barrier.image->data->lastLayout);
-        vkBarrier->newLayout = gpuLayoutToVk(barrier.nextLayout);
-        vkBarrier->image = barrier.image->data->image->image;
-        vkBarrier->subresourceRange = {
+        vkBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        vkBarrier.srcStageMask = gpuStageToVk(barrier.image->data->lastStage);
+        vkBarrier.srcAccessMask = gpuAccessToVk(barrier.image->data->lastAccess);
+        vkBarrier.dstStageMask = gpuStageToVk(barrier.nextStage);
+        vkBarrier.dstAccessMask = gpuAccessToVk(barrier.nextAccess);
+        vkBarrier.oldLayout = gpuLayoutToVk(barrier.image->data->lastLayout);
+        vkBarrier.newLayout = gpuLayoutToVk(barrier.nextLayout);
+        vkBarrier.image = barrier.image->data->image->image;
+        vkBarrier.subresourceRange = {
             gpuAspectToVk(barrier.image->data->aspectFlags),
             barrier.image->data->baseMipLevel,
             barrier.image->data->levelCount,
@@ -1114,16 +1114,16 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
 
     for (u32 i = 0; i < pass.uniformBuffers.count; ++i)
     {
-        VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
+        VkBufferMemoryBarrier2& barrier = bufferBarriers.push();
         GpuBufferData* buffer = pass.uniformBuffers[i]->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(buffer->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(buffer->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        barrier->dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
-        barrier->buffer = buffer->buffer;
-        barrier->size = buffer->size;
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(buffer->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(buffer->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+        barrier.buffer = buffer->buffer;
+        barrier.size = buffer->size;
 
         buffer->lastStage = GpuStage_computeShader;
         buffer->lastAccess = GpuAccess_uniformRead;
@@ -1131,16 +1131,16 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
 
     for (u32 i = 0; i < pass.storageBuffers.count; ++i)
     {
-        VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
+        VkBufferMemoryBarrier2& barrier = bufferBarriers.push();
         GpuBufferData* buffer = pass.storageBuffers[i]->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(buffer->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(buffer->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        barrier->dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        barrier->buffer = buffer->buffer;
-        barrier->size = buffer->size;
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(buffer->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(buffer->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.buffer = buffer->buffer;
+        barrier.size = buffer->size;
 
         buffer->lastStage = GpuStage_computeShader;
         buffer->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
@@ -1148,18 +1148,18 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
 
     for (u32 i = 0; i < pass.sampledImages.count; ++i)
     {
-        VkImageMemoryBarrier2* barrier = imageBarriers.push();
+        VkImageMemoryBarrier2& barrier = imageBarriers.push();
         GpuViewData* image = pass.sampledImages[i]->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(image->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(image->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        barrier->dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        barrier->oldLayout = gpuLayoutToVk(image->lastLayout);
-        barrier->newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier->image = image->image->image;
-        barrier->subresourceRange = {
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(image->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(image->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier.oldLayout = gpuLayoutToVk(image->lastLayout);
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.image = image->image->image;
+        barrier.subresourceRange = {
             gpuAspectToVk(image->aspectFlags),
             image->baseMipLevel,
             image->levelCount,
@@ -1174,18 +1174,18 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
 
     for (u32 i = 0; i < pass.storageImages.count; ++i)
     {
-        VkImageMemoryBarrier2* barrier = imageBarriers.push();
+        VkImageMemoryBarrier2& barrier = imageBarriers.push();
         GpuViewData* image = pass.storageImages[i]->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(image->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(image->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        barrier->dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        barrier->oldLayout = gpuLayoutToVk(image->lastLayout);
-        barrier->newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier->image = image->image->image;
-        barrier->subresourceRange = {
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(image->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(image->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.oldLayout = gpuLayoutToVk(image->lastLayout);
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.image = image->image->image;
+        barrier.subresourceRange = {
             gpuAspectToVk(image->aspectFlags),
             image->baseMipLevel,
             image->levelCount,
@@ -1217,16 +1217,16 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     for (u32 i = 0; i < pass.uniformBuffers.count; ++i)
     {
-        VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
+        VkBufferMemoryBarrier2& barrier = bufferBarriers.push();
         GpuBufferData* buffer = pass.uniformBuffers[i]->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(buffer->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(buffer->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        barrier->dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
-        barrier->buffer = buffer->buffer;
-        barrier->size = buffer->size;
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(buffer->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(buffer->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+        barrier.buffer = buffer->buffer;
+        barrier.size = buffer->size;
 
         buffer->lastStage = GpuStage_vertexShader | GpuStage_fragmentShader;
         buffer->lastAccess = GpuAccess_uniformRead;
@@ -1234,16 +1234,16 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     for (u32 i = 0; i < pass.storageBuffers.count; ++i)
     {
-        VkBufferMemoryBarrier2* barrier = bufferBarriers.push();
+        VkBufferMemoryBarrier2& barrier = bufferBarriers.push();
         GpuBufferData* buffer = pass.storageBuffers[i]->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(buffer->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(buffer->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        barrier->dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        barrier->buffer = buffer->buffer;
-        barrier->size = buffer->size;
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(buffer->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(buffer->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.buffer = buffer->buffer;
+        barrier.size = buffer->size;
 
         buffer->lastStage = GpuStage_vertexShader | GpuStage_fragmentShader;
         buffer->lastAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
@@ -1251,18 +1251,18 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     for (u32 i = 0; i < pass.sampledImages.count; ++i)
     {
-        VkImageMemoryBarrier2* barrier = imageBarriers.push();
+        VkImageMemoryBarrier2& barrier = imageBarriers.push();
         GpuViewData* image = pass.sampledImages[i]->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(image->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(image->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        barrier->dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        barrier->oldLayout = gpuLayoutToVk(image->lastLayout);
-        barrier->newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier->image = image->image->image;
-        barrier->subresourceRange = {
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(image->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(image->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier.oldLayout = gpuLayoutToVk(image->lastLayout);
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.image = image->image->image;
+        barrier.subresourceRange = {
             gpuAspectToVk(image->aspectFlags),
             image->baseMipLevel,
             image->levelCount,
@@ -1277,18 +1277,18 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     for (u32 i = 0; i < pass.storageImages.count; ++i)
     {
-        VkImageMemoryBarrier2* barrier = imageBarriers.push();
+        VkImageMemoryBarrier2& barrier = imageBarriers.push();
         GpuViewData* image = pass.storageImages[i]->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(image->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(image->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        barrier->dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        barrier->oldLayout = gpuLayoutToVk(image->lastLayout);
-        barrier->newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier->image = image->image->image;
-        barrier->subresourceRange = {
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(image->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(image->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.oldLayout = gpuLayoutToVk(image->lastLayout);
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.image = image->image->image;
+        barrier.subresourceRange = {
             gpuAspectToVk(image->aspectFlags),
             image->baseMipLevel,
             image->levelCount,
@@ -1303,19 +1303,19 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     for (u32 i = 0; i < pass.colorAttachments.count; ++i)
     {
-        VkImageMemoryBarrier2* barrier = imageBarriers.push();
+        VkImageMemoryBarrier2& barrier = imageBarriers.push();
         GpuViewData* image = pass.colorAttachments[i].image->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(image->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(image->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        barrier->dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(image->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(image->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         if (pass.colorAttachments[i].loadOp == GpuLoadOp_load)
-            barrier->oldLayout = gpuLayoutToVk(image->lastLayout);
-        barrier->newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier->image = image->image->image;
-        barrier->subresourceRange = {
+            barrier.oldLayout = gpuLayoutToVk(image->lastLayout);
+        barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier.image = image->image->image;
+        barrier.subresourceRange = {
             gpuAspectToVk(image->aspectFlags),
             image->baseMipLevel,
             image->levelCount,
@@ -1330,21 +1330,21 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     if (pass.depthAttachment != nullptr)
     {
-        VkImageMemoryBarrier2* barrier = imageBarriers.push();
+        VkImageMemoryBarrier2& barrier = imageBarriers.push();
         GpuViewData* image = pass.depthAttachment->image->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(image->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(image->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(image->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(image->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
                               | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        barrier->dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                                | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         if (pass.depthAttachment->loadOp == GpuLoadOp_load)
-            barrier->oldLayout = gpuLayoutToVk(image->lastLayout);
-        barrier->newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-        barrier->image = image->image->image;
-        barrier->subresourceRange = {
+            barrier.oldLayout = gpuLayoutToVk(image->lastLayout);
+        barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        barrier.image = image->image->image;
+        barrier.subresourceRange = {
             gpuAspectToVk(image->aspectFlags),
             image->baseMipLevel,
             image->levelCount,
@@ -1359,21 +1359,21 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     if (pass.stencilAttachment != nullptr)
     {
-        VkImageMemoryBarrier2* barrier = imageBarriers.push();
+        VkImageMemoryBarrier2& barrier = imageBarriers.push();
         GpuViewData* image = pass.stencilAttachment->image->data;
 
-        barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier->srcStageMask = gpuStageToVk(image->lastStage);
-        barrier->srcAccessMask = gpuAccessToVk(image->lastAccess);
-        barrier->dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = gpuStageToVk(image->lastStage);
+        barrier.srcAccessMask = gpuAccessToVk(image->lastAccess);
+        barrier.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
                               | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        barrier->dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                                | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         if (pass.stencilAttachment->loadOp == GpuLoadOp_load)
-            barrier->oldLayout = gpuLayoutToVk(image->lastLayout);
-        barrier->newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        barrier->image = image->image->image;
-        barrier->subresourceRange = {
+            barrier.oldLayout = gpuLayoutToVk(image->lastLayout);
+        barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        barrier.image = image->image->image;
+        barrier.subresourceRange = {
             gpuAspectToVk(image->aspectFlags),
             image->baseMipLevel,
             image->levelCount,
@@ -1400,13 +1400,13 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
 
     for (u32 i = 0; i < pass.colorAttachments.count; ++i)
     {
-        VkRenderingAttachmentInfo* attachment = colorAttachments.push();
-        attachment->sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        attachment->imageView = pass.colorAttachments[i].image->data->view;
-        attachment->imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachment->loadOp = gpuLoadOpToVk(pass.colorAttachments[i].loadOp);
-        attachment->storeOp = gpuStoreOpToVk(pass.colorAttachments[i].storeOp);
-        memcpy(&attachment->clearValue, &pass.colorAttachments[i].clearValue, sizeof(VkClearValue));
+        VkRenderingAttachmentInfo& attachment = colorAttachments.push();
+        attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        attachment.imageView = pass.colorAttachments[i].image->data->view;
+        attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachment.loadOp = gpuLoadOpToVk(pass.colorAttachments[i].loadOp);
+        attachment.storeOp = gpuStoreOpToVk(pass.colorAttachments[i].storeOp);
+        memcpy(&attachment.clearValue, &pass.colorAttachments[i].clearValue, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo depthAttachment{};
@@ -1553,9 +1553,9 @@ void gpuFrameEnd(GpuCmd* cmd)
         scratch, 0, frame->swapchains.count};
     for (internal::Swapchain* swap : frame->swapchains)
     {
-        GpuImageBarrier* barrier = presentBarriers.push();
-        barrier->image = &swap->data->views[swap->data->imageIdx];
-        barrier->nextLayout = GpuLayout_presentSrc;
+        GpuImageBarrier& barrier = presentBarriers.push();
+        barrier.image = &swap->data->views[swap->data->imageIdx];
+        barrier.nextLayout = GpuLayout_presentSrc;
     }
     gpuMemoryBarrier(cmd, {}, presentBarriers);
 

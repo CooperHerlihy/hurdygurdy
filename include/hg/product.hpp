@@ -10,7 +10,17 @@ namespace hg {
  * A product type, or tuple
  */
 template<typename... Ts>
-struct Product {};
+struct Product {
+    template<typename F>
+    void forEach(F&&)
+    {
+    }
+
+    template<typename F>
+    void forEach(F&&) const
+    {
+    }
+};
 
 /**
  * A product type, or tuple
@@ -64,6 +74,18 @@ struct Product<T, Ts...> {
     }
 
     /**
+     * Get an element by index (const)
+     */
+    template<u64 N> requires (N < count)
+    constexpr const auto& get() const
+    {
+        if constexpr (N == 0)
+            return first;
+        else
+            return rest.template get<N - 1>();
+    }
+
+    /**
      * Get an element by index
      */
     template<u64 N, typename U> requires (N < count)
@@ -73,6 +95,26 @@ struct Product<T, Ts...> {
             return first = std::forward<U>(val);
         else
             return rest.template set<N - 1>(std::forward<U>(val));
+    }
+
+    /**
+     * Call a function on all elements
+     */
+    template<typename F>
+    void forEach(F&& f)
+    {
+        f(first);
+        rest.forEach(std::forward<F>(f));
+    }
+
+    /**
+     * Call a function on all elements (const)
+     */
+    template<typename F>
+    void forEach(F&& f) const
+    {
+        f(first);
+        rest.forEach(std::forward<F>(f));
     }
 };
 

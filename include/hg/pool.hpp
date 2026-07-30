@@ -233,7 +233,7 @@ struct HandlePool {
     /**
      * Returns whether a handle is alive in the pool
      */
-    bool alive(Handle handle);
+    bool alive(Handle handle) const;
 
     /**
      * Free an index back into a pool
