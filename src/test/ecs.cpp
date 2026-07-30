@@ -254,6 +254,97 @@ void testEcs()
         TEST(sum == 30);
     }
 
+    {
+        Ecs<u32> ecs = Ecs<u32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 10;
+        ecs.add<u32>(e2) = 20;
+
+        u64 sum = 0;
+        auto fn = [&](Entity e)
+        {
+            sum += ecs.get<u32>(e);
+        };
+        ecs.forEach<decltype(fn), u32>(fn);
+        TEST(sum == 30);
+    }
+
+    {
+        Ecs<u32> ecs = Ecs<u32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 10;
+        ecs.add<u32>(e2) = 20;
+
+        u64 sum = 0;
+        auto fn = [&](u32& v)
+        {
+            sum += v;
+        };
+        ecs.forEach<decltype(fn), u32>(fn);
+        TEST(sum == 30);
+    }
+
+    // ============================================================================
+    // forEachPar single component type
+    // ============================================================================
+
+    {
+        Ecs<u32> ecs = Ecs<u32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 10;
+        ecs.add<u32>(e2) = 20;
+
+        hg::SpinLock lk;
+        u64 sum = 0;
+        auto fn = [&](Entity e, u32& v)
+        {
+            hg::SpinLockScope scope{&lk};
+            sum += v;
+            (void)e;
+        };
+        ecs.forEachPar<decltype(fn), u32>(fn);
+        TEST(sum == 30);
+    }
+
+    {
+        Ecs<u32> ecs = Ecs<u32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 10;
+        ecs.add<u32>(e2) = 20;
+
+        hg::SpinLock lk;
+        u64 sum = 0;
+        auto fn = [&](Entity e)
+        {
+            hg::SpinLockScope scope{&lk};
+            sum += ecs.get<u32>(e);
+        };
+        ecs.forEachPar<decltype(fn), u32>(fn);
+        TEST(sum == 30);
+    }
+
+    {
+        Ecs<u32> ecs = Ecs<u32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 10;
+        ecs.add<u32>(e2) = 20;
+
+        hg::SpinLock lk;
+        u64 sum = 0;
+        auto fn = [&](u32& v)
+        {
+            hg::SpinLockScope scope{&lk};
+            sum += v;
+        };
+        ecs.forEachPar<decltype(fn), u32>(fn);
+        TEST(sum == 30);
+    }
+
     // ============================================================================
     // forEach multiple component types
     // ============================================================================
@@ -276,6 +367,107 @@ void testEcs()
             (void)e;
         };
         ecs.forEach<decltype(fn), u32, f32>(fn);
+        TEST(sum == 33);
+    }
+
+    {
+        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 1;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 2;
+        ecs.add<f32>(e2) = 20.0f;
+
+        u64 sum = 0;
+        auto fn = [&](Entity e)
+        {
+            sum += ecs.get<u32>(e);
+        };
+        ecs.forEach<decltype(fn), u32, f32>(fn);
+        TEST(sum == 3);
+    }
+
+    {
+        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 1;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 2;
+        ecs.add<f32>(e2) = 20.0f;
+
+        u64 sum = 0;
+        auto fn = [&](u32& a, f32& b)
+        {
+            sum += a + (u64)b;
+        };
+        ecs.forEach<decltype(fn), u32, f32>(fn);
+        TEST(sum == 33);
+    }
+
+    // ============================================================================
+    // forEachPar multiple component types
+    // ============================================================================
+
+    {
+        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 1;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 2;
+        ecs.add<f32>(e2) = 20.0f;
+
+        hg::SpinLock lk;
+        u64 sum = 0;
+        auto fn = [&](Entity e, u32& a, f32& b)
+        {
+            hg::SpinLockScope scope{&lk};
+            sum += a + (u64)b;
+            (void)e;
+        };
+        ecs.forEachPar<decltype(fn), u32, f32>(fn);
+        TEST(sum == 33);
+    }
+
+    {
+        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 1;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 2;
+        ecs.add<f32>(e2) = 20.0f;
+
+        hg::SpinLock lk;
+        u64 sum = 0;
+        auto fn = [&](Entity e)
+        {
+            hg::SpinLockScope scope{&lk};
+            sum += ecs.get<u32>(e);
+        };
+        ecs.forEachPar<decltype(fn), u32, f32>(fn);
+        TEST(sum == 3);
+    }
+
+    {
+        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 1;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 2;
+        ecs.add<f32>(e2) = 20.0f;
+
+        hg::SpinLock lk;
+        u64 sum = 0;
+        auto fn = [&](u32& a, f32& b)
+        {
+            hg::SpinLockScope scope{&lk};
+            sum += a + (u64)b;
+        };
+        ecs.forEachPar<decltype(fn), u32, f32>(fn);
         TEST(sum == 33);
     }
 
@@ -791,6 +983,40 @@ void testEcs()
         TEST(fsum == 3.0f);
     }
 
+    {
+        Ecs<u32> ecs = Ecs<u32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 10;
+        ecs.add<u32>(e2) = 20;
+        const Ecs<u32>& cecs = ecs;
+
+        u64 sum = 0;
+        auto fn = [&](Entity e)
+        {
+            sum += cecs.get<u32>(e);
+        };
+        cecs.forEach<decltype(fn), u32>(fn);
+        TEST(sum == 30);
+    }
+
+    {
+        Ecs<u32> ecs = Ecs<u32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 10;
+        ecs.add<u32>(e2) = 20;
+        const Ecs<u32>& cecs = ecs;
+
+        u64 sum = 0;
+        auto fn = [&](const u32& v)
+        {
+            sum += v;
+        };
+        cecs.forEach<decltype(fn), u32>(fn);
+        TEST(sum == 30);
+    }
+
     // ============================================================================
     // const forEach multi: lambda receives const refs
     // ============================================================================
@@ -810,6 +1036,44 @@ void testEcs()
         {
             sum += a + (u64)b;
             (void)en;
+        };
+        cecs.forEach<decltype(fn), u32, f32>(fn);
+        TEST(sum == (5 + 10) + (15 + 20));
+    }
+
+    {
+        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 5;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 15;
+        ecs.add<f32>(e2) = 20.0f;
+        const Ecs<u32, f32>& cecs = ecs;
+
+        u64 sum = 0;
+        auto fn = [&](Entity e)
+        {
+            sum += cecs.get<u32>(e);
+        };
+        cecs.forEach<decltype(fn), u32, f32>(fn);
+        TEST(sum == 20);
+    }
+
+    {
+        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 5;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 15;
+        ecs.add<f32>(e2) = 20.0f;
+        const Ecs<u32, f32>& cecs = ecs;
+
+        u64 sum = 0;
+        auto fn = [&](const u32& a, const f32& b)
+        {
+            sum += a + (u64)b;
         };
         cecs.forEach<decltype(fn), u32, f32>(fn);
         TEST(sum == (5 + 10) + (15 + 20));

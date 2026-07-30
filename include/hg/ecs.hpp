@@ -482,12 +482,33 @@ struct Ecs {
     {
         EcsComponent<T>& s = getComponentSystem<T>();
 
-        Entity* e = s.entities.vals;
-        T* c = s.components.vals;
-        T* end = c + s.components.count;
-        for (; c != end; ++c, ++e)
+        if constexpr (std::is_invocable_r_v<void, F, Entity>)
         {
-            fn(*e, *c);
+            for (Entity e : s.entities)
+            {
+                fn(e);
+            }
+        }
+        else if constexpr (std::is_invocable_r_v<void, F, T&>)
+        {
+            for (T& c : s.components)
+            {
+                fn(c);
+            }
+        }
+        else if constexpr (std::is_invocable_r_v<void, F, Entity, T&>)
+        {
+            Entity* e = s.entities.vals;
+            T* c = s.components.vals;
+            T* end = c + s.components.count;
+            for (; c != end; ++c, ++e)
+            {
+                fn(*e, *c);
+            }
+        }
+        else
+        {
+            static_assert(false, "Invalid lambda in Ecs forEach()");
         }
     }
 
@@ -499,12 +520,27 @@ struct Ecs {
     {
         const EcsComponent<T>& s = getComponentSystem<T>();
 
-        const Entity* e = s.entities.vals;
-        const T* c = s.components.vals;
-        const T* end = c + s.components.count;
-        for (; c != end; ++c, ++e)
+        if constexpr (std::is_invocable_r_v<void, F, Entity>)
         {
-            fn(*e, *c);
+            for (const Entity& e : s.entities)
+                fn(e);
+        }
+        else if constexpr (std::is_invocable_r_v<void, F, const T&>)
+        {
+            for (const T& c : s.components)
+                fn(c);
+        }
+        else if constexpr (std::is_invocable_r_v<void, F, Entity, const T&>)
+        {
+            const Entity* e = s.entities.vals;
+            const T* c = s.components.vals;
+            const T* end = c + s.components.count;
+            for (; c != end; ++c, ++e)
+                fn(*e, *c);
+        }
+        else
+        {
+            static_assert(false, "Invalid lambda in Ecs forEach() const");
         }
     }
 
@@ -516,12 +552,31 @@ struct Ecs {
     {
         EcsComponent<T>& s = getComponentSystem<T>();
 
-        Entity* e = s.entities.vals;
-        T* c = s.components.vals;
-        forPar(0, s.components.count, [&](u64 idx)
+        if constexpr (std::is_invocable_r_v<void, F, Entity>)
         {
-            fn(e[idx], c[idx]);
-        });
+            Entity* e = s.entities.vals;
+            forPar(0, s.components.count, [&](u64 idx)
+            {
+                fn(e[idx]);
+            });
+        }
+        else if constexpr (std::is_invocable_r_v<void, F, T&>)
+        {
+            T* c = s.components.vals;
+            forPar(0, s.components.count, [&](u64 idx)
+            {
+                fn(c[idx]);
+            });
+        }
+        else if constexpr (std::is_invocable_r_v<void, F, Entity, T&>)
+        {
+            Entity* e = s.entities.vals;
+            T* c = s.components.vals;
+            forPar(0, s.components.count, [&](u64 idx)
+            {
+                fn(e[idx], c[idx]);
+            });
+        }
     }
 
     /**
@@ -565,7 +620,14 @@ struct Ecs {
         for (Entity e : getSmallestEntities<Us...>())
         {
             if (hasAll<Us...>(e))
-                fn(e, get<Us>(e)...);
+            {
+                if constexpr (std::is_invocable_r_v<void, F, Entity>)
+                    fn(e);
+                else if constexpr (std::is_invocable_r_v<void, F, decltype(get<Us>(e))...>)
+                    fn(get<Us>(e)...);
+                else
+                    fn(e, get<Us>(e)...);
+            }
         }
     }
 
@@ -578,7 +640,14 @@ struct Ecs {
         for (Entity e : getSmallestEntities<Us...>())
         {
             if (hasAll<Us...>(e))
-                fn(e, get<Us>(e)...);
+            {
+                if constexpr (std::is_invocable_r_v<void, F, Entity>)
+                    fn(e);
+                else if constexpr (std::is_invocable_r_v<void, F, decltype(get<Us>(e))...>)
+                    fn(get<Us>(e)...);
+                else
+                    fn(e, get<Us>(e)...);
+            }
         }
     }
 
@@ -593,7 +662,14 @@ struct Ecs {
         {
             Entity e = entrySpan[idx];
             if (hasAll<Us...>(e))
-                fn(e, get<Us>(e)...);
+            {
+                if constexpr (std::is_invocable_r_v<void, F, Entity>)
+                    fn(e);
+                else if constexpr (std::is_invocable_r_v<void, F, decltype(get<Us>(e))...>)
+                    fn(get<Us>(e)...);
+                else
+                    fn(e, get<Us>(e)...);
+            }
         });
     }
 };
