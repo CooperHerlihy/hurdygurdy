@@ -987,7 +987,7 @@ bool initGpu()
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vk.descriptorPools[i] = HandlePool::create();
+        vk.descriptorPools[i] = HandlePool{};
     }
 
     vk.samplers = Map<SamplerInfo, VkSampler>(

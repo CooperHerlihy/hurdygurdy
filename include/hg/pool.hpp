@@ -216,11 +216,6 @@ struct HandlePool {
     Array<Handle> freed = {};
 
     /**
-     * Create a new object pool
-     */
-    static HandlePool create();
-
-    /**
      * Reset a handle pool
      */
     void reset();

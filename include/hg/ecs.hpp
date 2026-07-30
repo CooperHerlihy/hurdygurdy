@@ -4,7 +4,7 @@
 #include "hg/concurrency.hpp"
 #include "hg/product.hpp"
 #include "hg/pool.hpp"
-// #include "hg/serialization.hpp"
+#include "hg/serialization.hpp"
 
 namespace hg {
 
@@ -53,6 +53,11 @@ constexpr u64 hash(Entity e)
  */
 template<typename T>
 struct EcsComponent {
+    /**
+     * The component type
+     */
+    using Type = T;
+
     /**
      * indices[e.handle.idx()] is the index into components, or -1 if none
      */
@@ -212,16 +217,6 @@ struct Ecs {
      * The component systems
      */
     Product<EcsComponent<Ts>...> systems{};
-
-    /**
-     * Create an empty entity component system
-     */
-    static Ecs create()
-    {
-        Ecs ecs{};
-        ecs.entities = HandlePool::create();
-        return ecs;
-    }
 
     /**
      * Get the component system for a type
@@ -477,7 +472,7 @@ struct Ecs {
     /**
      * Calls a function for each entity with a component type
      */
-    template<typename F, typename T>
+    template<typename T, typename F>
     void forEach(F fn)
     {
         EcsComponent<T>& s = getComponentSystem<T>();
@@ -508,14 +503,14 @@ struct Ecs {
         }
         else
         {
-            static_assert(false, "Invalid lambda in Ecs forEach()");
+            static_assert(sizeof(T) == 0, "Invalid lambda in Ecs forEach()");
         }
     }
 
     /**
      * Calls a function for each entity with a component type (const)
      */
-    template<typename F, typename T>
+    template<typename T, typename F>
     void forEach(F fn) const
     {
         const EcsComponent<T>& s = getComponentSystem<T>();
@@ -540,14 +535,14 @@ struct Ecs {
         }
         else
         {
-            static_assert(false, "Invalid lambda in Ecs forEach() const");
+            static_assert(sizeof(T) == 0, "Invalid lambda in Ecs forEach() const");
         }
     }
 
     /**
      * Calls a function in parallel for each entity with a component type
      */
-    template<typename F, typename T>
+    template<typename T, typename F>
     void forEachPar(F fn)
     {
         EcsComponent<T>& s = getComponentSystem<T>();
@@ -614,7 +609,7 @@ struct Ecs {
     /**
      * Calls a function for each entity with a list of components
      */
-    template<typename F, typename... Us> requires (sizeof...(Us) > 1)
+    template<typename... Us, typename F> requires (sizeof...(Us) > 1)
     void forEach(F fn)
     {
         for (Entity e : getSmallestEntities<Us...>())
@@ -634,7 +629,7 @@ struct Ecs {
     /**
      * Calls a function for each entity with a list of components (const)
      */
-    template<typename F, typename... Us> requires (sizeof...(Us) > 1)
+    template<typename... Us, typename F> requires (sizeof...(Us) > 1)
     void forEach(F fn) const
     {
         for (Entity e : getSmallestEntities<Us...>())
@@ -654,7 +649,7 @@ struct Ecs {
     /**
      * Calls a function in parallel for each entity with a list of components
      */
-    template<typename F, typename... Us> requires (sizeof...(Us) > 1)
+    template<typename... Us, typename F> requires (sizeof...(Us) > 1)
     void forEachPar(F fn)
     {
         Span<const Entity> entrySpan = getSmallestEntities<Us...>();
@@ -674,65 +669,137 @@ struct Ecs {
     }
 };
 
-// /**
-//  * The serializer for an ecs
-//  */
-// union EntitySerializer {
-//     /**
-//      * The indices of entities, if writing
-//      */
-//     u32* entityToIdx;
-//     /**
-//      * The entities by index, if reading
-//      */
-//     Entity* idxToEntity;
-//
-//     constexpr u32 getIdx(Entity e)
-//     {
-//         return entityToIdx[e.handle.idx()];
-//     }
-//
-//     constexpr Entity getEntity(u32 idx)
-//     {
-//         return idxToEntity[idx];
-//     }
-// };
-//
-// /**
-//  * Ecs serialization
-//  */
-// template<typename... Ts>
-// void serialize(Serializer* s, Ecs<Ts...>* ecs)
-// {
-// }
-//
-// /**
-//  * The default serialization for a component, may be overridden
-//  */
-// template<typename T>
-// void ecsSerialize(Serializer* s, T* val, EntitySerializer* ecs)
-// {
-//     serialize(s, val);
-//     static_cast<void>(ecs);
-// }
-//
-// /**
-//  * Entity ecs serialization
-//  */
-// template<>
-// inline void ecsSerialize(Serializer* s, Entity* e, EntitySerializer* ecs)
-// {
-//     if (s->writing)
-//     {
-//         u32 idx = ecs->getIdx(*e);
-//         serializeObject(s, &idx);
-//     }
-//     else
-//     {
-//         u32 idx;
-//         serializeObject(s, &idx);
-//         *e = ecs->getEntity(idx);
-//     }
-// }
+/**
+ * The serializer for an ecs
+ */
+union EntitySerializer {
+    /**
+     * The indices of entities, if writing
+     */
+    u32* entityToIdx;
+    /**
+     * The entities by index, if reading
+     */
+    Entity* idxToEntity;
+
+    /**
+     * The the writable index from the entity
+     */
+    constexpr u32 getIdx(Entity e)
+    {
+        return entityToIdx[e.handle.idx()];
+    }
+
+    /**
+     * Get the associated entity from the index
+     */
+    constexpr Entity getEntity(u32 idx)
+    {
+        return idxToEntity[idx];
+    }
+};
+
+/**
+ * The default serialization for a component, may be overridden
+ */
+template<typename T>
+void ecsSerialize(Serializer* s, T* val, EntitySerializer* ecs)
+{
+    serialize(s, val);
+    static_cast<void>(ecs);
+}
+
+/**
+ * Entity ecs serialization
+ */
+template<>
+inline void ecsSerialize(Serializer* s, Entity* e, EntitySerializer* ecs)
+{
+    if (s->writing)
+    {
+        u32 idx = ecs->getIdx(*e);
+        serializeObject(s, &idx);
+    }
+    else
+    {
+        u32 idx;
+        serializeObject(s, &idx);
+        *e = ecs->getEntity(idx);
+    }
+}
+
+/**
+ * Ecs serialization
+ *
+ * Note, if the ecs is not empty, the serialized data is added to the ecs
+ */
+template<typename... Ts>
+void serialize(Serializer* s, Ecs<Ts...>* ecs)
+{
+    serializeBegin(s);
+
+    ArenaScope scratch = getScratch(&s->arena, 1);
+
+    if (s->writing)
+    {
+        EntitySerializer es{};
+        es.entityToIdx = scratch.alloc<u32>(ecs->entities.handles.count);
+
+        u32 eCount = 0;
+        for (u32 i = 0; i < ecs->entities.handles.count; ++i)
+        {
+            if (ecs->entities.handles[i].idx() < ecs->entities.handles.count)
+                es.entityToIdx[i] = eCount++;
+            else
+                es.entityToIdx[i] = (u32)-1;
+        }
+        serialize(s, &eCount);
+
+        ecs->systems.forEach([&](auto& sys)
+        {
+            u32 cCount = (u32)sys.components.count;
+            serialize(s, &cCount);
+
+            Entity* e = sys.entities.vals;
+            auto* c = sys.components.vals;
+            auto* end = c + sys.components.count;
+            for (; c != end; ++c, ++e)
+            {
+                u32 idx = es.getIdx(*e);
+                serialize(s, &idx);
+                ecsSerialize(s, c, &es);
+            }
+        });
+    }
+    else
+    {
+        u32 eCount;
+        serialize(s, &eCount);
+
+        EntitySerializer es{};
+        es.idxToEntity = scratch.alloc<Entity>(eCount);
+        for (u32 i = 0; i < eCount; ++i)
+        {
+            es.idxToEntity[i] = ecs->spawn();
+        }
+
+        ecs->systems.forEach([&](auto& sys)
+        {
+            using T = std::remove_cvref_t<decltype(sys)>::Type;
+
+            u32 cCount;
+            serialize(s, &cCount);
+
+            for (u32 i = 0; i < cCount; ++i)
+            {
+                u32 idx;
+                serialize(s, &idx);
+                ecsSerialize(s, &ecs->template add<T>(es.getEntity(idx)), &es);
+            }
+        });
+    }
+
+    serializeEnd(s);
+}
 
 } // namespace hg

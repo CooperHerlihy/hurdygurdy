@@ -77,14 +77,14 @@ void testPool()
 
     // handlePoolCreate returns a valid pool
     {
-        HandlePool pool = HandlePool::create();
+        HandlePool pool = HandlePool{};
         TEST(nullHandle.id == (u32)-1);
         TEST(pool.handles.count == 0);
     }
 
     // handlePoolAlloc returns sequential handles
     {
-        HandlePool pool = HandlePool::create();
+        HandlePool pool = HandlePool{};
         Handle a = pool.alloc();
         Handle b = pool.alloc();
         TEST(pool.alive(a));
@@ -95,7 +95,7 @@ void testPool()
 
     // handlePoolFree invalidates handle
     {
-        HandlePool pool = HandlePool::create();
+        HandlePool pool = HandlePool{};
         Handle a = pool.alloc();
         TEST(pool.alive(a));
         pool.free(a);
@@ -104,7 +104,7 @@ void testPool()
 
     // Freed handle is reused with incremented generation
     {
-        HandlePool pool = HandlePool::create();
+        HandlePool pool = HandlePool{};
         Handle a = pool.alloc();
         u32 idx = a.idx();
         pool.free(a);
@@ -117,7 +117,7 @@ void testPool()
 
     // handlePoolReset invalidates all handles
     {
-        HandlePool pool = HandlePool::create();
+        HandlePool pool = HandlePool{};
         Handle a = pool.alloc();
         Handle b = pool.alloc();
         pool.reset();

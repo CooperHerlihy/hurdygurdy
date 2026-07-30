@@ -1,5 +1,21 @@
 #include "tests.hpp"
 
+struct EntityRefComp {
+    Entity target;
+    u32 data;
+};
+
+namespace hg {
+
+template<>
+void ecsSerialize(Serializer* s, EntityRefComp* val, EntitySerializer* ecs)
+{
+    ecsSerialize(s, &val->target, ecs);
+    serialize(s, &val->data);
+}
+
+} // namespace hg
+
 void testEcs()
 {
     // ============================================================================
@@ -25,7 +41,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<> ecs = Ecs<>::create();
+        Ecs<> ecs{};
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
         TEST(a != nullEntity);
@@ -36,12 +52,12 @@ void testEcs()
     }
 
     {
-        Ecs<> ecs = Ecs<>::create();
+        Ecs<> ecs{};
         TEST(!ecs.alive(nullEntity));
     }
 
     {
-        Ecs<> ecs = Ecs<>::create();
+        Ecs<> ecs{};
         Entity e = ecs.spawn();
         TEST(ecs.alive(e));
         ecs.despawn(e);
@@ -49,7 +65,7 @@ void testEcs()
     }
 
     {
-        Ecs<> ecs = Ecs<>::create();
+        Ecs<> ecs{};
         Entity a = ecs.spawn();
         u32 idx = a.handle.idx();
         ecs.despawn(a);
@@ -61,7 +77,7 @@ void testEcs()
     }
 
     {
-        Ecs<> ecs = Ecs<>::create();
+        Ecs<> ecs{};
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
         ecs.reset();
@@ -74,13 +90,13 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e = ecs.spawn();
         TEST(!ecs.has<u32>(e));
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e = ecs.spawn();
         u32& c = ecs.add<u32>(e);
         c = 42;
@@ -89,7 +105,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e) = 7;
         ecs.get<u32>(e) = 99;
@@ -97,7 +113,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e);
         TEST(ecs.has<u32>(e));
@@ -106,7 +122,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e) = 10;
         ecs.remove<u32>(e);
@@ -115,7 +131,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e) = 1;
         ecs.add<f32>(e) = 2.0f;
@@ -126,7 +142,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1);
@@ -142,7 +158,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1);
@@ -153,7 +169,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1);
@@ -163,7 +179,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
@@ -177,7 +193,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e = ecs.spawn();
         u32& c = ecs.add<u32>(e);
         Entity back = ecs.getEntity(c);
@@ -189,7 +205,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         Entity e3 = ecs.spawn();
@@ -215,7 +231,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32, u64> ecs = Ecs<u32, f32, u64>::create();
+        Ecs<u32, f32, u64> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e);
         ecs.add<f32>(e);
@@ -225,7 +241,7 @@ void testEcs()
     }
 
     {
-        Ecs<u32, f32, u64> ecs = Ecs<u32, f32, u64>::create();
+        Ecs<u32, f32, u64> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e);
         TEST((ecs.hasAny<u32, f32>(e)));
@@ -238,51 +254,48 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
         ecs.add<u32>(e2) = 20;
 
         u64 sum = 0;
-        auto fn = [&](Entity e, u32& v)
+        ecs.forEach<u32>([&](Entity e, u32& v)
         {
             sum += v;
             (void)e;
-        };
-        ecs.forEach<decltype(fn), u32>(fn);
+        });
         TEST(sum == 30);
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
         ecs.add<u32>(e2) = 20;
 
         u64 sum = 0;
-        auto fn = [&](Entity e)
+        ecs.forEach<u32>([&](Entity e)
         {
             sum += ecs.get<u32>(e);
-        };
-        ecs.forEach<decltype(fn), u32>(fn);
+        });
         TEST(sum == 30);
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
         ecs.add<u32>(e2) = 20;
 
         u64 sum = 0;
-        auto fn = [&](u32& v)
+        ecs.forEach<u32>([&](u32& v)
         {
             sum += v;
-        };
-        ecs.forEach<decltype(fn), u32>(fn);
+        });
         TEST(sum == 30);
     }
 
@@ -291,7 +304,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
@@ -299,18 +312,17 @@ void testEcs()
 
         hg::SpinLock lk;
         u64 sum = 0;
-        auto fn = [&](Entity e, u32& v)
+        ecs.forEachPar<u32>([&](Entity e, u32& v)
         {
             hg::SpinLockScope scope{&lk};
             sum += v;
             (void)e;
-        };
-        ecs.forEachPar<decltype(fn), u32>(fn);
+        });
         TEST(sum == 30);
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
@@ -318,17 +330,16 @@ void testEcs()
 
         hg::SpinLock lk;
         u64 sum = 0;
-        auto fn = [&](Entity e)
+        ecs.forEachPar<u32>([&](Entity e)
         {
             hg::SpinLockScope scope{&lk};
             sum += ecs.get<u32>(e);
-        };
-        ecs.forEachPar<decltype(fn), u32>(fn);
+        });
         TEST(sum == 30);
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
@@ -336,12 +347,11 @@ void testEcs()
 
         hg::SpinLock lk;
         u64 sum = 0;
-        auto fn = [&](u32& v)
+        ecs.forEachPar<u32>([&](u32& v)
         {
             hg::SpinLockScope scope{&lk};
             sum += v;
-        };
-        ecs.forEachPar<decltype(fn), u32>(fn);
+        });
         TEST(sum == 30);
     }
 
@@ -350,7 +360,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         Entity e3 = ecs.spawn();
@@ -361,17 +371,16 @@ void testEcs()
         ecs.add<u32>(e3) = 3;
 
         u64 sum = 0;
-        auto fn = [&](Entity e, u32& a, f32& b)
+        ecs.forEach<u32, f32>([&](Entity e, u32& a, f32& b)
         {
             sum += a + (u64)b;
             (void)e;
-        };
-        ecs.forEach<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == 33);
     }
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 1;
@@ -380,16 +389,15 @@ void testEcs()
         ecs.add<f32>(e2) = 20.0f;
 
         u64 sum = 0;
-        auto fn = [&](Entity e)
+        ecs.forEach<u32, f32>([&](Entity e)
         {
             sum += ecs.get<u32>(e);
-        };
-        ecs.forEach<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == 3);
     }
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 1;
@@ -398,11 +406,10 @@ void testEcs()
         ecs.add<f32>(e2) = 20.0f;
 
         u64 sum = 0;
-        auto fn = [&](u32& a, f32& b)
+        ecs.forEach<u32, f32>([&](u32& a, f32& b)
         {
             sum += a + (u64)b;
-        };
-        ecs.forEach<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == 33);
     }
 
@@ -411,7 +418,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 1;
@@ -421,18 +428,17 @@ void testEcs()
 
         hg::SpinLock lk;
         u64 sum = 0;
-        auto fn = [&](Entity e, u32& a, f32& b)
+        ecs.forEachPar<u32, f32>([&](Entity e, u32& a, f32& b)
         {
             hg::SpinLockScope scope{&lk};
             sum += a + (u64)b;
             (void)e;
-        };
-        ecs.forEachPar<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == 33);
     }
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 1;
@@ -442,17 +448,16 @@ void testEcs()
 
         hg::SpinLock lk;
         u64 sum = 0;
-        auto fn = [&](Entity e)
+        ecs.forEachPar<u32, f32>([&](Entity e)
         {
             hg::SpinLockScope scope{&lk};
             sum += ecs.get<u32>(e);
-        };
-        ecs.forEachPar<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == 3);
     }
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 1;
@@ -462,12 +467,11 @@ void testEcs()
 
         hg::SpinLock lk;
         u64 sum = 0;
-        auto fn = [&](u32& a, f32& b)
+        ecs.forEachPar<u32, f32>([&](u32& a, f32& b)
         {
             hg::SpinLockScope scope{&lk};
             sum += a + (u64)b;
-        };
-        ecs.forEachPar<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == 33);
     }
 
@@ -478,7 +482,7 @@ void testEcs()
     {
         Lifecycle::stats.reset();
         {
-            Ecs<Lifecycle> ecs = Ecs<Lifecycle>::create();
+            Ecs<Lifecycle> ecs{};
             Entity e = ecs.spawn();
             ecs.add<Lifecycle>(e);
             TEST(Lifecycle::stats.alive == 1);
@@ -489,7 +493,7 @@ void testEcs()
     {
         Lifecycle::stats.reset();
         {
-            Ecs<Lifecycle> ecs = Ecs<Lifecycle>::create();
+            Ecs<Lifecycle> ecs{};
             Entity e = ecs.spawn();
             ecs.add<Lifecycle>(e);
             TEST(Lifecycle::stats.alive == 1);
@@ -502,7 +506,7 @@ void testEcs()
     {
         Lifecycle::stats.reset();
         {
-            Ecs<Lifecycle> ecs = Ecs<Lifecycle>::create();
+            Ecs<Lifecycle> ecs{};
             Entity e1 = ecs.spawn();
             Entity e2 = ecs.spawn();
             ecs.add<Lifecycle>(e1);
@@ -519,7 +523,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         static constexpr u32 n = 100;
         Entity entities[100];
         for (u32 i = 0; i < n; ++i)
@@ -542,7 +546,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e) = 5;
         ecs.add<f32>(e) = 3.14f;
@@ -562,7 +566,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
         ecs.add<u32>(a) = 1;
@@ -579,7 +583,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         for (u32 i = 0; i < 10; ++i)
         {
@@ -596,7 +600,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.despawn(e);
         TEST(!ecs.alive(e));
@@ -607,7 +611,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         TEST(ecs.count<u32>() == 0);
         Span<const Entity> ents = ecs.getEntities<u32>();
         TEST(ents.count == 0);
@@ -620,7 +624,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
         Entity c = ecs.spawn();
@@ -649,7 +653,7 @@ void testEcs()
     // ============================================================================
 
     {
-        HandlePool pool = HandlePool::create();
+        HandlePool pool{};
         Entity e = {pool.alloc()};
         EcsComponent<u32> cs;
         u32& ref = cs.add(e);
@@ -667,7 +671,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
         Entity c = ecs.spawn();
@@ -680,7 +684,7 @@ void testEcs()
         Span<Entity> smallest = ecs.getSmallestEntities<u32, f32>();
         TEST(smallest.count == 2);
         // With no entities, should return empty
-        Ecs<u32> empty = Ecs<u32>::create();
+        Ecs<u32> empty{};
         Span<Entity> emptySmallest = empty.getSmallestEntities<u32>();
         TEST(emptySmallest.count == 0);
     }
@@ -690,7 +694,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         Entity e3 = ecs.spawn();
@@ -704,13 +708,12 @@ void testEcs()
         ecs.add<f32>(e4) = 40.0f;
         u64 visitCount = 0;
         u64 sum = 0;
-        auto fn = [&](Entity e, u32& a, f32& b)
+        ecs.forEach<u32, f32>([&](Entity e, u32& a, f32& b)
         {
             visitCount++;
             sum += a + (u64)b;
             (void)e;
-        };
-        ecs.forEach<decltype(fn), u32, f32>(fn);
+        });
         TEST(visitCount == 2);  // only e2 and e4
         TEST(sum == (2 + 20) + (4 + 40));
     }
@@ -720,7 +723,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
         Entity c = ecs.spawn();
@@ -739,7 +742,7 @@ void testEcs()
     {
         Lifecycle::stats.reset();
         {
-            Ecs<Lifecycle> ecs = Ecs<Lifecycle>::create();
+            Ecs<Lifecycle> ecs{};
             Entity e = ecs.spawn();
             for (u32 i = 0; i < 5; ++i)
             {
@@ -765,7 +768,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
         Entity c = ecs.spawn();
@@ -774,12 +777,11 @@ void testEcs()
         ecs.add<u32>(c) = 30;
         ecs.remove<u32>(b);
         u64 sum = 0;
-        auto fn = [&](Entity e, u32& v)
+        ecs.forEach<u32>([&](Entity e, u32& v)
         {
             sum += v;
             (void)e;
-        };
-        ecs.forEach<decltype(fn), u32>(fn);
+        });
         TEST(sum == 40);
     }
 
@@ -788,7 +790,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32, f32>(e);
         TEST(ecs.has<u32>(e));
@@ -802,7 +804,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32, f32>(e, 42u, 3.14f);
         TEST(ecs.get<u32>(e) == 42);
@@ -814,7 +816,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e) = 1;
         ecs.add<f32>(e) = 2.0f;
@@ -828,7 +830,7 @@ void testEcs()
     // ============================================================================
 
     {
-        HandlePool pool = HandlePool::create();
+        HandlePool pool{};
         Entity e = {pool.alloc()};
         EcsComponent<Lifecycle> cs;
 
@@ -866,7 +868,7 @@ void testEcs()
     {
         Lifecycle::stats.reset();
         {
-            Ecs<Lifecycle> ecs = Ecs<Lifecycle>::create();
+            Ecs<Lifecycle> ecs{};
             Entity e = ecs.spawn();
             Lifecycle src;
             ecs.add<Lifecycle>(e, src);
@@ -880,7 +882,7 @@ void testEcs()
     {
         Lifecycle::stats.reset();
         {
-            Ecs<Lifecycle> ecs = Ecs<Lifecycle>::create();
+            Ecs<Lifecycle> ecs{};
             Entity e = ecs.spawn();
             Lifecycle src;
             ecs.add<Lifecycle>(e, std::move(src));
@@ -898,7 +900,7 @@ void testEcs()
     {
         Lifecycle::stats.reset();
         {
-            Ecs<u32, Lifecycle> ecs = Ecs<u32, Lifecycle>::create();
+            Ecs<u32, Lifecycle> ecs{};
             Entity e = ecs.spawn();
             Lifecycle a;
             ecs.add<u32, Lifecycle>(e, 42u, std::move(a));
@@ -918,7 +920,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e) = 7;
         ecs.add<f32>(e) = 3.0f;
@@ -941,7 +943,7 @@ void testEcs()
     // ============================================================================
 
     {
-        HandlePool pool = HandlePool::create();
+        HandlePool pool{};
         Entity e = {pool.alloc()};
         EcsComponent<u32> cs;
         cs.add(e) = 42;
@@ -955,7 +957,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
@@ -965,26 +967,24 @@ void testEcs()
         const Ecs<u32, f32>& cecs = ecs;
 
         u64 sum = 0;
-        auto fn1 = [&](Entity en, const u32& v)
+        cecs.forEach<u32>([&](Entity en, const u32& v)
         {
             sum += v;
             (void)en;
-        };
-        cecs.forEach<decltype(fn1), u32>(fn1);
+        });
         TEST(sum == 30);
 
         f32 fsum = 0;
-        auto fn2 = [&](Entity en, const f32& v)
+        cecs.forEach<f32>([&](Entity en, const f32& v)
         {
             fsum += v;
             (void)en;
-        };
-        cecs.forEach<decltype(fn2), f32>(fn2);
+        });
         TEST(fsum == 3.0f);
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
@@ -992,16 +992,15 @@ void testEcs()
         const Ecs<u32>& cecs = ecs;
 
         u64 sum = 0;
-        auto fn = [&](Entity e)
+        cecs.forEach<u32>([&](Entity e)
         {
             sum += cecs.get<u32>(e);
-        };
-        cecs.forEach<decltype(fn), u32>(fn);
+        });
         TEST(sum == 30);
     }
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
@@ -1009,11 +1008,10 @@ void testEcs()
         const Ecs<u32>& cecs = ecs;
 
         u64 sum = 0;
-        auto fn = [&](const u32& v)
+        cecs.forEach<u32>([&](const u32& v)
         {
             sum += v;
-        };
-        cecs.forEach<decltype(fn), u32>(fn);
+        });
         TEST(sum == 30);
     }
 
@@ -1022,7 +1020,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 5;
@@ -1032,17 +1030,16 @@ void testEcs()
         const Ecs<u32, f32>& cecs = ecs;
 
         u64 sum = 0;
-        auto fn = [&](Entity en, const u32& a, const f32& b)
+        cecs.forEach<u32, f32>([&](Entity en, const u32& a, const f32& b)
         {
             sum += a + (u64)b;
             (void)en;
-        };
-        cecs.forEach<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == (5 + 10) + (15 + 20));
     }
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 5;
@@ -1052,16 +1049,15 @@ void testEcs()
         const Ecs<u32, f32>& cecs = ecs;
 
         u64 sum = 0;
-        auto fn = [&](Entity e)
+        cecs.forEach<u32, f32>([&](Entity e)
         {
             sum += cecs.get<u32>(e);
-        };
-        cecs.forEach<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == 20);
     }
 
     {
-        Ecs<u32, f32> ecs = Ecs<u32, f32>::create();
+        Ecs<u32, f32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 5;
@@ -1071,11 +1067,10 @@ void testEcs()
         const Ecs<u32, f32>& cecs = ecs;
 
         u64 sum = 0;
-        auto fn = [&](const u32& a, const f32& b)
+        cecs.forEach<u32, f32>([&](const u32& a, const f32& b)
         {
             sum += a + (u64)b;
-        };
-        cecs.forEach<decltype(fn), u32, f32>(fn);
+        });
         TEST(sum == (5 + 10) + (15 + 20));
     }
 
@@ -1084,7 +1079,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e) = 99;
         const Ecs<u32>& cecs = ecs;
@@ -1113,7 +1108,7 @@ void testEcs()
     // ============================================================================
 
     {
-        Ecs<u32> ecs = Ecs<u32>::create();
+        Ecs<u32> ecs{};
         Entity e1 = ecs.spawn();
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1) = 10;
@@ -1125,5 +1120,296 @@ void testEcs()
         for (u64 i = 0; i < comps.count; ++i)
             sum += comps[i];
         TEST(sum == 30);
+    }
+
+    // ============================================================================
+    // ECS Serialization: Empty
+    // ============================================================================
+
+    // Empty ECS (no component types)
+    {
+        Ecs<> ecs{};
+        Ecs<> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+    }
+
+    // Empty ECS with component types (no entities)
+    {
+        Ecs<u32, f32> ecs{};
+        Ecs<u32, f32> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+        TEST(copy.count<u32>() == 0);
+        TEST(copy.count<f32>() == 0);
+    }
+
+    // ============================================================================
+    // ECS Serialization: Single component
+    // ============================================================================
+
+    // Single entity, single component
+    {
+        Ecs<u32> ecs{};
+        Entity e = ecs.spawn();
+        ecs.add<u32>(e) = 42;
+
+        Ecs<u32> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+
+        TEST(copy.count<u32>() == 1);
+        u32 found = 0;
+        copy.forEach<u32>([&](u32& v) { found = v; });
+        TEST(found == 42);
+    }
+
+    // Multiple entities, single component
+    {
+        Ecs<u32> ecs{};
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 10;
+        ecs.add<u32>(e2) = 20;
+
+        Ecs<u32> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+
+        TEST(copy.count<u32>() == 2);
+        u64 sum = 0;
+        copy.forEach<u32>([&](u32& v) { sum += v; });
+        TEST(sum == 30);
+    }
+
+    // ============================================================================
+    // ECS Serialization: Multiple component types
+    // ============================================================================
+
+    {
+        Ecs<u32, f32> ecs{};
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 1;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 2;
+        ecs.add<f32>(e2) = 20.0f;
+
+        Ecs<u32, f32> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+
+        TEST(copy.count<u32>() == 2);
+        TEST(copy.count<f32>() == 2);
+        u64 sum = 0;
+        copy.forEach<u32, f32>([&](Entity ce, u32& a, f32& b)
+        {
+            sum += a + (u64)b;
+            (void)ce;
+        });
+        TEST(sum == 33);
+    }
+
+    // ============================================================================
+    // ECS Serialization: Sparse entities (after despawn)
+    // ============================================================================
+
+    {
+        Ecs<u32> ecs{};
+        Entity a = ecs.spawn();
+        Entity b = ecs.spawn();
+        Entity c = ecs.spawn();
+        ecs.add<u32>(a) = 1;
+        ecs.add<u32>(b) = 2;
+        ecs.add<u32>(c) = 3;
+        ecs.despawn(b);
+
+        Ecs<u32> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+
+        TEST(copy.count<u32>() == 2);
+        u64 sum = 0;
+        copy.forEach<u32>([&](u32& v) { sum += v; });
+        TEST(sum == 4);
+    }
+
+    // ============================================================================
+    // ECS Serialization: Partial component coverage
+    // ============================================================================
+
+    {
+        Ecs<u32, f32> ecs{};
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        Entity e3 = ecs.spawn();
+        ecs.add<u32>(e1) = 1;
+        ecs.add<u32>(e2) = 2;
+        ecs.add<f32>(e2) = 20.0f;
+        ecs.add<f32>(e3) = 30.0f;
+
+        Ecs<u32, f32> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+
+        TEST(copy.count<u32>() == 2);
+        TEST(copy.count<f32>() == 2);
+
+        {
+            u64 sumU = 0;
+            copy.forEach<u32>([&](u32& v) { sumU += v; });
+            TEST(sumU == 3);
+        }
+
+        {
+            f64 sumF = 0;
+            copy.forEach<f32>([&](f32& v) { sumF += v; });
+            TEST(sumF == 50.0);
+        }
+    }
+
+    // ============================================================================
+    // ECS Serialization: Entity references in components
+    // ============================================================================
+
+    {
+        Ecs<EntityRefComp> ecs{};
+        Entity a = ecs.spawn();
+        Entity b = ecs.spawn();
+        ecs.add<EntityRefComp>(a, EntityRefComp{b, 42});
+
+        Ecs<EntityRefComp> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+
+        TEST(copy.count<EntityRefComp>() == 1);
+        u32 foundData = 0;
+        bool targetAlive = false;
+        copy.forEach<EntityRefComp>([&](Entity ce, EntityRefComp& c)
+        {
+            foundData = c.data;
+            targetAlive = copy.alive(c.target);
+            (void)ce;
+        });
+        TEST(foundData == 42);
+        TEST(targetAlive);
+    }
+
+    // ============================================================================
+    // ECS Serialization: No-op entity reference (Entity component)
+    // ============================================================================
+
+    {
+        Ecs<Entity> ecs{};
+        Entity a = ecs.spawn();
+        Entity b = ecs.spawn();
+        ecs.add<Entity>(a, b);
+
+        Ecs<Entity> copy{};
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        Serializer r = serialReader(arena, w.current);
+        serialize(&r, &copy);
+
+        TEST(copy.count<Entity>() == 1);
+        bool targetAlive = false;
+        copy.forEach<Entity>([&](Entity ce, Entity& e)
+        {
+            targetAlive = copy.alive(e);
+            (void)ce;
+        });
+        TEST(targetAlive);
+    }
+
+    // ============================================================================
+    // ECS Serialization: Lifecycle component
+    // ============================================================================
+
+    {
+        Lifecycle::stats.reset();
+        {
+            Ecs<Lifecycle> ecs{};
+            Entity e1 = ecs.spawn();
+            Entity e2 = ecs.spawn();
+            ecs.add<Lifecycle>(e1);
+            ecs.add<Lifecycle>(e2);
+
+            Ecs<Lifecycle> copy{};
+            ArenaScope arena = getScratch();
+            Serializer w = serialWriter(arena);
+            serialize(&w, &ecs);
+            Serializer r = serialReader(arena, w.current);
+            serialize(&r, &copy);
+
+            TEST(copy.count<Lifecycle>() == 2);
+            TEST(Lifecycle::stats.alive == 4); // 2 original + 2 copy
+
+            // Verify copied values are valid (serialization preserves Lifecycle fields)
+            u64 validCount = 0;
+            copy.forEach<Lifecycle>([&](Lifecycle& l)
+            {
+                if (l.valid)
+                    validCount++;
+            });
+            TEST(validCount == 2);
+        }
+        TEST(Lifecycle::stats.alive == 0);
+    }
+
+    // ============================================================================
+    // ECS Serialization: Binary format round-trip
+    // ============================================================================
+
+    {
+        Ecs<u32, f32> ecs{};
+        Entity e1 = ecs.spawn();
+        Entity e2 = ecs.spawn();
+        ecs.add<u32>(e1) = 1;
+        ecs.add<f32>(e1) = 10.0f;
+        ecs.add<u32>(e2) = 2;
+        ecs.add<f32>(e2) = 20.0f;
+
+        ArenaScope arena = getScratch();
+        Serializer w = serialWriter(arena);
+        serialize(&w, &ecs);
+        BinaryView bin = writeSerialBinary(arena, &w);
+        Serializer r = readSerialBinary(arena, bin);
+        Ecs<u32, f32> copy{};
+        serialize(&r, &copy);
+
+        TEST(copy.count<u32>() == 2);
+        TEST(copy.count<f32>() == 2);
+        u64 sum = 0;
+        copy.forEach<u32, f32>([&](Entity ce, u32& a, f32& b)
+        {
+            sum += a + (u64)b;
+            (void)ce;
+        });
+        TEST(sum == 33);
     }
 }
