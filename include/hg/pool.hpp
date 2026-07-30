@@ -140,7 +140,7 @@ struct Handle {
     /**
      * The handle id
      */
-    u32 id = 0;
+    u32 id = (u32)-1;
 
     /**
      * The number of bits in a handle used for the index
@@ -175,7 +175,7 @@ struct Handle {
 /**
  * The null handle
  */
-static constexpr Handle nullHandle = Handle{0};
+static constexpr Handle nullHandle = Handle{(u32)-1};
 
 /**
  * Compare handles

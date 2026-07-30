@@ -75,11 +75,11 @@ void testPool()
     // HandlePool provides generation-counted handle allocation. Handles are
     // 32-bit values with 24-bit index and 8-bit generation.
 
-    // handlePoolCreate returns a valid pool with handle 0 reserved (null handle)
+    // handlePoolCreate returns a valid pool
     {
         HandlePool pool = HandlePool::create();
-        TEST(nullHandle.id == 0);
-        TEST(pool.handles.count == 1);
+        TEST(nullHandle.id == (u32)-1);
+        TEST(pool.handles.count == 0);
     }
 
     // handlePoolAlloc returns sequential handles
@@ -89,8 +89,8 @@ void testPool()
         Handle b = pool.alloc();
         TEST(pool.alive(a));
         TEST(pool.alive(b));
-        TEST(a.idx() == 1);
-        TEST(b.idx() == 2);
+        TEST(a.idx() == 0);
+        TEST(b.idx() == 1);
     }
 
     // handlePoolFree invalidates handle
@@ -124,7 +124,7 @@ void testPool()
         TEST(!pool.alive(a));
         TEST(!pool.alive(b));
         Handle c = pool.alloc();
-        TEST(c.idx() == 1);
+        TEST(c.idx() == 0);
     }
 }
 

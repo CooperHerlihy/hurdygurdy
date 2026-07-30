@@ -7,7 +7,6 @@ HandlePool HandlePool::create()
     HandlePool handles{};
     handles.handles = Array<Handle>{0, 1024};
     handles.freed = Array<Handle>{0, 1024};
-    handles.alloc();
     return handles;
 }
 
@@ -15,7 +14,6 @@ void HandlePool::reset()
 {
     handles.count = 0;
     freed.count = 0;
-    alloc();
 }
 
 Handle HandlePool::alloc()

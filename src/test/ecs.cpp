@@ -31,8 +31,8 @@ void testEcs()
         TEST(a != nullEntity);
         TEST(b != nullEntity);
         TEST(a != b);
-        TEST(a.handle.idx() == 1);
-        TEST(b.handle.idx() == 2);
+        TEST(a.handle.idx() == 0);
+        TEST(b.handle.idx() == 1);
     }
 
     {
