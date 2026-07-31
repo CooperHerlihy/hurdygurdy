@@ -2,39 +2,25 @@
 
 #include "hurdygurdy.glsl"
 
-#define TYPE_RECT 0u
-#define TYPE_SPRITE 1u
-
 layout (HgUniformBuffer) uniform ViewProjection {
     mat4 proj;
     mat4 view;
 } uVP[];
 
-struct VertexRect {
-    vec2 pos;
-    vec2 size;
-    uint type;
-    uint pad[3];
+struct Vertex {
     vec4 color;
-};
-
-struct VertexSprite {
     vec2 pos;
     vec2 size;
-    uint type;
-    uint pad[2];
-    uint tex;
     vec2 uvPos;
     vec2 uvSize;
+    vec2 origin;
+    float rotation;
+    uint texIdx;
 };
 
-layout (HgStorageBuffer) readonly buffer RectVertices {
-    VertexRect verts[];
-} rectBufs[];
-
-layout (HgStorageBuffer) readonly buffer SpriteVertices {
-    VertexSprite verts[];
-} spriteBufs[];
+layout (HgStorageBuffer) readonly buffer Vertices {
+    Vertex verts[];
+} vertBufs[];
 
 layout (HgStorageBuffer) readonly buffer Indices {
     uint indices[];
@@ -47,10 +33,9 @@ layout (push_constant) uniform Push {
 } push;
 
 layout (location = 0) out VertexOutput {
-    flat uint type;
-    flat uint texIdx;
-    vec2 texUV;
     vec4 color;
+    vec2 texUV;
+    flat uint texIdx;
 } vOut;
 
 void main()
@@ -67,23 +52,13 @@ void main()
         vec2(1.0, 1.0)
     );
 
-    VertexRect rectVert = rectBufs[push.inst].verts[gl_InstanceIndex];
-    VertexSprite spriteVert = spriteBufs[push.inst].verts[gl_InstanceIndex];
+    Vertex vert = vertBufs[push.inst].verts[gl_InstanceIndex];
 
-    if (rectVert.type == TYPE_RECT)
-    {
-        vOut.type = rectVert.type;
-        vOut.color = rectVert.color;
-    }
-    else if (spriteVert.type == TYPE_SPRITE)
-    {
-        vOut.type = spriteVert.type;
-        vOut.texIdx = spriteVert.tex;
-        vOut.texUV = positions[gl_VertexIndex] * spriteVert.uvSize + spriteVert.uvPos;
-    }
+    vOut.color = vert.color;
+    vOut.texUV = positions[gl_VertexIndex] * vert.uvSize + vert.uvPos;
+    vOut.texIdx = vert.texIdx;
 
-    vec2 pos = rectVert.pos + rectVert.size * positions[gl_VertexIndex];
-
+    vec2 pos = vert.pos + vert.size * positions[gl_VertexIndex];
     gl_Position = proj * view * push.model * vec4(pos, 0.0, 1.0);
 }
 

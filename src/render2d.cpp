@@ -470,34 +470,55 @@ void Layer2D::renderDebug(GpuCmd* cmd, Camera* camera)
 void Layer2D::drawRect(Vec4 color, Rect dst)
 {
     using internal::Render2DInstance;
-    using internal::Render2DInstanceType_color;
 
     Render2DInstance instance{};
-    instance.rect.pos = dst.begin;
-    instance.rect.size = dst.end - dst.begin;
-    instance.rect.type = Render2DInstanceType_color;
-    instance.rect.color = color;
+    instance.color = color;
+    instance.pos = dst.begin;
+    instance.size = dst.end - dst.begin;
 
     instances.push(instance);
     changed = true;
 }
 
-void Layer2D::drawSprite(const Sprite2D& sprite, Rect dst)
+void Layer2D::drawSprite(const Sprite2D& sprite, Rect dst, Vec4 tint)
 {
     using internal::Render2DInstance;
-    using internal::Render2DInstanceType_sprite;
 
     Texture* texture = sprite.texture == nullptr
         ? &render2D.defaultTex
         : &*sprite.texture;
 
     Render2DInstance instance{};
-    instance.sprite.pos = dst.begin;
-    instance.sprite.size = dst.end - dst.begin;
-    instance.sprite.type = Render2DInstanceType_sprite;
-    instance.sprite.tex = texture->view.samplerDescriptor();
-    instance.sprite.uvPos = sprite.uv.begin;
-    instance.sprite.uvSize = sprite.uv.end - sprite.uv.begin;
+    instance.color = tint;
+    instance.pos = dst.begin;
+    instance.size = dst.end - dst.begin;
+    instance.uvPos = sprite.uv.begin;
+    instance.uvSize = sprite.uv.end - sprite.uv.begin;
+    instance.origin = {};
+    instance.rotation = 0;
+    instance.texIdx = texture->view.samplerDescriptor();
+
+    instances.push(instance);
+    changed = true;
+}
+
+void Layer2D::drawSpriteRot(const Sprite2D& sprite, Rect dst, Vec2 origin, f32 rotation, Vec4 tint)
+{
+    using internal::Render2DInstance;
+
+    Texture* texture = sprite.texture == nullptr
+        ? &render2D.defaultTex
+        : &*sprite.texture;
+
+    Render2DInstance instance{};
+    instance.color = tint;
+    instance.pos = dst.begin;
+    instance.size = dst.end - dst.begin;
+    instance.uvPos = sprite.uv.begin;
+    instance.uvSize = sprite.uv.end - sprite.uv.begin;
+    instance.origin = origin;
+    instance.rotation = rotation;
+    instance.texIdx = texture->view.samplerDescriptor();
 
     instances.push(instance);
     changed = true;
@@ -519,16 +540,40 @@ void Layer2D::drawTilemap(const Tilemap2D& tilemap, Rect dst)
     }
 }
 
-void Layer2D::drawText(StringView text, const Atlas2D& font, Vec2 pos, f32 height, f32 spacing)
+StringView Layer2D::drawText(StringView text, const Atlas2D& font, Vec4 color, Rect bounds, f32 spacing, bool breakAtSpace)
 {
-    for (char c : text)
+    Vec2 dst = bounds.begin;
+    Vec2 boundSize = bounds.end - bounds.begin;
+
+    const char* c = text.begin();
+    const char* end = text.end();
+    while (c != end)
     {
-        Sprite2D s = font.get((u32)c);
-        Vec2 sSize = s.uv.end - s.uv.begin;
-        Vec2 dstSize = {height * sSize.x / sSize.y, height};
-        drawSprite(s, {pos, pos + dstSize});
-        pos.x += dstSize.x + spacing;
+        Sprite2D sprite = font.get((u32)*c);
+        Vec2 spriteSize = sprite.uv.end - sprite.uv.begin;
+
+        Vec2 dstSize = {boundSize.y * spriteSize.x / spriteSize.y, boundSize.y};
+        Vec2 dstEnd = dst + dstSize;
+        if (dstEnd.x > bounds.end.x)
+        {
+            if (breakAtSpace)
+            {
+                while (c > text.chars && *c != ' ')
+                {
+                    --c;
+                    instances.pop();
+                }
+                if (*c == ' ')
+                    ++c;
+            }
+            break;
+        }
+
+        drawSprite(sprite, {dst, dstEnd}, color);
+        dst.x += dstSize.x + spacing;
+        ++c;
     }
+    return {c, end};
 }
 
 } // namespace hg

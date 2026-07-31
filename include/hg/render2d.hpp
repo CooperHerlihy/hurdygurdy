@@ -315,98 +315,6 @@ void initRenderer2D(Format colorFormat);
  */
 void deinitRenderer2D();
 
-namespace internal {
-
-    /**
-     * The 2D instance types
-     */
-    enum Render2DInstanceType : u32 {
-        /**
-         * A instance with a color value
-         */
-        Render2DInstanceType_color = 0,
-        /**
-         * A instance with a sprite
-         */
-        Render2DInstanceType_sprite = 1,
-    };
-
-    /**
-     * A rectangle instance
-     */
-    struct Rect2DInstance {
-        /**
-         * The instance position
-         */
-        Vec2 pos;
-        /**
-         * The instance size
-         */
-        Vec2 size;
-        /**
-         * The instance type
-         */
-        u32 type;
-        /**
-         * Padding for 16 byte alignment
-         */
-        u32 pad[3];
-        /**
-         * The rectangle fill color
-         */
-        Vec4 color;
-    };
-
-    /**
-     * A sprite instance
-     */
-    struct Sprite2DInstance {
-        /**
-         * The instance position
-         */
-        Vec2 pos;
-        /**
-         * The instance size
-         */
-        Vec2 size;
-        /**
-         * The instance type
-         */
-        u32 type;
-        /**
-         * Padding for 16 byte alignment
-         */
-        u32 pad[2];
-        /**
-         * The texture index
-         */
-        u32 tex;
-        /**
-         * The texture uv coordinates
-         */
-        Vec2 uvPos;
-        /**
-         * The texture uv coordinates
-         */
-        Vec2 uvSize;
-    };
-
-    /**
-     * An instance in a 2D layer
-     */
-    union Render2DInstance {
-        /**
-         * The rectangle data
-         */
-        Rect2DInstance rect;
-        /**
-         * The sprite data
-         */
-        Sprite2DInstance sprite;
-    };
-
-};
-
 /**
  * A 2D sprite which can be drawn
  */
@@ -533,6 +441,48 @@ struct Tilemap2D {
 template<>
 void serialize(Serializer* s, Tilemap2D* tilemap);
 
+namespace internal {
+
+/**
+ * Instance data for the 2D renderer
+ */
+struct Render2DInstance {
+    /**
+     * The color, or tint
+     */
+    Vec4 color{};
+    /**
+     * The quad top left position
+     */
+    Vec2 pos{};
+    /**
+     * The quad size
+     */
+    Vec2 size{};
+    /**
+     * The texture coordinate beginning
+     */
+    Vec2 uvPos{};
+    /**
+     * The texture coordinate extent
+     */
+    Vec2 uvSize{};
+    /**
+     * The origin position for rotation
+     */
+    Vec2 origin{};
+    /**
+     * The angle of rotation about origin
+     */
+    f32 rotation = 0;
+    /**
+     * The texture descriptor index, or -1 to draw a plain rect
+     */
+    u32 texIdx = (u32)-1;
+};
+
+};
+
 /**
  * A 2D render layer
  */
@@ -586,7 +536,12 @@ struct Layer2D {
     /**
      *  Draw the sprite on the layer
      */
-    void drawSprite(const Sprite2D& sprite, Rect dst);
+    void drawSprite(const Sprite2D& sprite, Rect dst, Vec4 tint = Vec4{1});
+
+    /**
+     *  Draw the sprite on the layer
+     */
+    void drawSpriteRot(const Sprite2D& sprite, Rect dst, Vec2 origin, f32 rotation, Vec4 tint = Vec4{1});
 
     /**
      * Draw a tilemap to the layer
@@ -599,11 +554,17 @@ struct Layer2D {
      * Parameters
      * - text The text to draw
      * - font The character sprites, indices assumed to be ascii values
-     * - pos The beginning position to draw
-     * - height The height of each character
-     * - spacing the space between each character
+     * - color The font color
+     * - bounds The bounding box to draw in, characters are scaled to fit the
+     *   height, then drawn in sequence until the width is reached
+     * - spacing The space between each character
+     * - breakAtSpace Whether the text should be cut off at a space, or wherever
+     *   happens to break the bounds
+     *
+     * Returns
+     * - The characters that could not fit
      */
-    void drawText(StringView text, const Atlas2D& font, Vec2 pos, f32 height, f32 spacing);
+    StringView drawText(StringView text, const Atlas2D& font, Vec4 color, Rect bounds, f32 spacing, bool breakAtSpace = true);
 };
 
 } // namespace hg

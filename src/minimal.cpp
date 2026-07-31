@@ -68,7 +68,7 @@ int main()
         {.002f, 0, .012f, 1},
         {backgroundBegin, backgroundBegin + Vec2{0.5f, 0.5f}});
 
-    backgroundLayer.drawText("Hello World", getDefaultFont(), Vec2{0.2f, 0.1f}, 0.05f, 0.05f / 7.0f);
+    backgroundLayer.drawText("Hello World", getDefaultFont(), Vec4{1}, {{0.2f, 0.1f}, {0.8f, 0.15f}}, 0.05f / 7.0f);
 
     Layer2D spriteLayer = Layer2D::create();
 
