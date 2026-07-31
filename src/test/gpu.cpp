@@ -1347,15 +1347,14 @@ void testGpu()
 
         // Barrier: bufB -> shaderRead for dispatch 2
         {
-            GpuBufferBarrier bb{};
-            bb.buffer = &bufB;
-            bb.nextStage = GpuStage_computeShader;
-            bb.nextAccess = GpuAccess_shaderRead;
-            GpuBufferBarrier bc{};
-            bc.buffer = &bufC;
-            bc.nextStage = GpuStage_computeShader;
-            bc.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
-            gpuMemoryBarrier(cmd, {&bb, 1}, {});
+            GpuBufferBarrier barriers[2] = {};
+            barriers[0].buffer = &bufB;
+            barriers[0].nextStage = GpuStage_computeShader;
+            barriers[0].nextAccess = GpuAccess_shaderRead;
+            barriers[1].buffer = &bufC;
+            barriers[1].nextStage = GpuStage_computeShader;
+            barriers[1].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+            gpuMemoryBarrier(cmd, barriers, {});
         }
 
         // Dispatch 2: bufB -> bufC (multiply by 2 again)

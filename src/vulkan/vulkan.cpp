@@ -1064,7 +1064,10 @@ void deinitGpu()
     unloadVulkan();
 }
 
-Swapchain::Swapchain() noexcept = default;
+Swapchain::Swapchain() noexcept
+    : data{nullptr}
+{}
+
 Swapchain::~Swapchain() noexcept = default;
 Swapchain::Swapchain(Swapchain&& other) noexcept = default;
 Swapchain& Swapchain::operator=(Swapchain&& other) noexcept = default;

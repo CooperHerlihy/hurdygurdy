@@ -60,7 +60,7 @@ int main()
 
     Camera camera = Camera::create();
 
-    Layer2D backgroundLayer = Layer2D::create();
+    Layer2D backgroundLayer{};
 
     backgroundLayer.clear();
     Vec2 backgroundBegin = Vec2{static_cast<f32>(width) / static_cast<f32>(height) - 0.5f, 0.5f} / 2.0f;
@@ -70,7 +70,7 @@ int main()
 
     backgroundLayer.drawText("Hello World", getDefaultFont(), Vec4{1}, {{0.2f, 0.1f}, {0.8f, 0.15f}}, 0.05f / 7.0f);
 
-    Layer2D spriteLayer = Layer2D::create();
+    Layer2D spriteLayer{};
 
     Sprite2D sprite = {nullptr, {Vec2{0}, Vec2{1}}};
     Vec2 spriteSize{0.1f, 0.1f};

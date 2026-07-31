@@ -75,7 +75,7 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/audio.hpp` - AudioStream, Sound, AudioPlayer
 - `hg/render2d.hpp` - Texture, Mesh, Camera, Sprite2D, Atlas2D, Layer2D
 - `hg/imgui.hpp` - ImGui impl for HurdyGurdy
-- `hg/ecs.hpp` - ECS (commented out)
+- `hg/ecs.hpp` - Entity component system
 
 `src/` - implementation:
 - `internal.hpp` - internal header (platform/gpu/audio init)

@@ -73,7 +73,10 @@ WindowData& WindowData::operator=(WindowData&& other) noexcept
     return *this;
 }
 
-Window::Window() noexcept = default;
+Window::Window() noexcept
+    : data{nullptr}
+{}
+
 Window::~Window() noexcept = default;
 Window::Window(Window&& other) noexcept = default;
 Window& Window::operator=(Window&& other) noexcept = default;

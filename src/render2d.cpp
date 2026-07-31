@@ -400,21 +400,6 @@ void serialize(Serializer* s, Tilemap2D* tilemap)
     serializeObject(s, &tilemap->atlas, &tilemap->tiles, &tilemap->width, &tilemap->height);
 }
 
-Layer2D Layer2D::create()
-{
-    using internal::Render2DInstance;
-
-    Layer2D layer{};
-    layer.instances = Array<Render2DInstance>{0, 1024};
-    layer.instanceBuffer = GpuBuffer::create(layer.instances.capacity * sizeof(Render2DInstance),
-        GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
-    layer.instanceCapacity = static_cast<u32>(layer.instances.capacity);
-    layer.transform = Mat4{1.0f};
-    layer.changed = true;
-
-    return layer;
-}
-
 void Layer2D::clear()
 {
     instances.count = 0;
@@ -428,6 +413,9 @@ static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, const Gpu
     HG_ASSERT(cmd != nullptr);
     HG_ASSERT(camera != nullptr);
     HG_ASSERT(layer != nullptr);
+
+    if (layer->instances.count == 0)
+        return;
 
     if (layer->changed)
     {

@@ -75,7 +75,10 @@ GpuBufferData::~GpuBufferData()
     }
 }
 
-GpuBuffer::GpuBuffer() noexcept = default;
+GpuBuffer::GpuBuffer() noexcept
+    : data{nullptr}
+{}
+
 GpuBuffer::~GpuBuffer() noexcept = default;
 GpuBuffer::GpuBuffer(GpuBuffer&&) noexcept = default;
 GpuBuffer& GpuBuffer::operator=(GpuBuffer&&) noexcept = default;
@@ -228,7 +231,10 @@ GpuImageData::~GpuImageData()
     }
 }
 
-GpuImage::GpuImage() noexcept = default;
+GpuImage::GpuImage() noexcept
+    : data{nullptr}
+{}
+
 GpuImage::~GpuImage() noexcept = default;
 GpuImage::GpuImage(GpuImage&&) noexcept = default;
 GpuImage& GpuImage::operator=(GpuImage&&) noexcept = default;
@@ -325,7 +331,10 @@ GpuViewData::~GpuViewData()
     }
 }
 
-GpuView::GpuView() noexcept = default;
+GpuView::GpuView() noexcept
+    : data{nullptr}
+{}
+
 GpuView::~GpuView() noexcept = default;
 GpuView::GpuView(GpuView&&) noexcept = default;
 GpuView& GpuView::operator=(GpuView&&) noexcept = default;
@@ -956,7 +965,10 @@ GpuPipelineData::~GpuPipelineData()
     }
 }
 
-GpuPipeline::GpuPipeline() noexcept = default;
+GpuPipeline::GpuPipeline() noexcept
+    : data{nullptr}
+{}
+
 GpuPipeline::~GpuPipeline() noexcept = default;
 GpuPipeline::GpuPipeline(GpuPipeline&&) noexcept = default;
 GpuPipeline& GpuPipeline::operator=(GpuPipeline&&) noexcept = default;

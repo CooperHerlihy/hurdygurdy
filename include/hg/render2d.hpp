@@ -490,11 +490,11 @@ struct Layer2D {
     /**
      * The transform, does not affect changed
      */
-    Mat4 transform = {};
+    Mat4 transform{1.0};
     /**
      * The instance data
      */
-    Array<internal::Render2DInstance> instances = {};
+    Array<internal::Render2DInstance> instances{};
     /**
      * The gpu side instance buffer
      */
@@ -507,11 +507,6 @@ struct Layer2D {
      * Whether the gpu data needs to be updated
      */
     bool changed = false;
-
-    /**
-     * Create a 2D render layer
-     */
-    static Layer2D create();
 
     /**
      * Remove all drawings from the layer

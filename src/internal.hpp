@@ -25,7 +25,7 @@ void deinitAudio();
 struct SwapchainData;
 
 struct Swapchain {
-    UniquePtr<SwapchainData> data = nullptr;
+    UniquePtr<SwapchainData> data;
 
     Swapchain() noexcept;
     ~Swapchain() noexcept;

@@ -133,7 +133,7 @@ struct ThreadPoolState {
         do {
             if (idx == head.load())
                 return false;
-        } while (!workingTail.compare_exchange_weak(idx, (idx + 1) & (work.count - 1)));
+        } while (!workingTail.compare_exchange_weak(idx, (idx + 1) & (static_cast<u32>(work.count) - 1)));
 
         ThreadWork w = work[idx];
         hasWork[idx].store(false);
@@ -141,7 +141,7 @@ struct ThreadPoolState {
         u32 t = tail.load();
         while (t != head.load() && !hasWork[t].load())
         {
-            u32 next = (t + 1) & (work.count - 1);
+            u32 next = (t + 1) & (static_cast<u32>(work.count) - 1);
             tail.compare_exchange_strong(t, next);
             t = next;
         }
@@ -183,7 +183,7 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     if (fence != nullptr)
         fence->add();
 
-    u32 idx = pool.workingHead.fetch_add(1) & (pool.work.count - 1);
+    u32 idx = pool.workingHead.fetch_add(1) & (static_cast<u32>(pool.work.count) - 1);
 
     pool.work[idx].fence = fence;
     pool.work[idx].data = data;
@@ -193,7 +193,7 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     u32 h = pool.head.load();
     while (pool.hasWork[h].load())
     {
-        u32 next = (h + 1) & (pool.work.count - 1);
+        u32 next = (h + 1) & (static_cast<u32>(pool.work.count) - 1);
         pool.head.compare_exchange_strong(h, next);
         h = next;
     }

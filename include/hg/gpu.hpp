@@ -407,12 +407,11 @@ struct GpuBufferData;
 /**
  * A gpu buffer
  */
-struct GpuBuffer
-{
+struct GpuBuffer {
     /**
      * The implementation data
      */
-    UniquePtr<GpuBufferData> data = nullptr;
+    UniquePtr<GpuBufferData> data;
 
     /**
      * Construct empty
@@ -579,7 +578,7 @@ struct GpuImage {
     /**
      * The implementation data
      */
-    UniquePtr<GpuImageData> data = nullptr;
+    UniquePtr<GpuImageData> data;
 
     /**
      * Construct empty
@@ -748,7 +747,7 @@ struct GpuView {
     /**
      * The implementation data
      */
-    UniquePtr<GpuViewData> data = nullptr;
+    UniquePtr<GpuViewData> data;
 
     /**
      * Construct empty
@@ -978,7 +977,7 @@ struct GpuPipeline {
     /**
      * Implementation data
      */
-    UniquePtr<GpuPipelineData> data = nullptr;
+    UniquePtr<GpuPipelineData> data;
 
     /**
      * Construct empty
