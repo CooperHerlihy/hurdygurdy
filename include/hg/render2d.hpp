@@ -101,6 +101,11 @@ struct Texture {
 };
 
 /**
+ * Create a gpu texture from cpu data
+ */
+Texture createTextureFromData(const TextureData& data);
+
+/**
  * GpuTexture asset load implementation
  */
 template<>
@@ -427,12 +432,17 @@ struct Atlas2D {
     /**
      * The sprites
      */
-    Array<Rect> sprites = {};
+    Array<Rect> sprites{};
 
     /**
      * Create a new texture atlas
      */
     static Atlas2D create(const Asset<Texture>& texture);
+
+    /**
+     * Add empty sprites, to control indices
+     */
+    u32 addEmpty(u32 count = 1);
 
     /**
      * Add a sprite to the atlas
@@ -446,16 +456,21 @@ struct Atlas2D {
      * - grid The uv coords of the grid
      * - width The number of horizontal subdivisions
      * - height The number of vertical subdivisions
+     * - count The number of sprites in the grid (so empty ends are not added)
+     * - marginX The margin on the right of each sprite, as a fraction of the
+     *   subdivided sprite rect
+     * - marginY The margin on the bottom of each sprite, as a fraction of the
+     *   subdivided sprite rect
      *
      * Returns
      * - The first sprite index
      */
-    u32 addGrid(Rect grid, u32 width, u32 height);
+    u32 addGrid(Rect grid, u32 width, u32 height, u32 count = (u32)-1, f32 marginX = 0.0f, f32 marginY = 0.0f);
 
     /**
      * Get a sprite from the atlas
      */
-    Sprite2D get(u32 idx);
+    Sprite2D get(u32 idx) const;
 };
 
 /**
@@ -469,6 +484,11 @@ void serialize(Serializer* s, Atlas2D* atlas);
  */
 template<>
 void assetLoadImpl(AssetData<Atlas2D>* data);
+
+/**
+ * Get an atlas for a default pixel font
+ */
+const Atlas2D& getDefaultFont();
 
 /**
  * A world map of tiles
@@ -572,6 +592,18 @@ struct Layer2D {
      * Draw a tilemap to the layer
      */
     void drawTilemap(const Tilemap2D& tilemap, Rect dst);
+
+    /**
+     * Draw text to the layer
+     *
+     * Parameters
+     * - text The text to draw
+     * - font The character sprites, indices assumed to be ascii values
+     * - pos The beginning position to draw
+     * - height The height of each character
+     * - spacing the space between each character
+     */
+    void drawText(StringView text, const Atlas2D& font, Vec2 pos, f32 height, f32 spacing);
 };
 
 } // namespace hg

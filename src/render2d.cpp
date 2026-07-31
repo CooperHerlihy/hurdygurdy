@@ -50,6 +50,26 @@ bool textureStorePng(TextureData* texture, StringView path)
     return true;
 }
 
+Texture createTextureFromData(const TextureData& data)
+{
+    if (data.pixels == nullptr)
+        return {};
+
+    GpuImageCreateInfo imageInfo{};
+    imageInfo.format = data.format;
+    imageInfo.width = data.width;
+    imageInfo.height = data.height;
+    imageInfo.depth = data.depth;
+    imageInfo.usage = GpuImageUsage_transferDst | GpuImageUsage_sampled;
+
+    Texture tex{};
+    tex.image = GpuImage::createEx(imageInfo);
+    tex.view = GpuView::create(tex.image, GpuAspect_color, GpuFilter_nearest);
+    tex.view.write(data.pixels);
+
+    return tex;
+}
+
 template<>
 void assetLoadImpl(AssetData<Texture>* data)
 {
@@ -57,17 +77,7 @@ void assetLoadImpl(AssetData<Texture>* data)
     if (tex->pixels == nullptr)
         return;
 
-    GpuImageCreateInfo imageInfo{};
-    imageInfo.format = tex->format;
-    imageInfo.width = tex->width;
-    imageInfo.height = tex->height;
-    imageInfo.depth = tex->depth;
-    imageInfo.usage = GpuImageUsage_transferDst | GpuImageUsage_sampled;
-
-    data->asset.image = GpuImage::createEx(imageInfo);
-    data->asset.view = GpuView::create(data->asset.image, GpuAspect_color, GpuFilter_nearest);
-
-    data->asset.view.write(tex->pixels);
+    data->asset = createTextureFromData(*tex);
 }
 
 template<>
@@ -210,6 +220,7 @@ struct RenderState2D {
     GpuPipeline pipeline{};
     GpuPipeline debugPipeline{};
     Texture defaultTex{};
+    Atlas2D defaultFont{};
 };
 
 static RenderState2D render2D;
@@ -223,9 +234,12 @@ struct RenderPush2D {
 #include "shaders/render2d.vert.spv.h"
 #include "shaders/render2d.frag.spv.h"
 #include "shaders/debug2d.frag.spv.h"
+#include "pixel_font.h"
 
 void initRenderer2D(Format colorFormat)
 {
+    ArenaScope scratch = getScratch();
+
     GpuGraphicsPipelineCreateInfo pipelineConfig{};
     pipelineConfig.vertexShader = {shaders_render2d_vert_spv, sizeof(shaders_render2d_vert_spv)};
     pipelineConfig.fragmentShader = {shaders_render2d_frag_spv, sizeof(shaders_render2d_frag_spv)};
@@ -253,6 +267,21 @@ void initRenderer2D(Format colorFormat)
         GpuImageUsage_sampled | GpuImageUsage_transferDst);
     render2D.defaultTex.view = GpuView::create(render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
     render2D.defaultTex.view.write(defaultColors);
+
+    TextureData fontData{};
+    Serializer s = readSerialBinary(scratch, {pixel_font, sizeof(pixel_font)});
+    serializeBegin(&s);
+    serializeObject(&s, &fontData.width, &fontData.height, &fontData.format);
+    u64 size = fontData.width * fontData.height * formatToSize(fontData.format);
+    fontData.pixels = heapAlloc(size, formatToSize(fontData.format));
+    serializeVoid(&s, {fontData.pixels, size});
+    serializeEnd(&s);
+
+    render2D.defaultFont.texture = newAsset<Texture>();
+    *render2D.defaultFont.texture = createTextureFromData(fontData);
+
+    render2D.defaultFont.addEmpty(32);
+    render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95, 1.0f / 6.0f, 1.0f / 8.0f);
 }
 
 void deinitRenderer2D()
@@ -268,6 +297,16 @@ Atlas2D Atlas2D::create(const Asset<Texture>& texture)
     return atlas;
 }
 
+u32 Atlas2D::addEmpty(u32 count)
+{
+    u32 idx = static_cast<u32>(sprites.count);
+    for (u32 i = 0; i < count; ++i)
+    {
+        sprites.push(rectEmpty());
+    }
+    return idx;
+}
+
 u32 Atlas2D::add(Rect sprite)
 {
     u32 idx = static_cast<u32>(sprites.count);
@@ -275,29 +314,42 @@ u32 Atlas2D::add(Rect sprite)
     return idx;
 }
 
-u32 Atlas2D::addGrid(Rect grid, u32 width, u32 height)
+u32 Atlas2D::addGrid(Rect grid, u32 width, u32 height, u32 count, f32 marginX, f32 marginY)
 {
     u32 idx = static_cast<u32>(sprites.count);
 
-    Vec2 spriteSize = (grid.end - grid.begin) / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
+    Vec2 subdivSize = (grid.end - grid.begin) / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
+    Vec2 spriteSize = subdivSize * (Vec2{1} - Vec2{marginX, marginY});
+
+    count = std::min(count, width * height);
+    u32 i = 0;
     Vec2 pos = grid.begin;
     for (u32 y = 0; y < height; ++y)
     {
         pos.x = grid.begin.x;
         for (u32 x = 0; x < width; ++x)
         {
+            if (i++ == count)
+                goto done;
+
             sprites.push({pos, pos + spriteSize});
-            pos.x += spriteSize.x;
+            pos.x += subdivSize.x;
         }
-        pos.y += spriteSize.y;
+        pos.y += subdivSize.y;
     }
 
+done:
     return idx;
 }
 
-Sprite2D Atlas2D::get(u32 idx)
+Sprite2D Atlas2D::get(u32 idx) const
 {
     return {texture.clone(), sprites[idx]};
+}
+
+const Atlas2D& getDefaultFont()
+{
+    return render2D.defaultFont;
 }
 
 template<>
@@ -464,6 +516,18 @@ void Layer2D::drawTilemap(const Tilemap2D& tilemap, Rect dst)
             pos.x += size.x;
         }
         pos.y += size.y;
+    }
+}
+
+void Layer2D::drawText(StringView text, const Atlas2D& font, Vec2 pos, f32 height, f32 spacing)
+{
+    for (char c : text)
+    {
+        Sprite2D s = font.get((u32)c);
+        Vec2 sSize = s.uv.end - s.uv.begin;
+        Vec2 dstSize = {height * sSize.x / sSize.y, height};
+        drawSprite(s, {pos, pos + dstSize});
+        pos.x += dstSize.x + spacing;
     }
 }
 
