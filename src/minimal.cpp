@@ -144,12 +144,8 @@ int main()
 
         renderer.queueLayer(backgroundLayer);
         renderer.queueLayer(spriteLayer);
-
-        if (renderDebug)
-        {
-            debugRenderer.queueLayer(backgroundLayer);
-            debugRenderer.queueLayer(spriteLayer);
-        }
+        debugRenderer.queueLayer(backgroundLayer);
+        debugRenderer.queueLayer(spriteLayer);
 
         if (ImGui::Begin("Info"))
         {
@@ -180,6 +176,8 @@ int main()
             gpuBeginRenderPass(cmd, pass);
 
             renderer.render(cmd, camera);
+            if (renderDebug)
+                debugRenderer.render(cmd, camera);
 
             renderImGui(cmd);
 

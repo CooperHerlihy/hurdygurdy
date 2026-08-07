@@ -466,7 +466,7 @@ struct Render2DInstance {
     u32 texIdx = (u32)-1;
 };
 
-};
+} // namespace internal
 
 /**
  * A 2D render layer
@@ -574,36 +574,11 @@ struct Renderer2D {
 /**
  * A layer based 2D debug renderer
  */
-struct DebugRenderer2D {
-    /**
-     * The debug pipeline
-     */
-    GpuPipeline pipeline{};
-    /**
-     * The layers to render this frame
-     */
-    Array<Layer2D*> layerQueue{};
-
-    /**
-     * Construct without init
-     */
-    DebugRenderer2D() noexcept = default;
-
+struct DebugRenderer2D : public Renderer2D {
     /**
      * Initialize the renderer
      */
     DebugRenderer2D(Format colorFormat);
-
-    /**
-     * Queue a layer to draw this frame
-     */
-    void queueLayer(Layer2D& layer);
-
-    /**
-     * Issue draw commands
-     */
-    void render(GpuCmd* cmd, const Camera& camera);
 };
 
 } // namespace hg
-

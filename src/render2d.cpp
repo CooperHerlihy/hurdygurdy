@@ -524,16 +524,21 @@ DebugRenderer2D::DebugRenderer2D(Format colorFormat)
     pipeline = GpuPipeline::graphics(pipelineConfig);
 }
 
-static void renderRenderer2D(GpuCmd* cmd, Span<Layer2D*> layers, const Camera& camera, const GpuPipeline& pipeline)
+void Renderer2D::queueLayer(Layer2D& layer)
+{
+    layerQueue.push(&layer);
+}
+
+void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
 {
     using internal::Render2DInstance;
 
     HG_ASSERT(cmd != nullptr);
 
-    for (Layer2D* layer : layers)
+    for (Layer2D* layer : layerQueue)
     {
         if (layer->instances.count == 0)
-            return;
+            continue;
 
         if (layer->changed)
         {
@@ -562,27 +567,7 @@ static void renderRenderer2D(GpuCmd* cmd, Span<Layer2D*> layers, const Camera& c
 
         gpuDraw(cmd, 0, 6, 0, static_cast<u32>(layer->instances.count));
     }
-}
 
-void Renderer2D::queueLayer(Layer2D& layer)
-{
-    layerQueue.push(&layer);
-}
-
-void DebugRenderer2D::queueLayer(Layer2D& layer)
-{
-    layerQueue.push(&layer);
-}
-
-void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
-{
-    renderRenderer2D(cmd, layerQueue, camera, pipeline);
-    layerQueue.reset();
-}
-
-void DebugRenderer2D::render(GpuCmd* cmd, const Camera& camera)
-{
-    renderRenderer2D(cmd, layerQueue, camera, pipeline);
     layerQueue.reset();
 }
 
