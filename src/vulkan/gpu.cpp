@@ -83,7 +83,7 @@ GpuBuffer::~GpuBuffer() noexcept = default;
 GpuBuffer::GpuBuffer(GpuBuffer&&) noexcept = default;
 GpuBuffer& GpuBuffer::operator=(GpuBuffer&&) noexcept = default;
 
-u32 GpuBuffer::uniformDescriptor()
+u32 GpuBuffer::uniformDescriptor() const
 {
     HG_ASSERT(data->usage & GpuBufferUsage_uniformBuffer);
     GpuDescriptor desc = data->uniformDesc;
@@ -91,7 +91,7 @@ u32 GpuBuffer::uniformDescriptor()
     return desc.idx();
 }
 
-u32 GpuBuffer::storageDescriptor()
+u32 GpuBuffer::storageDescriptor() const
 {
     HG_ASSERT(data->usage & GpuBufferUsage_storageBuffer);
     GpuDescriptor desc = data->storageDesc;
@@ -349,7 +349,7 @@ u32 GpuView::height() const
     return data->image->height;
 }
 
-u32 GpuView::samplerDescriptor()
+u32 GpuView::samplerDescriptor() const
 {
     HG_ASSERT(data->image->usage & GpuImageUsage_sampled);
     GpuDescriptor desc = data->samplerDesc;
@@ -357,7 +357,7 @@ u32 GpuView::samplerDescriptor()
     return desc.idx();
 }
 
-u32 GpuView::storageDescriptor()
+u32 GpuView::storageDescriptor() const
 {
     HG_ASSERT(data->image->usage & GpuImageUsage_storage);
     GpuDescriptor desc = data->storageDesc;
@@ -1220,7 +1220,7 @@ void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass)
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 }
 
-void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
+void gpuBeginRenderPass(GpuCmd* cmd, const GpuRenderPass& pass)
 {
     ArenaScope scratch = getScratch();
 
@@ -1480,7 +1480,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass)
     gpuSetScissor(cmd, 0, 0, width, height);
 }
 
-void gpuRenderPassEnd(GpuCmd* cmd)
+void gpuEndRenderPass(GpuCmd* cmd)
 {
     vkCmdEndRendering(reinterpret_cast<VkCommandBuffer>(cmd));
 }
@@ -1497,7 +1497,7 @@ void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
     vkCmdSetScissor(reinterpret_cast<VkCommandBuffer>(cmd), 0, 1, &scissor);
 }
 
-GpuCmd* gpuFrameBegin(Span<Window*> windows)
+GpuCmd* gpuBeginFrame(Span<Window*> windows)
 {
     Frame* frame = &vk.frames[vk.currentFrame];
 
@@ -1553,7 +1553,7 @@ GpuCmd* gpuFrameBegin(Span<Window*> windows)
     return reinterpret_cast<GpuCmd*>(cmd);
 }
 
-void gpuFrameEnd(GpuCmd* cmd)
+void gpuEndFrame(GpuCmd* cmd)
 {
     HG_ASSERT(cmd != nullptr);
 

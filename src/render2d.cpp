@@ -6,6 +6,57 @@
 
 namespace hg {
 
+struct RenderState2D {
+    Texture defaultTex{};
+    Atlas2D defaultFont{};
+};
+
+static RenderState2D render2D;
+
+#include "pixel_font.h"
+
+namespace internal {
+
+void initRender2D()
+{
+    ArenaScope scratch = getScratch();
+
+    struct Color {
+        u8 r, g, b, a;
+    };
+    Color defaultColors[]{
+        {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
+        {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
+    };
+
+    render2D.defaultTex.image = GpuImage::create(2, 2, Format_r8g8b8a8_srgb,
+        GpuImageUsage_sampled | GpuImageUsage_transferDst);
+    render2D.defaultTex.view = GpuView::create(render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
+    render2D.defaultTex.view.write(defaultColors);
+
+    TextureData fontData{};
+    Serializer s = readSerialBinary(scratch, {pixel_font, sizeof(pixel_font)});
+    serializeBegin(&s);
+    serializeObject(&s, &fontData.width, &fontData.height, &fontData.format);
+    u64 size = fontData.width * fontData.height * formatToSize(fontData.format);
+    fontData.pixels = heapAlloc(size, formatToSize(fontData.format));
+    serializeVoid(&s, {fontData.pixels, size});
+    serializeEnd(&s);
+
+    render2D.defaultFont.texture = newAsset<Texture>();
+    *render2D.defaultFont.texture = createTextureFromData(fontData);
+
+    render2D.defaultFont.addEmpty(32);
+    render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95, 1.0f / 6.0f, 1.0f / 8.0f);
+}
+
+void deinitRender2D()
+{
+    render2D = {};
+}
+
+} // namespace internal
+
 template<>
 void assetLoadImpl(AssetData<TextureData>* data)
 {
@@ -118,19 +169,6 @@ struct VPUniform {
     Mat4 view = {};
 };
 
-Camera Camera::create()
-{
-    Camera camera{};
-
-    camera.vpBuffer = GpuBuffer::create(
-        sizeof(VPUniform), GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
-
-    camera.rotation = Quat{1.0f};
-    camera.position = Vec3{0.0f};
-
-    return camera;
-}
-
 void Camera::setPerspective(f32 aspect, f32 fov, f32 near, f32 far)
 {
     projection = CameraPerspective{aspect, fov, near, far};
@@ -160,6 +198,12 @@ void Camera::setOrthographic(f32 width, f32 height, f32 actualAspect)
 
 void Camera::update()
 {
+    if (vpBuffer.data == nullptr)
+    {
+        vpBuffer = GpuBuffer::create(sizeof(VPUniform),
+            GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
+    }
+
     VPUniform vp{};
     vp.view = matView(position, Vec3{1.0f}, rotation);
     projection.match(
@@ -181,6 +225,7 @@ void Camera::update()
                 ortho.near,
                 ortho.far);
         });
+
     vpBuffer.write(&vp, 0, sizeof(vp));
 }
 
@@ -214,79 +259,6 @@ void serialize(Serializer* s, Camera* camera)
     serialize(s, &camera->position);
     serialize(s, &camera->projection);
     serializeEnd(s);
-}
-
-struct RenderState2D {
-    GpuPipeline pipeline{};
-    GpuPipeline debugPipeline{};
-    Texture defaultTex{};
-    Atlas2D defaultFont{};
-};
-
-static RenderState2D render2D;
-
-struct RenderPush2D {
-    Mat4 model = {};
-    u32 vpIdx = 0;
-    u32 instIdx = 0;
-};
-
-#include "shaders/render2d.vert.spv.h"
-#include "shaders/render2d.frag.spv.h"
-#include "shaders/debug2d.frag.spv.h"
-#include "pixel_font.h"
-
-void initRenderer2D(Format colorFormat)
-{
-    ArenaScope scratch = getScratch();
-
-    GpuGraphicsPipelineCreateInfo pipelineConfig{};
-    pipelineConfig.vertexShader = {shaders_render2d_vert_spv, sizeof(shaders_render2d_vert_spv)};
-    pipelineConfig.fragmentShader = {shaders_render2d_frag_spv, sizeof(shaders_render2d_frag_spv)};
-    pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
-    pipelineConfig.colorAttachmentFormats = {&colorFormat, 1};
-    bool enableColorBlend = true;
-    pipelineConfig.colorBlendEnables = {&enableColorBlend, 1};
-
-    render2D.pipeline = GpuPipeline::graphics(pipelineConfig);
-
-    pipelineConfig.fragmentShader = {shaders_debug2d_frag_spv, sizeof(shaders_debug2d_frag_spv)};
-    pipelineConfig.topology = GpuTopology_lineStrip;
-
-    render2D.debugPipeline = GpuPipeline::graphics(pipelineConfig);
-
-    struct Color {
-        u8 r, g, b, a;
-    };
-    Color defaultColors[]{
-        {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
-        {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
-    };
-
-    render2D.defaultTex.image = GpuImage::create(2, 2, Format_r8g8b8a8_srgb,
-        GpuImageUsage_sampled | GpuImageUsage_transferDst);
-    render2D.defaultTex.view = GpuView::create(render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
-    render2D.defaultTex.view.write(defaultColors);
-
-    TextureData fontData{};
-    Serializer s = readSerialBinary(scratch, {pixel_font, sizeof(pixel_font)});
-    serializeBegin(&s);
-    serializeObject(&s, &fontData.width, &fontData.height, &fontData.format);
-    u64 size = fontData.width * fontData.height * formatToSize(fontData.format);
-    fontData.pixels = heapAlloc(size, formatToSize(fontData.format));
-    serializeVoid(&s, {fontData.pixels, size});
-    serializeEnd(&s);
-
-    render2D.defaultFont.texture = newAsset<Texture>();
-    *render2D.defaultFont.texture = createTextureFromData(fontData);
-
-    render2D.defaultFont.addEmpty(32);
-    render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95, 1.0f / 6.0f, 1.0f / 8.0f);
-}
-
-void deinitRenderer2D()
-{
-    render2D = {};
 }
 
 Atlas2D Atlas2D::create(const Asset<Texture>& texture)
@@ -406,55 +378,6 @@ void Layer2D::clear()
     changed = true;
 }
 
-static void renderLayer2D(GpuCmd* cmd, Camera* camera, Layer2D* layer, const GpuPipeline& pipeline)
-{
-    using internal::Render2DInstance;
-
-    HG_ASSERT(cmd != nullptr);
-    HG_ASSERT(camera != nullptr);
-    HG_ASSERT(layer != nullptr);
-
-    if (layer->instances.count == 0)
-        return;
-
-    if (layer->changed)
-    {
-        if (layer->instances.capacity > layer->instanceCapacity)
-        {
-            gpuWaitIdle();
-
-            layer->instanceBuffer = GpuBuffer::create(layer->instances.capacity * sizeof(Render2DInstance),
-                GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
-            layer->instanceCapacity = static_cast<u32>(layer->instances.capacity);
-        }
-
-        layer->instanceBuffer.write(layer->instances.vals, 0, layer->instances.count * sizeof(Render2DInstance));
-
-        layer->changed = false;
-    }
-
-    gpuBindPipeline(cmd, pipeline);
-
-    RenderPush2D push{};
-    push.model = layer->transform;
-    push.vpIdx = camera->vpBuffer.uniformDescriptor();
-    push.instIdx = layer->instanceBuffer.storageDescriptor();
-
-    gpuPushConstants(cmd, pipeline, &push, sizeof(push));
-
-    gpuDraw(cmd, 0, 6, 0, static_cast<u32>(layer->instances.count));
-}
-
-void Layer2D::render(GpuCmd* cmd, Camera* camera)
-{
-    renderLayer2D(cmd, camera, this, render2D.pipeline);
-}
-
-void Layer2D::renderDebug(GpuCmd* cmd, Camera* camera)
-{
-    renderLayer2D(cmd, camera, this, render2D.debugPipeline);
-}
-
 void Layer2D::drawRect(Vec4 color, Rect dst)
 {
     using internal::Render2DInstance;
@@ -562,6 +485,105 @@ StringView Layer2D::drawText(StringView text, const Atlas2D& font, Vec4 color, R
         ++c;
     }
     return {c, end};
+}
+
+struct RenderPush2D {
+    Mat4 model = {};
+    u32 vpIdx = 0;
+    u32 instIdx = 0;
+};
+
+#include "shaders/render2d.vert.spv.h"
+#include "shaders/render2d.frag.spv.h"
+#include "shaders/debug2d.frag.spv.h"
+
+Renderer2D::Renderer2D(Format colorFormat)
+{
+    GpuGraphicsPipelineCreateInfo pipelineConfig{};
+    pipelineConfig.vertexShader = {shaders_render2d_vert_spv, sizeof(shaders_render2d_vert_spv)};
+    pipelineConfig.fragmentShader = {shaders_render2d_frag_spv, sizeof(shaders_render2d_frag_spv)};
+    pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
+    pipelineConfig.colorAttachmentFormats = {&colorFormat, 1};
+    bool enableColorBlend = true;
+    pipelineConfig.colorBlendEnables = {&enableColorBlend, 1};
+
+    pipeline = GpuPipeline::graphics(pipelineConfig);
+}
+
+DebugRenderer2D::DebugRenderer2D(Format colorFormat)
+{
+    GpuGraphicsPipelineCreateInfo pipelineConfig{};
+    pipelineConfig.vertexShader = {shaders_render2d_vert_spv, sizeof(shaders_render2d_vert_spv)};
+    pipelineConfig.fragmentShader = {shaders_debug2d_frag_spv, sizeof(shaders_debug2d_frag_spv)};
+    pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
+    pipelineConfig.colorAttachmentFormats = {&colorFormat, 1};
+    bool enableColorBlend = true;
+    pipelineConfig.colorBlendEnables = {&enableColorBlend, 1};
+    pipelineConfig.topology = GpuTopology_lineStrip;
+
+    pipeline = GpuPipeline::graphics(pipelineConfig);
+}
+
+static void renderRenderer2D(GpuCmd* cmd, Span<Layer2D*> layers, const Camera& camera, const GpuPipeline& pipeline)
+{
+    using internal::Render2DInstance;
+
+    HG_ASSERT(cmd != nullptr);
+
+    for (Layer2D* layer : layers)
+    {
+        if (layer->instances.count == 0)
+            return;
+
+        if (layer->changed)
+        {
+            if (layer->instances.capacity > layer->instanceCapacity)
+            {
+                gpuWaitIdle();
+
+                layer->instanceBuffer = GpuBuffer::create(layer->instances.capacity * sizeof(Render2DInstance),
+                    GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
+                layer->instanceCapacity = static_cast<u32>(layer->instances.capacity);
+            }
+
+            layer->instanceBuffer.write(layer->instances.vals, 0, layer->instances.count * sizeof(Render2DInstance));
+
+            layer->changed = false;
+        }
+
+        gpuBindPipeline(cmd, pipeline);
+
+        RenderPush2D push{};
+        push.model = layer->transform;
+        push.vpIdx = camera.vpBuffer.uniformDescriptor();
+        push.instIdx = layer->instanceBuffer.storageDescriptor();
+
+        gpuPushConstants(cmd, pipeline, &push, sizeof(push));
+
+        gpuDraw(cmd, 0, 6, 0, static_cast<u32>(layer->instances.count));
+    }
+}
+
+void Renderer2D::queueLayer(Layer2D& layer)
+{
+    layerQueue.push(&layer);
+}
+
+void DebugRenderer2D::queueLayer(Layer2D& layer)
+{
+    layerQueue.push(&layer);
+}
+
+void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
+{
+    renderRenderer2D(cmd, layerQueue, camera, pipeline);
+    layerQueue.reset();
+}
+
+void DebugRenderer2D::render(GpuCmd* cmd, const Camera& camera)
+{
+    renderRenderer2D(cmd, layerQueue, camera, pipeline);
+    layerQueue.reset();
 }
 
 } // namespace hg

@@ -247,20 +247,15 @@ struct Camera {
     /**
      * The current rotation
      */
-    Quat rotation = {};
+    Quat rotation{1.0f};
     /**
      * The current position
      */
-    Vec3 position = {};
+    Vec3 position{};
     /**
      * The projection
      */
     Sum<CameraOrthographic, CameraPerspective> projection = {};
-
-    /**
-     * Create a camera
-     */
-    static Camera create();
 
     /**
      * The the camera to a perspective projection
@@ -304,16 +299,6 @@ void serialize(Serializer* s, CameraOrthographic* camera);
  */
 template<>
 void serialize(Serializer* s, Camera* camera);
-
-/**
- * Initialize the 2D renderer
- */
-void initRenderer2D(Format colorFormat);
-
-/**
- * Deinitialize the 2D renderer
- */
-void deinitRenderer2D();
 
 /**
  * A 2D sprite which can be drawn
@@ -514,16 +499,6 @@ struct Layer2D {
     void clear();
 
     /**
-     * Issue draw commands for a 2D layer
-     */
-    void render(GpuCmd* cmd, Camera* camera);
-
-    /**
-     * Issue draw commands for a 2D layer using debug lines
-     */
-    void renderDebug(GpuCmd* cmd, Camera* camera);
-
-    /**
      * Draw a rectangle on the layer
      */
     void drawRect(Vec4 color, Rect dst);
@@ -560,6 +535,74 @@ struct Layer2D {
      * - The characters that could not fit
      */
     StringView drawText(StringView text, const Atlas2D& font, Vec4 color, Rect bounds, f32 spacing, bool breakAtSpace = true);
+};
+
+/**
+ * A layer based 2D renderer
+ */
+struct Renderer2D {
+    /**
+     * The render pipeline
+     */
+    GpuPipeline pipeline{};
+    /**
+     * The layers to render this frame
+     */
+    Array<Layer2D*> layerQueue{};
+
+    /**
+     * Construct without init
+     */
+    Renderer2D() noexcept = default;
+
+    /**
+     * Initialize the renderer
+     */
+    Renderer2D(Format colorFormat);
+
+    /**
+     * Queue a layer to draw this frame
+     */
+    void queueLayer(Layer2D& layer);
+
+    /**
+     * Issue draw commands
+     */
+    void render(GpuCmd* cmd, const Camera& camera);
+};
+
+/**
+ * A layer based 2D debug renderer
+ */
+struct DebugRenderer2D {
+    /**
+     * The debug pipeline
+     */
+    GpuPipeline pipeline{};
+    /**
+     * The layers to render this frame
+     */
+    Array<Layer2D*> layerQueue{};
+
+    /**
+     * Construct without init
+     */
+    DebugRenderer2D() noexcept = default;
+
+    /**
+     * Initialize the renderer
+     */
+    DebugRenderer2D(Format colorFormat);
+
+    /**
+     * Queue a layer to draw this frame
+     */
+    void queueLayer(Layer2D& layer);
+
+    /**
+     * Issue draw commands
+     */
+    void render(GpuCmd* cmd, const Camera& camera);
 };
 
 } // namespace hg

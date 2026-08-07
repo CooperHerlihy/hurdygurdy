@@ -400,11 +400,11 @@ void testGpu()
         GpuView* sampledImages[] = {&view};
         pass.sampledImages = sampledImages;
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
         gpuPushConstants(cmd, pipe, &push, sizeof(push));
         gpuDraw(cmd, 0, 3, 0, 1);
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
         gpuCmdEnd(cmd);
 
         u32 result[outSize * outSize] = {};
@@ -792,10 +792,10 @@ void testGpu()
         GpuRenderAttachment colorAtt = makeColorAtt(&colorView, 1.0f, 0.0f, 0.0f, 1.0f);
         GpuRenderPass pass = simpleColorPass(&colorAtt);
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
         gpuDraw(cmd, 0, 3, 0, 1);
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
 
         gpuCmdEnd(cmd);
 
@@ -901,7 +901,7 @@ void testGpu()
         pass.colorAttachments = {&colorAtt, 1};
         pass.depthAttachment = &depthAtt;
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
 
         Push farPush{0.75f, {}, {1.0f, 0.0f, 0.0f, 1.0f}};
@@ -912,7 +912,7 @@ void testGpu()
         gpuPushConstants(cmd, pipe, &nearPush, sizeof(nearPush));
         gpuDraw(cmd, 0, 3, 0, 1);
 
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
 
         barrierToTransferRead(cmd, &depthView);
 
@@ -990,14 +990,14 @@ void testGpu()
         pass.uniformBuffers = uniformBufs;
         pass.colorAttachments = {&colorAtt, 1};
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
 
         Push push{instBuf.uniformDescriptor()};
         gpuPushConstants(cmd, pipe, &push, sizeof(push));
         gpuDraw(cmd, 0, 4, 0, instanceCount);
 
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
         gpuCmdEnd(cmd);
 
         u32 pixels[imgSize * imgSize] = {};
@@ -1047,7 +1047,7 @@ void testGpu()
         GpuRenderPass pass{};
         pass.colorAttachments = {&colorAtt, 1};
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
 
         Push red{0.0f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
@@ -1062,7 +1062,7 @@ void testGpu()
         gpuPushConstants(cmd, pipe, &blue, sizeof(blue));
         gpuDraw(cmd, 0, 3, 0, 1);
 
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
         gpuCmdEnd(cmd);
 
         u32 pixels[imgSize * imgSize] = {};
@@ -1196,10 +1196,10 @@ void testGpu()
             GpuRenderPass pass{};
             pass.colorAttachments = {&colorAtt, 1};
 
-            gpuRenderPassBegin(cmd, pass);
+            gpuBeginRenderPass(cmd, pass);
             gpuBindPipeline(cmd, pass1Pipe);
             gpuDraw(cmd, 0, 3, 0, 1);
-            gpuRenderPassEnd(cmd);
+            gpuEndRenderPass(cmd);
         }
 
         // Barrier: transition first attachment to shaderReadOnly
@@ -1226,12 +1226,12 @@ void testGpu()
             GpuView* sampledImages[] = {&firstView};
             pass.sampledImages = sampledImages;
 
-            gpuRenderPassBegin(cmd, pass);
+            gpuBeginRenderPass(cmd, pass);
             gpuBindPipeline(cmd, pass2Pipe);
             Push2 push{firstView.samplerDescriptor()};
             gpuPushConstants(cmd, pass2Pipe, &push, sizeof(push));
             gpuDraw(cmd, 0, 3, 0, 1);
-            gpuRenderPassEnd(cmd);
+            gpuEndRenderPass(cmd);
         }
 
         gpuCmdEnd(cmd);
@@ -1423,10 +1423,10 @@ void testGpu()
             colorAtt.image = &layerView;
 
             GpuCmd* cmd = gpuCmdBegin();
-            gpuRenderPassBegin(cmd, pass);
+            gpuBeginRenderPass(cmd, pass);
             gpuBindPipeline(cmd, pipe);
             gpuDraw(cmd, 0, 3, 0, 1);
-            gpuRenderPassEnd(cmd);
+            gpuEndRenderPass(cmd);
             gpuCmdEnd(cmd);
 
             u32 pixels[imgSize * imgSize] = {};
@@ -1531,11 +1531,11 @@ void testGpu()
         pass.uniformBuffers = uniformBufs;
         pass.colorAttachments = {&colorAtt, 1};
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
         gpuPushConstants(cmd, pipe, &push, sizeof(push));
         gpuDraw(cmd, 0, 3, 0, 1);
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
         gpuCmdEnd(cmd);
 
         u32 pixels[imgSize * imgSize] = {};
@@ -1803,7 +1803,7 @@ void testGpu()
                                                 GpuLoadOp_load, GpuStoreOp_store);
         GpuRenderPass pass = simpleColorPass(&att);
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
 
         // Viewport covers left half only; right half should retain original red
@@ -1811,7 +1811,7 @@ void testGpu()
         gpuSetScissor(cmd, 0, 0, halfW, h);
         gpuDraw(cmd, 0, 3, 0, 1);
 
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
         gpuCmdEnd(cmd);
 
         u32 pixels[w * h] = {};
@@ -1860,11 +1860,11 @@ void testGpu()
         GpuView* sampledImages[] = {&view};
         pass.sampledImages = sampledImages;
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
         gpuPushConstants(cmd, pipe, &push, sizeof(push));
         gpuDraw(cmd, 0, 3, 0, 1);
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
         gpuCmdEnd(cmd);
 
         u32 result[outSize * outSize] = {};
@@ -1887,10 +1887,10 @@ void testGpu()
         GpuRenderAttachment att = makeColorAtt(&colorView, 1.0f, 0.0f, 0.0f, 1.0f);
         GpuRenderPass pass = simpleColorPass(&att);
 
-        gpuRenderPassBegin(cmd, pass);
+        gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pipe);
         gpuDraw(cmd, 0, 3, 0, 1);
-        gpuRenderPassEnd(cmd);
+        gpuEndRenderPass(cmd);
 
         // Barrier with allGraphics / colorAttachmentWrite
         GpuImageBarrier ib{};

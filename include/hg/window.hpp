@@ -234,7 +234,7 @@ struct Window {
      *
      * Note, width and height are ignored if fullscreen is enabled
      */
-    static Maybe<Window> create(StringView title, u32 width, u32 height, const WindowConfig& config);
+    static Maybe<Window> create(StringView title, u32 width, u32 height, const WindowConfig& config = {});
 
     /**
      * Close the window
@@ -321,7 +321,7 @@ struct Window {
  * Returns
  * - The command buffer to record this frame
  */
-GpuCmd* gpuFrameBegin(Span<Window*> windows);
+GpuCmd* gpuBeginFrame(Span<Window*> windows);
 
 /**
  * Finishes recording the command buffer and presents the window images
@@ -329,7 +329,7 @@ GpuCmd* gpuFrameBegin(Span<Window*> windows);
  * Parameters
  * - cmd The command buffer given from beginFrame
  */
-void gpuFrameEnd(GpuCmd* cmd);
+void gpuEndFrame(GpuCmd* cmd);
 
 } // namespace hg
 

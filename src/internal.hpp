@@ -22,6 +22,9 @@ void deinitGpu();
 bool initAudio();
 void deinitAudio();
 
+void initRender2D();
+void deinitRender2D();
+
 struct SwapchainData;
 
 struct Swapchain {

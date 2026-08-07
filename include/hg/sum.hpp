@@ -249,6 +249,14 @@ struct Sum<T, Ts...> {
     }();
 
     /**
+     * Returns whether all types are inactive
+     */
+    constexpr bool isEmpty() const
+    {
+        return tag >= count;
+    };
+
+    /**
      * Returns whether the type is active
      */
     template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))

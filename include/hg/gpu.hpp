@@ -439,12 +439,12 @@ struct GpuBuffer {
     /**
      * Get the uniform buffer descriptor index from the buffer
      */
-    u32 uniformDescriptor();
+    u32 uniformDescriptor() const;
 
     /**
      * Get the storage buffer descriptor index from the buffer
      */
-    u32 storageDescriptor();
+    u32 storageDescriptor() const;
 
     /**
      * Writes to the gpu buffer
@@ -785,12 +785,12 @@ struct GpuView {
     /**
      * Get the image sampler descriptor index from the image view
      */
-    u32 samplerDescriptor();
+    u32 samplerDescriptor() const;
 
     /**
      * Get the storage image descriptor index from the image view
      */
-    u32 storageDescriptor();
+    u32 storageDescriptor() const;
 
     /**
      * Write to a gpu image
@@ -1288,7 +1288,7 @@ struct GpuRenderPass {
  * - cmd The command buffer
  * - pass The render pass description
  */
-void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass);
+void gpuBeginRenderPass(GpuCmd* cmd, const GpuRenderPass& pass);
 
 /**
  * Ends the render pass
@@ -1296,7 +1296,7 @@ void gpuRenderPassBegin(GpuCmd* cmd, const GpuRenderPass& pass);
  * Parameters
  * - cmd The command buffer
  */
-void gpuRenderPassEnd(GpuCmd* cmd);
+void gpuEndRenderPass(GpuCmd* cmd);
 
 /**
  * Set the rendering viewport, should be called after gpuRenderPassBegin

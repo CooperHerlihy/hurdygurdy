@@ -1,4 +1,4 @@
-#include "hurdygurdy.hpp"
+#include <hurdygurdy.hpp>
 
 using namespace hg;
 
@@ -52,21 +52,20 @@ int main()
     audio.setMusicGain(music, 0.3f);
     audio.pauseMusic(music);
 
-    initRenderer2D(window.imageFormat());
-    HG_DEFER(deinitRenderer2D());
+    Renderer2D renderer{window.imageFormat()};
+    DebugRenderer2D debugRenderer{window.imageFormat()};
 
     u32 width = window.width();
     u32 height = window.height();
 
-    Camera camera = Camera::create();
+    Camera camera{};
 
     Layer2D backgroundLayer{};
 
     backgroundLayer.clear();
+
     Vec2 backgroundBegin = Vec2{static_cast<f32>(width) / static_cast<f32>(height) - 0.5f, 0.5f} / 2.0f;
-    backgroundLayer.drawRect(
-        {.002f, 0, .012f, 1},
-        {backgroundBegin, backgroundBegin + Vec2{0.5f, 0.5f}});
+    backgroundLayer.drawRect({.002f, 0, .012f, 1}, {backgroundBegin, backgroundBegin + Vec2{0.5f, 0.5f}});
 
     backgroundLayer.drawText("Hello World", getDefaultFont(), Vec4{1}, {{0.2f, 0.1f}, {0.8f, 0.15f}}, 0.05f / 7.0f);
 
@@ -106,8 +105,20 @@ int main()
 
         width = window.width();
         height = window.height();
-
         camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
+
+        Span<WindowEvent> events = window.events();
+        for (WindowEvent event : events)
+        {
+            if (event.type == WindowEventType_buttonPress &&
+                event.button.button == Button_space)
+                audio.playSound(sound, 0.5f);
+        }
+
+        if (window.isButtonDown(Button_m))
+            audio.playMusic(music);
+        else
+            audio.pauseMusic(music);
 
         if (window.isButtonDown(Button_lmouse))
         {
@@ -131,18 +142,14 @@ int main()
         spriteLayer.clear();
         spriteLayer.drawSprite(sprite, {spritePos, spritePos + spriteSize});
 
-        Span<WindowEvent> events = window.events();
-        for (WindowEvent event : events)
-        {
-            if (event.type == WindowEventType_buttonPress &&
-                event.button.button == Button_space)
-                audio.playSound(sound, 0.5f);
-        }
+        renderer.queueLayer(backgroundLayer);
+        renderer.queueLayer(spriteLayer);
 
-        if (window.isButtonDown(Button_m))
-            audio.playMusic(music);
-        else
-            audio.pauseMusic(music);
+        if (renderDebug)
+        {
+            debugRenderer.queueLayer(backgroundLayer);
+            debugRenderer.queueLayer(spriteLayer);
+        }
 
         if (ImGui::Begin("Info"))
         {
@@ -160,7 +167,7 @@ int main()
 
         cpuTime += cpuClock.tick();
         Window* windows[] = {&window};
-        GpuCmd* cmd = gpuFrameBegin(windows);
+        GpuCmd* cmd = gpuBeginFrame(windows);
         cpuClock.tick();
         if (window.imageView() != nullptr)
         {
@@ -170,24 +177,16 @@ int main()
             GpuRenderPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
 
-            gpuRenderPassBegin(cmd, pass);
+            gpuBeginRenderPass(cmd, pass);
 
-            backgroundLayer.render(cmd, &camera);
-            spriteLayer.render(cmd, &camera);
-
-            if (renderDebug)
-            {
-                backgroundLayer.renderDebug(cmd, &camera);
-                spriteLayer.renderDebug(cmd, &camera);
-            }
+            renderer.render(cmd, camera);
 
             renderImGui(cmd);
 
-            gpuRenderPassEnd(cmd);
+            gpuEndRenderPass(cmd);
         }
         cpuTime += cpuClock.tick();
-
-        gpuFrameEnd(cmd);
+        gpuEndFrame(cmd);
     }
 
 quit:

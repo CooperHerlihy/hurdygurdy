@@ -4,11 +4,12 @@
 
 namespace hg {
 
-static u32 initialized = 0;
+static bool initialized = false;
+static u32 initCount = 0;
 
 Maybe<HurdyGurdy> init()
 {
-    if (initialized > 0)
+    if (initialized)
         return some<HurdyGurdy>();
 
     if (!internal::initPlatform())
@@ -27,43 +28,50 @@ Maybe<HurdyGurdy> init()
         return {};
     }
 
+    internal::initRender2D();
+
+    initialized = true;
     return some<HurdyGurdy>();
 }
 
 HurdyGurdy::HurdyGurdy() noexcept
 {
-    ++initialized;
+    ++initCount;
 }
 
 HurdyGurdy::HurdyGurdy(const HurdyGurdy&)
 {
-    ++initialized;
+    ++initCount;
 }
 
 HurdyGurdy& HurdyGurdy::operator=(const HurdyGurdy&)
 {
-    ++initialized;
+    ++initCount;
     return *this;
 }
 
 HurdyGurdy::HurdyGurdy(HurdyGurdy&&) noexcept
 {
-    ++initialized;
+    ++initCount;
 }
 
 HurdyGurdy& HurdyGurdy::operator=(HurdyGurdy&&) noexcept
 {
-    ++initialized;
+    ++initCount;
     return *this;
 }
 
 HurdyGurdy::~HurdyGurdy() noexcept
 {
-    if (--initialized == 0)
+    if (--initCount == 0 && initialized)
     {
+        internal::deinitRender2D();
+
         internal::deinitAudio();
         internal::deinitGpu();
         internal::deinitPlatform();
+
+        initialized = false;
     }
 }
 
