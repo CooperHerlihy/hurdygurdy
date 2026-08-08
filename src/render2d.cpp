@@ -47,7 +47,13 @@ void initRender2D()
     *render2D.defaultFont.texture = createTextureFromData(fontData);
 
     render2D.defaultFont.addEmpty(32);
-    render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95, 1.0f / 6.0f, 1.0f / 8.0f);
+    render2D.defaultFont.addGrid(
+        {{0, 0}, {1, 1}},
+        12,
+        8,
+        95);
+        // 1.0f / 6.0f,
+        // 1.0f / 8.0f);
 }
 
 void deinitRender2D()
@@ -372,6 +378,98 @@ void serialize(Serializer* s, Tilemap2D* tilemap)
     serializeObject(s, &tilemap->atlas, &tilemap->tiles, &tilemap->width, &tilemap->height);
 }
 
+TextBuilder::TextBuilder(const Atlas2D& fontVal)
+    : font{&fontVal}
+{
+}
+
+TextBuilder& TextBuilder::breakAtSpace(bool val)
+{
+    shouldBreakAtSpace = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setHeight(f32 val)
+{
+    height = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setWidth(f32 val)
+{
+    width = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setCutoff(f32 val)
+{
+    cutoff = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setCenter(Vec2 val)
+{
+    beginDir = {0, 0};
+    pos = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setCenterLeft(Vec2 val)
+{
+    beginDir = {-1, 0};
+    pos = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setCenterRight(Vec2 val)
+{
+    beginDir = {1, 0};
+    pos = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setTopLeft(Vec2 val)
+{
+    beginDir = {-1, -1};
+    pos = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setTopCenter(Vec2 val)
+{
+    beginDir = {0, -1};
+    pos = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setTopRight(Vec2 val)
+{
+    beginDir = {1, -1};
+    pos = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setBottomLeft(Vec2 val)
+{
+    beginDir = {-1, 1};
+    pos = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setBottomCenter(Vec2 val)
+{
+    beginDir = {0, 1};
+    pos = val;
+    return *this;
+}
+
+TextBuilder& TextBuilder::setBottomRight(Vec2 val)
+{
+    beginDir = {1, 1};
+    pos = val;
+    return *this;
+}
+
 void Layer2D::clear()
 {
     instances.count = 0;
@@ -451,40 +549,97 @@ void Layer2D::drawTilemap(const Tilemap2D& tilemap, Rect dst)
     }
 }
 
-StringView Layer2D::drawText(StringView text, const Atlas2D& font, Vec4 color, Rect bounds, f32 spacing, bool breakAtSpace)
+StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder& box)
 {
-    Vec2 dst = bounds.begin;
-    Vec2 boundSize = bounds.end - bounds.begin;
+    Rect bounds{};
 
-    const char* c = text.begin();
-    const char* end = text.end();
-    while (c != end)
+    HG_ASSERT(box.width != INFINITY || box.height != INFINITY);
+
+    if (box.width == INFINITY)
     {
-        Sprite2D sprite = font.get((u32)*c);
-        Vec2 spriteSize = sprite.uv.end - sprite.uv.begin;
-
-        Vec2 dstSize = {boundSize.y * spriteSize.x / spriteSize.y, boundSize.y};
-        Vec2 dstEnd = dst + dstSize;
-        if (dstEnd.x > bounds.end.x)
+        for (char c : text)
         {
-            if (breakAtSpace)
-            {
-                while (c > text.chars && *c != ' ')
-                {
-                    --c;
-                    instances.pop();
-                }
-                if (*c == ' ')
-                    ++c;
-            }
-            break;
+            Rect cRect = box.font->sprites[static_cast<u32>(c)];
+            Vec2 size = cRect.end - cRect.begin;
+            bounds.end.x += size.x * box.height / size.y;
         }
 
-        drawSprite(sprite, {dst, dstEnd}, color);
-        dst.x += dstSize.x + spacing;
-        ++c;
+        bounds.end.y = box.height;
     }
-    return {c, end};
+    else if (box.height == INFINITY)
+    {
+        f32 width = 0;
+        for (char c : text)
+        {
+            Rect cRect = box.font->sprites[static_cast<u32>(c)];
+            Vec2 size = cRect.end - cRect.begin;
+            width += size.x;
+        }
+
+        bounds.end.x = box.width;
+
+        Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
+        Vec2 firstSize = firstRect.end - firstRect.begin;
+
+        bounds.end.y = firstSize.y * box.width / width;
+    }
+    else
+    {
+        Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
+        Vec2 firstSize = firstRect.end - firstRect.begin;
+
+        bounds.end.y = firstSize.y;
+
+        for (char c : text)
+        {
+            Rect cRect = box.font->sprites[static_cast<u32>(c)];
+            Vec2 size = cRect.end - cRect.begin;
+            bounds.end.x += size.x;
+        }
+
+        Rect hBounds = {{}, {box.width * box.height / bounds.end.y, box.height}};
+        Rect wBounds = {{}, {box.width, box.height * box.width / bounds.end.x}};
+
+        if (hBounds.end.x <= box.width)
+            bounds = hBounds;
+        else if (wBounds.end.y <= box.height)
+            bounds = wBounds;
+    }
+
+    Vec2 size = bounds.end - bounds.begin;
+
+    // Vec2 dst = bounds.begin;
+    // Vec2 boundSize = bounds.end - bounds.begin;
+    //
+    // const char* c = text.begin();
+    // const char* end = text.end();
+    // while (c != end)
+    // {
+    //     Sprite2D sprite = font.get((u32)*c);
+    //     Vec2 spriteSize = sprite.uv.end - sprite.uv.begin;
+    //
+    //     Vec2 dstSize = {boundSize.y * spriteSize.x / spriteSize.y, boundSize.y};
+    //     Vec2 dstEnd = dst + dstSize;
+    //     if (dstEnd.x > bounds.end.x)
+    //     {
+    //         if (breakAtSpace)
+    //         {
+    //             while (c > text.chars && *c != ' ')
+    //             {
+    //                 --c;
+    //                 instances.pop();
+    //             }
+    //             if (*c == ' ')
+    //                 ++c;
+    //         }
+    //         break;
+    //     }
+    //
+    //     drawSprite(sprite, {dst, dstEnd}, color);
+    //     dst.x += dstSize.x + spacing;
+    //     ++c;
+    // }
+    // return {c, end};
 }
 
 struct RenderPush2D {

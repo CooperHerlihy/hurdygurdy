@@ -10,6 +10,8 @@
 #include "hg/serialization.hpp"
 #include "hg/gpu.hpp"
 
+#include <cmath>
+
 namespace hg {
 
 /**
@@ -468,6 +470,34 @@ struct Render2DInstance {
 
 } // namespace internal
 
+struct TextBuilder {
+    const Atlas2D* font = nullptr;
+    Vec2 beginDir{};
+    Vec2 pos{};
+    f32 height = 1;
+    f32 width = INFINITY;
+    f32 cutoff = INFINITY;
+    bool shouldBreakAtSpace = false;
+
+    TextBuilder(const Atlas2D& fontVal);
+
+    TextBuilder& breakAtSpace(bool val = true);
+
+    TextBuilder& setHeight(f32 val);
+    TextBuilder& setWidth(f32 val);
+    TextBuilder& setCutoff(f32 val);
+
+    TextBuilder& setCenter(Vec2 val);
+    TextBuilder& setCenterLeft(Vec2 val);
+    TextBuilder& setCenterRight(Vec2 val);
+    TextBuilder& setTopLeft(Vec2 val);
+    TextBuilder& setTopCenter(Vec2 val);
+    TextBuilder& setTopRight(Vec2 val);
+    TextBuilder& setBottomLeft(Vec2 val);
+    TextBuilder& setBottomCenter(Vec2 val);
+    TextBuilder& setBottomRight(Vec2 val);
+};
+
 /**
  * A 2D render layer
  */
@@ -523,18 +553,13 @@ struct Layer2D {
      *
      * Parameters
      * - text The text to draw
-     * - font The character sprites, indices assumed to be ascii values
      * - color The font color
-     * - bounds The bounding box to draw in, characters are scaled to fit the
-     *   height, then drawn in sequence until the width is reached
-     * - spacing The space between each character
-     * - breakAtSpace Whether the text should be cut off at a space, or wherever
-     *   happens to break the bounds
+     * - box Where to draw the text
      *
      * Returns
      * - The characters that could not fit
      */
-    StringView drawText(StringView text, const Atlas2D& font, Vec4 color, Rect bounds, f32 spacing, bool breakAtSpace = true);
+    StringView drawText(StringView text, Vec4 color, const TextBuilder& box);
 };
 
 /**
