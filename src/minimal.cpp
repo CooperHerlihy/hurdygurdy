@@ -67,7 +67,9 @@ int main()
     Vec2 backgroundBegin = Vec2{static_cast<f32>(width) / static_cast<f32>(height) - 0.5f, 0.5f} / 2.0f;
     backgroundLayer.drawRect({.002f, 0, .012f, 1}, {backgroundBegin, backgroundBegin + Vec2{0.5f, 0.5f}});
 
-    backgroundLayer.drawText("Hello World", getDefaultFont(), Vec4{1}, {{0.2f, 0.1f}, {0.8f, 0.15f}}, 0.05f / 7.0f);
+    backgroundLayer.drawText("Hello World", Vec4{1}, TextBuilder{getDefaultFont()}
+        .setTopLeft(Vec2{0})
+        .setBounds(1, 0.25));
 
     Layer2D spriteLayer{};
 

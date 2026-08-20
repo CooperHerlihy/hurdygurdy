@@ -378,98 +378,6 @@ void serialize(Serializer* s, Tilemap2D* tilemap)
     serializeObject(s, &tilemap->atlas, &tilemap->tiles, &tilemap->width, &tilemap->height);
 }
 
-TextBuilder::TextBuilder(const Atlas2D& fontVal)
-    : font{&fontVal}
-{
-}
-
-TextBuilder& TextBuilder::breakAtSpace(bool val)
-{
-    shouldBreakAtSpace = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setHeight(f32 val)
-{
-    height = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setWidth(f32 val)
-{
-    width = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setCutoff(f32 val)
-{
-    cutoff = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setCenter(Vec2 val)
-{
-    beginDir = {0, 0};
-    pos = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setCenterLeft(Vec2 val)
-{
-    beginDir = {-1, 0};
-    pos = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setCenterRight(Vec2 val)
-{
-    beginDir = {1, 0};
-    pos = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setTopLeft(Vec2 val)
-{
-    beginDir = {-1, -1};
-    pos = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setTopCenter(Vec2 val)
-{
-    beginDir = {0, -1};
-    pos = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setTopRight(Vec2 val)
-{
-    beginDir = {1, -1};
-    pos = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setBottomLeft(Vec2 val)
-{
-    beginDir = {-1, 1};
-    pos = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setBottomCenter(Vec2 val)
-{
-    beginDir = {0, 1};
-    pos = val;
-    return *this;
-}
-
-TextBuilder& TextBuilder::setBottomRight(Vec2 val)
-{
-    beginDir = {1, 1};
-    pos = val;
-    return *this;
-}
-
 void Layer2D::clear()
 {
     instances.count = 0;
@@ -552,22 +460,29 @@ void Layer2D::drawTilemap(const Tilemap2D& tilemap, Rect dst)
 StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder& box)
 {
     Rect bounds{};
+    f32 factor = 1.0f;
 
     HG_ASSERT(box.width != INFINITY || box.height != INFINITY);
 
     if (box.width == INFINITY)
     {
+        Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
+        Vec2 firstSize = firstRect.end - firstRect.begin;
+
+        factor = box.height / firstSize.y;
         for (char c : text)
         {
             Rect cRect = box.font->sprites[static_cast<u32>(c)];
             Vec2 size = cRect.end - cRect.begin;
-            bounds.end.x += size.x * box.height / size.y;
+            bounds.end.x += size.x * factor;
         }
-
         bounds.end.y = box.height;
     }
     else if (box.height == INFINITY)
     {
+        Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
+        Vec2 firstSize = firstRect.end - firstRect.begin;
+
         f32 width = 0;
         for (char c : text)
         {
@@ -575,12 +490,9 @@ StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder& box
             Vec2 size = cRect.end - cRect.begin;
             width += size.x;
         }
+        factor = box.width / width;
 
         bounds.end.x = box.width;
-
-        Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
-        Vec2 firstSize = firstRect.end - firstRect.begin;
-
         bounds.end.y = firstSize.y * box.width / width;
     }
     else
@@ -597,49 +509,65 @@ StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder& box
             bounds.end.x += size.x;
         }
 
-        Rect hBounds = {{}, {box.width * box.height / bounds.end.y, box.height}};
-        Rect wBounds = {{}, {box.width, box.height * box.width / bounds.end.x}};
+        Rect hBounds = {{}, {bounds.end.x * box.height / bounds.end.y, box.height}};
+        Rect wBounds = {{}, {box.width, bounds.end.y * box.width / bounds.end.x}};
 
         if (hBounds.end.x <= box.width)
+        {
+            factor = box.height / bounds.end.y;
             bounds = hBounds;
+        }
         else if (wBounds.end.y <= box.height)
+        {
+            factor = box.width / bounds.end.x;
             bounds = wBounds;
+        }
+    }
+
+    StringView toDraw = text;
+    if (box.cutoff < bounds.end.x)
+    {
+        const char* lastSpace = nullptr;
+        const char* c = text.begin();
+        f32 width = 0;
+        for (; c != text.end(); ++c)
+        {
+            if (*c == ' ')
+                lastSpace = c;
+
+            Rect cRect = box.font->sprites[static_cast<u32>(*c)];
+            Vec2 size = cRect.end - cRect.begin;
+
+            if (width + size.x > box.cutoff)
+            {
+                if (box.shouldBreakAtSpace && lastSpace != nullptr)
+                    c = lastSpace;
+                break;
+            }
+            width += size.x;
+        }
+        toDraw = {text.begin(), c};
     }
 
     Vec2 size = bounds.end - bounds.begin;
+    bounds.begin = box.pos + (size / 2) * (box.beginDir - Vec2{1});
 
-    // Vec2 dst = bounds.begin;
-    // Vec2 boundSize = bounds.end - bounds.begin;
-    //
-    // const char* c = text.begin();
-    // const char* end = text.end();
-    // while (c != end)
-    // {
-    //     Sprite2D sprite = font.get((u32)*c);
-    //     Vec2 spriteSize = sprite.uv.end - sprite.uv.begin;
-    //
-    //     Vec2 dstSize = {boundSize.y * spriteSize.x / spriteSize.y, boundSize.y};
-    //     Vec2 dstEnd = dst + dstSize;
-    //     if (dstEnd.x > bounds.end.x)
-    //     {
-    //         if (breakAtSpace)
-    //         {
-    //             while (c > text.chars && *c != ' ')
-    //             {
-    //                 --c;
-    //                 instances.pop();
-    //             }
-    //             if (*c == ' ')
-    //                 ++c;
-    //         }
-    //         break;
-    //     }
-    //
-    //     drawSprite(sprite, {dst, dstEnd}, color);
-    //     dst.x += dstSize.x + spacing;
-    //     ++c;
-    // }
-    // return {c, end};
+    Vec2 pos = bounds.begin;
+    for (char c : toDraw)
+    {
+        Sprite2D sprite = box.font->get((u32)c);
+        Vec2 spriteSize = (sprite.uv.end - sprite.uv.begin) * factor;
+
+        Rect dst = {pos, pos + spriteSize};
+        drawSprite(sprite, dst, color);
+
+        pos.x += spriteSize.x;
+        if (pos.x > bounds.end.x)
+            break;
+    }
+
+    text.chars += toDraw.length;
+    return text;
 }
 
 struct RenderPush2D {

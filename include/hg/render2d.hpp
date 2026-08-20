@@ -471,31 +471,177 @@ struct Render2DInstance {
 } // namespace internal
 
 struct TextBuilder {
+    /**
+     * The font to use
+     */
     const Atlas2D* font = nullptr;
+    /**
+     * Where to start drawing from in relation to the text
+     */
     Vec2 beginDir{};
+    /**
+     * Where to start drawing from in the world
+     */
     Vec2 pos{};
+    /**
+     * The max height to draw in
+     */
     f32 height = 1;
+    /**
+     * The max width to draw in
+     */
     f32 width = INFINITY;
+    /**
+     * Where to cut off text width
+     */
     f32 cutoff = INFINITY;
+    /**
+     * Whether the text should (if cut off), break at a space, or any character
+     */
     bool shouldBreakAtSpace = false;
 
-    TextBuilder(const Atlas2D& fontVal);
+    /**
+     * Begin building
+     */
+    TextBuilder(const Atlas2D& fontVal)
+        : font{&fontVal}
+    {}
 
-    TextBuilder& breakAtSpace(bool val = true);
+    /**
+     * Break the text at a spece, instead of where the end falls
+     */
+    TextBuilder& breakAtSpace(bool val = true)
+    {
+        shouldBreakAtSpace = val;
+        return *this;
+    }
 
-    TextBuilder& setHeight(f32 val);
-    TextBuilder& setWidth(f32 val);
-    TextBuilder& setCutoff(f32 val);
+    /**
+     * Set the max height, defaults to 1
+     */
+    TextBuilder& setHeight(f32 val)
+    {
+        height = val;
+        return *this;
+    }
 
-    TextBuilder& setCenter(Vec2 val);
-    TextBuilder& setCenterLeft(Vec2 val);
-    TextBuilder& setCenterRight(Vec2 val);
-    TextBuilder& setTopLeft(Vec2 val);
-    TextBuilder& setTopCenter(Vec2 val);
-    TextBuilder& setTopRight(Vec2 val);
-    TextBuilder& setBottomLeft(Vec2 val);
-    TextBuilder& setBottomCenter(Vec2 val);
-    TextBuilder& setBottomRight(Vec2 val);
+    /**
+     * Set the max width, defaults to infinity
+     */
+    TextBuilder& setWidth(f32 val)
+    {
+        width = val;
+        return *this;
+    }
+
+    /**
+     * Set the max width and height
+     */
+    TextBuilder& setBounds(f32 widthVal, f32 heightVal)
+    {
+        width = widthVal;
+        height = heightVal;
+        return *this;
+    }
+
+    /**
+     * Set the cutoff width, defaults to infinity
+     */
+    TextBuilder& setCutoff(f32 val)
+    {
+        cutoff = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the center of the text box
+     */
+    TextBuilder& setCenter(Vec2 val)
+    {
+        beginDir = {0, 0};
+        pos = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the center left of the text box
+     */
+    TextBuilder& setCenterLeft(Vec2 val)
+    {
+        beginDir = {1, 0};
+        pos = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the center right of the text box
+     */
+    TextBuilder& setCenterRight(Vec2 val)
+    {
+        beginDir = {-1, 0};
+        pos = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the top left of the text box
+     */
+    TextBuilder& setTopLeft(Vec2 val)
+    {
+        beginDir = {1, 1};
+        pos = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the top center of the text box
+     */
+    TextBuilder& setTopCenter(Vec2 val)
+    {
+        beginDir = {0, 1};
+        pos = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the top right of the text box
+     */
+    TextBuilder& setTopRight(Vec2 val)
+    {
+        beginDir = {-1, 1};
+        pos = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the bottom left of the text box
+     */
+    TextBuilder& setBottomLeft(Vec2 val)
+    {
+        beginDir = {1, -1};
+        pos = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the bottom center of the text box
+     */
+    TextBuilder& setBottomCenter(Vec2 val)
+    {
+        beginDir = {0, -1};
+        pos = val;
+        return *this;
+    }
+
+    /**
+     * Orient the position from the bottom right of the text box
+     */
+    TextBuilder& setBottomRight(Vec2 val)
+    {
+        beginDir = {-1, -1};
+        pos = val;
+        return *this;
+    }
 };
 
 /**
@@ -600,6 +746,11 @@ struct Renderer2D {
  * A layer based 2D debug renderer
  */
 struct DebugRenderer2D : public Renderer2D {
+    /**
+     * Construct without init
+     */
+    DebugRenderer2D() noexcept = default;
+
     /**
      * Initialize the renderer
      */
