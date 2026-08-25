@@ -550,11 +550,14 @@ StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder& box
     }
 
     Vec2 size = bounds.end - bounds.begin;
-    bounds.begin = box.pos + (size / 2) * (box.beginDir - Vec2{1});
-
-    Vec2 pos = bounds.begin;
+    Vec2 pos = box.pos + (size / 2) * (box.beginDir - Vec2{1});
+    bounds.begin = pos;
+    bounds.end += pos;
     for (char c : toDraw)
     {
+        if (pos.x > bounds.end.x)
+            break;
+
         Sprite2D sprite = box.font->get((u32)c);
         Vec2 spriteSize = (sprite.uv.end - sprite.uv.begin) * factor;
 
@@ -562,8 +565,6 @@ StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder& box
         drawSprite(sprite, dst, color);
 
         pos.x += spriteSize.x;
-        if (pos.x > bounds.end.x)
-            break;
     }
 
     text.chars += toDraw.length;
