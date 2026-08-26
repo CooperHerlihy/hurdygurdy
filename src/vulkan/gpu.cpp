@@ -1000,7 +1000,7 @@ void gpuCmdEnd(GpuCmd* cmd)
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
-    VkFence fence = nullptr;
+    VkFence fence;
     vkCreateFence(vk.device, &fenceInfo, nullptr, &fence);
     HG_DEFER(vkDestroyFence(vk.device, fence, nullptr));
 
@@ -1013,6 +1013,7 @@ void gpuCmdEnd(GpuCmd* cmd)
     vkWaitForFences(vk.device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     vkFreeCommandBuffers(vk.device, vk.cmdPool, 1, reinterpret_cast<VkCommandBuffer*>(&cmd));
+    vkResetFences(vk.device, 1, &fence);
 }
 
 void gpuBindPipeline(GpuCmd* cmd, const GpuPipeline& pipeline)

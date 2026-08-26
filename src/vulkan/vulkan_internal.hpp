@@ -14,8 +14,7 @@ namespace hg {
 
 using GpuDescriptor = Handle;
 
-struct GpuBufferData
-{
+struct GpuBufferData {
     VkBuffer buffer = nullptr;
     VmaAllocation alloc = nullptr;
     u64 size = 0;
@@ -55,8 +54,7 @@ struct GpuBufferData
     GpuBufferData& operator=(const GpuBufferData&) = delete;
 };
 
-struct GpuImageData
-{
+struct GpuImageData {
     VkImage image = nullptr;
     VmaAllocation alloc = nullptr;
     GpuImageUsageFlags usage = 0;
@@ -100,8 +98,7 @@ struct GpuImageData
     GpuImageData& operator=(const GpuImageData&) = delete;
 };
 
-struct GpuViewData
-{
+struct GpuViewData {
     GpuImageData* image = nullptr;
     VkImageView view = nullptr;
     VkSampler sampler = nullptr;
@@ -151,8 +148,7 @@ struct GpuViewData
     GpuViewData& operator=(const GpuViewData&) = delete;
 };
 
-struct GpuPipelineData
-{
+struct GpuPipelineData {
     VkPipeline pipeline = nullptr;
     VkPipelineLayout layout = nullptr;
     VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -182,8 +178,7 @@ struct GpuPipelineData
 
 namespace internal {
 
-struct SwapchainData
-{
+struct SwapchainData {
     VkSurfaceKHR surface = nullptr;
     VkSwapchainKHR swapchain = nullptr;
     Array<GpuImage> images{};
@@ -233,8 +228,7 @@ struct SwapchainData
 
 namespace vulkan {
 
-enum DescriptorType : u32
-{
+enum DescriptorType : u32 {
     DescriptorType_combinedImageSampler = 0,
     DescriptorType_storageImage = 1,
     DescriptorType_uniformBuffer = 2,
@@ -242,8 +236,7 @@ enum DescriptorType : u32
     DescriptorType_count,
 };
 
-struct SamplerInfo
-{
+struct SamplerInfo {
     GpuFilter filter = GpuFilter_nearest;
     GpuSamplerEdgeMode mode = GpuSamplerEdgeMode_repeat;
     GpuSamplerBorder border = GpuSamplerBorder_floatTransparentBlack;
@@ -256,15 +249,13 @@ constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
         && lhs.border == rhs.border;
 }
 
-struct Frame
-{
+struct Frame {
     Array<internal::Swapchain*> swapchains = {};
     VkCommandPool cmdPool = nullptr;
     VkFence fence = nullptr;
 };
 
-struct VulkanState
-{
+struct VulkanState {
 #ifdef HG_VK_DEBUG_MESSENGER
     VkDebugUtilsMessengerEXT debugMessenger = nullptr;
 #endif
