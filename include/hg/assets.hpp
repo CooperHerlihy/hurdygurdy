@@ -35,18 +35,12 @@ struct AssetManager {
     /**
      * The asset lookup
      */
-    Map<StringView, AssetData<T>*> map{};
+    static inline Map<StringView, AssetData<T>*> map{};
     /**
      * The asset pool
      */
-    Pool<AssetData<T>> pool{};
+    static inline Pool<AssetData<T>> pool{};
 };
-
-/**
- * Global per type asset managers
- */
-template<typename T>
-inline AssetManager<T> assets{};
 
 /**
  * Load an asset, implemented per asset type, should be blocking
@@ -91,9 +85,9 @@ struct Asset {
         if (data != nullptr && --data->refCount == 0)
         {
             if (data->path != "")
-                assets<T>.map.remove(data->path);
+                AssetManager<T>::map.remove(data->path);
 
-            assets<T>.pool.free(data);
+            AssetManager<T>::pool.free(data);
         }
     }
 
@@ -187,7 +181,7 @@ bool operator!=(const Asset<T>& lhs, std::nullptr_t)
 template<typename T>
 Asset<T> newAsset()
 {
-    return assets<T>.pool.alloc();
+    return AssetManager<T>::pool.alloc();
 }
 
 /**
@@ -196,14 +190,14 @@ Asset<T> newAsset()
 template<typename T>
 Asset<T> load(StringView path)
 {
-    AssetData<T>** asset = assets<T>.map.get(path);
+    AssetData<T>** asset = AssetManager<T>::map.get(path);
     if (asset != nullptr)
         return *asset;
 
-    AssetData<T>* data = assets<T>.pool.alloc();
+    AssetData<T>* data = AssetManager<T>::pool.alloc();
 
     data->path = String::create(path);
-    assets<T>.map.add(data->path, data);
+    AssetManager<T>::map.add(data->path, data);
 
     assetLoadImpl(data);
     return data;

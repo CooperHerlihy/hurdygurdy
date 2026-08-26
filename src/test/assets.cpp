@@ -150,9 +150,9 @@ void testAssets()
         writeFile("drop", "drop", 5);
         {
             Asset<Binary> a = load<Binary>("/tmp/hg_asset_test/drop");
-            TEST(assets<Binary>.map.has(a.data->path));
+            TEST(AssetManager<Binary>::map.has(a.data->path));
         }
-        TEST(!assets<Binary>.map.has("/tmp/hg_asset_test/drop"));
+        TEST(!AssetManager<Binary>::map.has("/tmp/hg_asset_test/drop"));
     }
 
     // ============================================================================
