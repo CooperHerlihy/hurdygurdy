@@ -190,5 +190,210 @@ void testMap()
         map.forEach([&](u32* k, f32* v) { sum += static_cast<f64>(*k) + *v; });
         TEST(sum == 33.0);
     }
+
+    // ============================================================================
+    // Map<String, V> — heterogenous lookups with owning string keys
+    // ============================================================================
+    //
+    // String is move-only, so add() must use the rvalue overload. Lookups via
+    // get/has/ to use the new template form and must accept String, StringView,
+    // const char*, StringBuilder, and string literals, all hashing and
+    // comparing consistently.
+
+    // Add and look up via every key representation
+    {
+        Map<String, u32> map{16};
+        map.add(String::create("alpha"), 1u);
+        map.add(String::create("beta"), 2u);
+        map.add(String::create("gamma"), 3u);
+        TEST(map.count == 3);
+
+        // by owning String
+        TEST(map.has(String::create("beta")));
+        TEST(*map.get(String::create("beta")) == 2u);
+
+        // by StringView
+        TEST(map.has(StringView{"alpha"}));
+        TEST(*map.get(StringView{"gamma"}) == 3u);
+
+        // by const char* variable
+        const char* b = "beta";
+        TEST(map.has(b));
+        TEST(*map.get(b) == 2u);
+
+        // by StringBuilder
+        ArenaScope arena = getScratch();
+        TEST(map.has(StringBuilder{arena, "alpha"}));
+        TEST(*map.get(StringBuilder{arena, "gamma"}) == 3u);
+
+        // by string literal (const char[N])
+        TEST(map.has("alpha"));
+        TEST(*map.get("beta") == 2u);
+
+        // unknown key across all representations
+        TEST(!map.has("delta"));
+        TEST(map.get("delta") == nullptr);
+        TEST(!map.has(StringView{"delta"}));
+
+        // remove by StringView with value output
+        u32 out = 0;
+        TEST(map.remove(StringView{"beta"}, &out));
+        TEST(out == 2u);
+        TEST(!map.has("beta"));
+        TEST(map.count == 2);
+
+        // remove by literal
+        TEST(map.remove("alpha"));
+        TEST(!map.has(StringView{"alpha"}));
+        TEST(map.count == 1);
+
+        // remaining key still reachable by every representation
+        TEST(map.has("gamma"));
+        TEST(map.has(StringView{"gamma"}));
+        TEST(*map.get(StringBuilder{arena, "gamma"}) == 3u);
+    }
+
+    // MapTemp<String, u32> mirrors the heap version
+    {
+        ArenaScope arena = getScratch();
+        MapTemp<String, u32> map{arena, 16};
+        map.add(String::create("alpha"), 1u);
+        map.add(String::create("beta"), 2u);
+        map.add(String::create("gamma"), 3u);
+        TEST(map.count == 3);
+
+        TEST(map.has(StringView{"alpha"}));
+        TEST(*map.get(StringView{"gamma"}) == 3u);
+
+        const char* b = "beta";
+        TEST(map.has(b));
+        TEST(*map.get(b) == 2u);
+
+        TEST(map.has(StringBuilder{arena, "alpha"}));
+        TEST(map.has("gamma"));
+        TEST(!map.has("delta"));
+
+        u32 out = 0;
+        TEST(map.remove(StringView{"beta"}, &out));
+        TEST(out == 2u);
+        TEST(!map.has("beta"));
+        TEST(map.count == 2);
+
+        TEST(map.remove("alpha"));
+        TEST(!map.has(StringView{"alpha"}));
+        TEST(map.count == 1);
+        TEST(map.has("gamma"));
+    }
+
+    // Map<String, String> — move-only key and value, no copies
+    {
+        Map<String, String> map{16};
+        map.add(String::create("k1"), String::create("v1"));
+        map.add(String::create("k2"), String::create("v2"));
+        TEST(map.count == 2);
+        TEST(map.has("k1"));
+        TEST(map.has("k2"));
+        TEST(*map.get("k1") == "v1");
+        TEST(*map.get("k2") == "v2");
+
+        String out = std::move(*map.get("k1"));
+        TEST(out == "v1");
+
+        TEST(map.remove("k2"));
+        TEST(!map.has("k2"));
+        TEST(map.count == 1);
+    }
+
+    // MapTemp<String, String> — move-only key and value in arena
+    {
+        ArenaScope arena = getScratch();
+        MapTemp<String, String> map{arena, 16};
+        map.add(String::create("k1"), String::create("v1"));
+        map.add(String::create("k2"), String::create("v2"));
+        TEST(map.count == 2);
+        TEST(map.has(StringView{"k1"}));
+        TEST(*map.get("k2") == "v2");
+        TEST(map.remove("k1"));
+        TEST(!map.has("k1"));
+        TEST(map.count == 1);
+    }
+
+    // ============================================================================
+    // Map<StringView, V> — non-owning keys, looked up by every representation
+    // ============================================================================
+    //
+    // Stored StringViews point at stable literals, so hashing at add and at
+    // lookup (including during robin-hood shifts) reads identical memory.
+
+    // Heap Map<StringView, u32>
+    {
+        Map<StringView, u32> map{16};
+        map.add("alpha", 1u);
+        map.add("beta", 2u);
+        map.add("gamma", 3u);
+        TEST(map.count == 3);
+
+        TEST(map.has(StringView{"alpha"}));
+        TEST(*map.get(StringView{"gamma"}) == 3u);
+
+        const char* b = "beta";
+        TEST(map.has(b));
+        TEST(*map.get(b) == 2u);
+
+        ArenaScope arena = getScratch();
+        TEST(map.has(StringBuilder{arena, "alpha"}));
+        TEST(*map.get(StringBuilder{arena, "gamma"}) == 3u);
+
+        TEST(map.has("alpha"));
+        TEST(*map.get("beta") == 2u);
+        TEST(!map.has("delta"));
+
+        u32 out = 0;
+        TEST(map.remove(StringView{"beta"}, &out));
+        TEST(out == 2u);
+        TEST(!map.has("beta"));
+        TEST(map.count == 2);
+        TEST(map.has("gamma"));
+    }
+
+    // MapTemp<StringView, u32>
+    {
+        ArenaScope arena = getScratch();
+        MapTemp<StringView, u32> map{arena, 16};
+        map.add("alpha", 1u);
+        map.add("beta", 2u);
+        map.add("gamma", 3u);
+        TEST(map.count == 3);
+
+        TEST(map.has(StringView{"alpha"}));
+        TEST(*map.get(StringView{"gamma"}) == 3u);
+        TEST(map.has("beta"));
+        TEST(*map.get(StringBuilder{arena, "alpha"}) == 1u);
+        TEST(!map.has("delta"));
+
+        TEST(map.remove("beta"));
+        TEST(!map.has(StringView{"beta"}));
+        TEST(map.count == 2);
+        TEST(map.has("gamma"));
+    }
+
+    // Collision pressure: many string keys in a tiny map stay reachable
+    {
+        Map<String, u32> map{4};
+        const char* keys[] = {
+            "red", "green", "blue", "cyan", "magenta",
+            "yellow", "black", "white", "orange", "pink"
+        };
+        for (u32 i = 0; i < 10; ++i)
+            map.add(String::create(keys[i]), static_cast<u32>(i));
+        TEST(map.count == 10);
+        for (u32 i = 0; i < 10; ++i)
+        {
+            TEST(map.has(keys[i]));
+            TEST(*map.get(StringView{keys[i]}) == i);
+            TEST(map.has(String::create(keys[i])));
+        }
+        TEST(!map.has("purple"));
+    }
 }
 

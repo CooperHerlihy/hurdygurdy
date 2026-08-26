@@ -503,7 +503,7 @@ VkSampler samplerGet(
 } // namespace vulkan
 
 template<>
-constexpr u64 hash(vulkan::SamplerInfo info)
+constexpr u64 hash(const vulkan::SamplerInfo& info)
 {
     return info.border + (info.mode << 4) + (info.filter << 8);
 }

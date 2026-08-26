@@ -134,7 +134,7 @@ inline bool operator==(const Lifecycle& a, const Lifecycle& b)
 namespace hg {
 
 template<>
-inline u64 hash(Lifecycle val)
+inline u64 hash(const Lifecycle& val)
 {
     return hash(val.id);
 }
@@ -167,6 +167,7 @@ void testGeometry2D();
 void testGeometry3D();
 void testNoise();
 void testStrings();
+void testHash();
 void testBinary();
 void testSmartPtr();
 void testArray();

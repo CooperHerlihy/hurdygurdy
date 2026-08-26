@@ -43,7 +43,7 @@ constexpr bool operator!=(Entity lhs, Entity rhs)
  * Hashing for entities
  */
 template<>
-constexpr u64 hash(Entity e)
+constexpr u64 hash(const Entity& e)
 {
     return hash(e.handle.id);
 }

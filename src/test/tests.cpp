@@ -26,6 +26,7 @@ int main()
     testGeometry3D();
     testNoise();
     testStrings();
+    testHash();
     testBinary();
     testSmartPtr();
     testArray();

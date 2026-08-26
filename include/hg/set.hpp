@@ -165,7 +165,8 @@ struct Set {
     /**
      * Remove a value from the set
      */
-    void remove(const V& val)
+    template<typename T>
+    void remove(const T& val)
     {
         u64 idx = static_cast<u64>(hash(val) % capacity);
         while (hasVal[idx])
@@ -196,7 +197,8 @@ struct Set {
     /**
      * Returns whether a value is contained in the set
      */
-    bool has(const V& val)
+    template<typename T>
+    bool has(const T& val)
     {
         for (u64 idx = static_cast<u64>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {
@@ -406,7 +408,8 @@ struct SetTemp {
     /**
      * Remove a value from the set
      */
-    void remove(const V& val)
+    template<typename T>
+    void remove(const T& val)
     {
         u64 idx = static_cast<u64>(hash(val) % capacity);
         while (hasVal[idx])
@@ -436,7 +439,8 @@ struct SetTemp {
     /**
      * Returns whether a value is contained in the set
      */
-    bool has(const V& val)
+    template<typename T>
+    bool has(const T& val)
     {
         for (u64 idx = static_cast<u64>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {
@@ -447,7 +451,7 @@ struct SetTemp {
     }
 
     /**
-     * Calls a function for each value in the hash map
+     * Calls a function for each value in the hash set
      */
     template<typename F> requires std::is_invocable_r_v<void, F, V*>
     void forEach(F fn)

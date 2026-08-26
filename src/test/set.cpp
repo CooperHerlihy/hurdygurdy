@@ -193,5 +193,142 @@ void testSet()
         set.forEach([&](u32* v) { sum += *v; });
         TEST(sum == 15);
     }
+
+    // ============================================================================
+    // Set<String> — heterogenous membership/removal with owning string values
+    // ============================================================================
+    //
+    // String is move-only, so add() must use the rvalue overload. has/remove use
+    // the new template form and accept String, StringView, const char*,
+    // StringBuilder, and string literals.
+
+    // Heap Set<String>
+    {
+        Set<String> set{16};
+        set.add(String::create("apple"));
+        set.add(String::create("banana"));
+        set.add(String::create("cherry"));
+        TEST(set.count == 3);
+
+        TEST(set.has(String::create("banana")));
+        TEST(set.has(StringView{"apple"}));
+
+        const char* b = "banana";
+        TEST(set.has(b));
+
+        ArenaScope arena = getScratch();
+        TEST(set.has(StringBuilder{arena, "apple"}));
+        TEST(set.has("cherry"));
+        TEST(!set.has("durian"));
+
+        // remove by StringView
+        set.remove(StringView{"banana"});
+        TEST(!set.has("banana"));
+        TEST(set.count == 2);
+
+        // remove by literal
+        set.remove("apple");
+        TEST(!set.has(StringView{"apple"}));
+        TEST(set.count == 1);
+        TEST(set.has("cherry"));
+    }
+
+    // SetTemp<String>
+    {
+        ArenaScope arena = getScratch();
+        SetTemp<String> set{arena, 16};
+        set.add(String::create("apple"));
+        set.add(String::create("banana"));
+        set.add(String::create("cherry"));
+        TEST(set.count == 3);
+
+        TEST(set.has(StringView{"apple"}));
+        TEST(set.has("banana"));
+        TEST(set.has(StringBuilder{arena, "cherry"}));
+        TEST(!set.has("durian"));
+
+        set.remove(StringView{"banana"});
+        TEST(!set.has("banana"));
+        TEST(set.count == 2);
+
+        set.remove("apple");
+        TEST(!set.has(StringView{"apple"}));
+        TEST(set.count == 1);
+        TEST(set.has("cherry"));
+    }
+
+    // ============================================================================
+    // Set<StringView> — non-owning values, checked by every representation
+    // ============================================================================
+
+    // Heap Set<StringView>
+    {
+        Set<StringView> set{16};
+        set.add("apple");
+        set.add("banana");
+        set.add("cherry");
+        TEST(set.count == 3);
+
+        TEST(set.has(StringView{"apple"}));
+        const char* b = "banana";
+        TEST(set.has(b));
+
+        ArenaScope arena = getScratch();
+        TEST(set.has(StringBuilder{arena, "apple"}));
+        TEST(set.has("cherry"));
+        TEST(!set.has("durian"));
+
+        set.remove(StringView{"banana"});
+        TEST(!set.has("banana"));
+        TEST(set.count == 2);
+
+        set.remove("apple");
+        TEST(!set.has(StringView{"apple"}));
+        TEST(set.count == 1);
+        TEST(set.has("cherry"));
+    }
+
+    // SetTemp<StringView>
+    {
+        ArenaScope arena = getScratch();
+        SetTemp<StringView> set{arena, 16};
+        set.add("apple");
+        set.add("banana");
+        set.add("cherry");
+        TEST(set.count == 3);
+
+        TEST(set.has(StringView{"apple"}));
+        TEST(set.has("banana"));
+        TEST(set.has(StringBuilder{arena, "cherry"}));
+        TEST(!set.has("durian"));
+
+        set.remove(StringView{"banana"});
+        TEST(!set.has("banana"));
+        TEST(set.count == 2);
+
+        set.remove("apple");
+        TEST(!set.has(StringView{"apple"}));
+        TEST(set.count == 1);
+        TEST(set.has("cherry"));
+    }
+
+    // Collision pressure: many string values in a tiny set stay findable
+    {
+        Set<String> set{4};
+        const char* vals[] = {
+            "red", "green", "blue", "cyan", "magenta",
+            "yellow", "black", "white", "orange", "pink"
+        };
+        for (u32 i = 0; i < 10; ++i)
+            set.add(String::create(vals[i]));
+        TEST(set.count == 10);
+        for (u32 i = 0; i < 10; ++i)
+        {
+            TEST(set.has(vals[i]));
+            TEST(set.has(StringView{vals[i]}));
+            TEST(set.has(String::create(vals[i])));
+        }
+        TEST(!set.has("purple"));
+    }
 }
 

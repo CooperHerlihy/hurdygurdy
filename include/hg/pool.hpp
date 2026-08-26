@@ -197,7 +197,7 @@ constexpr bool operator!=(Handle lhs, Handle rhs)
  * Hash map hashing for Handle
  */
 template<>
-constexpr u64 hash(Handle val)
+constexpr u64 hash(const Handle& val)
 {
     return hash(val.id);
 }

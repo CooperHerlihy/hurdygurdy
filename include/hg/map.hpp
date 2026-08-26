@@ -197,7 +197,8 @@ struct Map {
      * Returns
      * - Whether a key-value pair was found
      */
-    bool remove(const K& key, V* val = nullptr)
+    template<typename T>
+    bool remove(const T& key, V* val = nullptr)
     {
         if (capacity == 0)
             return false;
@@ -238,7 +239,8 @@ struct Map {
     /**
      * Returns whether the key is contained in the map
      */
-    bool has(const K& key)
+    template<typename T>
+    bool has(const T& key)
     {
         if (capacity == 0)
             return false;
@@ -254,7 +256,8 @@ struct Map {
     /**
      * Returns a pointer to the value at key, or nullptr if it does not exist
      */
-    V* get(const K& key)
+    template<typename T>
+    V* get(const T& key)
     {
         if (capacity == 0)
             return nullptr;
@@ -499,7 +502,8 @@ struct MapTemp {
      * Returns
      * - Whether a key-value pair was found
      */
-    bool remove(const K& key, V* val = nullptr)
+    template<typename T>
+    bool remove(const T& key, V* val = nullptr)
     {
         if (capacity == 0)
             return false;
@@ -540,7 +544,8 @@ struct MapTemp {
     /**
      * Returns whether the key is contained in the map
      */
-    bool has(const K& key)
+    template<typename T>
+    bool has(const T& key)
     {
         if (capacity == 0)
             return false;
@@ -556,7 +561,8 @@ struct MapTemp {
     /**
      * Returns a pointer to the value at key, or nullptr if it does not exist
      */
-    V* get(const K& key)
+    template<typename T>
+    V* get(const T& key)
     {
         if (capacity == 0)
             return nullptr;

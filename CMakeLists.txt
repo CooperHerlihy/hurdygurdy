@@ -202,6 +202,7 @@ add_executable(tests
     src/test/queue.cpp
     src/test/set.cpp
     src/test/map.cpp
+    src/test/hash.cpp
     src/test/pool.cpp
     src/test/assets.cpp
     src/test/serialization.cpp
