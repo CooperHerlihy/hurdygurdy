@@ -1,5 +1,7 @@
 #include "hg/audio.hpp"
 
+#include "hg/time.hpp"
+
 #include <algorithm>
 
 namespace hg {

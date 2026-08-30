@@ -18,6 +18,8 @@ int main()
 
     Window window = Window::create("Hg Minimal Example", 1200, 800, {}).expect("Could not create window\n");
 
+    Array<Product<String, f64>> globalTimes{};
+
     f32 musicData[2000];
     Asset<Sound> music = newAsset<Sound>();
     music->data = musicData;
@@ -93,6 +95,9 @@ int main()
     Clock gameClock{};
     for (;;)
     {
+    {
+        ScopeTimerRegistry timer{"Frame"};
+
         cpuClock.tick();
         f64 delta = gameClock.tick();
 
@@ -161,6 +166,16 @@ int main()
         }
         ImGui::End();
 
+        if (ImGui::Begin("Timers"))
+        {
+            for (const Product<String, f64>& time : globalTimes)
+            {
+                ImGui::Text("%.*s: %.3fms", (int)time.get<0>().length, time.get<0>().chars, time.get<1>() * 1.e3f);
+            }
+            globalTimes.reset();
+        }
+        ImGui::End();
+
         ImGui::Render();
 
         cpuTime += cpuClock.tick();
@@ -187,6 +202,12 @@ int main()
         }
         cpuTime += cpuClock.tick();
         gpuEndFrame(cmd);
+    }
+    ScopeTimerRegistry::forEach([&](const String& name, f64 time)
+    {
+        globalTimes.push({String::create(name), time});
+    });
+    ScopeTimerRegistry::clear();
     }
 
 quit:

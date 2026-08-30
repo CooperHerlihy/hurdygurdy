@@ -269,9 +269,9 @@ void processEvents()
     windowState.mouseDX = 0;
     windowState.mouseDY = 0;
 
-    windowState.ids.forEach([&](SDL_WindowID*, WindowData** window)
+    windowState.ids.forEach([&](const SDL_WindowID&, WindowData*& window)
     {
-        (*window)->events.count = 0;
+        window->events.count = 0;
     });
 
     SDL_Event event;

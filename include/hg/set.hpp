@@ -41,10 +41,11 @@ struct Set {
      */
     ~Set() noexcept
     {
-        forEach([&](V* val)
+        for (u32 i = 0; i < capacity; ++i)
         {
-            val->~V();
-        });
+            if (hasVal[i])
+                vals[i].~V();
+        }
         heapFree(hasVal, capacity);
         heapFree(vals, capacity);
     }
@@ -211,13 +212,13 @@ struct Set {
     /**
      * Calls a function for each value in the hash set
      */
-    template<typename F> requires std::is_invocable_r_v<void, F, V*>
+    template<typename F> requires std::is_invocable_r_v<void, F, const V&>
     void forEach(F fn)
     {
         for (u64 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
-                fn(vals + i);
+                fn(vals[i]);
         }
     }
 
@@ -284,10 +285,11 @@ struct SetTemp {
      */
     ~SetTemp() noexcept
     {
-        forEach([&](V* val)
+        for (u32 i = 0; i < capacity; ++i)
         {
-            val->~V();
-        });
+            if (hasVal[i])
+                vals[i].~V();
+        }
     }
 
     /**
@@ -453,13 +455,13 @@ struct SetTemp {
     /**
      * Calls a function for each value in the hash set
      */
-    template<typename F> requires std::is_invocable_r_v<void, F, V*>
+    template<typename F> requires std::is_invocable_r_v<void, F, const V&>
     void forEach(F fn)
     {
         for (u64 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
-                fn(vals + i);
+                fn(vals[i]);
         }
     }
 

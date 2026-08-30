@@ -252,6 +252,7 @@ constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
 struct Frame {
     Array<internal::Swapchain*> swapchains = {};
     VkCommandPool cmdPool = nullptr;
+    VkCommandBuffer cmd = nullptr;
     VkFence fence = nullptr;
 };
 

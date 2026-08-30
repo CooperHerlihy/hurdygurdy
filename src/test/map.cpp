@@ -118,7 +118,7 @@ void testMap()
         map.add(1, 10.0f);
         map.add(2, 20.0f);
         f64 sum = 0;
-        map.forEach([&](u32* k, f32* v) { sum += static_cast<f64>(*k) + *v; });
+        map.forEach([&](const u32& k, f32& v) { sum += static_cast<f64>(k) + v; });
         TEST(sum == 33.0);
     }
 
@@ -187,7 +187,7 @@ void testMap()
         map.add(1, 10.0f);
         map.add(2, 20.0f);
         f64 sum = 0;
-        map.forEach([&](u32* k, f32* v) { sum += static_cast<f64>(*k) + *v; });
+        map.forEach([&](const u32& k, f32& v) { sum += static_cast<f64>(k) + v; });
         TEST(sum == 33.0);
     }
 

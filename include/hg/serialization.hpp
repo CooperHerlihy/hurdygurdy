@@ -374,9 +374,9 @@ void serialize(Serializer* s, Set<V>* set)
         serialize(s, &set->capacity);
         serialize(s, &set->count);
 
-        set->forEach([&](V* val)
+        set->forEach([&](const V& val)
         {
-            serialize(s, val);
+            serialize(s, const_cast<V*>(&val));
         });
     }
     else
@@ -411,9 +411,9 @@ void serialize(Serializer* s, Map<K, V>* map)
         serialize(s, &map->capacity);
         serialize(s, &map->count);
 
-        map->forEach([&](K* key, V* val)
+        map->forEach([&](const K& key, V& val)
         {
-            serializeObject(s, key, val);
+            serializeObject(s, const_cast<K*>(&key), &val);
         });
     }
     else

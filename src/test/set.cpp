@@ -119,7 +119,7 @@ void testSet()
         set.add(20);
         set.add(30);
         u64 sum = 0;
-        set.forEach([&](u32* v) { sum += *v; });
+        set.forEach([&](const u32& v) { sum += v; });
         TEST(sum == 60);
     }
 
@@ -190,7 +190,7 @@ void testSet()
         set.add(5);
         set.add(10);
         u64 sum = 0;
-        set.forEach([&](u32* v) { sum += *v; });
+        set.forEach([&](const u32& v) { sum += v; });
         TEST(sum == 15);
     }
 

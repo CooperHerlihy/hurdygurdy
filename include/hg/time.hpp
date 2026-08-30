@@ -119,6 +119,15 @@ struct ScopeTimerRegistry {
     static inline Map<String, f64> entries{};
 
     /**
+     * Iterate over the global registery
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, const String&, f64>
+    static void forEach(F fn)
+    {
+        entries.forEach(fn);
+    }
+
+    /**
      * Clear the global registry
      */
     static void clear()

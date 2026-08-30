@@ -45,11 +45,14 @@ struct Map {
      */
     ~Map() noexcept
     {
-        forEach([&](K* key, V* val)
+        for (u32 i = 0; i < capacity; ++i)
         {
-            key->~K();
-            val->~V();
-        });
+            if (hasVal[i])
+            {
+                keys[i].~K();
+                vals[i].~V();
+            }
+        }
         heapFree(hasVal, capacity);
         heapFree(keys, capacity);
         heapFree(vals, capacity);
@@ -273,13 +276,13 @@ struct Map {
     /**
      * Calls a function for each value in the hash map
      */
-    template<typename F> requires std::is_invocable_r_v<void, F, K*, V*>
+    template<typename F> requires std::is_invocable_r_v<void, F, const K&, V&>
     void forEach(F fn)
     {
         for (u64 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
-                fn(&keys[i], &vals[i]);
+                fn(keys[i], vals[i]);
         }
     }
 
@@ -351,11 +354,14 @@ struct MapTemp {
      */
     ~MapTemp() noexcept
     {
-        forEach([&](K* key, V* val)
+        for (u32 i = 0; i < capacity; ++i)
         {
-            key->~K();
-            val->~V();
-        });
+            if (hasVal[i])
+            {
+                keys[i].~K();
+                vals[i].~V();
+            }
+        }
     }
 
     /**
@@ -578,13 +584,13 @@ struct MapTemp {
     /**
      * Calls a function for each value in the hash map
      */
-    template<typename F> requires std::is_invocable_r_v<void, F, K*, V*>
+    template<typename F> requires std::is_invocable_r_v<void, F, const K&, V&>
     void forEach(F fn)
     {
         for (u64 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
-                fn(&keys[i], &vals[i]);
+                fn(keys[i], vals[i]);
         }
     }
 

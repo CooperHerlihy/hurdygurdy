@@ -2,6 +2,7 @@
 
 #include "vulkan_internal.hpp"
 #include "hg/utility.hpp"
+#include "hg/time.hpp"
 
 #include <cmath>
 
@@ -1537,21 +1538,12 @@ GpuCmd* gpuBeginFrame(Span<Window*> windows)
 
     vkResetCommandPool(vk.device, frame->cmdPool, 0);
 
-    VkCommandBufferAllocateInfo cmdInfo{};
-    cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdInfo.commandPool = frame->cmdPool;
-    cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmdInfo.commandBufferCount = 1;
-
-    VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(vk.device, &cmdInfo, &cmd);
-
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(cmd, &beginInfo);
-    return reinterpret_cast<GpuCmd*>(cmd);
+    vkBeginCommandBuffer(frame->cmd, &beginInfo);
+    return reinterpret_cast<GpuCmd*>(frame->cmd);
 }
 
 void gpuEndFrame(GpuCmd* cmd)

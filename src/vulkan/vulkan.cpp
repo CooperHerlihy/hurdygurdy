@@ -782,6 +782,16 @@ static Frame createFrame()
     if (frame.cmdPool == nullptr)
         HG_PANIC("Could not create Vulkan command pool: %s\n", vkResultToStr(poolResult));
 
+    VkCommandBufferAllocateInfo cmdInfo{};
+    cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdInfo.commandPool = frame.cmdPool;
+    cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdInfo.commandBufferCount = 1;
+
+    VkResult cmdResult = vkAllocateCommandBuffers(vk.device, &cmdInfo, &frame.cmd);
+    if (frame.cmd == nullptr)
+        HG_PANIC("Could not create Vulkan command buffer: %s\n", vkResultToStr(cmdResult));
+
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -1034,9 +1044,9 @@ void deinitGpu()
     }
     heapFree(vk.frames, vk.frameCount);
 
-    vk.samplers.forEach([](SamplerInfo*, VkSampler* sampler)
+    vk.samplers.forEach([](const SamplerInfo&, VkSampler& sampler)
     {
-        vkDestroySampler(vk.device, *sampler, nullptr);
+        vkDestroySampler(vk.device, sampler, nullptr);
     });
     vk.samplers = {};
 
