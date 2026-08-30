@@ -39,6 +39,59 @@ struct Clock {
 void sleep(f64 time);
 
 /**
+ * Global registries for profiling
+ */
+struct Profiler {
+    /**
+     * The timer registry
+     */
+    static inline Map<String, f64> timers{};
+    /**
+     * The counter registry
+     */
+    static inline Map<String, u32> counters{};
+
+    /**
+     * Iterate over timers
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, const String&, f64>
+    static void forEachTimer(F fn)
+    {
+        timers.forEach(fn);
+    }
+
+    /**
+     * Iterate over timers
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, const String&, u32>
+    static void forEachCounter(F fn)
+    {
+        counters.forEach(fn);
+    }
+
+    /**
+     * Clear the global registry
+     */
+    static void clear()
+    {
+        timers.reset();
+        counters.reset();
+    }
+
+    /**
+     * Add to a counter
+     */
+    static void event(StringView name)
+    {
+        u32* counter = counters.get(name);
+        if (counter == nullptr)
+            counter = counters.add(String::create(name), 0);
+
+        ++*counter;
+    }
+};
+
+/**
  * Time a scope, and set the value at the end
  */
 struct ScopeTimer {
@@ -64,13 +117,28 @@ struct ScopeTimer {
     ~ScopeTimer()
     {
         if (out != nullptr)
-            *out = timer.tick();
+            *out += timer.tick();
     }
 
     ScopeTimer(const ScopeTimer& other) = delete;
     ScopeTimer& operator=(const ScopeTimer& other) = delete;
     ScopeTimer(ScopeTimer&&) = delete;
     ScopeTimer& operator=(ScopeTimer&&) = delete;
+};
+
+/**
+ * Time a scope and add it to the global registry
+ */
+struct ProfilerScopeTimer : public ScopeTimer {
+    /**
+     * Add a new timer to the name in the registry
+     */
+    ProfilerScopeTimer(StringView name)
+        : ScopeTimer{Profiler::timers.get(name)}
+    {
+        if (out == nullptr)
+            out = Profiler::timers.add(String::create(name), 0.0f);
+    }
 };
 
 /**
@@ -100,73 +168,13 @@ struct ScopeTimerLog {
      */
     ~ScopeTimerLog()
     {
-        HG_LOG("Scope \"%.*s\": %f\n", (int)name.length, name.chars, timer.tick());
+        HG_LOG("Scope \"%.*s\": %fms\n", (int)name.length, name.chars, timer.tick() * 1.e3f);
     }
 
     ScopeTimerLog(const ScopeTimerLog& other) = delete;
     ScopeTimerLog& operator=(const ScopeTimerLog& other) = delete;
     ScopeTimerLog(ScopeTimerLog&&) = delete;
     ScopeTimerLog& operator=(ScopeTimerLog&&) = delete;
-};
-
-/**
- * Time a scope and add it to the global registry
- */
-struct ScopeTimerRegistry {
-    /**
-     * The global registry
-     */
-    static inline Map<String, f64> entries{};
-
-    /**
-     * Iterate over the global registery
-     */
-    template<typename F> requires std::is_invocable_r_v<void, F, const String&, f64>
-    static void forEach(F fn)
-    {
-        entries.forEach(fn);
-    }
-
-    /**
-     * Clear the global registry
-     */
-    static void clear()
-    {
-        entries.reset();
-    }
-
-    /**
-     * The timer for the scope
-     */
-    Clock timer{};
-    /**
-     * Where to store the result
-     */
-    f64* out = nullptr;
-
-    /**
-     * Add a new timer to the name in the registry
-     */
-    ScopeTimerRegistry(StringView name)
-        : timer{}, out{entries.get(name)}
-    {
-        if (out == nullptr)
-            out = entries.add(String::create(name), 0.0f);
-    }
-
-    /**
-     * Record the time to stdout
-     */
-    ~ScopeTimerRegistry()
-    {
-        if (out != nullptr)
-            *out += timer.tick();
-    }
-
-    ScopeTimerRegistry(const ScopeTimerRegistry& other) = delete;
-    ScopeTimerRegistry& operator=(const ScopeTimerRegistry& other) = delete;
-    ScopeTimerRegistry(ScopeTimerRegistry&&) = delete;
-    ScopeTimerRegistry& operator=(ScopeTimerRegistry&&) = delete;
 };
 
 /**

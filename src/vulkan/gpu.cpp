@@ -1501,6 +1501,8 @@ void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height)
 
 GpuCmd* gpuBeginFrame(Span<Window*> windows)
 {
+    ProfilerScopeTimer timer{"gpuBeginFrame"};
+
     Frame* frame = &vk.frames[vk.currentFrame];
 
     vkWaitForFences(vk.device, 1, &frame->fence, VK_TRUE, UINT64_MAX);
@@ -1513,6 +1515,8 @@ GpuCmd* gpuBeginFrame(Span<Window*> windows)
         if (swap.data->swapchain == nullptr)
             continue;
 
+        {
+        ProfilerScopeTimer timer{"vkAcquireNextImageKHR"};
         VkResult result = vkAcquireNextImageKHR(
             vk.device,
             swap.data->swapchain,
@@ -1533,6 +1537,7 @@ GpuCmd* gpuBeginFrame(Span<Window*> windows)
         else
         {
             HG_PANIC("Could not acquire next image: %s\n", vkResultToStr(result));
+        }
         }
     }
 

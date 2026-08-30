@@ -7,9 +7,6 @@ using namespace hg;
 
 static volatile bool quit = false;
 
-static Clock cpuClock{};
-static f64 cpuTime = 0.0;
-
 static bool renderDebug = false;
 
 int main()
@@ -19,6 +16,7 @@ int main()
     Window window = Window::create("Hg Minimal Example", 1200, 800, {}).expect("Could not create window\n");
 
     Array<Product<String, f64>> globalTimes{};
+    Array<Product<String, u32>> globalCounts{};
 
     f32 musicData[2000];
     Asset<Sound> music = newAsset<Sound>();
@@ -95,95 +93,101 @@ int main()
     Clock gameClock{};
     for (;;)
     {
-    {
-        ScopeTimerRegistry timer{"Frame"};
-
-        cpuClock.tick();
         f64 delta = gameClock.tick();
-
-        processEvents();
-        if (wasQuit() || window.wasClosed())
-            goto quit;
-
-        audio.update();
-
-        beginImGuiFrame();
-        ImGui::NewFrame();
-
-        width = window.width();
-        height = window.height();
-        camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
-
-        Span<WindowEvent> events = window.events();
-        for (WindowEvent event : events)
+    {
+        ProfilerScopeTimer timer{"Frame"};
         {
-            if (event.type == WindowEventType_buttonPress &&
-                event.button.button == Button_space)
-                audio.playSound(sound, 0.5f);
-        }
+            ProfilerScopeTimer timer{"Cpu"};
 
-        if (window.isButtonDown(Button_m))
-            audio.playMusic(music);
-        else
-            audio.pauseMusic(music);
+            processEvents();
+            if (wasQuit() || window.wasClosed())
+                goto quit;
 
-        if (window.isButtonDown(Button_lmouse))
-        {
-            f32 moveSpeed = 1.0f;
-            camera.position.x -= window.mouseDX() * moveSpeed;
-            camera.position.y -= window.mouseDY() * moveSpeed;
-        }
+            audio.update();
 
-        camera.update();
+            beginImGuiFrame();
+            ImGui::NewFrame();
 
-        Vec2 spriteMove = {
-            static_cast<f32>(window.isButtonDown(Button_d) - window.isButtonDown(Button_a)),
-            static_cast<f32>(window.isButtonDown(Button_s) - window.isButtonDown(Button_w)),
-        };
-        if (spriteMove != Vec2{0.0f})
-        {
-            f32 moveSpeed = 0.4f;
-            spritePos += vecNorm2(spriteMove) * moveSpeed * static_cast<f32>(delta);
-        }
+            width = window.width();
+            height = window.height();
+            camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
 
-        spriteLayer.clear();
-        spriteLayer.drawSprite(sprite, {spritePos, spritePos + spriteSize});
-
-        renderer.queueLayer(backgroundLayer);
-        renderer.queueLayer(spriteLayer);
-        debugRenderer.queueLayer(backgroundLayer);
-        debugRenderer.queueLayer(spriteLayer);
-
-        if (ImGui::Begin("Info"))
-        {
-            ImGui::Text("Total: %.3fms", delta * 1.0e3);
-
-            cpuTime += cpuClock.tick();
-            ImGui::Text("Cpu: %.3fms", cpuTime * 1.0e3);
-            cpuTime = 0.0f;
-
-            ImGui::Checkbox("Render Debug", &renderDebug);
-        }
-        ImGui::End();
-
-        if (ImGui::Begin("Timers"))
-        {
-            for (const Product<String, f64>& time : globalTimes)
+            Span<WindowEvent> events = window.events();
+            for (WindowEvent event : events)
             {
-                ImGui::Text("%.*s: %.3fms", (int)time.get<0>().length, time.get<0>().chars, time.get<1>() * 1.e3f);
+                if (event.type == WindowEventType_buttonPress &&
+                    event.button.button == Button_space)
+                    audio.playSound(sound, 0.5f);
             }
-            globalTimes.reset();
+
+            if (window.isButtonDown(Button_m))
+                audio.playMusic(music);
+            else
+                audio.pauseMusic(music);
+
+            if (window.isButtonDown(Button_lmouse))
+            {
+                f32 moveSpeed = 1.0f;
+                camera.position.x -= window.mouseDX() * moveSpeed;
+                camera.position.y -= window.mouseDY() * moveSpeed;
+            }
+
+            camera.update();
+
+            Vec2 spriteMove = {
+                static_cast<f32>(window.isButtonDown(Button_d) - window.isButtonDown(Button_a)),
+                static_cast<f32>(window.isButtonDown(Button_s) - window.isButtonDown(Button_w)),
+            };
+            if (spriteMove != Vec2{0.0f})
+            {
+                f32 moveSpeed = 0.4f;
+                spritePos += vecNorm2(spriteMove) * moveSpeed * static_cast<f32>(delta);
+            }
+
+            spriteLayer.clear();
+            spriteLayer.drawSprite(sprite, {spritePos, spritePos + spriteSize});
+
+            renderer.queueLayer(backgroundLayer);
+            renderer.queueLayer(spriteLayer);
+            debugRenderer.queueLayer(backgroundLayer);
+            debugRenderer.queueLayer(spriteLayer);
+
+            if (ImGui::Begin("Info"))
+            {
+                ImGui::Text("Frame Time: %.3fms", delta * 1.0e3);
+
+                ImGui::Checkbox("Render Debug", &renderDebug);
+            }
+            ImGui::End();
+
+            if (ImGui::Begin("Timers"))
+            {
+                for (const Product<String, f64>& time : globalTimes)
+                {
+                    ImGui::Text("%.*s: %.3fms", (int)time.get<0>().length, time.get<0>().chars, time.get<1>() * 1.e3f);
+                }
+                globalTimes.reset();
+                for (const Product<String, u32>& count : globalCounts)
+                {
+                    ImGui::Text("%.*s: %d", (int)count.get<0>().length, count.get<0>().chars, count.get<1>());
+                }
+                globalCounts.reset();
+            }
+            ImGui::End();
+
+            ImGui::Render();
         }
-        ImGui::End();
 
-        ImGui::Render();
-
-        cpuTime += cpuClock.tick();
-        Window* windows[] = {&window};
-        GpuCmd* cmd = gpuBeginFrame(windows);
-        cpuClock.tick();
+        GpuCmd* cmd;
+        {
+            ProfilerScopeTimer timer{"Gpu"};
+            Window* windows[] = {&window};
+            cmd = gpuBeginFrame(windows);
+        }
         if (window.imageView() != nullptr)
         {
+            ProfilerScopeTimer timer{"Cpu"};
+
             GpuRenderAttachment colorAttachment{};
             colorAttachment.image = window.imageView();
 
@@ -200,14 +204,20 @@ int main()
 
             gpuEndRenderPass(cmd);
         }
-        cpuTime += cpuClock.tick();
-        gpuEndFrame(cmd);
+        {
+            ProfilerScopeTimer timer{"Gpu"};
+            gpuEndFrame(cmd);
+        }
     }
-    ScopeTimerRegistry::forEach([&](const String& name, f64 time)
-    {
-        globalTimes.push({String::create(name), time});
-    });
-    ScopeTimerRegistry::clear();
+        Profiler::forEachTimer([&](const String& name, f64 time)
+        {
+            globalTimes.push({String::create(name), time});
+        });
+        Profiler::forEachCounter([&](const String& name, u32 count)
+        {
+            globalCounts.push({String::create(name), count});
+        });
+        Profiler::clear();
     }
 
 quit:

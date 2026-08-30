@@ -788,6 +788,7 @@ static Frame createFrame()
     cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmdInfo.commandBufferCount = 1;
 
+    [[maybe_unused]]
     VkResult cmdResult = vkAllocateCommandBuffers(vk.device, &cmdInfo, &frame.cmd);
     if (frame.cmd == nullptr)
         HG_PANIC("Could not create Vulkan command buffer: %s\n", vkResultToStr(cmdResult));
