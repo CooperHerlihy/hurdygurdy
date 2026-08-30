@@ -13,9 +13,13 @@ int main()
 {
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
-    Window window = Window::create("Hg Minimal Example", 1200, 800, {
+    Window window = Window::create({
         // .preferredPresentMode = GpuPresentMode_mailbox,
     }).expect("Could not create window\n");
+
+    window.setTitle("Hg Minimal Example");
+    // window.setSize(1200, 800);
+    // window.setFullscreen();
 
     f32 musicData[2000];
     Asset<Sound> music = newAsset<Sound>();
@@ -115,7 +119,7 @@ int main()
             for (WindowEvent event : events)
             {
                 if (event.type == WindowEventType_buttonPress &&
-                    event.button.button == Button_space)
+                    event.button == Button_space)
                     audio.playSound(sound, 0.5f);
             }
 

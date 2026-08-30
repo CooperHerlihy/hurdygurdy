@@ -22,6 +22,8 @@ struct SdlFuncs {
     HG_MAKE_SDL_FUNC(SDL_SetWindowSize);
     HG_MAKE_SDL_FUNC(SDL_SetWindowTitle);
     HG_MAKE_SDL_FUNC(SDL_SetWindowOpacity);
+    HG_MAKE_SDL_FUNC(SDL_SetWindowResizable);
+    HG_MAKE_SDL_FUNC(SDL_SetWindowFullscreen);
     HG_MAKE_SDL_FUNC(SDL_ShowWindow);
     HG_MAKE_SDL_FUNC(SDL_RaiseWindow);
     HG_MAKE_SDL_FUNC(SDL_SetWindowParent);
@@ -136,6 +138,8 @@ bool loadSDL()
     HG_LOAD_SDL_FUNC(SDL_SetWindowSize);
     HG_LOAD_SDL_FUNC(SDL_SetWindowTitle);
     HG_LOAD_SDL_FUNC(SDL_SetWindowOpacity);
+    HG_LOAD_SDL_FUNC(SDL_SetWindowResizable);
+    HG_LOAD_SDL_FUNC(SDL_SetWindowFullscreen);
     HG_LOAD_SDL_FUNC(SDL_ShowWindow);
     HG_LOAD_SDL_FUNC(SDL_RaiseWindow);
     HG_LOAD_SDL_FUNC(SDL_SetWindowParent);
@@ -255,6 +259,10 @@ SDL_WRAPPER(SDL_SetWindowTitle, bool,
     (SDL_Window* window, const char* title), (window, title))
 SDL_WRAPPER(SDL_SetWindowOpacity, bool,
     (SDL_Window* window, float opacity), (window, opacity))
+SDL_WRAPPER(SDL_SetWindowResizable, bool,
+    (SDL_Window* window, bool resizable), (window, resizable))
+SDL_WRAPPER(SDL_SetWindowFullscreen, bool,
+    (SDL_Window* window, bool fullscreen), (window, fullscreen))
 SDL_WRAPPER(SDL_ShowWindow, bool, (SDL_Window* window), (window))
 SDL_WRAPPER(SDL_RaiseWindow, bool, (SDL_Window* window), (window))
 SDL_WRAPPER(SDL_SetWindowParent, bool,

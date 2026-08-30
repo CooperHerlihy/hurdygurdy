@@ -81,6 +81,31 @@ Window::~Window() noexcept = default;
 Window::Window(Window&& other) noexcept = default;
 Window& Window::operator=(Window&& other) noexcept = default;
 
+void Window::setTitle(StringView title)
+{
+    ArenaScope scratch = getScratch();
+    SDL_SetWindowTitle(data->sdlWindow, cString(scratch, title));
+}
+
+void Window::setSize(u32 width, u32 height)
+{
+    SDL_SetWindowSize(data->sdlWindow, static_cast<int>(width), static_cast<int>(height));
+    data->swap.resize(width, height);
+}
+
+void Window::setResizeable(bool set)
+{
+    SDL_SetWindowResizable(data->sdlWindow, set);
+}
+
+void Window::setFullscreen(bool set)
+{
+    SDL_SetWindowFullscreen(data->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
+    u32 w, h;
+    SDL_GetWindowSize(data->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
+    data->swap.resize(w, h);
+}
+
 GpuView* Window::imageView() const
 {
     return data->swap.currentView();
@@ -145,16 +170,16 @@ static Button sdlKeycodeToHgButton(u32 key)
 {
     switch (key)
     {
-        case SDLK_0: return Button_k0;
-        case SDLK_1: return Button_k1;
-        case SDLK_2: return Button_k2;
-        case SDLK_3: return Button_k3;
-        case SDLK_4: return Button_k4;
-        case SDLK_5: return Button_k5;
-        case SDLK_6: return Button_k6;
-        case SDLK_7: return Button_k7;
-        case SDLK_8: return Button_k8;
-        case SDLK_9: return Button_k9;
+        case SDLK_0: return Button_0;
+        case SDLK_1: return Button_1;
+        case SDLK_2: return Button_2;
+        case SDLK_3: return Button_3;
+        case SDLK_4: return Button_4;
+        case SDLK_5: return Button_5;
+        case SDLK_6: return Button_6;
+        case SDLK_7: return Button_7;
+        case SDLK_8: return Button_8;
+        case SDLK_9: return Button_9;
         case SDLK_Q: return Button_q;
         case SDLK_W: return Button_w;
         case SDLK_E: return Button_e;
@@ -226,6 +251,8 @@ static Button sdlKeycodeToHgButton(u32 key)
         case SDLK_TAB: return Button_tab;
         case SDLK_HOME: return Button_home;
         case SDLK_END: return Button_end;
+        case SDLK_PAGEUP: return Button_pageup;
+        case SDLK_PAGEDOWN: return Button_pagedown;
         case SDLK_F1: return Button_f1;
         case SDLK_F2: return Button_f2;
         case SDLK_F3: return Button_f3;
@@ -247,6 +274,9 @@ static Button sdlKeycodeToHgButton(u32 key)
         case SDLK_LGUI: return Button_lsuper;
         case SDLK_RGUI: return Button_rsuper;
         case SDLK_CAPSLOCK: return Button_capslock;
+        case SDLK_NUMLOCKCLEAR: return Button_numlock;
+        case SDLK_SCROLLLOCK: return Button_scrolllock;
+        case SDLK_PAUSE: return Button_pause;
     }
     return Button_none;
 }
@@ -323,8 +353,8 @@ void processEvents()
                 if (w != nullptr)
                 {
                     WindowEvent windowEvent{};
-                    windowEvent.button.type = WindowEventType_buttonPress;
-                    windowEvent.button.button = key;
+                    windowEvent.type = WindowEventType_buttonPress;
+                    windowEvent.button = key;
 
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = true;
@@ -337,8 +367,8 @@ void processEvents()
                 if (w != nullptr)
                 {
                     WindowEvent windowEvent{};
-                    windowEvent.button.type = WindowEventType_buttonRelease;
-                    windowEvent.button.button = key;
+                    windowEvent.type = WindowEventType_buttonRelease;
+                    windowEvent.button = key;
 
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = false;
@@ -351,8 +381,8 @@ void processEvents()
                 if (w != nullptr)
                 {
                     WindowEvent windowEvent{};
-                    windowEvent.button.type = WindowEventType_buttonPress;
-                    windowEvent.button.button = key;
+                    windowEvent.type = WindowEventType_buttonPress;
+                    windowEvent.button = key;
 
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = true;
@@ -365,8 +395,8 @@ void processEvents()
                 if (w != nullptr)
                 {
                     WindowEvent windowEvent{};
-                    windowEvent.button.type = WindowEventType_buttonRelease;
-                    windowEvent.button.button = key;
+                    windowEvent.type = WindowEventType_buttonRelease;
+                    windowEvent.button = key;
 
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = false;
@@ -381,41 +411,17 @@ bool wasQuit()
     return windowState.wasQuit;
 }
 
-Maybe<Window> Window::create(
-    StringView title,
-    u32 width,
-    u32 height,
-    const WindowConfig& config)
+Maybe<Window> Window::create(const WindowConfig& config)
 {
     Maybe<Window> window = some<Window>();
     window->data = makeUnique<WindowData>();
 
-    if (title == "")
-        title = "Hurdy Gurdy";
-
-    u64 flags = SDL_WINDOW_VULKAN;
-    if (!config.fixedSize)
-        flags |= SDL_WINDOW_RESIZABLE;
-
-    if (config.fullscreen)
-    {
-        int modeCount = 0;
-        SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(
-            SDL_GetPrimaryDisplay(), &modeCount);
-        HG_DEFER(SDL_free(modes));
-
-        width = static_cast<u32>(modes[0]->w);
-        height = static_cast<u32>(modes[0]->h);
-        flags |= SDL_WINDOW_FULLSCREEN;
-    }
-
     ArenaScope scratch = getScratch();
 
     window->data->sdlWindow = SDL_CreateWindow(
-        cString(scratch, title),
-        static_cast<int>(width),
-        static_cast<int>(height),
-        flags);
+        "Hurdy Gurdy",
+        800, 600,
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     if (window->data->sdlWindow == nullptr)
     {
         setError(SDL_GetError());
@@ -423,8 +429,7 @@ Maybe<Window> Window::create(
         return {};
     }
 
-    windowState.ids.add(
-        SDL_GetWindowID(window->data->sdlWindow), window->data);
+    windowState.ids.add(SDL_GetWindowID(window->data->sdlWindow), window->data);
 
     u32 w, h;
     SDL_GetWindowSize(window->data->sdlWindow,
@@ -432,7 +437,9 @@ Maybe<Window> Window::create(
         reinterpret_cast<int*>(&h));
 
     window->data->swap = internal::Swapchain::create(
-        window->data->sdlWindow, w, h,
+        window->data->sdlWindow,
+        w,
+        h,
         config.preferredPresentMode,
         config.imageUsage);
 

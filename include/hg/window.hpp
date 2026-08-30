@@ -23,16 +23,16 @@ bool wasQuit();
  */
 enum Button : u32 {
     Button_none = 0,
-    Button_k0,
-    Button_k1,
-    Button_k2,
-    Button_k3,
-    Button_k4,
-    Button_k5,
-    Button_k6,
-    Button_k7,
-    Button_k8,
-    Button_k9,
+    Button_0,
+    Button_1,
+    Button_2,
+    Button_3,
+    Button_4,
+    Button_5,
+    Button_6,
+    Button_7,
+    Button_8,
+    Button_9,
     Button_q,
     Button_w,
     Button_e,
@@ -112,6 +112,8 @@ enum Button : u32 {
     Button_tab,
     Button_home,
     Button_end,
+    Button_pageup,
+    Button_pagedown,
     Button_f1,
     Button_f2,
     Button_f3,
@@ -128,13 +130,14 @@ enum Button : u32 {
     Button_rshift,
     Button_lctrl,
     Button_rctrl,
-    Button_lmeta,
-    Button_rmeta,
     Button_lalt,
     Button_ralt,
     Button_lsuper,
     Button_rsuper,
     Button_capslock,
+    Button_numlock,
+    Button_scrolllock,
+    Button_pause,
     Button_count,
 };
 
@@ -149,20 +152,6 @@ enum WindowEventType : u32 {
 };
 
 /**
- * A button input event
- */
-struct WindowButtonEvent {
-    /**
-     * The type of event
-     */
-    WindowEventType type;
-    /**
-     * The button which was pressed or released
-     */
-    Button button;
-};
-
-/**
  * Input event data
  */
 union WindowEvent {
@@ -171,9 +160,9 @@ union WindowEvent {
      */
     WindowEventType type;
     /**
-     * The button press or release event
+     * The button which was pressed or released
      */
-    WindowButtonEvent button;
+    Button button;
 };
 
 /**
@@ -190,14 +179,6 @@ enum GpuPresentMode : u32 {
  * Configuration for a window
  */
 struct WindowConfig {
-    /**
-     * Whether the window can be resized
-     */
-    bool fixedSize = false;
-    /**
-     * Whether the window should be windowed or fullscreen
-     */
-    bool fullscreen = false;
     /**
      * How the swapchain images will be presented
      *
@@ -231,15 +212,33 @@ struct Window {
 
     /**
      * Open a new window
-     *
-     * Note, width and height are ignored if fullscreen is enabled
      */
-    static Maybe<Window> create(StringView title, u32 width, u32 height, const WindowConfig& config = {});
+    static Maybe<Window> create(const WindowConfig& config = {});
 
     /**
      * Close the window
      */
     ~Window() noexcept;
+
+    /**
+     * Set the window title
+     */
+    void setTitle(StringView title);
+
+    /**
+     * Set the width and height
+     */
+    void setSize(u32 width, u32 height);
+
+    /**
+     * Set the window to resizeable or not
+     */
+    void setResizeable(bool set = true);
+
+    /**
+     * Set to fullscreen or disable fullscreen
+     */
+    void setFullscreen(bool set = true);
 
     /**
      * Returns the window's current image, or nullptr if unavailable this frame
@@ -332,4 +331,3 @@ GpuCmd* gpuBeginFrame(Span<Window*> windows);
 void gpuEndFrame(GpuCmd* cmd);
 
 } // namespace hg
-

@@ -2,7 +2,6 @@
 
 #include "vulkan_internal.hpp"
 #include "hg/utility.hpp"
-#include "hg/time.hpp"
 
 #include <cmath>
 
