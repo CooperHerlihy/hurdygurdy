@@ -13,10 +13,9 @@ int main()
 {
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
-    Window window = Window::create("Hg Minimal Example", 1200, 800, {}).expect("Could not create window\n");
-
-    Array<Product<String, f64>> globalTimes{};
-    Array<Product<String, u32>> globalCounts{};
+    Window window = Window::create("Hg Minimal Example", 1200, 800, {
+        // .preferredPresentMode = GpuPresentMode_mailbox,
+    }).expect("Could not create window\n");
 
     f32 musicData[2000];
     Asset<Sound> music = newAsset<Sound>();
@@ -90,6 +89,9 @@ int main()
     initImGui(window, window.imageFormat());
     HG_DEFER(deinitImGui());
 
+    beginImGuiFrame();
+    ImGui::NewFrame();
+
     Clock gameClock{};
     for (;;)
     {
@@ -104,9 +106,6 @@ int main()
                 goto quit;
 
             audio.update();
-
-            beginImGuiFrame();
-            ImGui::NewFrame();
 
             width = window.width();
             height = window.height();
@@ -160,21 +159,6 @@ int main()
             }
             ImGui::End();
 
-            if (ImGui::Begin("Timers"))
-            {
-                for (const Product<String, f64>& time : globalTimes)
-                {
-                    ImGui::Text("%.*s: %.3fms", (int)time.get<0>().length, time.get<0>().chars, time.get<1>() * 1.e3f);
-                }
-                globalTimes.reset();
-                for (const Product<String, u32>& count : globalCounts)
-                {
-                    ImGui::Text("%.*s: %d", (int)count.get<0>().length, count.get<0>().chars, count.get<1>());
-                }
-                globalCounts.reset();
-            }
-            ImGui::End();
-
             ImGui::Render();
         }
 
@@ -209,15 +193,22 @@ int main()
             gpuEndFrame(cmd);
         }
     }
-        Profiler::forEachTimer([&](const String& name, f64 time)
+        beginImGuiFrame();
+        ImGui::NewFrame();
+
+        if (ImGui::Begin("Timers"))
         {
-            globalTimes.push({String::create(name), time});
-        });
-        Profiler::forEachCounter([&](const String& name, u32 count)
-        {
-            globalCounts.push({String::create(name), count});
-        });
-        Profiler::clear();
+            Profiler::forEachTimer([&](const String& name, f64 time)
+            {
+                ImGui::Text("%.*s: %.3fms", (int)name.length, name.chars, time * 1.e3f);
+            });
+            Profiler::forEachCounter([&](const String& name, u32 count)
+            {
+                ImGui::Text("%.*s: %d", (int)name.length, name.chars, count);
+            });
+            Profiler::clear();
+        }
+        ImGui::End();
     }
 
 quit:
