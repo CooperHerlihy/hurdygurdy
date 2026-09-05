@@ -15,17 +15,19 @@ if(CCACHE_PROGRAM)
 endif()
 
 if(MSVC)
-    add_compile_options(/permissive- /GR- /D_CRT_SECURE_NO_WARNINGS)
+    add_compile_options(/permissive- /GR- /EHs-c- /D_CRT_SECURE_NO_WARNINGS)
     # C4702 fires spuriously in the Asset<T>::Asset constructor initializer on
     # optimized builds (MSVC proves pool.alloc() never returns null, then warns
     # about the "unreachable" else-branch that doesn't exist)
     # C4127 flags conditionals which could be compile time, but are at runtime
     add_compile_options(/wd4702 /wd4127)
     set(STRICT_FLAGS /W4 /WX)
+    set(TESTS_EXCEPTION_FLAG /EHsc)
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -Wno-cpp")
     set(STRICT_FLAGS -Wall -Wextra -Wconversion -Wsign-conversion -pedantic -Werror)
+    set(TESTS_EXCEPTION_FLAG -fexceptions)
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         set(CLANG_VENDOR_FLAGS
@@ -215,7 +217,7 @@ target_precompile_headers(tests PRIVATE
     <hurdygurdy.hpp>
 )
 target_include_directories(tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-target_compile_options(tests PRIVATE ${STRICT_FLAGS})
+target_compile_options(tests PRIVATE ${STRICT_FLAGS} ${TESTS_EXCEPTION_FLAG})
 target_compile_definitions(tests PRIVATE HG_LOGGING=1)
 
 foreach(tgt minimal editor)

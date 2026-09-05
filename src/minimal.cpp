@@ -14,7 +14,7 @@ int main()
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
     Window window = Window::create({
-        // .preferredPresentMode = GpuPresentMode_mailbox,
+        .preferredPresentMode = GpuPresentMode_mailbox,
     }).expect("Could not create window\n");
 
     window.setTitle("Hg Minimal Example");
@@ -157,8 +157,7 @@ int main()
 
             if (ImGui::Begin("Info"))
             {
-                ImGui::Text("Frame Time: %.3fms", delta * 1.0e3);
-
+                ImGui::Text("FPS: %.3f", 1.e0 / delta);
                 ImGui::Checkbox("Render Debug", &renderDebug);
             }
             ImGui::End();

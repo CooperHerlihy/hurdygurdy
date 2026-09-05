@@ -1,7 +1,6 @@
 #pragma once
 #undef HG_NO_LOGGING
 #define HG_LOGGING 1
-#include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
 #include "hg/hash.hpp"
 #include "hg/serialization.hpp"
@@ -9,12 +8,19 @@
 #include <cfloat>
 #include <cmath>
 
+using namespace hg;
+
+struct TestFailure {
+    const char* file;
+    i32 line;
+    const char* func;
+    const char* cond;
+};
+
 #define TEST(cond) do { \
     if (!(cond)) \
-        HG_PANIC("Test failed in " __FILE__ ":%d %s() \"" #cond "\"\n", __LINE__, __func__); \
+        throw TestFailure{__FILE__, __LINE__, __func__, #cond}; \
 } while(0)
-
-using namespace hg;
 
 /**
  * Tracks lifetime events for testing RAII correctness
