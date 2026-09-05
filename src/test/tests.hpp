@@ -8,7 +8,7 @@
 #include <cfloat>
 #include <cmath>
 
-using namespace hg;
+namespace hg {
 
 struct TestFailure {
     const char* file;
@@ -17,10 +17,19 @@ struct TestFailure {
     const char* cond;
 };
 
-#define TEST(cond) do { \
+#define ASSERT(cond) do { \
     if (!(cond)) \
         throw TestFailure{__FILE__, __LINE__, __func__, #cond}; \
 } while(0)
+
+void registerTest(const char* name, void (*fn)());
+
+#define TEST(name) \
+    void name(); \
+    struct name##Registrar { \
+        name##Registrar() { registerTest(#name, name); } \
+    } name##registrar; \
+    void name()
 
 /**
  * Tracks lifetime events for testing RAII correctness
@@ -137,8 +146,6 @@ inline bool operator==(const Lifecycle& a, const Lifecycle& b)
     return a.id == b.id;
 }
 
-namespace hg {
-
 template<>
 inline u64 hash(const Lifecycle& val)
 {
@@ -159,31 +166,4 @@ inline void serialize(Serializer* s, Lifecycle* val)
 }
 
 }
-
-void testSpan();
-void testProduct();
-void testSum();
-void testMaybe();
-void testError();
-void testUtils();
-void testMemory();
-void testConcurrency();
-void testMath();
-void testGeometry2D();
-void testGeometry3D();
-void testNoise();
-void testStrings();
-void testHash();
-void testBinary();
-void testSmartPtr();
-void testArray();
-void testQueue();
-void testSet();
-void testMap();
-void testPool();
-void testAssets();
-void testSerialization();
-void testGpu();
-void testRender2D();
-void testEcs();
 

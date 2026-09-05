@@ -17,7 +17,9 @@
 #include "test/blur.comp.spv.h"
 #include "test/invert.frag.spv.h"
 
-void testGpu()
+using namespace hg;
+
+TEST(testGpu)
 {
     // ============================================================================
     // GPU API
@@ -106,70 +108,70 @@ void testGpu()
     // formatToSize
     {
         // Common 8-bit formats
-        TEST(formatToSize(Format_r8_unorm) == 1);
-        TEST(formatToSize(Format_r8_snorm) == 1);
-        TEST(formatToSize(Format_r8g8_unorm) == 2);
-        TEST(formatToSize(Format_r8g8b8a8_unorm) == 4);
-        TEST(formatToSize(Format_r8g8b8a8_snorm) == 4);
-        TEST(formatToSize(Format_r8g8b8a8_srgb) == 4);
+        ASSERT(formatToSize(Format_r8_unorm) == 1);
+        ASSERT(formatToSize(Format_r8_snorm) == 1);
+        ASSERT(formatToSize(Format_r8g8_unorm) == 2);
+        ASSERT(formatToSize(Format_r8g8b8a8_unorm) == 4);
+        ASSERT(formatToSize(Format_r8g8b8a8_snorm) == 4);
+        ASSERT(formatToSize(Format_r8g8b8a8_srgb) == 4);
         // 16-bit float / depth formats
-        TEST(formatToSize(Format_r16_sfloat) == 2);
-        TEST(formatToSize(Format_r16g16_sfloat) == 4);
-        TEST(formatToSize(Format_r16g16b16a16_sfloat) == 8);
-        TEST(formatToSize(Format_d16_unorm) == 2);
+        ASSERT(formatToSize(Format_r16_sfloat) == 2);
+        ASSERT(formatToSize(Format_r16g16_sfloat) == 4);
+        ASSERT(formatToSize(Format_r16g16b16a16_sfloat) == 8);
+        ASSERT(formatToSize(Format_d16_unorm) == 2);
         // 32-bit float / int formats
-        TEST(formatToSize(Format_r32_sfloat) == 4);
-        TEST(formatToSize(Format_r32g32_sfloat) == 8);
-        TEST(formatToSize(Format_r32g32b32_sfloat) == 12);
-        TEST(formatToSize(Format_r32g32b32a32_sfloat) == 16);
-        TEST(formatToSize(Format_r32_sint) == 4);
-        TEST(formatToSize(Format_r32g32b32a32_uint) == 16);
+        ASSERT(formatToSize(Format_r32_sfloat) == 4);
+        ASSERT(formatToSize(Format_r32g32_sfloat) == 8);
+        ASSERT(formatToSize(Format_r32g32b32_sfloat) == 12);
+        ASSERT(formatToSize(Format_r32g32b32a32_sfloat) == 16);
+        ASSERT(formatToSize(Format_r32_sint) == 4);
+        ASSERT(formatToSize(Format_r32g32b32a32_uint) == 16);
         // Depth-stencil
-        TEST(formatToSize(Format_d24_unorm_s8_uint) == 4);
-        TEST(formatToSize(Format_d32_sfloat) == 4);
-        TEST(formatToSize(Format_d32_sfloat_s8_uint) == 5);
+        ASSERT(formatToSize(Format_d24_unorm_s8_uint) == 4);
+        ASSERT(formatToSize(Format_d32_sfloat) == 4);
+        ASSERT(formatToSize(Format_d32_sfloat_s8_uint) == 5);
         // Block-compressed
-        TEST(formatToSize(Format_bc1_rgba_unorm_block) == 8);
-        TEST(formatToSize(Format_bc3_unorm_block) == 16);
-        TEST(formatToSize(Format_bc5_unorm_block) == 16);
-        TEST(formatToSize(Format_bc7_unorm_block) == 16);
+        ASSERT(formatToSize(Format_bc1_rgba_unorm_block) == 8);
+        ASSERT(formatToSize(Format_bc3_unorm_block) == 16);
+        ASSERT(formatToSize(Format_bc5_unorm_block) == 16);
+        ASSERT(formatToSize(Format_bc7_unorm_block) == 16);
     }
 
     // getMaxMipmaps
     {
-        TEST(getMaxMipmaps(1, 1, 1) == 1);
-        TEST(getMaxMipmaps(2, 1, 1) == 2);
-        TEST(getMaxMipmaps(64, 64, 1) == 7);
-        TEST(getMaxMipmaps(128, 64, 1) == 8);
-        TEST(getMaxMipmaps(256, 256, 256) == 9);
-        TEST(getMaxMipmaps(0, 0, 0) == 0);
-        TEST(getMaxMipmaps(1, 0, 1) == 1);
+        ASSERT(getMaxMipmaps(1, 1, 1) == 1);
+        ASSERT(getMaxMipmaps(2, 1, 1) == 2);
+        ASSERT(getMaxMipmaps(64, 64, 1) == 7);
+        ASSERT(getMaxMipmaps(128, 64, 1) == 8);
+        ASSERT(getMaxMipmaps(256, 256, 256) == 9);
+        ASSERT(getMaxMipmaps(0, 0, 0) == 0);
+        ASSERT(getMaxMipmaps(1, 0, 1) == 1);
     }
 
     // GpuBuffer lifecycle
     {
         // Default construction
         GpuBuffer empty{};
-        TEST(empty.data == nullptr);
+        ASSERT(empty.data == nullptr);
 
         // Create a device-local buffer
         GpuBuffer devBuf = GpuBuffer::create(256, GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst);
-        TEST(devBuf.data != nullptr);
+        ASSERT(devBuf.data != nullptr);
 
         // Create a host-visible buffer
         GpuBuffer hostBuf = GpuBuffer::create(128, GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
-        TEST(hostBuf.data != nullptr);
+        ASSERT(hostBuf.data != nullptr);
 
         // Move construction
         GpuBuffer moved{std::move(devBuf)};
-        TEST(devBuf.data == nullptr);
-        TEST(moved.data != nullptr);
+        ASSERT(devBuf.data == nullptr);
+        ASSERT(moved.data != nullptr);
 
         // Move assignment
         GpuBuffer dest{};
         dest = std::move(hostBuf);
-        TEST(hostBuf.data == nullptr);
-        TEST(dest.data != nullptr);
+        ASSERT(hostBuf.data == nullptr);
+        ASSERT(dest.data != nullptr);
 
         // Destruction via scope exit
     }
@@ -197,9 +199,9 @@ void testGpu()
             buf.read(&r1, 0, sizeof(r1));
             buf.read(&r2, 64, sizeof(r2));
             buf.read(&r3, 128, sizeof(r3));
-            TEST(r1 == 0x11111111);
-            TEST(r2 == 0x22222222);
-            TEST(r3 == 0x33333333);
+            ASSERT(r1 == 0x11111111);
+            ASSERT(r2 == 0x22222222);
+            ASSERT(r3 == 0x33333333);
 
             // Cross-boundary read: 8 bytes starting at offset 60
             // Bytes 60-63 are the tail of 0x11111111 fill,
@@ -208,8 +210,8 @@ void testGpu()
             buf.read(&cross, 60, sizeof(cross));
             u32 tail = static_cast<u32>(cross & 0xFFFFFFFF);
             u32 head = static_cast<u32>((cross >> 32) & 0xFFFFFFFF);
-            TEST(tail == 0x11111111);
-            TEST(head == 0x22222222);
+            ASSERT(tail == 0x11111111);
+            ASSERT(head == 0x22222222);
         }
 
         // Device-only (staging) path
@@ -230,16 +232,16 @@ void testGpu()
             buf.read(&r1, 0, sizeof(r1));
             buf.read(&r2, 64, sizeof(r2));
             buf.read(&r3, 128, sizeof(r3));
-            TEST(r1 == 0x11111111);
-            TEST(r2 == 0x22222222);
-            TEST(r3 == 0x33333333);
+            ASSERT(r1 == 0x11111111);
+            ASSERT(r2 == 0x22222222);
+            ASSERT(r3 == 0x33333333);
 
             u64 cross = 0;
             buf.read(&cross, 60, sizeof(cross));
             u32 tail = static_cast<u32>(cross & 0xFFFFFFFF);
             u32 head = static_cast<u32>((cross >> 32) & 0xFFFFFFFF);
-            TEST(tail == 0x11111111);
-            TEST(head == 0x22222222);
+            ASSERT(tail == 0x11111111);
+            ASSERT(head == 0x22222222);
         }
     }
 
@@ -253,19 +255,19 @@ void testGpu()
         u32 dst[16] = {};
         buf.read(dst, 0, sizeof(dst));
         for (u32 i = 0; i < 16; ++i)
-            TEST(dst[i] == i * 3 + 7);
+            ASSERT(dst[i] == i * 3 + 7);
     }
 
     // GpuImage lifecycle
     {
         GpuImage empty{};
-        TEST(empty.data == nullptr);
+        ASSERT(empty.data == nullptr);
 
         // Simple constructor
         GpuImage img = GpuImage::create(16, 16, Format_r8g8b8a8_unorm, GpuImageUsage_transferSrc);
-        TEST(img.data != nullptr);
-        TEST(img.width() == 16);
-        TEST(img.height() == 16);
+        ASSERT(img.data != nullptr);
+        ASSERT(img.width() == 16);
+        ASSERT(img.height() == 16);
 
         // Extended constructor with mip levels
         GpuImageCreateInfo ci{};
@@ -275,20 +277,20 @@ void testGpu()
         ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst;
         ci.mipLevels = 4;
         GpuImage mipImg = GpuImage::createEx(ci);
-        TEST(mipImg.data != nullptr);
-        TEST(mipImg.width() == 64);
-        TEST(mipImg.height() == 64);
+        ASSERT(mipImg.data != nullptr);
+        ASSERT(mipImg.width() == 64);
+        ASSERT(mipImg.height() == 64);
 
         // Move construction
         GpuImage moved{std::move(img)};
-        TEST(img.data == nullptr);
-        TEST(moved.data != nullptr);
+        ASSERT(img.data == nullptr);
+        ASSERT(moved.data != nullptr);
 
         // Move assignment
         GpuImage dest{};
         dest = std::move(mipImg);
-        TEST(mipImg.data == nullptr);
-        TEST(dest.data != nullptr);
+        ASSERT(mipImg.data == nullptr);
+        ASSERT(dest.data != nullptr);
     }
 
     // GpuView lifecycle
@@ -297,20 +299,20 @@ void testGpu()
             GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
 
         GpuView view = GpuView::create(img, GpuAspect_color);
-        TEST(view.data != nullptr);
-        TEST(view.width() == 16);
-        TEST(view.height() == 16);
+        ASSERT(view.data != nullptr);
+        ASSERT(view.width() == 16);
+        ASSERT(view.height() == 16);
 
         // Move construction
         GpuView moved{std::move(view)};
-        TEST(view.data == nullptr);
-        TEST(moved.data != nullptr);
+        ASSERT(view.data == nullptr);
+        ASSERT(moved.data != nullptr);
 
         // Move assignment
         GpuView dest{};
         dest = std::move(moved);
-        TEST(moved.data == nullptr);
-        TEST(dest.data != nullptr);
+        ASSERT(moved.data == nullptr);
+        ASSERT(dest.data != nullptr);
     }
 
     // GpuView write/read
@@ -326,7 +328,7 @@ void testGpu()
         u32 dst[16 * 16] = {};
         view.read(dst);
         for (u32 i = 0; i < 16 * 16; ++i)
-            TEST(dst[i] == 0x30405060);
+            ASSERT(dst[i] == 0x30405060);
     }
 
     // GpuView Extended Config Affects Sampler Output
@@ -360,7 +362,7 @@ void testGpu()
         for (u32 i = 0; i < texSize * texSize; ++i)
             if (readback[i] != checker[i])
                 match = false;
-        TEST(match);
+        ASSERT(match);
 
         // Verify sampled rendering produces non-clear color
         static constexpr u32 outSize = 2;
@@ -410,7 +412,7 @@ void testGpu()
         u32 result[outSize * outSize] = {};
         outView.read(result);
         // Sampling center of white texel (1,0) → white (0xFFFFFFFF)
-        TEST(result[0] == 0xFFFFFFFF);
+        ASSERT(result[0] == 0xFFFFFFFF);
     }
 
     // Command Buffer Executes Recorded Commands
@@ -435,7 +437,7 @@ void testGpu()
         Push push{0, staging.storageDescriptor(), devBuf.storageDescriptor()};
 
         GpuCmd* cmd = gpuCmdBegin();
-        TEST(cmd != nullptr);
+        ASSERT(cmd != nullptr);
 
         GpuBufferBarrier stagingBarrier{};
         stagingBarrier.buffer = &staging;
@@ -457,7 +459,7 @@ void testGpu()
 
         u32 result = 0;
         devBuf.read(&result, 0, sizeof(result));
-        TEST(result == 0xDECAF123);
+        ASSERT(result == 0xDECAF123);
     }
 
     // Buffer Barrier Synchronizes Compute Write Then Read
@@ -518,7 +520,7 @@ void testGpu()
         u32 result[elemCount] = {};
         outBuf.read(result, 0, bufSize);
         for (u32 i = 0; i < elemCount; ++i)
-            TEST(result[i] == input[i] + 1);
+            ASSERT(result[i] == input[i] + 1);
     }
 
     // Image Barrier Transitions Layout Correctly
@@ -557,7 +559,7 @@ void testGpu()
         u32 result[imgSize * imgSize] = {};
         view.read(result);
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(result[i] == 0xFF0000FF);
+            ASSERT(result[i] == 0xFF0000FF);
     }
 
     // Combined Buffer+Image Barrier in a Dependency Chain
@@ -633,13 +635,13 @@ void testGpu()
         u32 bufResult[imgSize * imgSize] = {};
         storageBuf.read(bufResult, 0, sizeof(bufResult));
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(bufResult[i] == pixelData[i]);
+            ASSERT(bufResult[i] == pixelData[i]);
 
         // Read back image — should match buffer data
         u32 imgResult[imgSize * imgSize] = {};
         imgView.read(imgResult);
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(imgResult[i] == pixelData[i]);
+            ASSERT(imgResult[i] == pixelData[i]);
     }
 
     // Compute Pass Dispatch Produces Correct Output
@@ -690,24 +692,24 @@ void testGpu()
         u32 output[elemCount] = {};
         outBuf.read(output, 0, bufSize);
         for (u32 i = 0; i < elemCount; ++i)
-            TEST(output[i] == input[i] * 2);
+            ASSERT(output[i] == input[i] * 2);
     }
 
     // GpuPipeline compute: lifecycle
     {
         GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12);
-        TEST(pipe.data != nullptr);
+        ASSERT(pipe.data != nullptr);
 
         // Move construction
         GpuPipeline moved{std::move(pipe)};
-        TEST(pipe.data == nullptr);
-        TEST(moved.data != nullptr);
+        ASSERT(pipe.data == nullptr);
+        ASSERT(moved.data != nullptr);
 
         // Move assignment
         GpuPipeline dest{};
         dest = std::move(moved);
-        TEST(moved.data == nullptr);
-        TEST(dest.data != nullptr);
+        ASSERT(moved.data == nullptr);
+        ASSERT(dest.data != nullptr);
     }
 
     // Compute dispatch: SSBO input → push constant → SSBO output
@@ -754,7 +756,7 @@ void testGpu()
         outBuf.read(output, 0, bufSize);
 
         for (u32 i = 0; i < elemCount; ++i)
-            TEST(output[i] == input[i] + addVal);
+            ASSERT(output[i] == input[i] + addVal);
     }
 
     // GpuPipeline graphics: lifecycle
@@ -766,16 +768,16 @@ void testGpu()
         ci.colorAttachmentFormats = {&colorFmt, 1};
 
         GpuPipeline pipe = GpuPipeline::graphics(ci);
-        TEST(pipe.data != nullptr);
+        ASSERT(pipe.data != nullptr);
 
         GpuPipeline moved{std::move(pipe)};
-        TEST(pipe.data == nullptr);
-        TEST(moved.data != nullptr);
+        ASSERT(pipe.data == nullptr);
+        ASSERT(moved.data != nullptr);
 
         GpuPipeline dest{};
         dest = std::move(moved);
-        TEST(moved.data == nullptr);
-        TEST(dest.data != nullptr);
+        ASSERT(moved.data == nullptr);
+        ASSERT(dest.data != nullptr);
     }
 
     // Offscreen render: render a full-screen triangle to an image, read it back
@@ -805,7 +807,7 @@ void testGpu()
         // Triangle covers the whole viewport; all pixels should be (0.2, 0.4, 0.6, 1.0)
         // packed RGBA → 0xFF996633
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(pixelData[i] == 0xFF996633);
+            ASSERT(pixelData[i] == 0xFF996633);
     }
 
     // Compute SSBO Add (Buffer -> Push Constant -> Buffer)
@@ -861,7 +863,7 @@ void testGpu()
         outBuf.read(output, 0, bufSize);
 
         for (u32 i = 0; i < elemCount; ++i)
-            TEST(output[i] == input[i] + addVal);
+            ASSERT(output[i] == input[i] + addVal);
     }
 
     // Offscreen Render with Depth Test
@@ -922,13 +924,13 @@ void testGpu()
         colorView.read(colorPixels);
 
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(colorPixels[i] == 0xFF00FF00);
+            ASSERT(colorPixels[i] == 0xFF00FF00);
 
         f32 depthPixels[imgSize * imgSize] = {};
         depthView.read(depthPixels);
 
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(depthPixels[i] > 0.24f && depthPixels[i] < 0.26f);
+            ASSERT(depthPixels[i] > 0.24f && depthPixels[i] < 0.26f);
     }
 
     // Multi-Draw with Instancing
@@ -1004,10 +1006,10 @@ void testGpu()
         colorView.read(pixels);
 
         u32 green = 0xFF00FF00;
-        TEST(pixels[2 * imgSize + 2] == green);
-        TEST(pixels[2 * imgSize + 6] == green);
-        TEST(pixels[6 * imgSize + 2] == green);
-        TEST(pixels[6 * imgSize + 6] == green);
+        ASSERT(pixels[2 * imgSize + 2] == green);
+        ASSERT(pixels[2 * imgSize + 6] == green);
+        ASSERT(pixels[6 * imgSize + 2] == green);
+        ASSERT(pixels[6 * imgSize + 6] == green);
     }
 
     // Multi-Viewport / Multi-Scissor Render
@@ -1072,9 +1074,9 @@ void testGpu()
         u32 bluePx = 0xFFFF0000;
         for (u32 y = 0; y < imgSize; ++y) {
             for (u32 x = 0; x < 8; ++x)
-                TEST(pixels[y * imgSize + x] == redPx);
+                ASSERT(pixels[y * imgSize + x] == redPx);
             for (u32 x = 8; x < imgSize; ++x)
-                TEST(pixels[y * imgSize + x] == bluePx);
+                ASSERT(pixels[y * imgSize + x] == bluePx);
         }
     }
 
@@ -1150,7 +1152,7 @@ void testGpu()
 
         for (u32 y = 1; y < imgSize - 1; ++y)
             for (u32 x = 1; x < imgSize - 1; ++x)
-                TEST(pixels[y * imgSize + x] == white);
+                ASSERT(pixels[y * imgSize + x] == white);
     }
 
     // Render to Texture, Sample in Second Pass
@@ -1243,7 +1245,7 @@ void testGpu()
         // In RGBA8: R=204, G=153, B=102, A=0  => 0x006699CC
         u32 expected = 0x006699CC;
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(pixels[i] == expected);
+            ASSERT(pixels[i] == expected);
     }
 
     // Buffer Readback After Compute (Staging Read)
@@ -1299,7 +1301,7 @@ void testGpu()
         u32 output[elemCount] = {};
         outBuf.read(output, 0, bufSize);
         for (u32 i = 0; i < elemCount; ++i)
-            TEST(output[i] == input[i] * 2);
+            ASSERT(output[i] == input[i] * 2);
     }
 
     // Pipeline Barrier Granularity (Chained Dispatches)
@@ -1384,7 +1386,7 @@ void testGpu()
         u32 output[elemCount] = {};
         bufC.read(output, 0, bufSize);
         for (u32 i = 0; i < elemCount; ++i)
-            TEST(output[i] == input[i] * 4);
+            ASSERT(output[i] == input[i] * 4);
     }
 
     // Image Array Rendering (Layered Rendering)
@@ -1433,7 +1435,7 @@ void testGpu()
             layerView.read(pixels);
 
             for (u32 i = 0; i < imgSize * imgSize; ++i)
-                TEST(pixels[i] == 0xFF996633);
+                ASSERT(pixels[i] == 0xFF996633);
         }
     }
 
@@ -1483,7 +1485,7 @@ void testGpu()
 
         u32 result = 0;
         devBuf.read(&result, 0, sizeof(result));
-        TEST(result == 0xDEADBEEF);
+        ASSERT(result == 0xDEADBEEF);
     }
 
     // Uniform Buffer Passes Data to Vertex Shader
@@ -1548,10 +1550,10 @@ void testGpu()
             u8 r = static_cast<u8>((pixels[i] >> 0) & 0xFF);
             u8 g = static_cast<u8>((pixels[i] >> 8) & 0xFF);
             u8 b = static_cast<u8>((pixels[i] >> 16) & 0xFF);
-            TEST(r >= 125 && r <= 130);
-            TEST(g >= 74 && g <= 79);
-            TEST(b >= 176 && b <= 181);
-            TEST(((pixels[i] >> 24) & 0xFF) == 0xFF);
+            ASSERT(r >= 125 && r <= 130);
+            ASSERT(g >= 74 && g <= 79);
+            ASSERT(b >= 176 && b <= 181);
+            ASSERT(((pixels[i] >> 24) & 0xFF) == 0xFF);
         }
     }
 
@@ -1612,7 +1614,7 @@ void testGpu()
                     : 0xFFFFFFFF; // white
 
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(pixels[i] == expected[i]);
+            ASSERT(pixels[i] == expected[i]);
     }
 
     // GpuView::writeCubemap
@@ -1684,7 +1686,7 @@ void testGpu()
         u32 face[faceSize * faceSize] = {};
         readView.read(face);
         for (u32 i = 0; i < faceSize * faceSize; ++i)
-            TEST(face[i] == 0xFF0000FF); // RGBA: R=0xFF, G=0x00, B=0x00, A=0xFF
+            ASSERT(face[i] == 0xFF0000FF); // RGBA: R=0xFF, G=0x00, B=0x00, A=0xFF
     }
 
     // GpuView::genMipmaps — verify base level not corrupted
@@ -1718,7 +1720,7 @@ void testGpu()
         u32 dst[imgSize * imgSize] = {};
         mipView.read(dst);
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(dst[i] == yellow);
+            ASSERT(dst[i] == yellow);
     }
 
     // GpuView::genMipmaps — verify mip 1 content via read()
@@ -1771,10 +1773,10 @@ void testGpu()
 
         // Mip 1 (2×2): top-left averages the red 2×2 block → red;
         // the other three average green quadrants → green
-        TEST(mip1[0] == red);
-        TEST(mip1[1] == green);
-        TEST(mip1[2] == green);
-        TEST(mip1[3] == green);
+        ASSERT(mip1[0] == red);
+        ASSERT(mip1[1] == green);
+        ASSERT(mip1[2] == green);
+        ASSERT(mip1[3] == green);
     }
 
     // GpuLoadOp_load: render pass begins without clearing, preserves existing content
@@ -1820,7 +1822,7 @@ void testGpu()
         u32 triColor = 0xFF996633;
         for (u32 y = 0; y < h; ++y)
             for (u32 x = 0; x < w; ++x)
-                TEST(pixels[y * w + x] == (x < halfW ? triColor : redPx));
+                ASSERT(pixels[y * w + x] == (x < halfW ? triColor : redPx));
     }
 
     // GpuView mirroredRepeat edge mode
@@ -1870,7 +1872,7 @@ void testGpu()
         u32 result[outSize * outSize] = {};
         outView.read(result);
         for (u32 i = 0; i < outSize * outSize; ++i)
-            TEST(result[i] == 0xFF00FF00); // green from mirrored repeat
+            ASSERT(result[i] == 0xFF00FF00); // green from mirrored repeat
     }
 
     // Untested barrier stage/access flags: allGraphics + colorAttachmentWrite
@@ -1911,7 +1913,7 @@ void testGpu()
         u32 pixels[imgSize * imgSize] = {};
         colorView.read(pixels);
         for (u32 i = 0; i < imgSize * imgSize; ++i)
-            TEST(pixels[i] == 0xFF996633);
+            ASSERT(pixels[i] == 0xFF996633);
     }
 }
 

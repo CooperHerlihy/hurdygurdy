@@ -58,9 +58,9 @@ struct Queue {
         if (back != front)
             HG_WARN("Non-empty queue destroyed\n");
 
-        for (u64 i = front; i != back; i = (i + 1) % capacity)
+        for (u64 n = 0; n < count; ++n)
         {
-            vals[i].~T();
+            vals[(front + n) % capacity].~T();
         }
         heapFree(vals, capacity);
     }
@@ -75,8 +75,9 @@ struct Queue {
             T* newVals = heapAlloc<T>(newCapacity);
 
             T* nextVal = newVals;
-            for (u64 i = front; i != back; i = (i + 1) % capacity)
+            for (u64 n = 0; n < count; ++n)
             {
+                u64 i = (front + n) % capacity;
                 new (nextVal++) T{std::move(vals[i])};
                 vals[i].~T();
             }
@@ -281,9 +282,9 @@ struct QueueTemp {
         if (back != front)
             HG_WARN("Non-empty queue destroyed\n");
 
-        for (u64 i = front; i != back; i = (i + 1) % capacity)
+        for (u64 n = 0; n < count; ++n)
         {
-            vals[i].~T();
+            vals[(front + n) % capacity].~T();
         }
     }
 
@@ -313,8 +314,9 @@ struct QueueTemp {
                 T* newVals = arena->alloc<T>(newCapacity);
 
                 T* nextVal = newVals;
-                for (u64 i = front; i != back; i = (i + 1) % capacity)
+                for (u64 n = 0; n < count; ++n)
                 {
+                    u64 i = (front + n) % capacity;
                     new (nextVal++) T{std::move(vals[i])};
                     vals[i].~T();
                 }

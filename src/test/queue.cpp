@@ -1,316 +1,405 @@
 #include "tests.hpp"
 #include "hg/queue.hpp"
 
-void testQueue()
+using namespace hg;
+
+TEST(testQueueDefault)
 {
-    // ============================================================================
-    // Queue
-    // ============================================================================
-    //
-    // Queue is a move-only, heap-allocated double-ended ring buffer.
-    // Supports pushFront, pushBack, popFront, popBack, and reserve.
+    Queue<u32> q;
+    ASSERT(q.vals == nullptr);
+    ASSERT(q.count == 0);
+    ASSERT(q.capacity == 0);
+}
 
-    // Default-constructed queue is empty
+TEST(testQueueInitialCapacity)
+{
+    Queue<u32> q{16};
+    ASSERT(q.vals != nullptr);
+    ASSERT(q.capacity == 16);
+    ASSERT(q.count == 0);
+}
+
+TEST(testQueuePushBackPopFront)
+{
+    Queue<u32> q;
+    q.pushBack(1);
+    q.pushBack(2);
+    q.pushBack(3);
+    ASSERT(q.count == 3);
+    ASSERT(q.popFront() == 1);
+    ASSERT(q.popFront() == 2);
+    ASSERT(q.popFront() == 3);
+    ASSERT(q.count == 0);
+}
+
+TEST(testQueuePushFrontPopBack)
+{
+    Queue<u32> q;
+    q.pushFront(1);
+    q.pushFront(2);
+    q.pushFront(3);
+    ASSERT(q.count == 3);
+    ASSERT(q.popBack() == 1);
+    ASSERT(q.popBack() == 2);
+    ASSERT(q.popBack() == 3);
+    ASSERT(q.count == 0);
+}
+
+TEST(testQueuePushFrontPopFront)
+{
+    Queue<u32> q;
+    q.pushFront(10);
+    q.pushFront(20);
+    ASSERT(q.popFront() == 20);
+    ASSERT(q.popFront() == 10);
+}
+
+TEST(testQueuePushBackPopBack)
+{
+    Queue<u32> q;
+    q.pushBack(1);
+    q.pushBack(2);
+    q.pushBack(3);
+    ASSERT(q.popBack() == 3);
+    ASSERT(q.popBack() == 2);
+    ASSERT(q.popBack() == 1);
+}
+
+TEST(testQueueWrapAround)
+{
+    Queue<u32> q;
+    q.pushBack(1);
+    q.pushBack(2);
+    q.pushBack(3);
+    ASSERT(q.popFront() == 1);
+    ASSERT(q.popFront() == 2);
+    q.pushBack(4);
+    q.pushBack(5);
+    ASSERT(q.count == 3);
+    ASSERT(q.popFront() == 3);
+    ASSERT(q.popFront() == 4);
+    ASSERT(q.popFront() == 5);
+}
+
+TEST(testQueueWrapAroundPushFront)
+{
+    Queue<u32> q;
+    q.pushBack(1);
+    q.pushBack(2);
+    q.pushBack(3);
+    q.popFront();
+    q.pushFront(0);
+    ASSERT(q.count == 3);
+    ASSERT(q.popFront() == 0);
+    ASSERT(q.popFront() == 2);
+    ASSERT(q.popFront() == 3);
+}
+
+TEST(testQueueReserve)
+{
+    Queue<u32> q{4};
+    q.pushBack(1);
+    q.pushBack(2);
+    q.reserve(16);
+    ASSERT(q.capacity >= 16);
+    ASSERT(q.count == 2);
+    ASSERT(q.popFront() == 1);
+    ASSERT(q.popFront() == 2);
+}
+
+TEST(testQueueMoveConstruct)
+{
+    Queue<u32> a;
+    a.pushBack(1);
+    a.pushBack(2);
+    u32* oldVals = a.vals;
+    Queue<u32> b = std::move(a);
+    ASSERT(a.vals == nullptr);
+    ASSERT(b.vals == oldVals);
+    ASSERT(b.popFront() == 1);
+    ASSERT(b.popFront() == 2);
+}
+
+TEST(testQueueMoveAssign)
+{
+    Queue<u32> a;
+    a.pushBack(10);
+    Queue<u32> b;
+    b.pushBack(20);
+    b.popFront();
+    b = std::move(a);
+    ASSERT(b.popFront() == 10);
+}
+
+TEST(testQueuePushBackCopy)
+{
+    Lifecycle::stats.reset();
     {
-        Queue<u32> q;
-        TEST(q.vals == nullptr);
-        TEST(q.count == 0);
-        TEST(q.capacity == 0);
+        Queue<Lifecycle> q;
+        Lifecycle a;
+        q.pushBack(a);
+        ASSERT(a.valid);
+        ASSERT(q.count == 1);
+        ASSERT(Lifecycle::stats.copies == 1);
+        ASSERT(Lifecycle::stats.moves == 0);
+        q.popFront();
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+}
 
-    // Construct with initial capacity
+TEST(testQueuePushBackMove)
+{
+    Lifecycle::stats.reset();
     {
-        Queue<u32> q{16};
-        TEST(q.vals != nullptr);
-        TEST(q.capacity == 16);
-        TEST(q.count == 0);
+        Queue<Lifecycle> q;
+        Lifecycle a;
+        q.pushBack(std::move(a));
+        ASSERT(!a.valid);
+        ASSERT(q.count == 1);
+        ASSERT(Lifecycle::stats.copies == 0);
+        ASSERT(Lifecycle::stats.moves == 1);
+        q.popFront();
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+}
 
-    // pushBack and popFront (FIFO order)
+TEST(testQueuePushFrontCopy)
+{
+    Lifecycle::stats.reset();
     {
-        Queue<u32> q;
-        q.pushBack(1);
-        q.pushBack(2);
-        q.pushBack(3);
-        TEST(q.count == 3);
-        TEST(q.popFront() == 1);
-        TEST(q.popFront() == 2);
-        TEST(q.popFront() == 3);
-        TEST(q.count == 0);
+        Queue<Lifecycle> q;
+        Lifecycle a;
+        q.pushFront(a);
+        ASSERT(a.valid);
+        ASSERT(Lifecycle::stats.copies == 1);
+        ASSERT(Lifecycle::stats.moves == 0);
+        q.popBack();
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+}
 
-    // pushFront and popBack (LIFO order from front)
+TEST(testQueuePushFrontMove)
+{
+    Lifecycle::stats.reset();
     {
-        Queue<u32> q;
-        q.pushFront(1);
-        q.pushFront(2);
-        q.pushFront(3);
-        TEST(q.count == 3);
-        TEST(q.popBack() == 1);
-        TEST(q.popBack() == 2);
-        TEST(q.popBack() == 3);
-        TEST(q.count == 0);
+        Queue<Lifecycle> q;
+        Lifecycle a;
+        q.pushFront(std::move(a));
+        ASSERT(!a.valid);
+        ASSERT(Lifecycle::stats.copies == 0);
+        ASSERT(Lifecycle::stats.moves == 1);
+        q.popBack();
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+}
 
-    // pushFront and popFront (reversed order)
+TEST(testQueuePopFrontMove)
+{
+    Lifecycle::stats.reset();
     {
-        Queue<u32> q;
-        q.pushFront(10);
-        q.pushFront(20);
-        TEST(q.popFront() == 20);
-        TEST(q.popFront() == 10);
+        Queue<Lifecycle> q;
+        q.pushBack();
+        Lifecycle val = q.popFront();
+        ASSERT(val.valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // pushBack and popBack (stack order)
+TEST(testQueuePopBackMove)
+{
+    Lifecycle::stats.reset();
     {
-        Queue<u32> q;
-        q.pushBack(1);
-        q.pushBack(2);
-        q.pushBack(3);
-        TEST(q.popBack() == 3);
-        TEST(q.popBack() == 2);
-        TEST(q.popBack() == 1);
+        Queue<Lifecycle> q;
+        q.pushBack();
+        Lifecycle val = q.popBack();
+        ASSERT(val.valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // Wrap-around behavior: popFront followed by pushBack reuses slots
+TEST(testQueueTempDefault)
+{
+    QueueTemp<u32> q;
+    ASSERT(q.arena == nullptr);
+    ASSERT(q.vals == nullptr);
+    ASSERT(q.count == 0);
+}
+
+TEST(testQueueTempCreate)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> q{arena, 16};
+    ASSERT(q.arena == arena);
+    ASSERT(q.vals != nullptr);
+    ASSERT(q.capacity == 16);
+    ASSERT(q.count == 0);
+}
+
+TEST(testQueueTempPushBackPopFront)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> q{arena, 0};
+    q.pushBack(1);
+    q.pushBack(2);
+    q.pushBack(3);
+    ASSERT(q.count == 3);
+    ASSERT(q.popFront() == 1);
+    ASSERT(q.popFront() == 2);
+    ASSERT(q.popFront() == 3);
+}
+
+TEST(testQueueTempPushFrontPopBack)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> q{arena, 0};
+    q.pushFront(10);
+    q.pushFront(20);
+    ASSERT(q.popBack() == 10);
+    ASSERT(q.popBack() == 20);
+}
+
+TEST(testQueueTempWrapAround)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> q{arena, 4};
+    q.pushBack(1);
+    q.pushBack(2);
+    q.pushBack(3);
+    q.popFront();
+    q.popFront();
+    q.pushBack(4);
+    q.pushBack(5);
+    ASSERT(q.count == 3);
+    ASSERT(q.popFront() == 3);
+    ASSERT(q.popFront() == 4);
+    ASSERT(q.popFront() == 5);
+}
+
+TEST(testQueueTempReserve)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> q{arena, 4};
+    q.pushBack(1);
+    q.pushBack(2);
+    q.reserve(20);
+    ASSERT(q.capacity >= 20);
+    ASSERT(q.popFront() == 1);
+    ASSERT(q.popFront() == 2);
+}
+
+TEST(testQueueTempMoveConstruct)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> a{arena, 0};
+    a.pushBack(99);
+    QueueTemp<u32> b = std::move(a);
+    ASSERT(a.vals == nullptr);
+    ASSERT(b.popFront() == 99);
+}
+
+TEST(testQueueSingleElement)
+{
+    Queue<u32> q;
+    q.pushBack(42);
+    ASSERT(q.count == 1);
+    ASSERT(q.popFront() == 42);
+    ASSERT(q.count == 0);
+}
+
+TEST(testQueuePushPopAlternating)
+{
+    Queue<u32> q;
+    for (u32 i = 0; i < 16; ++i)
     {
-        Queue<u32> q;
-        q.pushBack(1);
-        q.pushBack(2);
-        q.pushBack(3);
-        TEST(q.popFront() == 1);
-        TEST(q.popFront() == 2);
-        q.pushBack(4);
-        q.pushBack(5);
-        TEST(q.count == 3);
-        TEST(q.popFront() == 3);
-        TEST(q.popFront() == 4);
-        TEST(q.popFront() == 5);
+        q.pushBack(i);
+        ASSERT(q.popFront() == i);
+        ASSERT(q.count == 0);
     }
+}
 
-    // Wrap-around with pushFront
+TEST(testQueueReserveDoesNotShrink)
+{
+    Queue<u32> q{16};
+    q.pushBack(1);
+    q.reserve(4);
+    ASSERT(q.capacity == 16);
+    ASSERT(q.popFront() == 1);
+}
+
+TEST(testQueueReserveZero)
+{
+    Queue<u32> q{8};
+    q.reserve(0);
+    ASSERT(q.capacity == 8);
+}
+
+TEST(testQueuePushBackExceedCapacity)
+{
+    Queue<u32> q{4};
+    for (u32 i = 0; i < 16; ++i)
+        q.pushBack(i);
+    ASSERT(q.capacity >= 16);
+    ASSERT(q.count == 16);
+    for (u32 i = 0; i < 16; ++i)
+        ASSERT(q.popFront() == i);
+}
+
+TEST(testQueuePushFrontExceedCapacity)
+{
+    Queue<u32> q{4};
+    for (u32 i = 0; i < 16; ++i)
+        q.pushFront(i);
+    ASSERT(q.capacity >= 16);
+    ASSERT(q.count == 16);
+    for (u32 i = 0; i < 16; ++i)
+        ASSERT(q.popBack() == i);
+}
+
+TEST(testQueueTempSingleElement)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> q{arena, 0};
+    q.pushBack(42);
+    ASSERT(q.count == 1);
+    ASSERT(q.popFront() == 42);
+    ASSERT(q.count == 0);
+}
+
+TEST(testQueueTempPushPopAlternating)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> q{arena, 0};
+    for (u32 i = 0; i < 16; ++i)
     {
-        Queue<u32> q;
-        q.pushBack(1);
-        q.pushBack(2);
-        q.pushBack(3);
-        q.popFront(); // 1
-        q.pushFront(0);
-        TEST(q.count == 3);
-        TEST(q.popFront() == 0);
-        TEST(q.popFront() == 2);
-        TEST(q.popFront() == 3);
+        q.pushBack(i);
+        ASSERT(q.popFront() == i);
+        ASSERT(q.count == 0);
     }
+}
 
-    // Reserve grows capacity
-    {
-        Queue<u32> q{4};
-        q.pushBack(1);
-        q.pushBack(2);
-        q.reserve(16);
-        TEST(q.capacity >= 16);
-        TEST(q.count == 2);
-        TEST(q.popFront() == 1);
-        TEST(q.popFront() == 2);
-    }
+TEST(testQueueTempReserveDoesNotShrink)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> q{arena, 16};
+    q.pushBack(1);
+    q.reserve(4);
+    ASSERT(q.capacity == 16);
+    ASSERT(q.popFront() == 1);
+}
 
-    // Move construct
-    {
-        Queue<u32> a;
-        a.pushBack(1);
-        a.pushBack(2);
-        u32* oldVals = a.vals;
-        Queue<u32> b = std::move(a);
-        TEST(a.vals == nullptr);
-        TEST(b.vals == oldVals);
-        TEST(b.popFront() == 1);
-        TEST(b.popFront() == 2);
-    }
-
-    // Move assign
-    {
-        Queue<u32> a;
-        a.pushBack(10);
-        Queue<u32> b;
-        b.pushBack(20);
-        b.popFront();
-        b = std::move(a);
-        TEST(b.popFront() == 10);
-    }
-
-    // pushBack const ref copies (0 moves)
-    {
-        Lifecycle::stats.reset();
-        {
-            Queue<Lifecycle> q;
-            Lifecycle a;
-            q.pushBack(a);
-            TEST(a.valid);
-            TEST(q.count == 1);
-            TEST(Lifecycle::stats.copies == 1);
-            TEST(Lifecycle::stats.moves == 0);
-            q.popFront();
-        }
-        TEST(Lifecycle::stats.alive == 0);
-    }
-
-    // pushBack rvalue ref moves (0 copies)
-    {
-        Lifecycle::stats.reset();
-        {
-            Queue<Lifecycle> q;
-            Lifecycle a;
-            q.pushBack(std::move(a));
-            TEST(!a.valid);
-            TEST(q.count == 1);
-            TEST(Lifecycle::stats.copies == 0);
-            TEST(Lifecycle::stats.moves == 1);
-            q.popFront();
-        }
-        TEST(Lifecycle::stats.alive == 0);
-    }
-
-    // pushFront const ref copies (0 moves)
-    {
-        Lifecycle::stats.reset();
-        {
-            Queue<Lifecycle> q;
-            Lifecycle a;
-            q.pushFront(a);
-            TEST(a.valid);
-            TEST(Lifecycle::stats.copies == 1);
-            TEST(Lifecycle::stats.moves == 0);
-            q.popBack();
-        }
-        TEST(Lifecycle::stats.alive == 0);
-    }
-
-    // pushFront rvalue ref moves (0 copies)
-    {
-        Lifecycle::stats.reset();
-        {
-            Queue<Lifecycle> q;
-            Lifecycle a;
-            q.pushFront(std::move(a));
-            TEST(!a.valid);
-            TEST(Lifecycle::stats.copies == 0);
-            TEST(Lifecycle::stats.moves == 1);
-            q.popBack();
-        }
-        TEST(Lifecycle::stats.alive == 0);
-    }
-
-    // popFront pops by move
-    {
-        Lifecycle::stats.reset();
-        {
-            Queue<Lifecycle> q;
-            q.pushBack();
-            Lifecycle val = q.popFront();
-            TEST(val.valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);
-        TEST(Lifecycle::stats.copies == 0);
-    }
-
-    // popBack pops by move
-    {
-        Lifecycle::stats.reset();
-        {
-            Queue<Lifecycle> q;
-            q.pushBack();
-            Lifecycle val = q.popBack();
-            TEST(val.valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);
-        TEST(Lifecycle::stats.copies == 0);
-    }
-
-    // ============================================================================
-    // QueueTemp
-    // ============================================================================
-    //
-    // QueueTemp is an arena-allocated double-ended ring buffer.
-
-    // Default-constructed QueueTemp is empty
-    {
-        QueueTemp<u32> q;
-        TEST(q.arena == nullptr);
-        TEST(q.vals == nullptr);
-        TEST(q.count == 0);
-    }
-
-    // Create with arena and initial capacity
-    {
-        ArenaScope arena = getScratch();
-        QueueTemp<u32> q{arena, 16};
-        TEST(q.arena == arena);
-        TEST(q.vals != nullptr);
-        TEST(q.capacity == 16);
-        TEST(q.count == 0);
-    }
-
-    // pushBack and popFront
-    {
-        ArenaScope arena = getScratch();
-        QueueTemp<u32> q{arena, 0};
-        q.pushBack(1);
-        q.pushBack(2);
-        q.pushBack(3);
-        TEST(q.count == 3);
-        TEST(q.popFront() == 1);
-        TEST(q.popFront() == 2);
-        TEST(q.popFront() == 3);
-    }
-
-    // pushFront and popBack
-    {
-        ArenaScope arena = getScratch();
-        QueueTemp<u32> q{arena, 0};
-        q.pushFront(10);
-        q.pushFront(20);
-        TEST(q.popBack() == 10);
-        TEST(q.popBack() == 20);
-    }
-
-    // Wrap-around behavior
-    {
-        ArenaScope arena = getScratch();
-        QueueTemp<u32> q{arena, 4};
-        q.pushBack(1);
-        q.pushBack(2);
-        q.pushBack(3);
-        q.popFront(); // 1
-        q.popFront(); // 2
-        q.pushBack(4);
-        q.pushBack(5);
-        TEST(q.count == 3);
-        TEST(q.popFront() == 3);
-        TEST(q.popFront() == 4);
-        TEST(q.popFront() == 5);
-    }
-
-    // Reserve grows capacity (non-extend path)
-    {
-        ArenaScope arena = getScratch();
-        QueueTemp<u32> q{arena, 4};
-        q.pushBack(1);
-        q.pushBack(2);
-        q.reserve(20);
-        TEST(q.capacity >= 20);
-        TEST(q.popFront() == 1);
-        TEST(q.popFront() == 2);
-    }
-
-    // Move construct
-    {
-        ArenaScope arena = getScratch();
-        QueueTemp<u32> a{arena, 0};
-        a.pushBack(99);
-        QueueTemp<u32> b = std::move(a);
-        TEST(a.vals == nullptr);
-        TEST(b.popFront() == 99);
-    }
+TEST(testQueueTempMoveAssign)
+{
+    ArenaScope arena = getScratch();
+    QueueTemp<u32> a{arena, 0};
+    a.pushBack(10);
+    QueueTemp<u32> b{arena, 0};
+    b.pushBack(20);
+    b.popFront();
+    b = std::move(a);
+    ASSERT(a.vals == nullptr);
+    ASSERT(b.popFront() == 10);
 }

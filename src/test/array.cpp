@@ -1,1243 +1,1411 @@
 #include "tests.hpp"
 #include "hg/array.hpp"
 
-void testArray()
+using namespace hg;
+
+TEST(testArrayDefault)
 {
-    // ============================================================================
-    // Array
-    // ============================================================================
-    //
-    // Array is a move-only, heap-allocated dynamic array (std::vector-like).
-    // Supports push, pop, insertShift, removeShift, insertSwap, removeSwap,
-    // resize, reserve, reset, range-for, and implicit conversion to Span.
+    Array<u32> arr;
+    ASSERT(arr.vals == nullptr);
+    ASSERT(arr.count == 0);
+    ASSERT(arr.capacity == 0);
+}
 
-    // Default-constructed array is empty
+TEST(testArrayInitialCount)
+{
+    Array<u32> arr{3, 8};
+    ASSERT(arr.count == 3);
+    ASSERT(arr.capacity == 8);
+    ASSERT(arr[0] == 0);
+    ASSERT(arr[1] == 0);
+    ASSERT(arr[2] == 0);
+}
+
+TEST(testArrayPush)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    ASSERT(arr.count == 3);
+    ASSERT(arr.capacity >= 3);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
+    ASSERT(arr[2] == 30);
+}
+
+TEST(testArrayPushReturnRef)
+{
+    Array<u32> arr;
+    u32& ref = arr.push(42);
+    ASSERT(ref == 42);
+    ref = 99;
+    ASSERT(arr[0] == 99);
+}
+
+TEST(testArrayPop)
+{
+    Array<u32> arr;
+    arr.push(1);
+    arr.push(2);
+    arr.push(3);
+    u32 val = arr.pop();
+    ASSERT(val == 3);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 1);
+    ASSERT(arr[1] == 2);
+}
+
+TEST(testArrayPushDefaultLifecycle)
+{
+    Lifecycle::stats.reset();
     {
-        Array<u32> arr;
-        TEST(arr.vals == nullptr);
-        TEST(arr.count == 0);
-        TEST(arr.capacity == 0);
+        Array<Lifecycle> arr;
+        Lifecycle& p1 = arr.push();
+        ASSERT(arr.count == 1);
+        ASSERT(p1.valid);
+        Lifecycle& p2 = arr.push();
+        ASSERT(arr.count == 2);
+        ASSERT(p2.valid);
+        ASSERT(&p2 != &p1);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.dtors == 2);
+    ASSERT(Lifecycle::stats.copies == 0);
+    ASSERT(Lifecycle::stats.moves == 0);
+}
 
-    // Construct with initial count and capacity
+TEST(testArrayPushRvalueLifecycle)
+{
+    Lifecycle::stats.reset();
     {
-        Array<u32> arr{3, 8};
-        TEST(arr.count == 3);
-        TEST(arr.capacity == 8);
-        TEST(arr[0] == 0);
-        TEST(arr[1] == 0);
-        TEST(arr[2] == 0);
+        Array<Lifecycle> arr;
+        Lifecycle lc;
+        arr.push(std::move(lc));
+        ASSERT(arr.count == 1);
+        ASSERT(!lc.valid);
+        ASSERT(arr[0].valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // push appends elements, grows capacity as needed
+TEST(testArrayPushConstRefLifecycle)
+{
+    Lifecycle::stats.reset();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        TEST(arr.count == 3);
-        TEST(arr.capacity >= 3);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 20);
-        TEST(arr[2] == 30);
+        Array<Lifecycle> arr;
+        Lifecycle lc;
+        arr.push(lc);
+        ASSERT(arr.count == 1);
+        ASSERT(lc.valid);
+        ASSERT(arr[0].valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 0);
+}
 
-    // push return value references the pushed element
+TEST(testArrayPopMoveLifecycle)
+{
+    Lifecycle::stats.reset();
     {
-        Array<u32> arr;
-        u32& ref = arr.push(42);
-        TEST(ref == 42);
-        ref = 99;
-        TEST(arr[0] == 99);
+        Array<Lifecycle> arr;
+        arr.push();
+        Lifecycle val = arr.pop();
+        ASSERT(val.valid);
+        ASSERT(Lifecycle::stats.alive == 1);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // pop removes and returns the last element
-    {
-        Array<u32> arr;
-        arr.push(1);
-        arr.push(2);
-        arr.push(3);
-        u32 val = arr.pop();
-        TEST(val == 3);
-        TEST(arr.count == 2);
-        TEST(arr[0] == 1);
-        TEST(arr[1] == 2);
-    }
+TEST(testArrayReserve)
+{
+    Array<u32> arr;
+    arr.reserve(100);
+    ASSERT(arr.capacity >= 100);
+    ASSERT(arr.count == 0);
+}
 
-    // push default-constructs in place (0 copies, 0 moves)
-    {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            Lifecycle& p1 = arr.push();
-            TEST(arr.count == 1);
-            TEST(p1.valid);
-            Lifecycle& p2 = arr.push();
-            TEST(arr.count == 2);
-            TEST(p2.valid);
-            TEST(&p2 != &p1);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.dtors == 2);
-        TEST(Lifecycle::stats.copies == 0);
-        TEST(Lifecycle::stats.moves == 0);
-    }
+TEST(testArrayReserveSmaller)
+{
+    Array<u32> arr;
+    arr.reserve(100);
+    u64 cap = arr.capacity;
+    arr.reserve(50);
+    ASSERT(arr.capacity == cap);
+}
 
-    // push by rvalue reference (1 move, 0 copies)
-    {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            Lifecycle lc;
-            arr.push(std::move(lc));
-            TEST(arr.count == 1);
-            TEST(!lc.valid); // moved-from
-            TEST(arr[0].valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);
-        TEST(Lifecycle::stats.copies == 0);
-    }
+TEST(testArrayResizeGrow)
+{
+    Array<u32> arr;
+    arr.push(1);
+    arr.push(2);
+    arr.resize(5);
+    ASSERT(arr.count == 5);
+    ASSERT(arr[0] == 1);
+    ASSERT(arr[1] == 2);
+    ASSERT(arr[2] == 0);
+    ASSERT(arr[3] == 0);
+    ASSERT(arr[4] == 0);
+}
 
-    // push by const reference (1 copy, 0 moves)
+TEST(testArrayResizeShrink)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            Lifecycle lc;
-            arr.push(lc);
-            TEST(arr.count == 1);
-            TEST(lc.valid); // not moved-from
-            TEST(arr[0].valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1);
-        TEST(Lifecycle::stats.moves == 0);
-    }
-
-    // pop returns by move (0 copies)
-    {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push();
-            Lifecycle val = arr.pop();
-            TEST(val.valid);
-            TEST(Lifecycle::stats.alive == 1); // val lives outside array
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);   // 1 move-construct in pop
-        TEST(Lifecycle::stats.copies == 0);
-    }
-
-    // reserve increases capacity without changing count
-    {
-        Array<u32> arr;
-        arr.reserve(100);
-        TEST(arr.capacity >= 100);
-        TEST(arr.count == 0);
-    }
-
-    // reserve smaller than capacity is a no-op
-    {
-        Array<u32> arr;
-        arr.reserve(100);
-        u64 cap = arr.capacity;
-        arr.reserve(50);
-        TEST(arr.capacity == cap);
-    }
-
-    // resize grows the array, default-constructing new elements
-    {
-        Array<u32> arr;
-        arr.push(1);
-        arr.push(2);
-        arr.resize(5);
-        TEST(arr.count == 5);
-        TEST(arr[0] == 1);
-        TEST(arr[1] == 2);
-        TEST(arr[2] == 0);
-        TEST(arr[3] == 0);
-        TEST(arr[4] == 0);
-    }
-
-    // resize shrinks the array, destroying excess elements
-    {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push();
-            arr.push();
-            arr.push();
-            TEST(Lifecycle::stats.alive == 3);
-            arr.resize(1);
-            TEST(arr.count == 1);
-            TEST(arr[0].valid);
-            TEST(Lifecycle::stats.alive == 1);
-            TEST(Lifecycle::stats.dtors == 2);
-        }
-        TEST(Lifecycle::stats.dtors == 3);
-    }
-
-    // reset destroys all elements without freeing memory
-    {
-        Lifecycle::stats.reset();
         Array<Lifecycle> arr;
         arr.push();
         arr.push();
         arr.push();
-        TEST(Lifecycle::stats.alive == 3);
-        arr.reset();
-        TEST(arr.count == 0);
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.dtors == 3);
-        TEST(arr.capacity >= 3);
+        ASSERT(Lifecycle::stats.alive == 3);
+        arr.resize(1);
+        ASSERT(arr.count == 1);
+        ASSERT(arr[0].valid);
+        ASSERT(Lifecycle::stats.alive == 1);
+        ASSERT(Lifecycle::stats.dtors == 2);
+    }
+    ASSERT(Lifecycle::stats.dtors == 3);
+}
+
+TEST(testArrayReset)
+{
+    Lifecycle::stats.reset();
+    Array<Lifecycle> arr;
+    arr.push();
+    arr.push();
+    arr.push();
+    ASSERT(Lifecycle::stats.alive == 3);
+    arr.reset();
+    ASSERT(arr.count == 0);
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.dtors == 3);
+    ASSERT(arr.capacity >= 3);
+    arr.push();
+    ASSERT(arr.count == 1);
+    ASSERT(Lifecycle::stats.ctors >= 4);
+}
+
+TEST(testArrayInsertShiftConstRef)
+{
+    Lifecycle::stats.reset();
+    {
+        Array<Lifecycle> arr;
+        arr.push(); arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertShift(0, val);
+        ASSERT(val.valid);
+        ASSERT(arr[0].valid);
+        ASSERT(arr.count == 4);
+    }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 3);
+}
+
+TEST(testArrayInsertShiftAtEnd)
+{
+    Lifecycle::stats.reset();
+    {
+        Array<Lifecycle> arr;
         arr.push();
-        TEST(arr.count == 1);
-        TEST(Lifecycle::stats.ctors >= 4);
+        Lifecycle val;
+        arr.insertShift(1, val);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 0);
+}
 
-    // insertShift with const ref (copies, no extra moves beyond shift)
+TEST(testArrayInsertShiftAtEndRvalue)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push(); arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertShift(0, val);
-            TEST(val.valid);
-            TEST(arr[0].valid);
-            TEST(arr.count == 4);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1); // 1 copy of val into slot
-        TEST(Lifecycle::stats.moves == 3);  // 3 elements shifted right
+        Array<Lifecycle> arr;
+        arr.push();
+        Lifecycle val;
+        arr.insertShift(1, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // insertShift at end appends without shifting
+TEST(testArrayInsertShiftRvalue)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push();
-            Lifecycle val;
-            arr.insertShift(1, val);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1); // 1 copy of val
-        TEST(Lifecycle::stats.moves == 0);  // no shift needed
+        Array<Lifecycle> arr;
+        arr.push();
+        Lifecycle val;
+        arr.insertShift(0, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 2);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // insertShift at end with rvalue
+TEST(testArrayInsertShiftMiddleRvalue)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push();
-            Lifecycle val;
-            arr.insertShift(1, std::move(val));
-            TEST(!val.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);  // 1 move-construct
-        TEST(Lifecycle::stats.copies == 0);
+        Array<Lifecycle> arr;
+        arr.push(); arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertShift(1, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr[0].valid);
+        ASSERT(arr[1].valid);
+        ASSERT(arr.count == 4);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 3);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // insertShift with rvalue ref (no copies, just moves)
+TEST(testArrayRemoveShiftLifecycle)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push();
-            Lifecycle val;
-            arr.insertShift(0, std::move(val));
-            TEST(!val.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 2);  // 1 shift + 1 move-construct
-        TEST(Lifecycle::stats.copies == 0);
+        Array<Lifecycle> arr;
+        arr.push(); arr.push(); arr.push();
+        Lifecycle removed = arr.removeShift(0);
+        ASSERT(removed.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 0);
+    ASSERT(Lifecycle::stats.moves == 3);
+}
 
-    // insertShift at middle with rvalue
+TEST(testArrayRemoveShiftSingle)
+{
+    Array<u32> arr;
+    arr.push(99);
+    u32 v = arr.removeShift(0);
+    ASSERT(v == 99);
+    ASSERT(arr.count == 0);
+}
+
+TEST(testArrayInsertSwapConstRef)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push(); arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertShift(1, std::move(val));
-            TEST(!val.valid);
-            TEST(arr[0].valid);
-            TEST(arr[1].valid);
-            TEST(arr.count == 4);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 3);  // 1 move-construct + 1 shift + 1 move-assign
-        TEST(Lifecycle::stats.copies == 0);
+        Array<Lifecycle> arr;
+        arr.push(); arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertSwap(0, val);
+        ASSERT(arr.count == 4);
+        ASSERT(val.valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 1);
+}
 
-    // removeShift moves elements (0 copies)
+TEST(testArrayInsertSwapRvalue)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push(); arr.push(); arr.push();
-            Lifecycle removed = arr.removeShift(0);
-            TEST(removed.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 0);
-        TEST(Lifecycle::stats.moves == 3);  // 1 move-out + 2 shift
+        Array<Lifecycle> arr;
+        arr.push(); arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertSwap(0, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr.count == 4);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 2);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // removeShift single element (last remaining)
+TEST(testArrayInsertSwapAtEnd)
+{
+    Lifecycle::stats.reset();
     {
-        Array<u32> arr;
-        arr.push(99);
-        u32 v = arr.removeShift(0);
-        TEST(v == 99);
-        TEST(arr.count == 0);
+        Array<Lifecycle> arr;
+        arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertSwap(2, val);
+        ASSERT(arr.count == 3);
+        ASSERT(val.valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 0);
+}
 
-    // insertSwap with const ref (copies)
+TEST(testArrayInsertSwapAtEndRvalue)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push(); arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertSwap(0, val);
-            TEST(arr.count == 4);
-            TEST(val.valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1); // 1 copy of val
-        TEST(Lifecycle::stats.moves == 1);  // 1 displaced element moved
+        Array<Lifecycle> arr;
+        arr.push();
+        Lifecycle val;
+        arr.insertSwap(1, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // insertSwap with rvalue ref
+TEST(testArrayRemoveSwapLifecycle)
+{
+    Lifecycle::stats.reset();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push(); arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertSwap(0, std::move(val));
-            TEST(!val.valid);
-            TEST(arr.count == 4);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 2);  // 1 displaced + 1 move-construct
-        TEST(Lifecycle::stats.copies == 0);
+        Array<Lifecycle> arr;
+        arr.push(); arr.push(); arr.push();
+        Lifecycle removed = arr.removeSwap(0);
+        ASSERT(removed.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 0);
+    ASSERT(Lifecycle::stats.moves == 2);
+}
 
-    // insertSwap at end appends without swapping
+TEST(testArrayRemoveSwapMiddle)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeSwap(1);
+    ASSERT(removed == 20);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 30);
+}
+
+TEST(testArrayRemoveSwapEnd)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeSwap(2);
+    ASSERT(removed == 30);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
+}
+
+TEST(testArrayRemoveSwapSingle)
+{
+    Array<u32> arr;
+    arr.push(99);
+    u32 v = arr.removeSwap(0);
+    ASSERT(v == 99);
+    ASSERT(arr.count == 0);
+}
+
+TEST(testArrayInsertShiftBeginning)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    arr.insertShift(0, 5);
+    ASSERT(arr.count == 4);
+    ASSERT(arr[0] == 5);
+    ASSERT(arr[1] == 10);
+    ASSERT(arr[2] == 20);
+    ASSERT(arr[3] == 30);
+}
+
+TEST(testArrayInsertShiftMiddle)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    arr.insertShift(1, 15);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 15);
+    ASSERT(arr[2] == 20);
+    ASSERT(arr[3] == 30);
+}
+
+TEST(testArrayInsertShiftEnd)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.insertShift(2, 30);
+    ASSERT(arr.count == 3);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
+    ASSERT(arr[2] == 30);
+}
+
+TEST(testArrayRemoveShiftBeginning)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeShift(0);
+    ASSERT(removed == 10);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 20);
+    ASSERT(arr[1] == 30);
+}
+
+TEST(testArrayRemoveShiftMiddle)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeShift(1);
+    ASSERT(removed == 20);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 30);
+}
+
+TEST(testArrayRemoveShiftEnd)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeShift(2);
+    ASSERT(removed == 30);
+    ASSERT(arr.count == 2);
+}
+
+TEST(testArrayInsertSwapBeginning)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    arr.insertSwap(0, 5);
+    ASSERT(arr.count == 4);
+    ASSERT(arr[0] == 5);
+    ASSERT(arr[3] == 10);
+}
+
+TEST(testArrayInsertSwapMiddle)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    arr.insertSwap(1, 99);
+    ASSERT(arr.count == 4);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 99);
+    ASSERT(arr[3] == 20);
+}
+
+TEST(testArrayRemoveSwapSwapWithLast)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeSwap(0);
+    ASSERT(removed == 10);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 30);
+    ASSERT(arr[1] == 20);
+}
+
+TEST(testArrayInsertShiftReturnValue)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    u32& r = arr.insertShift(1, 99);
+    ASSERT(r == 20);
+    r = 77;
+    ASSERT(arr[2] == 77);
+}
+
+TEST(testArrayInsertSwapReturnValue)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    u32& r = arr.insertSwap(0, 99);
+    ASSERT(r == 10);
+    r = 55;
+    ASSERT(arr[2] == 55);
+}
+
+TEST(testArrayRangeFor)
+{
+    Array<u32> arr;
+    arr.push(1);
+    arr.push(2);
+    arr.push(3);
+    u64 sum = 0;
+    for (u32 v : arr)
+        sum += v;
+    ASSERT(sum == 6);
+}
+
+TEST(testArrayRangeForConst)
+{
+    Array<u32> arr;
+    arr.push(1);
+    arr.push(2);
+    arr.push(3);
+    const Array<u32>& carr = arr;
+    u64 sum = 0;
+    for (u32 v : carr)
+        sum += v;
+    ASSERT(sum == 6);
+}
+
+TEST(testArrayConstIndex)
+{
+    Array<u32> arr;
+    arr.push(42);
+    const Array<u32>& carr = arr;
+    ASSERT(carr[0] == 42);
+}
+
+TEST(testArraySpanConversion)
+{
+    Array<u32> arr;
+    arr.push(42);
+    Span<u32> s = arr;
+    ASSERT(s.data == arr.vals);
+    ASSERT(s.count == arr.count);
+    s[0] = 99;
+    ASSERT(arr[0] == 99);
+}
+
+TEST(testArraySpanConversionConst)
+{
+    Array<u32> arr;
+    arr.push(99);
+    const Array<u32>& carr = arr;
+    Span<const u32> cs = carr;
+    ASSERT(cs.data == arr.vals);
+    ASSERT(cs.count == arr.count);
+    ASSERT(cs[0] == 99);
+}
+
+TEST(testArrayMoveConstruct)
+{
+    Array<u32> a;
+    a.push(1);
+    a.push(2);
+    u64 oldCount = a.count;
+    u64 oldCap = a.capacity;
+    u32* oldVals = a.vals;
+    Array<u32> b = std::move(a);
+    ASSERT(a.vals == nullptr);
+    ASSERT(a.count == 0);
+    ASSERT(a.capacity == 0);
+    ASSERT(b.vals == oldVals);
+    ASSERT(b.count == oldCount);
+    ASSERT(b.capacity == oldCap);
+    ASSERT(b[0] == 1);
+    ASSERT(b[1] == 2);
+}
+
+TEST(testArrayMoveAssign)
+{
+    Array<u32> a;
+    a.push(10);
+    a.push(20);
+    Array<u32> b;
+    b.push(30);
+    b = std::move(a);
+    ASSERT(b[0] == 10);
+    ASSERT(b[1] == 20);
+    ASSERT(a.vals == nullptr);
+}
+
+TEST(testArrayTempDefault)
+{
+    ArrayTemp<u32> arr;
+    ASSERT(arr.arena == nullptr);
+    ASSERT(arr.vals == nullptr);
+    ASSERT(arr.count == 0);
+    ASSERT(arr.capacity == 0);
+}
+
+TEST(testArrayTempCreate)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 16};
+    ASSERT(arr.arena == arena);
+    ASSERT(arr.vals != nullptr);
+    ASSERT(arr.count == 0);
+    ASSERT(arr.capacity == 16);
+}
+
+TEST(testArrayTempInitialCount)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 3, 8};
+    ASSERT(arr.count == 3);
+    ASSERT(arr.capacity == 8);
+    ASSERT(arr[0] == 0);
+    ASSERT(arr[1] == 0);
+    ASSERT(arr[2] == 0);
+}
+
+TEST(testArrayTempPush)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(1);
+    arr.push(2);
+    arr.push(3);
+    ASSERT(arr.count == 3);
+    ASSERT(arr[0] == 1);
+    ASSERT(arr[1] == 2);
+    ASSERT(arr[2] == 3);
+}
+
+TEST(testArrayTempPushReturnRef)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    u32& ref = arr.push(42);
+    ASSERT(ref == 42);
+    ref = 99;
+    ASSERT(arr[0] == 99);
+}
+
+TEST(testArrayTempPop)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    u32 v = arr.pop();
+    ASSERT(v == 20);
+    ASSERT(arr.count == 1);
+}
+
+TEST(testArrayTempPushDefaultLifecycle)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertSwap(2, val);
-            TEST(arr.count == 3);
-            TEST(val.valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1);
-        TEST(Lifecycle::stats.moves == 0);  // no swap, just append
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        Lifecycle& p1 = arr.push();
+        ASSERT(arr.count == 1);
+        ASSERT(p1.valid);
+        Lifecycle& p2 = arr.push();
+        ASSERT(arr.count == 2);
+        ASSERT(p2.valid);
+        ASSERT(&p2 != &p1);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.dtors == 2);
+    ASSERT(Lifecycle::stats.copies == 0);
+    ASSERT(Lifecycle::stats.moves == 0);
+}
 
-    // insertSwap at end with rvalue
+TEST(testArrayTempPushRvalueLifecycle)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push();
-            Lifecycle val;
-            arr.insertSwap(1, std::move(val));
-            TEST(!val.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);
-        TEST(Lifecycle::stats.copies == 0);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        Lifecycle lc;
+        arr.push(std::move(lc));
+        ASSERT(arr.count == 1);
+        ASSERT(!lc.valid);
+        ASSERT(arr[0].valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // removeSwap moves only
+TEST(testArrayTempPushConstRefLifecycle)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Lifecycle::stats.reset();
-        {
-            Array<Lifecycle> arr;
-            arr.push(); arr.push(); arr.push();
-            Lifecycle removed = arr.removeSwap(0);
-            TEST(removed.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 0);
-        TEST(Lifecycle::stats.moves == 2);  // 1 move-out + 1 swap-move
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        Lifecycle lc;
+        arr.push(lc);
+        ASSERT(arr.count == 1);
+        ASSERT(lc.valid);
+        ASSERT(arr[0].valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 0);
+}
 
-    // removeSwap at middle
+TEST(testArrayTempPopMoveLifecycle)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeSwap(1);
-        TEST(removed == 20);
-        TEST(arr.count == 2);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 30);   // last element swapped into slot 1
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push();
+        Lifecycle val = arr.pop();
+        ASSERT(val.valid);
+        ASSERT(Lifecycle::stats.alive == 1);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // removeSwap at end (no swap, just pop)
+TEST(testArrayTempReserve)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.reserve(100);
+    ASSERT(arr.capacity >= 100);
+    ASSERT(arr.count == 0);
+}
+
+TEST(testArrayTempReserveSmaller)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.reserve(100);
+    u64 cap = arr.capacity;
+    arr.reserve(50);
+    ASSERT(arr.capacity == cap);
+}
+
+TEST(testArrayTempResizeGrow)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(5);
+    arr.resize(4);
+    ASSERT(arr.count == 4);
+    ASSERT(arr[0] == 5);
+    ASSERT(arr[1] == 0);
+}
+
+TEST(testArrayTempResizeShrink)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeSwap(2);
-        TEST(removed == 30);
-        TEST(arr.count == 2);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 20);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push();
+        arr.push();
+        arr.push();
+        ASSERT(Lifecycle::stats.alive == 3);
+        arr.resize(1);
+        ASSERT(arr.count == 1);
+        ASSERT(arr[0].valid);
+        ASSERT(Lifecycle::stats.alive == 1);
+        ASSERT(Lifecycle::stats.dtors == 2);
     }
+    ASSERT(Lifecycle::stats.dtors == 3);
+}
 
-    // removeSwap single element (last remaining)
+TEST(testArrayTempReset)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(99);
-        u32 v = arr.removeSwap(0);
-        TEST(v == 99);
-        TEST(arr.count == 0);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push();
+        arr.push();
+        ASSERT(Lifecycle::stats.alive == 2);
+        arr.reset();
+        ASSERT(arr.count == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
     }
+    ASSERT(Lifecycle::stats.dtors == 2);
+}
 
-    // insertShift at beginning shifts all elements right
+TEST(testArrayTempInsertShiftConstRef)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        arr.insertShift(0, 5);
-        TEST(arr.count == 4);
-        TEST(arr[0] == 5);
-        TEST(arr[1] == 10);
-        TEST(arr[2] == 20);
-        TEST(arr[3] == 30);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push(); arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertShift(0, val);
+        ASSERT(val.valid);
+        ASSERT(arr[0].valid);
+        ASSERT(arr.count == 4);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 3);
+}
 
-    // insertShift at middle
+TEST(testArrayTempInsertShiftRvalue)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        arr.insertShift(1, 15);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 15);
-        TEST(arr[2] == 20);
-        TEST(arr[3] == 30);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push();
+        Lifecycle val;
+        arr.insertShift(0, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 2);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // insertShift at end appends
+TEST(testArrayTempInsertShiftAtEnd)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    arr.insertShift(2, 30);
+    ASSERT(arr.count == 3);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
+    ASSERT(arr[2] == 30);
+}
+
+TEST(testArrayTempInsertShiftAtEndRvalue)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.insertShift(2, 30);
-        TEST(arr.count == 3);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 20);
-        TEST(arr[2] == 30);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push();
+        Lifecycle val;
+        arr.insertShift(1, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // removeShift at beginning shifts elements left
+TEST(testArrayTempInsertShiftMiddleRvalue)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeShift(0);
-        TEST(removed == 10);
-        TEST(arr.count == 2);
-        TEST(arr[0] == 20);
-        TEST(arr[1] == 30);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push(); arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertShift(1, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr[0].valid);
+        ASSERT(arr[1].valid);
+        ASSERT(arr.count == 4);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 3);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // removeShift at middle
+TEST(testArrayTempRemoveShift)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeShift(1);
-        TEST(removed == 20);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 30);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push(); arr.push(); arr.push();
+        Lifecycle removed = arr.removeShift(0);
+        ASSERT(removed.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 0);
+    ASSERT(Lifecycle::stats.moves == 3);
+}
 
-    // removeShift at end
+TEST(testArrayTempRemoveShiftSingle)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(99);
+    u32 v = arr.removeShift(0);
+    ASSERT(v == 99);
+    ASSERT(arr.count == 0);
+}
+
+TEST(testArrayTempRemoveShiftSequence)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    ASSERT(arr.removeShift(0) == 10);
+    ASSERT(arr[0] == 20);
+    ASSERT(arr.removeShift(0) == 20);
+    ASSERT(arr[0] == 30);
+    ASSERT(arr.removeShift(0) == 30);
+    ASSERT(arr.count == 0);
+}
+
+TEST(testArrayTempInsertSwapConstRef)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeShift(2);
-        TEST(removed == 30);
-        TEST(arr.count == 2);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push(); arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertSwap(0, val);
+        ASSERT(arr.count == 4);
+        ASSERT(val.valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 1);
+}
 
-    // insertSwap at beginning moves old value to end
+TEST(testArrayTempInsertSwapRvalue)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        arr.insertSwap(0, 5);
-        TEST(arr.count == 4);
-        TEST(arr[0] == 5);
-        TEST(arr[3] == 10);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push(); arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertSwap(0, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr.count == 4);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 2);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // insertSwap at middle
+TEST(testArrayTempInsertSwapAtEnd)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        arr.insertSwap(1, 99);
-        TEST(arr.count == 4);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 99);
-        TEST(arr[3] == 20);  // displaced to end
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push(); arr.push();
+        Lifecycle val;
+        arr.insertSwap(2, val);
+        ASSERT(arr.count == 3);
+        ASSERT(val.valid);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 1);
+    ASSERT(Lifecycle::stats.moves == 0);
+}
 
-    // removeSwap swaps with last element then pops
+TEST(testArrayTempInsertSwapAtEndRvalue)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeSwap(0);
-        TEST(removed == 10);
-        TEST(arr.count == 2);
-        TEST(arr[0] == 30);
-        TEST(arr[1] == 20);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push();
+        Lifecycle val;
+        arr.insertSwap(1, std::move(val));
+        ASSERT(!val.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.moves == 1);
+    ASSERT(Lifecycle::stats.copies == 0);
+}
 
-    // insertShift return value is reference to displaced element
+TEST(testArrayTempInsertSwapBeginning)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    arr.insertSwap(0, 5);
+    ASSERT(arr.count == 4);
+    ASSERT(arr[0] == 5);
+    ASSERT(arr[3] == 10);
+}
+
+TEST(testArrayTempInsertSwapMiddle)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    arr.insertSwap(1, 99);
+    ASSERT(arr.count == 4);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 99);
+    ASSERT(arr[3] == 20);
+}
+
+TEST(testArrayTempRemoveSwap)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        u32& r = arr.insertShift(1, 99);
-        TEST(r == 20); // displaced element (old last) moved to end
-        r = 77;
-        TEST(arr[2] == 77); // end slot was modified
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push(); arr.push(); arr.push();
+        Lifecycle removed = arr.removeSwap(0);
+        ASSERT(removed.valid);
+        ASSERT(arr.count == 2);
     }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.copies == 0);
+    ASSERT(Lifecycle::stats.moves == 2);
+}
 
-    // insertSwap return value is reference to displaced element
+TEST(testArrayTempRemoveSwapBeginning)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeSwap(0);
+    ASSERT(removed == 10);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 30);
+    ASSERT(arr[1] == 20);
+}
+
+TEST(testArrayTempRemoveSwapMiddle)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeSwap(1);
+    ASSERT(removed == 20);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 30);
+}
+
+TEST(testArrayTempRemoveSwapEnd)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32 removed = arr.removeSwap(2);
+    ASSERT(removed == 30);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
+}
+
+TEST(testArrayTempRemoveSwapSingle)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(99);
+    u32 v = arr.removeSwap(0);
+    ASSERT(v == 99);
+    ASSERT(arr.count == 0);
+}
+
+TEST(testArrayTempInsertShiftReturnValue)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    u32& r = arr.insertShift(1, 99);
+    ASSERT(r == 20);
+    r = 77;
+    ASSERT(arr[2] == 77);
+}
+
+TEST(testArrayTempInsertSwapReturnValue)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    u32& r = arr.insertSwap(0, 99);
+    ASSERT(r == 10);
+    r = 55;
+    ASSERT(arr[2] == 55);
+}
+
+TEST(testArrayTempRangeFor)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(1);
+    arr.push(2);
+    u64 sum = 0;
+    for (u32 v : arr)
+        sum += v;
+    ASSERT(sum == 3);
+}
+
+TEST(testArrayTempRangeForConst)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(1);
+    arr.push(2);
+    const ArrayTemp<u32>& carr = arr;
+    u64 sum = 0;
+    for (u32 v : carr)
+        sum += v;
+    ASSERT(sum == 3);
+}
+
+TEST(testArrayTempConstIndex)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(42);
+    const ArrayTemp<u32>& carr = arr;
+    ASSERT(carr[0] == 42);
+}
+
+TEST(testArrayTempSpanConversion)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(42);
+    Span<u32> s = arr;
+    ASSERT(s.data == arr.vals);
+    ASSERT(s.count == arr.count);
+    s[0] = 99;
+    ASSERT(arr[0] == 99);
+}
+
+TEST(testArrayTempSpanConversionConst)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(99);
+    const ArrayTemp<u32>& carr = arr;
+    Span<const u32> cs = carr;
+    ASSERT(cs.data == arr.vals);
+    ASSERT(cs.count == arr.count);
+    ASSERT(cs[0] == 99);
+}
+
+TEST(testArrayTempMoveConstruct)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> a{arena, 0, 8};
+    a.push(7);
+    u32* oldVals = a.vals;
+    ArrayTemp<u32> b = std::move(a);
+    ASSERT(a.vals == nullptr);
+    ASSERT(b.vals == oldVals);
+    ASSERT(b[0] == 7);
+}
+
+TEST(testArrayTempMoveAssign)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> a{arena, 0, 8};
+    a.push(10);
+    a.push(20);
+    ArrayTemp<u32> b{arena, 0, 8};
+    b.push(30);
+    b = std::move(a);
+    ASSERT(b[0] == 10);
+    ASSERT(b[1] == 20);
+    ASSERT(a.vals == nullptr);
+}
+
+TEST(testArrayResizeToZero)
+{
+    Lifecycle::stats.reset();
     {
-        Array<u32> arr;
-        arr.push(10);
-        arr.push(20);
-        u32& r = arr.insertSwap(0, 99);
-        TEST(r == 10); // displaced element moved to end
-        r = 55;
-        TEST(arr[2] == 55); // end slot was modified
+        Array<Lifecycle> arr;
+        arr.push();
+        arr.push();
+        ASSERT(Lifecycle::stats.alive == 2);
+        arr.resize(0);
+        ASSERT(arr.count == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.dtors == 2);
     }
+    ASSERT(Lifecycle::stats.dtors == 2);
+}
 
-    // range-for iteration
+TEST(testArrayResizeSameSize)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u64 oldVals = (u64)arr.vals;
+    arr.resize(3);
+    ASSERT(arr.count == 3);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
+    ASSERT(arr[2] == 30);
+    ASSERT((u64)arr.vals == oldVals);
+}
+
+TEST(testArrayPushManyThenPopAll)
+{
+    Array<u32> arr;
+    for (u32 i = 0; i < 100; ++i)
+        arr.push(i);
+    ASSERT(arr.count == 100);
+    for (u32 i = 0; i < 100; ++i)
     {
-        Array<u32> arr;
-        arr.push(1);
-        arr.push(2);
-        arr.push(3);
-        u64 sum = 0;
-        for (u32 v : arr)
-            sum += v;
-        TEST(sum == 6);
-    }
-
-    // range-for over const ref
-    {
-        Array<u32> arr;
-        arr.push(1);
-        arr.push(2);
-        arr.push(3);
-        const Array<u32>& carr = arr;
-        u64 sum = 0;
-        for (u32 v : carr)
-            sum += v;
-        TEST(sum == 6);
-    }
-
-    // const operator[] works on const ref
-    {
-        Array<u32> arr;
-        arr.push(42);
-        const Array<u32>& carr = arr;
-        TEST(carr[0] == 42);
-    }
-
-    // Implicit conversion to Span (non-const)
-    {
-        Array<u32> arr;
-        arr.push(42);
-        Span<u32> s = arr;
-        TEST(s.data == arr.vals);
-        TEST(s.count == arr.count);
-        s[0] = 99;
-        TEST(arr[0] == 99);
-    }
-
-    // Implicit conversion to Span<const T> from const ref
-    {
-        Array<u32> arr;
-        arr.push(99);
-        const Array<u32>& carr = arr;
-        Span<const u32> cs = carr;
-        TEST(cs.data == arr.vals);
-        TEST(cs.count == arr.count);
-        TEST(cs[0] == 99);
-    }
-
-    // Move construct
-    {
-        Array<u32> a;
-        a.push(1);
-        a.push(2);
-        u64 oldCount = a.count;
-        u64 oldCap = a.capacity;
-        u32* oldVals = a.vals;
-        Array<u32> b = std::move(a);
-        TEST(a.vals == nullptr);
-        TEST(a.count == 0);
-        TEST(a.capacity == 0);
-        TEST(b.vals == oldVals);
-        TEST(b.count == oldCount);
-        TEST(b.capacity == oldCap);
-        TEST(b[0] == 1);
-        TEST(b[1] == 2);
-    }
-
-    // Move assign
-    {
-        Array<u32> a;
-        a.push(10);
-        a.push(20);
-        Array<u32> b;
-        b.push(30);
-        b = std::move(a);
-        TEST(b[0] == 10);
-        TEST(b[1] == 20);
-        TEST(a.vals == nullptr);
-    }
-
-    // ============================================================================
-    // ArrayTemp
-    // ============================================================================
-    //
-    // ArrayTemp is an arena-allocated dynamic array. Memory is managed by the
-    // arena rather than heap. Has the same API as Array.
-
-    // Default-constructed ArrayTemp is empty
-    {
-        ArrayTemp<u32> arr;
-        TEST(arr.arena == nullptr);
-        TEST(arr.vals == nullptr);
-        TEST(arr.count == 0);
-        TEST(arr.capacity == 0);
-    }
-
-    // Create with arena and initial capacity
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 16};
-        TEST(arr.arena == arena);
-        TEST(arr.vals != nullptr);
-        TEST(arr.count == 0);
-        TEST(arr.capacity == 16);
-    }
-
-    // Create with arena, initial count and capacity
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 3, 8};
-        TEST(arr.count == 3);
-        TEST(arr.capacity == 8);
-        TEST(arr[0] == 0);
-        TEST(arr[1] == 0);
-        TEST(arr[2] == 0);
-    }
-
-    // push appends elements
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(1);
-        arr.push(2);
-        arr.push(3);
-        TEST(arr.count == 3);
-        TEST(arr[0] == 1);
-        TEST(arr[1] == 2);
-        TEST(arr[2] == 3);
-    }
-
-    // push return value references the pushed element
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        u32& ref = arr.push(42);
-        TEST(ref == 42);
-        ref = 99;
-        TEST(arr[0] == 99);
-    }
-
-    // pop removes and returns last element
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
         u32 v = arr.pop();
-        TEST(v == 20);
-        TEST(arr.count == 1);
+        ASSERT(v == 99 - i);
     }
+    ASSERT(arr.count == 0);
+}
 
-    // push default-constructs in place (0 copies, 0 moves)
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            Lifecycle& p1 = arr.push();
-            TEST(arr.count == 1);
-            TEST(p1.valid);
-            Lifecycle& p2 = arr.push();
-            TEST(arr.count == 2);
-            TEST(p2.valid);
-            TEST(&p2 != &p1);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.dtors == 2);
-        TEST(Lifecycle::stats.copies == 0);
-        TEST(Lifecycle::stats.moves == 0);
-    }
+TEST(testArrayConstRangeFor)
+{
+    Array<u32> arr;
+    arr.push(1);
+    arr.push(2);
+    arr.push(3);
+    const Array<u32>& carr = arr;
+    u64 sum = 0;
+    for (const u32& v : carr)
+        sum += v;
+    ASSERT(sum == 6);
+}
 
-    // push by rvalue reference (1 move, 0 copies)
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            Lifecycle lc;
-            arr.push(std::move(lc));
-            TEST(arr.count == 1);
-            TEST(!lc.valid);
-            TEST(arr[0].valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);
-        TEST(Lifecycle::stats.copies == 0);
-    }
+TEST(testArrayConstBeginEnd)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    const Array<u32>& carr = arr;
+    ASSERT(carr.begin() == arr.vals);
+    ASSERT(carr.end() == arr.vals + 2);
+    ASSERT(*carr.begin() == 10);
+    ASSERT(*(carr.end() - 1) == 20);
+}
 
-    // push by const reference (1 copy, 0 moves)
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            Lifecycle lc;
-            arr.push(lc);
-            TEST(arr.count == 1);
-            TEST(lc.valid);
-            TEST(arr[0].valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1);
-        TEST(Lifecycle::stats.moves == 0);
-    }
+TEST(testArrayResetThenPush)
+{
+    Lifecycle::stats.reset();
+    Array<Lifecycle> arr;
+    arr.push();
+    arr.push();
+    arr.reset();
+    ASSERT(arr.count == 0);
+    arr.push();
+    ASSERT(arr.count == 1);
+    ASSERT(arr[0].valid);
+}
 
-    // pop returns by move (0 copies)
+TEST(testArrayTempResizeToZero)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push();
-            Lifecycle val = arr.pop();
-            TEST(val.valid);
-            TEST(Lifecycle::stats.alive == 1);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);
-        TEST(Lifecycle::stats.copies == 0);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push();
+        arr.push();
+        ASSERT(Lifecycle::stats.alive == 2);
+        arr.resize(0);
+        ASSERT(arr.count == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.dtors == 2);
     }
+    ASSERT(Lifecycle::stats.dtors == 2);
+}
 
-    // reserve increases capacity without changing count
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.reserve(100);
-        TEST(arr.capacity >= 100);
-        TEST(arr.count == 0);
-    }
+TEST(testArrayTempResizeSameSize)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    arr.resize(3);
+    ASSERT(arr.count == 3);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
+    ASSERT(arr[2] == 30);
+}
 
-    // reserve smaller than capacity is a no-op
+TEST(testArrayTempPushManyThenPopAll)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    for (u32 i = 0; i < 100; ++i)
+        arr.push(i);
+    ASSERT(arr.count == 100);
+    for (u32 i = 0; i < 100; ++i)
     {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.reserve(100);
-        u64 cap = arr.capacity;
-        arr.reserve(50);
-        TEST(arr.capacity == cap);
+        u32 v = arr.pop();
+        ASSERT(v == 99 - i);
     }
+    ASSERT(arr.count == 0);
+}
 
-    // resize grows the array
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(5);
-        arr.resize(4);
-        TEST(arr.count == 4);
-        TEST(arr[0] == 5);
-        TEST(arr[1] == 0);
-    }
+TEST(testArrayTempConstRangeFor)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(1);
+    arr.push(2);
+    arr.push(3);
+    const ArrayTemp<u32>& carr = arr;
+    u64 sum = 0;
+    for (const u32& v : carr)
+        sum += v;
+    ASSERT(sum == 6);
+}
 
-    // resize shrinks the array
+TEST(testArrayTempResetThenPush)
+{
+    Lifecycle::stats.reset();
+    ArenaScope arena = getScratch();
     {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push();
-            arr.push();
-            arr.push();
-            TEST(Lifecycle::stats.alive == 3);
-            arr.resize(1);
-            TEST(arr.count == 1);
-            TEST(arr[0].valid);
-            TEST(Lifecycle::stats.alive == 1);
-            TEST(Lifecycle::stats.dtors == 2);
-        }
-        TEST(Lifecycle::stats.dtors == 3);
+        ArrayTemp<Lifecycle> arr{arena, 0, 0};
+        arr.push();
+        arr.push();
+        arr.reset();
+        ASSERT(arr.count == 0);
+        arr.push();
+        ASSERT(arr.count == 1);
+        ASSERT(arr[0].valid);
     }
+}
 
-    // reset destroys all elements
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push();
-            arr.push();
-            TEST(Lifecycle::stats.alive == 2);
-            arr.reset();
-            TEST(arr.count == 0);
-            TEST(Lifecycle::stats.alive == 0);
-        }
-        TEST(Lifecycle::stats.dtors == 2);
-    }
+TEST(testArrayMoveAssignSelf)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    Array<u32>& ref = arr;
+    ref = std::move(arr);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
+}
 
-    // insertShift with const ref
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push(); arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertShift(0, val);
-            TEST(val.valid);
-            TEST(arr[0].valid);
-            TEST(arr.count == 4);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1);
-        TEST(Lifecycle::stats.moves == 3);
-    }
-
-    // insertShift with rvalue ref
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push();
-            Lifecycle val;
-            arr.insertShift(0, std::move(val));
-            TEST(!val.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 2);
-        TEST(Lifecycle::stats.copies == 0);
-    }
-
-    // insertShift at end appends (const ref)
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        arr.insertShift(2, 30);
-        TEST(arr.count == 3);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 20);
-        TEST(arr[2] == 30);
-    }
-
-    // insertShift at end with rvalue
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push();
-            Lifecycle val;
-            arr.insertShift(1, std::move(val));
-            TEST(!val.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);
-        TEST(Lifecycle::stats.copies == 0);
-    }
-
-    // insertShift at middle with rvalue
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push(); arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertShift(1, std::move(val));
-            TEST(!val.valid);
-            TEST(arr[0].valid);
-            TEST(arr[1].valid);
-            TEST(arr.count == 4);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 3);
-        TEST(Lifecycle::stats.copies == 0);
-    }
-
-    // removeShift moves elements
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push(); arr.push(); arr.push();
-            Lifecycle removed = arr.removeShift(0);
-            TEST(removed.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 0);
-        TEST(Lifecycle::stats.moves == 3);
-    }
-
-    // removeShift single element
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(99);
-        u32 v = arr.removeShift(0);
-        TEST(v == 99);
-        TEST(arr.count == 0);
-    }
-
-    // removeShift at beginning, middle, end
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        TEST(arr.removeShift(0) == 10);
-        TEST(arr[0] == 20);
-        TEST(arr.removeShift(0) == 20);
-        TEST(arr[0] == 30);
-        TEST(arr.removeShift(0) == 30);
-        TEST(arr.count == 0);
-    }
-
-    // insertSwap with const ref
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push(); arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertSwap(0, val);
-            TEST(arr.count == 4);
-            TEST(val.valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1);
-        TEST(Lifecycle::stats.moves == 1);
-    }
-
-    // insertSwap with rvalue ref
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push(); arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertSwap(0, std::move(val));
-            TEST(!val.valid);
-            TEST(arr.count == 4);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 2);
-        TEST(Lifecycle::stats.copies == 0);
-    }
-
-    // insertSwap at end appends without swapping
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push(); arr.push();
-            Lifecycle val;
-            arr.insertSwap(2, val);
-            TEST(arr.count == 3);
-            TEST(val.valid);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 1);
-        TEST(Lifecycle::stats.moves == 0);
-    }
-
-    // insertSwap at end with rvalue
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push();
-            Lifecycle val;
-            arr.insertSwap(1, std::move(val));
-            TEST(!val.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.moves == 1);
-        TEST(Lifecycle::stats.copies == 0);
-    }
-
-    // insertSwap at beginning moves old value to end
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        arr.insertSwap(0, 5);
-        TEST(arr.count == 4);
-        TEST(arr[0] == 5);
-        TEST(arr[3] == 10);
-    }
-
-    // insertSwap at middle
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        arr.insertSwap(1, 99);
-        TEST(arr.count == 4);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 99);
-        TEST(arr[3] == 20);
-    }
-
-    // removeSwap moves only
-    {
-        Lifecycle::stats.reset();
-        ArenaScope arena = getScratch();
-        {
-            ArrayTemp<Lifecycle> arr{arena, 0, 0};
-            arr.push(); arr.push(); arr.push();
-            Lifecycle removed = arr.removeSwap(0);
-            TEST(removed.valid);
-            TEST(arr.count == 2);
-        }
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.copies == 0);
-        TEST(Lifecycle::stats.moves == 2);
-    }
-
-    // removeSwap at beginning (with 3 elements)
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeSwap(0);
-        TEST(removed == 10);
-        TEST(arr.count == 2);
-        TEST(arr[0] == 30);
-        TEST(arr[1] == 20);
-    }
-
-    // removeSwap at middle
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeSwap(1);
-        TEST(removed == 20);
-        TEST(arr.count == 2);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 30);
-    }
-
-    // removeSwap at end
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        arr.push(30);
-        u32 removed = arr.removeSwap(2);
-        TEST(removed == 30);
-        TEST(arr.count == 2);
-        TEST(arr[0] == 10);
-        TEST(arr[1] == 20);
-    }
-
-    // removeSwap single element (last remaining)
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(99);
-        u32 v = arr.removeSwap(0);
-        TEST(v == 99);
-        TEST(arr.count == 0);
-    }
-
-    // insertShift return value is reference to displaced element
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        u32& r = arr.insertShift(1, 99);
-        TEST(r == 20);
-        r = 77;
-        TEST(arr[2] == 77);
-    }
-
-    // insertSwap return value is reference to displaced element
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(10);
-        arr.push(20);
-        u32& r = arr.insertSwap(0, 99);
-        TEST(r == 10);
-        r = 55;
-        TEST(arr[2] == 55);
-    }
-
-    // range-for iteration
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(1);
-        arr.push(2);
-        u64 sum = 0;
-        for (u32 v : arr)
-            sum += v;
-        TEST(sum == 3);
-    }
-
-    // range-for over const ref
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(1);
-        arr.push(2);
-        const ArrayTemp<u32>& carr = arr;
-        u64 sum = 0;
-        for (u32 v : carr)
-            sum += v;
-        TEST(sum == 3);
-    }
-
-    // const operator[] works on const ref
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(42);
-        const ArrayTemp<u32>& carr = arr;
-        TEST(carr[0] == 42);
-    }
-
-    // Implicit conversion to Span (non-const)
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(42);
-        Span<u32> s = arr;
-        TEST(s.data == arr.vals);
-        TEST(s.count == arr.count);
-        s[0] = 99;
-        TEST(arr[0] == 99);
-    }
-
-    // Implicit conversion to Span<const T> from const ref
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> arr{arena, 0, 0};
-        arr.push(99);
-        const ArrayTemp<u32>& carr = arr;
-        Span<const u32> cs = carr;
-        TEST(cs.data == arr.vals);
-        TEST(cs.count == arr.count);
-        TEST(cs[0] == 99);
-    }
-
-    // Move construct
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> a{arena, 0, 8};
-        a.push(7);
-        u32* oldVals = a.vals;
-        ArrayTemp<u32> b = std::move(a);
-        TEST(a.vals == nullptr);
-        TEST(b.vals == oldVals);
-        TEST(b[0] == 7);
-    }
-
-    // Move assign
-    {
-        ArenaScope arena = getScratch();
-        ArrayTemp<u32> a{arena, 0, 8};
-        a.push(10);
-        a.push(20);
-        ArrayTemp<u32> b{arena, 0, 8};
-        b.push(30);
-        b = std::move(a);
-        TEST(b[0] == 10);
-        TEST(b[1] == 20);
-        TEST(a.vals == nullptr);
-    }
+TEST(testArrayTempMoveAssignSelf)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.push(10);
+    arr.push(20);
+    ArrayTemp<u32>& ref = arr;
+    ref = std::move(arr);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 20);
 }

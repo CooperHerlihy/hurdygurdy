@@ -1,6 +1,8 @@
 #include "tests.hpp"
 #include "hg/ecs.hpp"
 
+using namespace hg;
+
 struct EntityRefComp {
     Entity target;
     u32 data;
@@ -17,7 +19,7 @@ void ecsSerialize(Serializer* s, EntityRefComp* val, EntitySerializer* ecs)
 
 } // namespace hg
 
-void testEcs()
+TEST(testEcs)
 {
     // ============================================================================
     // Entity
@@ -25,16 +27,16 @@ void testEcs()
 
     {
         Entity e;
-        TEST(e == nullEntity);
-        TEST(e.handle == nullHandle);
+        ASSERT(e == nullEntity);
+        ASSERT(e.handle == nullHandle);
     }
 
     {
         Entity a{Handle{1}};
         Entity b{Handle{1}};
         Entity c{Handle{2}};
-        TEST(a == b);
-        TEST(a != c);
+        ASSERT(a == b);
+        ASSERT(a != c);
     }
 
     // ============================================================================
@@ -45,24 +47,24 @@ void testEcs()
         Ecs<> ecs{};
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
-        TEST(a != nullEntity);
-        TEST(b != nullEntity);
-        TEST(a != b);
-        TEST(a.handle.idx() == 0);
-        TEST(b.handle.idx() == 1);
+        ASSERT(a != nullEntity);
+        ASSERT(b != nullEntity);
+        ASSERT(a != b);
+        ASSERT(a.handle.idx() == 0);
+        ASSERT(b.handle.idx() == 1);
     }
 
     {
         Ecs<> ecs{};
-        TEST(!ecs.alive(nullEntity));
+        ASSERT(!ecs.alive(nullEntity));
     }
 
     {
         Ecs<> ecs{};
         Entity e = ecs.spawn();
-        TEST(ecs.alive(e));
+        ASSERT(ecs.alive(e));
         ecs.despawn(e);
-        TEST(!ecs.alive(e));
+        ASSERT(!ecs.alive(e));
     }
 
     {
@@ -71,10 +73,10 @@ void testEcs()
         u32 idx = a.handle.idx();
         ecs.despawn(a);
         Entity b = ecs.spawn();
-        TEST(b.handle.idx() == idx);
-        TEST(b.handle.id != a.handle.id);
-        TEST(ecs.alive(b));
-        TEST(!ecs.alive(a));
+        ASSERT(b.handle.idx() == idx);
+        ASSERT(b.handle.id != a.handle.id);
+        ASSERT(ecs.alive(b));
+        ASSERT(!ecs.alive(a));
     }
 
     {
@@ -82,8 +84,8 @@ void testEcs()
         Entity a = ecs.spawn();
         Entity b = ecs.spawn();
         ecs.reset();
-        TEST(!ecs.alive(a));
-        TEST(!ecs.alive(b));
+        ASSERT(!ecs.alive(a));
+        ASSERT(!ecs.alive(b));
     }
 
     // ============================================================================
@@ -93,7 +95,7 @@ void testEcs()
     {
         Ecs<u32> ecs{};
         Entity e = ecs.spawn();
-        TEST(!ecs.has<u32>(e));
+        ASSERT(!ecs.has<u32>(e));
     }
 
     {
@@ -101,8 +103,8 @@ void testEcs()
         Entity e = ecs.spawn();
         u32& c = ecs.add<u32>(e);
         c = 42;
-        TEST(ecs.has<u32>(e));
-        TEST(ecs.get<u32>(e) == 42);
+        ASSERT(ecs.has<u32>(e));
+        ASSERT(ecs.get<u32>(e) == 42);
     }
 
     {
@@ -110,16 +112,16 @@ void testEcs()
         Entity e = ecs.spawn();
         ecs.add<u32>(e) = 7;
         ecs.get<u32>(e) = 99;
-        TEST(ecs.get<u32>(e) == 99);
+        ASSERT(ecs.get<u32>(e) == 99);
     }
 
     {
         Ecs<u32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e);
-        TEST(ecs.has<u32>(e));
+        ASSERT(ecs.has<u32>(e));
         ecs.remove<u32>(e);
-        TEST(!ecs.has<u32>(e));
+        ASSERT(!ecs.has<u32>(e));
     }
 
     {
@@ -128,7 +130,7 @@ void testEcs()
         ecs.add<u32>(e) = 10;
         ecs.remove<u32>(e);
         ecs.add<u32>(e) = 20;
-        TEST(ecs.get<u32>(e) == 20);
+        ASSERT(ecs.get<u32>(e) == 20);
     }
 
     {
@@ -137,9 +139,9 @@ void testEcs()
         ecs.add<u32>(e) = 1;
         ecs.add<f32>(e) = 2.0f;
         ecs.despawn(e);
-        TEST(!ecs.alive(e));
-        TEST(ecs.count<u32>() == 0);
-        TEST(ecs.count<f32>() == 0);
+        ASSERT(!ecs.alive(e));
+        ASSERT(ecs.count<u32>() == 0);
+        ASSERT(ecs.count<f32>() == 0);
     }
 
     {
@@ -149,9 +151,9 @@ void testEcs()
         ecs.add<u32>(e1);
         ecs.add<f32>(e2);
         ecs.reset();
-        TEST(ecs.count<u32>() == 0);
-        TEST(ecs.count<f32>() == 0);
-        { Entity e3 = ecs.spawn(); TEST(ecs.alive(e3)); }
+        ASSERT(ecs.count<u32>() == 0);
+        ASSERT(ecs.count<f32>() == 0);
+        { Entity e3 = ecs.spawn(); ASSERT(ecs.alive(e3)); }
     }
 
     // ============================================================================
@@ -164,9 +166,9 @@ void testEcs()
         Entity e2 = ecs.spawn();
         ecs.add<u32>(e1);
         ecs.add<u32>(e2);
-        TEST(ecs.count<u32>() == 2);
+        ASSERT(ecs.count<u32>() == 2);
         ecs.remove<u32>(e1);
-        TEST(ecs.count<u32>() == 1);
+        ASSERT(ecs.count<u32>() == 1);
     }
 
     {
@@ -176,7 +178,7 @@ void testEcs()
         ecs.add<u32>(e1);
         ecs.add<u32>(e2);
         Span<const Entity> ents = ecs.getEntities<u32>();
-        TEST(ents.count == 2);
+        ASSERT(ents.count == 2);
     }
 
     {
@@ -186,11 +188,11 @@ void testEcs()
         ecs.add<u32>(e1) = 10;
         ecs.add<u32>(e2) = 20;
         Span<u32> comps = ecs.getComponents<u32>();
-        TEST(comps.count == 2);
+        ASSERT(comps.count == 2);
         u64 sum = 0;
         for (u32 i = 0; i < comps.count; ++i)
             sum += comps[i];
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     {
@@ -198,7 +200,7 @@ void testEcs()
         Entity e = ecs.spawn();
         u32& c = ecs.add<u32>(e);
         Entity back = ecs.getEntity(c);
-        TEST(back == e);
+        ASSERT(back == e);
     }
 
     // ============================================================================
@@ -215,16 +217,16 @@ void testEcs()
         ecs.add<f32>(e1) = 1.0f;
         ecs.add<u32>(e2) = 2;
 
-        TEST(ecs.has<u32>(e1));
-        TEST(ecs.has<f32>(e1));
-        TEST(ecs.has<u32>(e2));
-        TEST(!ecs.has<f32>(e2));
-        TEST(!ecs.has<u32>(e3));
-        TEST(!ecs.has<f32>(e3));
+        ASSERT(ecs.has<u32>(e1));
+        ASSERT(ecs.has<f32>(e1));
+        ASSERT(ecs.has<u32>(e2));
+        ASSERT(!ecs.has<f32>(e2));
+        ASSERT(!ecs.has<u32>(e3));
+        ASSERT(!ecs.has<f32>(e3));
 
-        TEST(ecs.get<u32>(e1) == 1);
-        TEST(ecs.get<f32>(e1) == 1.0f);
-        TEST(ecs.get<u32>(e2) == 2);
+        ASSERT(ecs.get<u32>(e1) == 1);
+        ASSERT(ecs.get<f32>(e1) == 1.0f);
+        ASSERT(ecs.get<u32>(e2) == 2);
     }
 
     // ============================================================================
@@ -236,18 +238,18 @@ void testEcs()
         Entity e = ecs.spawn();
         ecs.add<u32>(e);
         ecs.add<f32>(e);
-        TEST((ecs.hasAll<u32, f32>(e)));
-        TEST((!ecs.hasAll<u32, u64>(e)));
-        TEST((!ecs.hasAll<u32, f32, u64>(e)));
+        ASSERT((ecs.hasAll<u32, f32>(e)));
+        ASSERT((!ecs.hasAll<u32, u64>(e)));
+        ASSERT((!ecs.hasAll<u32, f32, u64>(e)));
     }
 
     {
         Ecs<u32, f32, u64> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32>(e);
-        TEST((ecs.hasAny<u32, f32>(e)));
-        TEST((ecs.hasAny<u32, u64>(e)));
-        TEST((!ecs.hasAny<f32, u64>(e)));
+        ASSERT((ecs.hasAny<u32, f32>(e)));
+        ASSERT((ecs.hasAny<u32, u64>(e)));
+        ASSERT((!ecs.hasAny<f32, u64>(e)));
     }
 
     // ============================================================================
@@ -267,7 +269,7 @@ void testEcs()
             sum += v;
             (void)e;
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     {
@@ -282,7 +284,7 @@ void testEcs()
         {
             sum += ecs.get<u32>(e);
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     {
@@ -297,7 +299,7 @@ void testEcs()
         {
             sum += v;
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     // ============================================================================
@@ -319,7 +321,7 @@ void testEcs()
             sum += v;
             (void)e;
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     {
@@ -336,7 +338,7 @@ void testEcs()
             hg::SpinLockScope scope{&lk};
             sum += ecs.get<u32>(e);
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     {
@@ -353,7 +355,7 @@ void testEcs()
             hg::SpinLockScope scope{&lk};
             sum += v;
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     // ============================================================================
@@ -377,7 +379,7 @@ void testEcs()
             sum += a + (u64)b;
             (void)e;
         });
-        TEST(sum == 33);
+        ASSERT(sum == 33);
     }
 
     {
@@ -394,7 +396,7 @@ void testEcs()
         {
             sum += ecs.get<u32>(e);
         });
-        TEST(sum == 3);
+        ASSERT(sum == 3);
     }
 
     {
@@ -411,7 +413,7 @@ void testEcs()
         {
             sum += a + (u64)b;
         });
-        TEST(sum == 33);
+        ASSERT(sum == 33);
     }
 
     // ============================================================================
@@ -435,7 +437,7 @@ void testEcs()
             sum += a + (u64)b;
             (void)e;
         });
-        TEST(sum == 33);
+        ASSERT(sum == 33);
     }
 
     {
@@ -454,7 +456,7 @@ void testEcs()
             hg::SpinLockScope scope{&lk};
             sum += ecs.get<u32>(e);
         });
-        TEST(sum == 3);
+        ASSERT(sum == 3);
     }
 
     {
@@ -473,7 +475,7 @@ void testEcs()
             hg::SpinLockScope scope{&lk};
             sum += a + (u64)b;
         });
-        TEST(sum == 33);
+        ASSERT(sum == 33);
     }
 
     // ============================================================================
@@ -486,8 +488,8 @@ void testEcs()
             Ecs<Lifecycle> ecs{};
             Entity e = ecs.spawn();
             ecs.add<Lifecycle>(e);
-            TEST(Lifecycle::stats.alive == 1);
-            TEST(Lifecycle::stats.ctors == 1);
+            ASSERT(Lifecycle::stats.alive == 1);
+            ASSERT(Lifecycle::stats.ctors == 1);
         }
     }
 
@@ -497,10 +499,10 @@ void testEcs()
             Ecs<Lifecycle> ecs{};
             Entity e = ecs.spawn();
             ecs.add<Lifecycle>(e);
-            TEST(Lifecycle::stats.alive == 1);
+            ASSERT(Lifecycle::stats.alive == 1);
             ecs.remove<Lifecycle>(e);
-            TEST(Lifecycle::stats.alive == 0);
-            TEST(Lifecycle::stats.dtors == 1);
+            ASSERT(Lifecycle::stats.alive == 0);
+            ASSERT(Lifecycle::stats.dtors == 1);
         }
     }
 
@@ -512,10 +514,10 @@ void testEcs()
             Entity e2 = ecs.spawn();
             ecs.add<Lifecycle>(e1);
             ecs.add<Lifecycle>(e2);
-            TEST(Lifecycle::stats.alive == 2);
+            ASSERT(Lifecycle::stats.alive == 2);
             ecs.reset();
-            TEST(Lifecycle::stats.alive == 0);
-            TEST(Lifecycle::stats.dtors == 2);
+            ASSERT(Lifecycle::stats.alive == 0);
+            ASSERT(Lifecycle::stats.dtors == 2);
         }
     }
 
@@ -532,14 +534,14 @@ void testEcs()
             entities[i] = ecs.spawn();
             ecs.add<u32>(entities[i]) = i;
         }
-        TEST(ecs.count<u32>() == n);
+        ASSERT(ecs.count<u32>() == n);
 
         for (u32 i = 0; i < n; ++i)
-            TEST(ecs.get<u32>(entities[i]) == i);
+            ASSERT(ecs.get<u32>(entities[i]) == i);
 
         for (u32 i = 0; i < n; i += 2)
             ecs.remove<u32>(entities[i]);
-        TEST(ecs.count<u32>() == n / 2);
+        ASSERT(ecs.count<u32>() == n / 2);
     }
 
     // ============================================================================
@@ -556,10 +558,10 @@ void testEcs()
         Entity f = ecs.spawn();
         ecs.add<u32>(f) = 10;
         ecs.add<f32>(f) = 2.71f;
-        TEST(ecs.get<u32>(f) == 10);
-        TEST(ecs.get<f32>(f) == 2.71f);
-        TEST(ecs.count<u32>() == 1);
-        TEST(ecs.count<f32>() == 1);
+        ASSERT(ecs.get<u32>(f) == 10);
+        ASSERT(ecs.get<f32>(f) == 2.71f);
+        ASSERT(ecs.count<u32>() == 1);
+        ASSERT(ecs.count<f32>() == 1);
     }
 
     // ============================================================================
@@ -573,10 +575,10 @@ void testEcs()
         ecs.add<u32>(a) = 1;
         ecs.add<u32>(b) = 2;
         ecs.remove<u32>(a);
-        TEST(!ecs.has<u32>(a));
-        TEST(ecs.has<u32>(b));
-        TEST(ecs.get<u32>(b) == 2);
-        TEST(ecs.count<u32>() == 1);
+        ASSERT(!ecs.has<u32>(a));
+        ASSERT(ecs.has<u32>(b));
+        ASSERT(ecs.get<u32>(b) == 2);
+        ASSERT(ecs.count<u32>() == 1);
     }
 
     // ============================================================================
@@ -589,10 +591,10 @@ void testEcs()
         for (u32 i = 0; i < 10; ++i)
         {
             ecs.add<u32>(e) = i;
-            TEST(ecs.has<u32>(e));
-            TEST(ecs.get<u32>(e) == i);
+            ASSERT(ecs.has<u32>(e));
+            ASSERT(ecs.get<u32>(e) == i);
             ecs.remove<u32>(e);
-            TEST(!ecs.has<u32>(e));
+            ASSERT(!ecs.has<u32>(e));
         }
     }
 
@@ -604,7 +606,7 @@ void testEcs()
         Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.despawn(e);
-        TEST(!ecs.alive(e));
+        ASSERT(!ecs.alive(e));
     }
 
     // ============================================================================
@@ -613,11 +615,11 @@ void testEcs()
 
     {
         Ecs<u32> ecs{};
-        TEST(ecs.count<u32>() == 0);
+        ASSERT(ecs.count<u32>() == 0);
         Span<const Entity> ents = ecs.getEntities<u32>();
-        TEST(ents.count == 0);
+        ASSERT(ents.count == 0);
         Span<u32> comps = ecs.getComponents<u32>();
-        TEST(comps.count == 0);
+        ASSERT(comps.count == 0);
     }
 
     // ============================================================================
@@ -634,19 +636,19 @@ void testEcs()
         ecs.add<u32>(c) = 3;
         // Remove from middle (b): removes index 1, swaps c into index 1
         ecs.remove<u32>(b);
-        TEST(!ecs.has<u32>(b));
-        TEST(ecs.has<u32>(a));
-        TEST(ecs.has<u32>(c));
-        TEST(ecs.get<u32>(a) == 1);
-        TEST(ecs.get<u32>(c) == 3);
+        ASSERT(!ecs.has<u32>(b));
+        ASSERT(ecs.has<u32>(a));
+        ASSERT(ecs.has<u32>(c));
+        ASSERT(ecs.get<u32>(a) == 1);
+        ASSERT(ecs.get<u32>(c) == 3);
         // Remove last (end): no swap needed
         ecs.remove<u32>(c);
-        TEST(!ecs.has<u32>(c));
-        TEST(ecs.has<u32>(a));
-        TEST(ecs.get<u32>(a) == 1);
+        ASSERT(!ecs.has<u32>(c));
+        ASSERT(ecs.has<u32>(a));
+        ASSERT(ecs.get<u32>(a) == 1);
         // Remove first: the only remaining
         ecs.remove<u32>(a);
-        TEST(ecs.count<u32>() == 0);
+        ASSERT(ecs.count<u32>() == 0);
     }
 
     // ============================================================================
@@ -659,12 +661,12 @@ void testEcs()
         EcsComponent<u32> cs;
         u32& ref = cs.add(e);
         ref = 42;
-        TEST(cs.has(e));
-        TEST(cs.get(e) == 42);
+        ASSERT(cs.has(e));
+        ASSERT(cs.get(e) == 42);
         Entity back = cs.getEntity(ref);
-        TEST(back == e);
+        ASSERT(back == e);
         cs.remove(e);
-        TEST(!cs.has(e));
+        ASSERT(!cs.has(e));
     }
 
     // ============================================================================
@@ -683,11 +685,11 @@ void testEcs()
         // u32 has 2 entities (a,b), f32 has 2 entities (b,c)
         // smallest should be 2
         Span<Entity> smallest = ecs.getSmallestEntities<u32, f32>();
-        TEST(smallest.count == 2);
+        ASSERT(smallest.count == 2);
         // With no entities, should return empty
         Ecs<u32> empty{};
         Span<Entity> emptySmallest = empty.getSmallestEntities<u32>();
-        TEST(emptySmallest.count == 0);
+        ASSERT(emptySmallest.count == 0);
     }
 
     // ============================================================================
@@ -715,8 +717,8 @@ void testEcs()
             sum += a + (u64)b;
             (void)e;
         });
-        TEST(visitCount == 2);  // only e2 and e4
-        TEST(sum == (2 + 20) + (4 + 40));
+        ASSERT(visitCount == 2);  // only e2 and e4
+        ASSERT(sum == (2 + 20) + (4 + 40));
     }
 
     // ============================================================================
@@ -733,7 +735,7 @@ void testEcs()
         ecs.add<u32>(c);
         ecs.remove<u32>(b);
         auto ents = ecs.getSmallestEntities<u32>();
-        TEST(ents.count == 2);
+        ASSERT(ents.count == 2);
     }
 
     // ============================================================================
@@ -750,9 +752,9 @@ void testEcs()
                 ecs.add<Lifecycle>(e);
                 ecs.remove<Lifecycle>(e);
             }
-            TEST(Lifecycle::stats.alive == 0);
-            TEST(Lifecycle::stats.dtors == 5);
-            TEST(Lifecycle::stats.ctors == 5);
+            ASSERT(Lifecycle::stats.alive == 0);
+            ASSERT(Lifecycle::stats.dtors == 5);
+            ASSERT(Lifecycle::stats.ctors == 5);
         }
     }
 
@@ -783,7 +785,7 @@ void testEcs()
             sum += v;
             (void)e;
         });
-        TEST(sum == 40);
+        ASSERT(sum == 40);
     }
 
     // ============================================================================
@@ -794,10 +796,10 @@ void testEcs()
         Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32, f32>(e);
-        TEST(ecs.has<u32>(e));
-        TEST(ecs.has<f32>(e));
-        TEST(ecs.count<u32>() == 1);
-        TEST(ecs.count<f32>() == 1);
+        ASSERT(ecs.has<u32>(e));
+        ASSERT(ecs.has<f32>(e));
+        ASSERT(ecs.count<u32>() == 1);
+        ASSERT(ecs.count<f32>() == 1);
     }
 
     // ============================================================================
@@ -808,8 +810,8 @@ void testEcs()
         Ecs<u32, f32> ecs{};
         Entity e = ecs.spawn();
         ecs.add<u32, f32>(e, 42u, 3.14f);
-        TEST(ecs.get<u32>(e) == 42);
-        TEST(ecs.get<f32>(e) == 3.14f);
+        ASSERT(ecs.get<u32>(e) == 42);
+        ASSERT(ecs.get<f32>(e) == 3.14f);
     }
 
     // ============================================================================
@@ -822,8 +824,8 @@ void testEcs()
         ecs.add<u32>(e) = 1;
         ecs.add<f32>(e) = 2.0f;
         ecs.remove<u32, f32>(e);
-        TEST(!ecs.has<u32>(e));
-        TEST(!ecs.has<f32>(e));
+        ASSERT(!ecs.has<u32>(e));
+        ASSERT(!ecs.has<f32>(e));
     }
 
     // ============================================================================
@@ -839,27 +841,27 @@ void testEcs()
         {
             Lifecycle src;
             cs.add(e, src);
-            TEST(src.valid);
-            TEST(cs.has(e));
-            TEST(cs.get(e).valid);
-            TEST(Lifecycle::stats.copies == 1);
-            TEST(Lifecycle::stats.moves == 0);
+            ASSERT(src.valid);
+            ASSERT(cs.has(e));
+            ASSERT(cs.get(e).valid);
+            ASSERT(Lifecycle::stats.copies == 1);
+            ASSERT(Lifecycle::stats.moves == 0);
             cs.remove(e);
         }
-        TEST(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
 
         Lifecycle::stats.reset();
         {
             Lifecycle src;
             cs.add(e, std::move(src));
-            TEST(!src.valid);
-            TEST(cs.has(e));
-            TEST(cs.get(e).valid);
-            TEST(Lifecycle::stats.copies == 0);
-            TEST(Lifecycle::stats.moves == 1);
+            ASSERT(!src.valid);
+            ASSERT(cs.has(e));
+            ASSERT(cs.get(e).valid);
+            ASSERT(Lifecycle::stats.copies == 0);
+            ASSERT(Lifecycle::stats.moves == 1);
             cs.remove(e);
         }
-        TEST(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
     }
 
     // ============================================================================
@@ -873,11 +875,11 @@ void testEcs()
             Entity e = ecs.spawn();
             Lifecycle src;
             ecs.add<Lifecycle>(e, src);
-            TEST(src.valid);
-            TEST(Lifecycle::stats.copies == 1);
-            TEST(Lifecycle::stats.moves == 0);
+            ASSERT(src.valid);
+            ASSERT(Lifecycle::stats.copies == 1);
+            ASSERT(Lifecycle::stats.moves == 0);
         }
-        TEST(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
     }
 
     {
@@ -887,11 +889,11 @@ void testEcs()
             Entity e = ecs.spawn();
             Lifecycle src;
             ecs.add<Lifecycle>(e, std::move(src));
-            TEST(!src.valid);
-            TEST(Lifecycle::stats.copies == 0);
-            TEST(Lifecycle::stats.moves == 1);
+            ASSERT(!src.valid);
+            ASSERT(Lifecycle::stats.copies == 0);
+            ASSERT(Lifecycle::stats.moves == 1);
         }
-        TEST(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
     }
 
     // ============================================================================
@@ -905,15 +907,15 @@ void testEcs()
             Entity e = ecs.spawn();
             Lifecycle a;
             ecs.add<u32, Lifecycle>(e, 42u, std::move(a));
-            TEST(!a.valid);
-            TEST(ecs.has<u32>(e));
-            TEST(ecs.has<Lifecycle>(e));
-            TEST(ecs.get<u32>(e) == 42);
-            TEST(ecs.get<Lifecycle>(e).valid);
-            TEST(Lifecycle::stats.copies == 0);
-            TEST(Lifecycle::stats.moves == 1);
+            ASSERT(!a.valid);
+            ASSERT(ecs.has<u32>(e));
+            ASSERT(ecs.has<Lifecycle>(e));
+            ASSERT(ecs.get<u32>(e) == 42);
+            ASSERT(ecs.get<Lifecycle>(e).valid);
+            ASSERT(Lifecycle::stats.copies == 0);
+            ASSERT(Lifecycle::stats.moves == 1);
         }
-        TEST(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
     }
 
     // ============================================================================
@@ -928,15 +930,15 @@ void testEcs()
         const Ecs<u32, f32>& cecs = ecs;
 
         bool all = cecs.hasAll<u32, f32>(e);
-        TEST(all);
+        ASSERT(all);
         bool any = cecs.hasAny<u32, f32>(e);
-        TEST(any);
-        TEST(cecs.alive(e));
-        TEST(cecs.has<u32>(e));
-        TEST(cecs.get<u32>(e) == 7);
-        TEST(cecs.get<f32>(e) == 3.0f);
-        TEST(cecs.count<u32>() == 1);
-        TEST(cecs.count<f32>() == 1);
+        ASSERT(any);
+        ASSERT(cecs.alive(e));
+        ASSERT(cecs.has<u32>(e));
+        ASSERT(cecs.get<u32>(e) == 7);
+        ASSERT(cecs.get<f32>(e) == 3.0f);
+        ASSERT(cecs.count<u32>() == 1);
+        ASSERT(cecs.count<f32>() == 1);
     }
 
     // ============================================================================
@@ -949,8 +951,8 @@ void testEcs()
         EcsComponent<u32> cs;
         cs.add(e) = 42;
         const EcsComponent<u32>& ccs = cs;
-        TEST(ccs.has(e));
-        TEST(ccs.get(e) == 42);
+        ASSERT(ccs.has(e));
+        ASSERT(ccs.get(e) == 42);
     }
 
     // ============================================================================
@@ -973,7 +975,7 @@ void testEcs()
             sum += v;
             (void)en;
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
 
         f32 fsum = 0;
         cecs.forEach<f32>([&](Entity en, const f32& v)
@@ -981,7 +983,7 @@ void testEcs()
             fsum += v;
             (void)en;
         });
-        TEST(fsum == 3.0f);
+        ASSERT(fsum == 3.0f);
     }
 
     {
@@ -997,7 +999,7 @@ void testEcs()
         {
             sum += cecs.get<u32>(e);
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     {
@@ -1013,7 +1015,7 @@ void testEcs()
         {
             sum += v;
         });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     // ============================================================================
@@ -1036,7 +1038,7 @@ void testEcs()
             sum += a + (u64)b;
             (void)en;
         });
-        TEST(sum == (5 + 10) + (15 + 20));
+        ASSERT(sum == (5 + 10) + (15 + 20));
     }
 
     {
@@ -1054,7 +1056,7 @@ void testEcs()
         {
             sum += cecs.get<u32>(e);
         });
-        TEST(sum == 20);
+        ASSERT(sum == 20);
     }
 
     {
@@ -1072,7 +1074,7 @@ void testEcs()
         {
             sum += a + (u64)b;
         });
-        TEST(sum == (5 + 10) + (15 + 20));
+        ASSERT(sum == (5 + 10) + (15 + 20));
     }
 
     // ============================================================================
@@ -1085,8 +1087,8 @@ void testEcs()
         ecs.add<u32>(e) = 99;
         const Ecs<u32>& cecs = ecs;
         const EcsComponent<u32>& ccs = cecs.getComponentSystem<u32>();
-        TEST(ccs.has(e));
-        TEST(ccs.get(e) == 99);
+        ASSERT(ccs.has(e));
+        ASSERT(ccs.get(e) == 99);
     }
 
     // ============================================================================
@@ -1097,11 +1099,11 @@ void testEcs()
         u32 arr[] = {1, 2, 3};
         Span<u32> s{arr, 3};
         Span<const u32> cs = s;
-        TEST(cs.data == arr);
-        TEST(cs.count == 3);
-        TEST(cs[0] == 1);
-        TEST(cs[1] == 2);
-        TEST(cs[2] == 3);
+        ASSERT(cs.data == arr);
+        ASSERT(cs.count == 3);
+        ASSERT(cs[0] == 1);
+        ASSERT(cs[1] == 2);
+        ASSERT(cs[2] == 3);
     }
 
     // ============================================================================
@@ -1116,11 +1118,11 @@ void testEcs()
         ecs.add<u32>(e2) = 20;
         const Ecs<u32>& cecs = ecs;
         Span<const u32> comps = cecs.getComponents<u32>();
-        TEST(comps.count == 2);
+        ASSERT(comps.count == 2);
         u64 sum = 0;
         for (u64 i = 0; i < comps.count; ++i)
             sum += comps[i];
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     // ============================================================================
@@ -1147,8 +1149,8 @@ void testEcs()
         serialize(&w, &ecs);
         Serializer r = serialReader(arena, w.current);
         serialize(&r, &copy);
-        TEST(copy.count<u32>() == 0);
-        TEST(copy.count<f32>() == 0);
+        ASSERT(copy.count<u32>() == 0);
+        ASSERT(copy.count<f32>() == 0);
     }
 
     // ============================================================================
@@ -1168,10 +1170,10 @@ void testEcs()
         Serializer r = serialReader(arena, w.current);
         serialize(&r, &copy);
 
-        TEST(copy.count<u32>() == 1);
+        ASSERT(copy.count<u32>() == 1);
         u32 found = 0;
         copy.forEach<u32>([&](u32& v) { found = v; });
-        TEST(found == 42);
+        ASSERT(found == 42);
     }
 
     // Multiple entities, single component
@@ -1189,10 +1191,10 @@ void testEcs()
         Serializer r = serialReader(arena, w.current);
         serialize(&r, &copy);
 
-        TEST(copy.count<u32>() == 2);
+        ASSERT(copy.count<u32>() == 2);
         u64 sum = 0;
         copy.forEach<u32>([&](u32& v) { sum += v; });
-        TEST(sum == 30);
+        ASSERT(sum == 30);
     }
 
     // ============================================================================
@@ -1215,15 +1217,15 @@ void testEcs()
         Serializer r = serialReader(arena, w.current);
         serialize(&r, &copy);
 
-        TEST(copy.count<u32>() == 2);
-        TEST(copy.count<f32>() == 2);
+        ASSERT(copy.count<u32>() == 2);
+        ASSERT(copy.count<f32>() == 2);
         u64 sum = 0;
         copy.forEach<u32, f32>([&](Entity ce, u32& a, f32& b)
         {
             sum += a + (u64)b;
             (void)ce;
         });
-        TEST(sum == 33);
+        ASSERT(sum == 33);
     }
 
     // ============================================================================
@@ -1247,10 +1249,10 @@ void testEcs()
         Serializer r = serialReader(arena, w.current);
         serialize(&r, &copy);
 
-        TEST(copy.count<u32>() == 2);
+        ASSERT(copy.count<u32>() == 2);
         u64 sum = 0;
         copy.forEach<u32>([&](u32& v) { sum += v; });
-        TEST(sum == 4);
+        ASSERT(sum == 4);
     }
 
     // ============================================================================
@@ -1274,19 +1276,19 @@ void testEcs()
         Serializer r = serialReader(arena, w.current);
         serialize(&r, &copy);
 
-        TEST(copy.count<u32>() == 2);
-        TEST(copy.count<f32>() == 2);
+        ASSERT(copy.count<u32>() == 2);
+        ASSERT(copy.count<f32>() == 2);
 
         {
             u64 sumU = 0;
             copy.forEach<u32>([&](u32& v) { sumU += v; });
-            TEST(sumU == 3);
+            ASSERT(sumU == 3);
         }
 
         {
             f64 sumF = 0;
             copy.forEach<f32>([&](f32& v) { sumF += v; });
-            TEST(sumF == 50.0);
+            ASSERT(sumF == 50.0);
         }
     }
 
@@ -1307,7 +1309,7 @@ void testEcs()
         Serializer r = serialReader(arena, w.current);
         serialize(&r, &copy);
 
-        TEST(copy.count<EntityRefComp>() == 1);
+        ASSERT(copy.count<EntityRefComp>() == 1);
         u32 foundData = 0;
         bool targetAlive = false;
         copy.forEach<EntityRefComp>([&](Entity ce, EntityRefComp& c)
@@ -1316,8 +1318,8 @@ void testEcs()
             targetAlive = copy.alive(c.target);
             (void)ce;
         });
-        TEST(foundData == 42);
-        TEST(targetAlive);
+        ASSERT(foundData == 42);
+        ASSERT(targetAlive);
     }
 
     // ============================================================================
@@ -1337,14 +1339,14 @@ void testEcs()
         Serializer r = serialReader(arena, w.current);
         serialize(&r, &copy);
 
-        TEST(copy.count<Entity>() == 1);
+        ASSERT(copy.count<Entity>() == 1);
         bool targetAlive = false;
         copy.forEach<Entity>([&](Entity ce, Entity& e)
         {
             targetAlive = copy.alive(e);
             (void)ce;
         });
-        TEST(targetAlive);
+        ASSERT(targetAlive);
     }
 
     // ============================================================================
@@ -1367,8 +1369,8 @@ void testEcs()
             Serializer r = serialReader(arena, w.current);
             serialize(&r, &copy);
 
-            TEST(copy.count<Lifecycle>() == 2);
-            TEST(Lifecycle::stats.alive == 4); // 2 original + 2 copy
+            ASSERT(copy.count<Lifecycle>() == 2);
+            ASSERT(Lifecycle::stats.alive == 4); // 2 original + 2 copy
 
             // Verify copied values are valid (serialization preserves Lifecycle fields)
             u64 validCount = 0;
@@ -1377,9 +1379,9 @@ void testEcs()
                 if (l.valid)
                     validCount++;
             });
-            TEST(validCount == 2);
+            ASSERT(validCount == 2);
         }
-        TEST(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
     }
 
     // ============================================================================
@@ -1403,14 +1405,14 @@ void testEcs()
         Ecs<u32, f32> copy{};
         serialize(&r, &copy);
 
-        TEST(copy.count<u32>() == 2);
-        TEST(copy.count<f32>() == 2);
+        ASSERT(copy.count<u32>() == 2);
+        ASSERT(copy.count<f32>() == 2);
         u64 sum = 0;
         copy.forEach<u32, f32>([&](Entity ce, u32& a, f32& b)
         {
             sum += a + (u64)b;
             (void)ce;
         });
-        TEST(sum == 33);
+        ASSERT(sum == 33);
     }
 }

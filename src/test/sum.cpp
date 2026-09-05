@@ -1,245 +1,322 @@
 #include "tests.hpp"
 #include "hg/sum.hpp"
 
-void testSum()
+using namespace hg;
+
+TEST(testSumDefault)
 {
-    // ============================================================================
-    // Sum
-    // ============================================================================
-    //
-    // Sum<Ts...> is a tagged union (discriminated union). It holds a tag
-    // indicating which variant is active, and an untagged union for storage.
-    // Supports construction from any variant type, emplacement, visitor-style
-    // matching via call/match, and copy/move semantics.
-
-    // Default-constructed Sum has no active variant (tag == count)
-    {
-        Sum<i32, f64> s;
-        TEST(s.tag == s.count);
-    }
-
-    // Construction from the first variant type
-    {
-        Sum<i32, f64> s{42};
-        TEST(s.is<i32>());
-        TEST(!s.is<f64>());
-        TEST(s.get<i32>() == 42);
-    }
-
-    // Construction from the second variant type
-    {
-        Sum<i32, f64> s{3.14};
-        TEST(!s.is<i32>());
-        TEST(s.is<f64>());
-        TEST(s.get<f64>() == 3.14);
-    }
-
-    // Sum with three variants
-    {
-        Sum<i32, f64, char> s{'A'};
-        TEST(s.is<char>());
-        TEST(s.get<char>() == 'A');
-    }
-
-    // hasN<N>() checks the active variant by index
-    {
-        Sum<i32, f64> s{42};
-        TEST(s.isN<0>());
-        TEST(!s.isN<1>());
-    }
-
-    // getN<N>() accesses the active variant by index
-    {
-        Sum<i32, f64> s{3.14};
-        TEST(s.getN<1>() == 3.14);
-    }
-
-    // emplaceN<N>() switches the variant and constructs the new value in place
-    {
-        Sum<i32, f64> s{42};
-        TEST(s.is<i32>());
-
-        f64& ref = s.emplaceN<1>(3.14);
-        TEST(!s.is<i32>());
-        TEST(s.is<f64>());
-        TEST(s.get<f64>() == 3.14);
-        TEST(ref == 3.14);
-    }
-
-    // emplaceN<N>() at the first index
-    {
-        Sum<i32, f64> s{3.14};
-        i32& ref = s.emplaceN<0>(99);
-        TEST(s.is<i32>());
-        TEST(s.get<i32>() == 99);
-        TEST(ref == 99);
-    }
-
-    // call(F) dispatches a generic lambda to the active variant
-    {
-        Sum<i32, f64> s{42};
-        bool called = false;
-        s.call([&](auto& val)
-        {
-            called = true;
-            using T = std::remove_cvref_t<decltype(val)>;
-            TEST((std::same_as<T, i32>));
-            TEST(val == 42);
-        });
-        TEST(called);
-    }
-
-    // call(F) dispatches for the second variant
-    {
-        Sum<i32, f64> s{3.14};
-        bool called = false;
-        s.call([&](auto& val)
-        {
-            called = true;
-            using T = std::remove_cvref_t<decltype(val)>;
-            TEST((std::same_as<T, f64>));
-            TEST(val == 3.14);
-        });
-        TEST(called);
-    }
-
-    // match(Fs...) dispatches an overload set to the active variant
-    {
-        Sum<i32, f64> s{3.14};
-        bool matched = false;
-        s.match(
-            [&](i32) { TEST(false); },
-            [&](f64 v)
-            {
-                matched = true;
-                TEST(v == 3.14);
-            }
-        );
-        TEST(matched);
-    }
-
-    // Copy construction preserves the active variant and value
-    {
-        Sum<i32, f64> a{42};
-        Sum<i32, f64> b{a};
-        TEST(b.is<i32>());
-        TEST(b.get<i32>() == 42);
-        TEST(a.is<i32>());
-        TEST(a.get<i32>() == 42);
-    }
-
-    // Copy assignment from a different variant
-    {
-        Sum<i32, f64> a{42};
-        Sum<i32, f64> b{3.14};
-        b = a;
-        TEST(b.is<i32>());
-        TEST(b.get<i32>() == 42);
-        TEST(a.is<i32>());
-    }
-
-    // Move construction transfers ownership; source tag is reset to count
-    {
-        Sum<i32, f64> a{42};
-        Sum<i32, f64> b{std::move(a)};
-        TEST(b.is<i32>());
-        TEST(b.get<i32>() == 42);
-        TEST(a.tag == a.count);
-    }
-
-    // Move assignment from a different variant
-    {
-        Sum<i32, f64> a{42};
-        Sum<i32, f64> b{3.14};
-        b = std::move(a);
-        TEST(b.is<i32>());
-        TEST(b.get<i32>() == 42);
-        TEST(a.tag == a.count);
-    }
-
-    // typeToTag maps each type to its variant index at compile time
-    {
-        static_assert(Sum<i32, f64, u64>::typeIdx<i32> == 0);
-        static_assert(Sum<i32, f64, u64>::typeIdx<f64> == 1);
-        static_assert(Sum<i32, f64, u64>::typeIdx<u64> == 2);
-    }
-
-    // Sum with a single variant type
-    {
-        Sum<i32> s{42};
-        TEST(s.is<i32>());
-        TEST(s.get<i32>() == 42);
-        TEST(s.count == 1);
-    }
-
-    // Non-trivial type: Sum destructor destroys the active variant
-    {
-        Lifecycle::stats.reset();
-        {
-            Sum<Lifecycle, i32> s{Lifecycle{}};
-            TEST(s.is<Lifecycle>());
-            TEST(Lifecycle::stats.alive == 1);
-        }
-        TEST(Lifecycle::stats.dtors == 1);
-        TEST(Lifecycle::stats.alive == 0);
-    }
-
-    // Non-trivial type: emplaceN to a different variant destroys the old value
-    {
-        Lifecycle::stats.reset();
-        {
-            Sum<Lifecycle, i32> s{Lifecycle{}};
-            TEST(Lifecycle::stats.alive == 1);
-            s.template emplaceN<1>(42);
-            TEST(s.is<i32>());
-            TEST(Lifecycle::stats.alive == 0);
-        }
-        // No extra destruction from ~Sum (i32 variant active)
-        TEST(Lifecycle::stats.dtors == 1);
-    }
-
-    // Non-trivial type: emplaceN back to the non-trivial variant
-    {
-        Lifecycle::stats.reset();
-        {
-            Sum<Lifecycle, i32> s{i32{42}};
-            TEST(s.is<i32>());
-            s.template emplaceN<0>();
-            TEST(s.is<Lifecycle>());
-            TEST(Lifecycle::stats.alive == 1);
-        }
-        TEST(Lifecycle::stats.dtors == 1);
-        TEST(Lifecycle::stats.alive == 0);
-    }
-
-    // Non-trivial type: copy construction preserves the value
-    {
-        Lifecycle::stats.reset();
-        {
-            Sum<Lifecycle, i32> a{Lifecycle{}};
-            Sum<Lifecycle, i32> b{a};
-            TEST(a.is<Lifecycle>());
-            TEST(b.is<Lifecycle>());
-            TEST(Lifecycle::stats.alive == 2); // a and b each own a Lifecycle
-        }
-        // Both destroyed when scope exits
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.dtors == 2);
-    }
-
-    // Non-trivial type: move construction transfers ownership; source is empty
-    {
-        Lifecycle::stats.reset();
-        {
-            Sum<Lifecycle, i32> a{Lifecycle{}};
-            Sum<Lifecycle, i32> b{std::move(a)};
-            TEST(b.is<Lifecycle>());
-            TEST(a.tag == a.count);
-            TEST(Lifecycle::stats.alive == 1);
-        }
-        // b destroyed, a was empty
-        TEST(Lifecycle::stats.alive == 0);
-        TEST(Lifecycle::stats.dtors == 1);
-    }
+    Sum<i32, f64> s;
+    ASSERT(s.tag == s.count);
 }
 
+TEST(testSumConstruction)
+{
+    Sum<i32, f64> a{42};
+    ASSERT(a.is<i32>());
+    ASSERT(a.get<i32>() == 42);
+
+    Sum<i32, f64> b{3.14};
+    ASSERT(b.is<f64>());
+    ASSERT(b.get<f64>() == 3.14);
+
+    Sum<i32, f64, char> c{'A'};
+    ASSERT(c.is<char>());
+    ASSERT(c.get<char>() == 'A');
+}
+
+TEST(testSumIsGet)
+{
+    Sum<i32, f64> s{42};
+    ASSERT(s.is<i32>());
+    ASSERT(!s.is<f64>());
+    ASSERT(s.get<i32>() == 42);
+}
+
+TEST(testSumIsNGetN)
+{
+    Sum<i32, f64> a{42};
+    ASSERT(a.isN<0>());
+    ASSERT(!a.isN<1>());
+
+    Sum<i32, f64> b{3.14};
+    ASSERT(b.getN<1>() == 3.14);
+}
+
+TEST(testSumEmplaceN)
+{
+    Sum<i32, f64> a{42};
+    ASSERT(a.is<i32>());
+    f64& ref = a.emplaceN<1>(3.14);
+    ASSERT(!a.is<i32>());
+    ASSERT(a.is<f64>());
+    ASSERT(a.get<f64>() == 3.14);
+    ASSERT(ref == 3.14);
+
+    Sum<i32, f64> b{3.14};
+    i32& ref2 = b.emplaceN<0>(99);
+    ASSERT(b.is<i32>());
+    ASSERT(b.get<i32>() == 99);
+    ASSERT(ref2 == 99);
+}
+
+TEST(testSumCall)
+{
+    Sum<i32, f64> a{42};
+    bool called = false;
+    a.call([&](auto& val)
+    {
+        called = true;
+        using T = std::remove_cvref_t<decltype(val)>;
+        ASSERT((std::same_as<T, i32>));
+        ASSERT(val == 42);
+    });
+    ASSERT(called);
+
+    Sum<i32, f64> b{3.14};
+    called = false;
+    b.call([&](auto& val)
+    {
+        called = true;
+        using T = std::remove_cvref_t<decltype(val)>;
+        ASSERT((std::same_as<T, f64>));
+        ASSERT(val == 3.14);
+    });
+    ASSERT(called);
+}
+
+TEST(testSumMatch)
+{
+    Sum<i32, f64> s{3.14};
+    bool matched = false;
+    s.match(
+        [&](i32) { ASSERT(false); },
+        [&](f64 v)
+        {
+            matched = true;
+            ASSERT(v == 3.14);
+        }
+    );
+    ASSERT(matched);
+}
+
+TEST(testSumCopyConstruction)
+{
+    Sum<i32, f64> a{42};
+    Sum<i32, f64> b{a};
+    ASSERT(b.is<i32>());
+    ASSERT(b.get<i32>() == 42);
+    ASSERT(a.is<i32>());
+    ASSERT(a.get<i32>() == 42);
+}
+
+TEST(testSumCopyAssignment)
+{
+    Sum<i32, f64> a{42};
+    Sum<i32, f64> b{3.14};
+    b = a;
+    ASSERT(b.is<i32>());
+    ASSERT(b.get<i32>() == 42);
+    ASSERT(a.is<i32>());
+}
+
+TEST(testSumMoveConstruction)
+{
+    Sum<i32, f64> a{42};
+    Sum<i32, f64> b{std::move(a)};
+    ASSERT(b.is<i32>());
+    ASSERT(b.get<i32>() == 42);
+    ASSERT(a.tag == a.count);
+}
+
+TEST(testSumMoveAssignment)
+{
+    Sum<i32, f64> a{42};
+    Sum<i32, f64> b{3.14};
+    b = std::move(a);
+    ASSERT(b.is<i32>());
+    ASSERT(b.get<i32>() == 42);
+    ASSERT(a.tag == a.count);
+}
+
+TEST(testSumTypeIdx)
+{
+    static_assert(Sum<i32, f64, u64>::typeIdx<i32> == 0);
+    static_assert(Sum<i32, f64, u64>::typeIdx<f64> == 1);
+    static_assert(Sum<i32, f64, u64>::typeIdx<u64> == 2);
+}
+
+TEST(testSumSingleVariant)
+{
+    Sum<i32> s{42};
+    ASSERT(s.is<i32>());
+    ASSERT(s.get<i32>() == 42);
+    ASSERT(s.count == 1);
+}
+
+TEST(testSumLifecycleDestroy)
+{
+    Lifecycle::stats.reset();
+    {
+        Sum<Lifecycle, i32> s{Lifecycle{}};
+        ASSERT(s.is<Lifecycle>());
+        ASSERT(Lifecycle::stats.alive == 1);
+    }
+    ASSERT(Lifecycle::stats.dtors == 1);
+    ASSERT(Lifecycle::stats.alive == 0);
+}
+
+TEST(testSumLifecycleEmplace)
+{
+    Lifecycle::stats.reset();
+    {
+        Sum<Lifecycle, i32> s{Lifecycle{}};
+        ASSERT(Lifecycle::stats.alive == 1);
+        s.template emplaceN<1>(42);
+        ASSERT(s.is<i32>());
+        ASSERT(Lifecycle::stats.alive == 0);
+    }
+    ASSERT(Lifecycle::stats.dtors == 1);
+}
+
+TEST(testSumLifecycleEmplaceBack)
+{
+    Lifecycle::stats.reset();
+    {
+        Sum<Lifecycle, i32> s{i32{42}};
+        ASSERT(s.is<i32>());
+        s.template emplaceN<0>();
+        ASSERT(s.is<Lifecycle>());
+        ASSERT(Lifecycle::stats.alive == 1);
+    }
+    ASSERT(Lifecycle::stats.dtors == 1);
+    ASSERT(Lifecycle::stats.alive == 0);
+}
+
+TEST(testSumLifecycleCopy)
+{
+    Lifecycle::stats.reset();
+    {
+        Sum<Lifecycle, i32> a{Lifecycle{}};
+        Sum<Lifecycle, i32> b{a};
+        ASSERT(a.is<Lifecycle>());
+        ASSERT(b.is<Lifecycle>());
+        ASSERT(Lifecycle::stats.alive == 2);
+    }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.dtors == 2);
+}
+
+TEST(testSumLifecycleMove)
+{
+    Lifecycle::stats.reset();
+    {
+        Sum<Lifecycle, i32> a{Lifecycle{}};
+        Sum<Lifecycle, i32> b{std::move(a)};
+        ASSERT(b.is<Lifecycle>());
+        ASSERT(a.tag == a.count);
+        ASSERT(Lifecycle::stats.alive == 1);
+    }
+    ASSERT(Lifecycle::stats.alive == 0);
+    ASSERT(Lifecycle::stats.dtors == 1);
+}
+
+TEST(testSumIsEmptyDefault)
+{
+    Sum<i32, f64> s;
+    ASSERT(s.isEmpty());
+}
+
+TEST(testSumIsEmptyAfterConstruct)
+{
+    Sum<i32, f64> a{42};
+    ASSERT(!a.isEmpty());
+
+    Sum<i32, f64> b{3.14};
+    ASSERT(!b.isEmpty());
+}
+
+TEST(testSumIsNAllVariants)
+{
+    Sum<i32, f64, char> a{42};
+    ASSERT(a.isN<0>());
+    ASSERT(!a.isN<1>());
+    ASSERT(!a.isN<2>());
+
+    Sum<i32, f64, char> b{3.14};
+    ASSERT(!b.isN<0>());
+    ASSERT(b.isN<1>());
+    ASSERT(!b.isN<2>());
+
+    Sum<i32, f64, char> c{'A'};
+    ASSERT(!c.isN<0>());
+    ASSERT(!c.isN<1>());
+    ASSERT(c.isN<2>());
+}
+
+TEST(testSumConstGetN)
+{
+    const Sum<i32, f64> a{42};
+    ASSERT(a.getN<0>() == 42);
+
+    const Sum<i32, f64> b{3.14};
+    ASSERT(b.getN<1>() == 3.14);
+}
+
+TEST(testSumConstGet)
+{
+    const Sum<i32, f64> a{42};
+    ASSERT(a.get<i32>() == 42);
+
+    const Sum<i32, f64> b{3.14};
+    ASSERT(b.get<f64>() == 3.14);
+}
+
+TEST(testSumEmplaceByType)
+{
+    Sum<i32, f64> a{42};
+    ASSERT(a.is<i32>());
+    f64& ref = a.emplace<f64>(3.14);
+    ASSERT(a.is<f64>());
+    ASSERT(a.get<f64>() == 3.14);
+    ASSERT(ref == 3.14);
+
+    i32& ref2 = a.emplace<i32>(99);
+    ASSERT(a.is<i32>());
+    ASSERT(a.get<i32>() == 99);
+    ASSERT(ref2 == 99);
+}
+
+TEST(testSumEmplaceOverwrites)
+{
+    Lifecycle::stats = {};
+    {
+        Sum<Lifecycle, i32, f64> s{Lifecycle{}};
+        ASSERT(Lifecycle::stats.ctors == 1);
+        s.emplace<i32>(42);
+        ASSERT(Lifecycle::stats.dtors == 1);
+        ASSERT(s.get<i32>() == 42);
+    }
+    ASSERT(Lifecycle::stats.dtors == 1);
+}
+
+TEST(testSumCopyAssignDifferentVariant)
+{
+    Sum<i32, f64> a{3.14};
+    Sum<i32, f64> b{42};
+    ASSERT(b.is<i32>());
+    b = a;
+    ASSERT(b.is<f64>());
+    ASSERT(b.get<f64>() == 3.14);
+    ASSERT(a.is<f64>());
+}
+
+TEST(testSumMoveAssignDifferentVariant)
+{
+    Sum<i32, f64> a{3.14};
+    Sum<i32, f64> b{42};
+    ASSERT(b.is<i32>());
+    b = std::move(a);
+    ASSERT(b.is<f64>());
+    ASSERT(b.get<f64>() == 3.14);
+    ASSERT(a.tag == a.count);
+}
