@@ -14,7 +14,7 @@ int main()
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
     Window window = Window::create({
-        .preferredPresentMode = GpuPresentMode_mailbox,
+        // .preferredPresentMode = GpuPresentMode_mailbox,
     }).expect("Could not create window\n");
 
     window.setTitle("Hg Minimal Example");

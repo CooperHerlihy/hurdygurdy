@@ -189,7 +189,6 @@ add_executable(tests
     src/test/product.cpp
     src/test/sum.cpp
     src/test/maybe.cpp
-    src/test/error.cpp
     src/test/utility.cpp
     src/test/memory.cpp
     src/test/concurrency.cpp
@@ -201,6 +200,7 @@ add_executable(tests
     src/test/binary.cpp
     src/test/smart_ptr.cpp
     src/test/array.cpp
+    src/test/array_temp.cpp
     src/test/queue.cpp
     src/test/set.cpp
     src/test/map.cpp
@@ -211,6 +211,8 @@ add_executable(tests
     src/test/gpu.cpp
     src/test/render2d.cpp
     src/test/ecs.cpp
+    src/test/ecs_foreach.cpp
+    src/test/ecs_serialize.cpp
 )
 target_link_libraries(tests hurdygurdy)
 target_precompile_headers(tests PRIVATE
