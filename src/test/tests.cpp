@@ -59,5 +59,18 @@ int main()
         }
     }
 
+    // ArenaScope scratch = getScratch();
+    //
+    // Asset<TextureData> fontData = load<TextureData>("pixel-font.png");
+    // Serializer s = serialWriter(scratch);
+    //
+    // serializeBegin(&s);
+    // serializeObject(&s, &fontData->width, &fontData->height, &fontData->format);
+    // u64 size = fontData->width * fontData->height * formatToSize(fontData->format);
+    // serializeVoid(&s, {fontData->pixels, size});
+    // serializeEnd(&s);
+    //
+    // binaryStore(writeSerialBinary(scratch, &s), "pixel-font.hg");
+
     return failCount;
 }

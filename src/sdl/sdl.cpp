@@ -24,13 +24,23 @@ bool initPlatform()
         return false;
     }
 
-    hg::windowInit();
+    windowInit();
+
+    if (!initAudio())
+    {
+        windowDeinit();
+        SDL_Quit();
+        sdl::unloadSDL();
+        return false;
+    }
+
     return true;
 }
 
 void deinitPlatform()
 {
-    hg::windowDeinit();
+    deinitAudio();
+    windowDeinit();
     SDL_Quit();
     sdl::unloadSDL();
 }

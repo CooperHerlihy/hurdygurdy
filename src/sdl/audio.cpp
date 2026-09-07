@@ -1,6 +1,5 @@
 #include "hg/audio.hpp"
 
-#include "internal.hpp"
 #include "hg/error.hpp"
 
 #include <SDL3/SDL_audio.h>
@@ -20,7 +19,7 @@ struct AudioState {
 
 static AudioState audio{};
 
-bool internal::initAudio()
+bool initAudio()
 {
     audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
@@ -48,7 +47,7 @@ bool internal::initAudio()
     return true;
 }
 
-void internal::deinitAudio()
+void deinitAudio()
 {
     SDL_DestroyAudioStream(audio.stream);
     SDL_CloseAudioDevice(audio.device);

@@ -121,6 +121,16 @@ struct AudioPlayer {
     Array<AudioPlayerSound> music{};
 
     /**
+     * Ensure sounds and music are removed on destruction safely
+     */
+    ~AudioPlayer() noexcept
+    {
+        SpinLockScope scope{lock};
+        sounds.reset();
+        music.reset();
+    }
+
+    /**
      * Update the music and sounds
      */
     void update(Span<f32> buf, AudioConfig config);

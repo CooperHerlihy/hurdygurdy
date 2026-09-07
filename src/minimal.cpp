@@ -174,10 +174,10 @@ int main()
         {
             ProfilerScopeTimer timer{"Cpu"};
 
-            GpuRenderAttachment colorAttachment{};
+            GpuAttachment colorAttachment{};
             colorAttachment.image = window.imageView();
 
-            GpuRenderPass pass{};
+            GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
 
             gpuBeginRenderPass(cmd, pass);

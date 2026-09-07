@@ -26,27 +26,24 @@ static Span<const u8> shDepthVert  = {test_depth_vert_spv,    sizeof(test_depth_
 static Span<const u8> shDepthFrag  = {test_depth_frag_spv,    sizeof(test_depth_frag_spv)};
 static Span<const u8> shSamplerFrag= {test_sampler_frag_spv,  sizeof(test_sampler_frag_spv)};
 
-static Format kColorFmt = Format_r8g8b8a8_unorm;
+static Format kColorFmt = Format_rgba8_unorm;
 
 // ---- shared helper functions ----
-static GpuRenderAttachment makeColorAtt(GpuView* view, f32 r, f32 g, f32 b, f32 a,
+static GpuAttachment makeColorAtt(GpuView* view, f32 r, f32 g, f32 b, f32 a,
                                         GpuLoadOp loadOp = GpuLoadOp_clear,
                                         GpuStoreOp storeOp = GpuStoreOp_store)
 {
-    GpuRenderAttachment att{};
+    GpuAttachment att{};
     att.image = view;
     att.loadOp = loadOp;
     att.storeOp = storeOp;
-    att.clearValue.color.float32[0] = r;
-    att.clearValue.color.float32[1] = g;
-    att.clearValue.color.float32[2] = b;
-    att.clearValue.color.float32[3] = a;
+    att.clearValue.color = Vec4{r, g, b, a};
     return att;
 }
 
-static GpuRenderAttachment makeDepthAtt(GpuView* view, f32 clearDepth = 1.0f)
+static GpuAttachment makeDepthAtt(GpuView* view, f32 clearDepth = 1.0f)
 {
-    GpuRenderAttachment att{};
+    GpuAttachment att{};
     att.image = view;
     att.loadOp = GpuLoadOp_clear;
     att.storeOp = GpuStoreOp_store;
@@ -54,13 +51,13 @@ static GpuRenderAttachment makeDepthAtt(GpuView* view, f32 clearDepth = 1.0f)
     return att;
 }
 
-static GpuRenderPass simpleColorPass(GpuRenderAttachment* colorAtt,
+static GpuPass simpleColorPass(GpuAttachment* colorAtt,
                                       GpuView** sampledImages = nullptr,
                                       u32 sampledCount = 0,
                                       GpuBuffer** uniformBufs = nullptr,
                                       u32 uniformCount = 0)
 {
-    GpuRenderPass pass{};
+    GpuPass pass{};
     pass.colorAttachments = {colorAtt, 1};
     if (sampledImages) pass.sampledImages = {sampledImages, sampledCount};
     if (uniformBufs)   pass.uniformBuffers = {uniformBufs, uniformCount};
@@ -73,7 +70,7 @@ static GpuPipeline makeSimplePipeline(Span<const u8> vertShader, Span<const u8> 
     GpuGraphicsPipelineCreateInfo ci{};
     ci.vertexShader = vertShader;
     ci.fragmentShader = fragShader;
-    Format cf = Format_r8g8b8a8_unorm;
+    Format cf = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&cf, 1};
     ci.pushConstantSize = pushSize;
     ci.topology = topo;
@@ -82,15 +79,14 @@ static GpuPipeline makeSimplePipeline(Span<const u8> vertShader, Span<const u8> 
 
 static GpuImage makeColorTarget(u32 w, u32 h)
 {
-    return GpuImage::create(w, h, Format_r8g8b8a8_unorm, GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
+    return GpuImage::create(w, h, Format_rgba8_unorm, GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
 }
 
 static void barrierToTransferRead(GpuCmd* cmd, GpuView* view)
 {
     GpuImageBarrier ib{};
     ib.image = view;
-    ib.nextStage = GpuStage_transfer;
-    ib.nextAccess = GpuAccess_transferRead;
+    ib.nextAccess = GpuAccess_transferSrc;
     ib.nextLayout = GpuLayout_transferSrc;
     gpuMemoryBarrier(cmd, {}, {&ib, 1});
 }
@@ -101,31 +97,27 @@ static void barrierToTransferRead(GpuCmd* cmd, GpuView* view)
 
 TEST(testFormatToSize)
 {
-    // Common 8-bit formats
+    // 8-bit
     ASSERT(formatToSize(Format_r8_unorm) == 1);
-    ASSERT(formatToSize(Format_r8_snorm) == 1);
-    ASSERT(formatToSize(Format_r8g8_unorm) == 2);
-    ASSERT(formatToSize(Format_r8g8b8a8_unorm) == 4);
-    ASSERT(formatToSize(Format_r8g8b8a8_snorm) == 4);
-    ASSERT(formatToSize(Format_r8g8b8a8_srgb) == 4);
-    // 16-bit float / depth formats
+    ASSERT(formatToSize(Format_rg8_unorm) == 2);
+    ASSERT(formatToSize(Format_rgba8_unorm) == 4);
+    ASSERT(formatToSize(Format_rgba8_srgb) == 4);
+    // 16-bit
+    ASSERT(formatToSize(Format_r16_unorm) == 2);
     ASSERT(formatToSize(Format_r16_sfloat) == 2);
-    ASSERT(formatToSize(Format_r16g16_sfloat) == 4);
-    ASSERT(formatToSize(Format_r16g16b16a16_sfloat) == 8);
+    ASSERT(formatToSize(Format_rg16_sfloat) == 4);
+    ASSERT(formatToSize(Format_rgba16_sfloat) == 8);
     ASSERT(formatToSize(Format_d16_unorm) == 2);
-    // 32-bit float / int formats
+    // 32-bit
     ASSERT(formatToSize(Format_r32_sfloat) == 4);
-    ASSERT(formatToSize(Format_r32g32_sfloat) == 8);
-    ASSERT(formatToSize(Format_r32g32b32_sfloat) == 12);
-    ASSERT(formatToSize(Format_r32g32b32a32_sfloat) == 16);
-    ASSERT(formatToSize(Format_r32_sint) == 4);
-    ASSERT(formatToSize(Format_r32g32b32a32_uint) == 16);
+    ASSERT(formatToSize(Format_rg32_sfloat) == 8);
+    ASSERT(formatToSize(Format_rgba32_sfloat) == 16);
     // Depth-stencil
     ASSERT(formatToSize(Format_d24_unorm_s8_uint) == 4);
     ASSERT(formatToSize(Format_d32_sfloat) == 4);
     ASSERT(formatToSize(Format_d32_sfloat_s8_uint) == 5);
     // Block-compressed
-    ASSERT(formatToSize(Format_bc1_rgba_unorm_block) == 8);
+    ASSERT(formatToSize(Format_bc1_rgb_unorm_block) == 8);
     ASSERT(formatToSize(Format_bc3_unorm_block) == 16);
     ASSERT(formatToSize(Format_bc5_unorm_block) == 16);
     ASSERT(formatToSize(Format_bc7_unorm_block) == 16);
@@ -254,7 +246,7 @@ TEST(testGpuImageLifecycle)
     ASSERT(empty.data == nullptr);
 
     // Simple constructor
-    GpuImage img = GpuImage::create(16, 16, Format_r8g8b8a8_unorm, GpuImageUsage_transferSrc);
+    GpuImage img = GpuImage::create(16, 16, Format_rgba8_unorm, GpuImageUsage_transferSrc);
     ASSERT(img.data != nullptr);
     ASSERT(img.width() == 16);
     ASSERT(img.height() == 16);
@@ -285,7 +277,7 @@ TEST(testGpuImageLifecycle)
 
 TEST(testGpuViewLifecycle)
 {
-    GpuImage img = GpuImage::create(16, 16, Format_r8g8b8a8_unorm,
+    GpuImage img = GpuImage::create(16, 16, Format_rgba8_unorm,
         GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
 
     GpuView view = GpuView::create(img, GpuAspect_color);
@@ -307,7 +299,7 @@ TEST(testGpuViewLifecycle)
 
 TEST(testGpuViewWriteRead)
 {
-    GpuImage img = GpuImage::create(16, 16, Format_r8g8b8a8_unorm,
+    GpuImage img = GpuImage::create(16, 16, Format_rgba8_unorm,
         GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
     GpuView view = GpuView::create(img, GpuAspect_color);
 
@@ -325,7 +317,7 @@ TEST(testGpuViewExtendedConfigSampler)
 {
     static constexpr u32 texSize = 4;
 
-    GpuImage texImg = GpuImage::create(texSize, texSize, Format_r8g8b8a8_unorm,
+    GpuImage texImg = GpuImage::create(texSize, texSize, Format_rgba8_unorm,
         GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
 
     u32 checker[texSize * texSize] = {};
@@ -356,7 +348,7 @@ TEST(testGpuViewExtendedConfigSampler)
 
     // Verify sampled rendering produces non-clear color
     static constexpr u32 outSize = 2;
-    GpuImage outImg = GpuImage::create(outSize, outSize, Format_r8g8b8a8_unorm,
+    GpuImage outImg = GpuImage::create(outSize, outSize, Format_rgba8_unorm,
         GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
     GpuView outView = GpuView::create(outImg, GpuAspect_color);
 
@@ -370,7 +362,7 @@ TEST(testGpuViewExtendedConfigSampler)
     GpuGraphicsPipelineCreateInfo ci{};
     ci.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
     ci.fragmentShader = {test_sampler_frag_spv, sizeof(test_sampler_frag_spv)};
-    Format colorFmt = Format_r8g8b8a8_unorm;
+    Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
     ci.pushConstantSize = sizeof(Push);
 
@@ -378,16 +370,13 @@ TEST(testGpuViewExtendedConfigSampler)
 
     GpuCmd* cmd = gpuCmdBegin();
 
-    GpuRenderAttachment colorAtt{};
+    GpuAttachment colorAtt{};
     colorAtt.image = &outView;
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color.float32[0] = 0.0f;
-    colorAtt.clearValue.color.float32[1] = 0.0f;
-    colorAtt.clearValue.color.float32[2] = 0.0f;
-    colorAtt.clearValue.color.float32[3] = 1.0f;
+    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
 
-    GpuRenderPass pass{};
+    GpuPass pass{};
     pass.colorAttachments = {&colorAtt, 1};
     GpuView* sampledImages[] = {&view};
     pass.sampledImages = sampledImages;
@@ -431,8 +420,7 @@ TEST(testCommandBufferExecutes)
 
     GpuBufferBarrier stagingBarrier{};
     stagingBarrier.buffer = &staging;
-    stagingBarrier.nextStage = GpuStage_computeShader;
-    stagingBarrier.nextAccess = GpuAccess_shaderRead;
+    stagingBarrier.nextAccess = GpuAccess_uniformBufferCompute;
     gpuMemoryBarrier(cmd, {&stagingBarrier, 1}, {});
 
     gpuBindPipeline(cmd, pipe);
@@ -441,8 +429,7 @@ TEST(testCommandBufferExecutes)
 
     GpuBufferBarrier devBarrier{};
     devBarrier.buffer = &devBuf;
-    devBarrier.nextStage = GpuStage_transfer;
-    devBarrier.nextAccess = GpuAccess_transferRead;
+    devBarrier.nextAccess = GpuAccess_transferSrc;
     gpuMemoryBarrier(cmd, {&devBarrier, 1}, {});
 
     gpuCmdEnd(cmd);
@@ -481,8 +468,7 @@ TEST(testBufferBarrierComputeSync)
     // Barrier: buf to shaderWrite|shaderRead for Dispatch 1
     GpuBufferBarrier bb{};
     bb.buffer = &buf;
-    bb.nextStage = GpuStage_computeShader;
-    bb.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+    bb.nextAccess = GpuAccess_storageBufferCompute;
     gpuMemoryBarrier(cmd, {&bb, 1}, {});
 
     // Dispatch 1: increment every element by 1 (in-place)
@@ -494,7 +480,7 @@ TEST(testBufferBarrierComputeSync)
     }
 
     // Barrier: buf to shaderRead for Dispatch 2
-    bb.nextAccess = GpuAccess_shaderRead;
+    bb.nextAccess = GpuAccess_uniformBufferCompute;
     gpuMemoryBarrier(cmd, {&bb, 1}, {});
 
     // Dispatch 2: copy from buf to outBuf (addVal=0)
@@ -517,7 +503,7 @@ TEST(testImageBarrierLayoutTransition)
 {
     static constexpr u32 imgSize = 4;
 
-    GpuImage img = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage img = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
         GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled | GpuImageUsage_colorAttachment);
     GpuView view = GpuView::create(img, GpuAspect_color);
 
@@ -533,13 +519,11 @@ TEST(testImageBarrierLayoutTransition)
 
     GpuImageBarrier ib{};
     ib.image = &view;
-    ib.nextStage = GpuStage_computeShader;
-    ib.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+    ib.nextAccess = GpuAccess_storageImageCompute;
     ib.nextLayout = GpuLayout_general;
     gpuMemoryBarrier(cmd, {}, {&ib, 1});
 
-    ib.nextStage = GpuStage_transfer;
-    ib.nextAccess = GpuAccess_transferRead;
+    ib.nextAccess = GpuAccess_transferSrc;
     ib.nextLayout = GpuLayout_transferSrc;
     gpuMemoryBarrier(cmd, {}, {&ib, 1});
 
@@ -560,7 +544,7 @@ TEST(testCombinedBufferImageBarrier)
     GpuBuffer storageBuf = GpuBuffer::create(bufSize,
             GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
             GpuMemoryUsage_frequentUpdate);
-    GpuImage img = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage img = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
         GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_storage);
     GpuView imgView = GpuView::create(img, GpuAspect_color);
 
@@ -587,18 +571,16 @@ TEST(testCombinedBufferImageBarrier)
     // Combined barrier: buffer to shaderRead|shaderWrite, image to general
     GpuBufferBarrier bb{};
     bb.buffer = &storageBuf;
-    bb.nextStage = GpuStage_computeShader;
-    bb.nextAccess = GpuAccess_shaderRead;
+    bb.nextAccess = GpuAccess_uniformBufferCompute;
     GpuImageBarrier ib{};
     ib.image = &imgView;
-    ib.nextStage = GpuStage_computeShader;
-    ib.nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+    ib.nextAccess = GpuAccess_storageImageCompute;
     ib.nextLayout = GpuLayout_general;
     gpuMemoryBarrier(cmd, {&bb, 1}, {&ib, 1});
 
     // Dispatch: read buffer -> write image
     {
-        GpuComputePass pass{};
+        GpuPass pass{};
         GpuBuffer* storageBufs[] = {&storageBuf};
         GpuView* storageImages[] = {&imgView};
         pass.storageBuffers = storageBufs;
@@ -612,10 +594,8 @@ TEST(testCombinedBufferImageBarrier)
     }
 
     // Barrier: both to transferSrc for readback
-    bb.nextAccess = GpuAccess_transferRead;
-    bb.nextStage = GpuStage_transfer;
-    ib.nextAccess = GpuAccess_transferRead;
-    ib.nextStage = GpuStage_transfer;
+    bb.nextAccess = GpuAccess_transferSrc;
+    ib.nextAccess = GpuAccess_transferSrc;
     ib.nextLayout = GpuLayout_transferSrc;
     gpuMemoryBarrier(cmd, {&bb, 1}, {&ib, 1});
 
@@ -658,15 +638,13 @@ TEST(testComputePassDispatch)
 
     GpuBufferBarrier barriers[2] = {};
     barriers[0].buffer = &inBuf;
-    barriers[0].nextStage = GpuStage_computeShader;
-    barriers[0].nextAccess = GpuAccess_shaderRead;
+    barriers[0].nextAccess = GpuAccess_uniformBufferCompute;
     barriers[1].buffer = &outBuf;
-    barriers[1].nextStage = GpuStage_computeShader;
-    barriers[1].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+    barriers[1].nextAccess = GpuAccess_storageBufferCompute;
     gpuMemoryBarrier(cmd, {barriers, 2}, {});
 
     {
-        GpuComputePass pass{};
+        GpuPass pass{};
         GpuBuffer* storageBufs[] = {&inBuf, &outBuf};
         pass.storageBuffers = storageBufs;
         gpuComputePass(cmd, pass);
@@ -729,11 +707,9 @@ TEST(testComputeDispatchSSBO)
 
     GpuBufferBarrier barriers[2] = {};
     barriers[0].buffer = &outBuf;
-    barriers[0].nextStage = GpuStage_computeShader;
-    barriers[0].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        barriers[0].nextAccess = GpuAccess_storageBufferCompute;
     barriers[1].buffer = &inBuf;
-    barriers[1].nextStage = GpuStage_computeShader;
-    barriers[1].nextAccess = GpuAccess_shaderRead;
+        barriers[1].nextAccess = GpuAccess_uniformBufferCompute;
     gpuMemoryBarrier(cmd, {barriers, 2}, {});
 
     gpuBindPipeline(cmd, pipe);
@@ -754,7 +730,7 @@ TEST(testGpuPipelineGraphicsLifecycle)
     GpuGraphicsPipelineCreateInfo ci{};
     ci.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
     ci.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
-    Format colorFmt = Format_r8g8b8a8_unorm;
+    Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
 
     GpuPipeline pipe = GpuPipeline::graphics(ci);
@@ -781,8 +757,8 @@ TEST(testOffscreenRenderTriangle)
 
     GpuCmd* cmd = gpuCmdBegin();
 
-    GpuRenderAttachment colorAtt = makeColorAtt(&colorView, 1.0f, 0.0f, 0.0f, 1.0f);
-    GpuRenderPass pass = simpleColorPass(&colorAtt);
+    GpuAttachment colorAtt = makeColorAtt(&colorView, 1.0f, 0.0f, 0.0f, 1.0f);
+    GpuPass pass = simpleColorPass(&colorAtt);
 
     gpuBeginRenderPass(cmd, pass);
     gpuBindPipeline(cmd, pipe);
@@ -829,15 +805,13 @@ TEST(testComputeSSBOAdd)
 
     GpuBufferBarrier barriers[2] = {};
     barriers[0].buffer = &inBuf;
-    barriers[0].nextStage = GpuStage_computeShader;
-    barriers[0].nextAccess = GpuAccess_shaderRead;
+    barriers[0].nextAccess = GpuAccess_uniformBufferCompute;
     barriers[1].buffer = &outBuf;
-    barriers[1].nextStage = GpuStage_computeShader;
-    barriers[1].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+    barriers[1].nextAccess = GpuAccess_storageBufferCompute;
     gpuMemoryBarrier(cmd, {barriers, 2}, {});
 
     {
-        GpuComputePass pass{};
+        GpuPass pass{};
         GpuBuffer* storageBufs[] = {&inBuf, &outBuf};
         pass.storageBuffers = storageBufs;
         gpuComputePass(cmd, pass);
@@ -886,10 +860,10 @@ TEST(testOffscreenRenderDepthTest)
 
     GpuCmd* cmd = gpuCmdBegin();
 
-    GpuRenderAttachment colorAtt = makeColorAtt(&colorView, 0.0f, 0.0f, 0.0f, 0.0f);
-    GpuRenderAttachment depthAtt = makeDepthAtt(&depthView);
+    GpuAttachment colorAtt = makeColorAtt(&colorView, 0.0f, 0.0f, 0.0f, 0.0f);
+    GpuAttachment depthAtt = makeDepthAtt(&depthView);
 
-    GpuRenderPass pass{};
+    GpuPass pass{};
     pass.colorAttachments = {&colorAtt, 1};
     pass.depthAttachment = &depthAtt;
 
@@ -942,7 +916,7 @@ TEST(testMultiDrawInstancing)
             GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
     instBuf.write(instanceData, 0, sizeof(instanceData));
 
-    GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
     GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
@@ -953,7 +927,7 @@ TEST(testMultiDrawInstancing)
     GpuGraphicsPipelineCreateInfo ci{};
     ci.vertexShader = {test_instance_vert_spv, sizeof(test_instance_vert_spv)};
     ci.fragmentShader = {test_instance_frag_spv, sizeof(test_instance_frag_spv)};
-    Format colorFmt = Format_r8g8b8a8_unorm;
+    Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
     ci.pushConstantSize = sizeof(Push);
     ci.topology = GpuTopology_triangleStrip;
@@ -964,20 +938,16 @@ TEST(testMultiDrawInstancing)
 
     GpuBufferBarrier bb{};
     bb.buffer = &instBuf;
-    bb.nextStage = GpuStage_vertexShader;
-    bb.nextAccess = GpuAccess_shaderRead;
+    bb.nextAccess = GpuAccess_uniformBufferVertex;
     gpuMemoryBarrier(cmd, {&bb, 1}, {});
 
-    GpuRenderAttachment colorAtt{};
+    GpuAttachment colorAtt{};
     colorAtt.image = &colorView;
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color.float32[0] = 0.0f;
-    colorAtt.clearValue.color.float32[1] = 0.0f;
-    colorAtt.clearValue.color.float32[2] = 0.0f;
-    colorAtt.clearValue.color.float32[3] = 0.0f;
+    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 0.0f};
 
-    GpuRenderPass pass{};
+    GpuPass pass{};
     GpuBuffer* uniformBufs[] = {&instBuf};
     pass.uniformBuffers = uniformBufs;
     pass.colorAttachments = {&colorAtt, 1};
@@ -1006,7 +976,7 @@ TEST(testMultiViewportScissor)
 {
     static constexpr u32 imgSize = 16;
 
-    GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
     GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
@@ -1019,7 +989,7 @@ TEST(testMultiViewportScissor)
     GpuGraphicsPipelineCreateInfo ci{};
     ci.vertexShader = {test_depth_vert_spv, sizeof(test_depth_vert_spv)};
     ci.fragmentShader = {test_depth_frag_spv, sizeof(test_depth_frag_spv)};
-    Format colorFmt = Format_r8g8b8a8_unorm;
+    Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
     ci.pushConstantSize = sizeof(Push);
 
@@ -1027,16 +997,13 @@ TEST(testMultiViewportScissor)
 
     GpuCmd* cmd = gpuCmdBegin();
 
-    GpuRenderAttachment colorAtt{};
+    GpuAttachment colorAtt{};
     colorAtt.image = &colorView;
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color.float32[0] = 0.0f;
-    colorAtt.clearValue.color.float32[1] = 0.0f;
-    colorAtt.clearValue.color.float32[2] = 0.0f;
-    colorAtt.clearValue.color.float32[3] = 1.0f;
+    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
 
-    GpuRenderPass pass{};
+    GpuPass pass{};
     pass.colorAttachments = {&colorAtt, 1};
 
     gpuBeginRenderPass(cmd, pass);
@@ -1074,7 +1041,7 @@ TEST(testComputeImageFilterBlur)
 {
     static constexpr u32 imgSize = 8;
 
-    GpuImage srcImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage srcImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_sampled | GpuImageUsage_transferDst | GpuImageUsage_transferSrc);
     GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
 
@@ -1084,7 +1051,7 @@ TEST(testComputeImageFilterBlur)
         whiteImg[i] = white;
     srcView.write(whiteImg);
 
-    GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_storage | GpuImageUsage_transferSrc);
     GpuViewCreateInfo dstCI{};
     dstCI.image = &dstImg;
@@ -1103,19 +1070,17 @@ TEST(testComputeImageFilterBlur)
 
     GpuImageBarrier srcBarrier{};
     srcBarrier.image = &srcView;
-    srcBarrier.nextStage = GpuStage_computeShader;
-    srcBarrier.nextAccess = GpuAccess_shaderRead;
+    srcBarrier.nextAccess = GpuAccess_sampledImageCompute;
     srcBarrier.nextLayout = GpuLayout_shaderReadOnly;
     GpuImageBarrier dstBarrier{};
     dstBarrier.image = &dstView;
-    dstBarrier.nextStage = GpuStage_computeShader;
-    dstBarrier.nextAccess = GpuAccess_shaderWrite;
+    dstBarrier.nextAccess = GpuAccess_storageImageCompute;
     dstBarrier.nextLayout = GpuLayout_general;
     GpuImageBarrier imgBarriers[] = {srcBarrier, dstBarrier};
     gpuMemoryBarrier(cmd, {}, {imgBarriers, 2});
 
     {
-        GpuComputePass pass{};
+        GpuPass pass{};
         GpuView* sampledImages[] = {&srcView};
         GpuView* storageImages[] = {&dstView};
         pass.sampledImages = sampledImages;
@@ -1130,8 +1095,7 @@ TEST(testComputeImageFilterBlur)
 
     GpuImageBarrier readBarrier{};
     readBarrier.image = &dstView;
-    readBarrier.nextStage = GpuStage_transfer;
-    readBarrier.nextAccess = GpuAccess_transferRead;
+    readBarrier.nextAccess = GpuAccess_transferSrc;
     readBarrier.nextLayout = GpuLayout_transferSrc;
     gpuMemoryBarrier(cmd, {}, {&readBarrier, 1});
 
@@ -1149,18 +1113,18 @@ TEST(testRenderToTextureSample)
 {
     static constexpr u32 imgSize = 4;
 
-    GpuImage firstImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage firstImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_colorAttachment | GpuImageUsage_sampled | GpuImageUsage_transferSrc);
     GpuView firstView = GpuView::create(firstImg, GpuAspect_color);
 
-    GpuImage resultImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage resultImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
     GpuView resultView = GpuView::create(resultImg, GpuAspect_color);
 
     GpuGraphicsPipelineCreateInfo pass1CI{};
     pass1CI.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
     pass1CI.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
-    Format colorFmt = Format_r8g8b8a8_unorm;
+    Format colorFmt = Format_rgba8_unorm;
     pass1CI.colorAttachmentFormats = {&colorFmt, 1};
     GpuPipeline pass1Pipe = GpuPipeline::graphics(pass1CI);
 
@@ -1176,16 +1140,13 @@ TEST(testRenderToTextureSample)
 
     // Pass 1: render triangle to first attachment
     {
-        GpuRenderAttachment colorAtt{};
+        GpuAttachment colorAtt{};
         colorAtt.image = &firstView;
         colorAtt.loadOp = GpuLoadOp_clear;
         colorAtt.storeOp = GpuStoreOp_store;
-        colorAtt.clearValue.color.float32[0] = 0.0f;
-        colorAtt.clearValue.color.float32[1] = 0.0f;
-        colorAtt.clearValue.color.float32[2] = 0.0f;
-        colorAtt.clearValue.color.float32[3] = 1.0f;
+        colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
 
-        GpuRenderPass pass{};
+        GpuPass pass{};
         pass.colorAttachments = {&colorAtt, 1};
 
         gpuBeginRenderPass(cmd, pass);
@@ -1197,23 +1158,19 @@ TEST(testRenderToTextureSample)
     // Barrier: transition first attachment to shaderReadOnly
     GpuImageBarrier ib{};
     ib.image = &firstView;
-    ib.nextStage = GpuStage_fragmentShader;
-    ib.nextAccess = GpuAccess_shaderRead;
+    ib.nextAccess = GpuAccess_sampledImageFragment;
     ib.nextLayout = GpuLayout_shaderReadOnly;
     gpuMemoryBarrier(cmd, {}, {&ib, 1});
 
     // Pass 2: sample first attachment, invert, write to result
     {
-        GpuRenderAttachment colorAtt{};
+        GpuAttachment colorAtt{};
         colorAtt.image = &resultView;
         colorAtt.loadOp = GpuLoadOp_clear;
         colorAtt.storeOp = GpuStoreOp_store;
-        colorAtt.clearValue.color.float32[0] = 0.0f;
-        colorAtt.clearValue.color.float32[1] = 0.0f;
-        colorAtt.clearValue.color.float32[2] = 0.0f;
-        colorAtt.clearValue.color.float32[3] = 1.0f;
+        colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
 
-        GpuRenderPass pass{};
+        GpuPass pass{};
         pass.colorAttachments = {&colorAtt, 1};
         GpuView* sampledImages[] = {&firstView};
         pass.sampledImages = sampledImages;
@@ -1261,15 +1218,13 @@ TEST(testBufferReadbackStagingRead)
 
     GpuBufferBarrier barriers[2] = {};
     barriers[0].buffer = &inBuf;
-    barriers[0].nextStage = GpuStage_computeShader;
-    barriers[0].nextAccess = GpuAccess_shaderRead;
+    barriers[0].nextAccess = GpuAccess_uniformBufferCompute;
     barriers[1].buffer = &outBuf;
-    barriers[1].nextStage = GpuStage_computeShader;
-    barriers[1].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+    barriers[1].nextAccess = GpuAccess_storageBufferCompute;
     gpuMemoryBarrier(cmd, {barriers, 2}, {});
 
     {
-        GpuComputePass pass{};
+        GpuPass pass{};
         GpuBuffer* storageBufs[] = {&inBuf, &outBuf};
         pass.storageBuffers = storageBufs;
         gpuComputePass(cmd, pass);
@@ -1282,7 +1237,6 @@ TEST(testBufferReadbackStagingRead)
 
     GpuBufferBarrier readBarrier{};
     readBarrier.buffer = &outBuf;
-    readBarrier.nextStage = GpuStage_host;
     readBarrier.nextAccess = GpuAccess_hostRead;
     gpuMemoryBarrier(cmd, {&readBarrier, 1}, {});
 
@@ -1319,14 +1273,12 @@ TEST(testPipelineBarrierChainedDispatches)
     {
         GpuBufferBarrier barriers[2] = {};
         barriers[0].buffer = &bufA;
-        barriers[0].nextStage = GpuStage_computeShader;
-        barriers[0].nextAccess = GpuAccess_shaderRead;
+        barriers[0].nextAccess = GpuAccess_uniformBufferCompute;
         barriers[1].buffer = &bufB;
-        barriers[1].nextStage = GpuStage_computeShader;
-        barriers[1].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        barriers[1].nextAccess = GpuAccess_storageBufferCompute;
         gpuMemoryBarrier(cmd, {barriers, 2}, {});
 
-        GpuComputePass pass{};
+        GpuPass pass{};
         GpuBuffer* storageBufs[] = {&bufA, &bufB};
         pass.storageBuffers = storageBufs;
         gpuComputePass(cmd, pass);
@@ -1341,17 +1293,15 @@ TEST(testPipelineBarrierChainedDispatches)
     {
         GpuBufferBarrier barriers[2] = {};
         barriers[0].buffer = &bufB;
-        barriers[0].nextStage = GpuStage_computeShader;
-        barriers[0].nextAccess = GpuAccess_shaderRead;
+        barriers[0].nextAccess = GpuAccess_uniformBufferCompute;
         barriers[1].buffer = &bufC;
-        barriers[1].nextStage = GpuStage_computeShader;
-        barriers[1].nextAccess = GpuAccess_shaderRead | GpuAccess_shaderWrite;
+        barriers[1].nextAccess = GpuAccess_storageBufferCompute;
         gpuMemoryBarrier(cmd, barriers, {});
     }
 
     // Dispatch 2: bufB -> bufC (multiply by 2 again)
     {
-        GpuComputePass pass{};
+        GpuPass pass{};
         GpuBuffer* storageBufs[] = {&bufB, &bufC};
         pass.storageBuffers = storageBufs;
         gpuComputePass(cmd, pass);
@@ -1366,8 +1316,7 @@ TEST(testPipelineBarrierChainedDispatches)
     {
         GpuBufferBarrier bc{};
         bc.buffer = &bufC;
-        bc.nextStage = GpuStage_host;
-        bc.nextAccess = GpuAccess_hostRead;
+    bc.nextAccess = GpuAccess_hostRead;
         gpuMemoryBarrier(cmd, {&bc, 1}, {});
     }
 
@@ -1387,21 +1336,18 @@ TEST(testImageArrayRendering)
     GpuImageCreateInfo imgCI{};
     imgCI.width = imgSize;
     imgCI.height = imgSize;
-    imgCI.format = Format_r8g8b8a8_unorm;
+    imgCI.format = Format_rgba8_unorm;
     imgCI.arrayLayers = numLayers;
     imgCI.usage = GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc;
     GpuImage arrayImg = GpuImage::createEx(imgCI);
 
     // Hoisted: pipeline and attachment template (invariant across layers)
     GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
-    GpuRenderAttachment colorAtt{};
+    GpuAttachment colorAtt{};
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color.float32[0] = 0.0f;
-    colorAtt.clearValue.color.float32[1] = 0.0f;
-    colorAtt.clearValue.color.float32[2] = 0.0f;
-    colorAtt.clearValue.color.float32[3] = 1.0f;
-    GpuRenderPass pass{};
+    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    GpuPass pass{};
     pass.colorAttachments = {&colorAtt, 1};
 
     for (u32 layer = 0; layer < numLayers; ++layer) {
@@ -1454,8 +1400,7 @@ TEST(testGpuWaitIdle)
 
     GpuBufferBarrier stagingBarrier{};
     stagingBarrier.buffer = &staging;
-    stagingBarrier.nextStage = GpuStage_computeShader;
-    stagingBarrier.nextAccess = GpuAccess_shaderRead;
+    stagingBarrier.nextAccess = GpuAccess_uniformBufferCompute;
     gpuMemoryBarrier(cmd, {&stagingBarrier, 1}, {});
 
     gpuBindPipeline(cmd, pipe);
@@ -1464,8 +1409,7 @@ TEST(testGpuWaitIdle)
 
     GpuBufferBarrier devBarrier{};
     devBarrier.buffer = &devBuf;
-    devBarrier.nextStage = GpuStage_transfer;
-    devBarrier.nextAccess = GpuAccess_transferRead;
+    devBarrier.nextAccess = GpuAccess_transferSrc;
     gpuMemoryBarrier(cmd, {&devBarrier, 1}, {});
 
     gpuCmdEnd(cmd);
@@ -1488,7 +1432,7 @@ TEST(testUniformBufferVertexShader)
     GpuBuffer uniformBuf = GpuBuffer::create(64, GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
     uniformBuf.write(colorData, 0, sizeof(colorData));
 
-    GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
     GpuView colorView = GpuView::create(colorImg, GpuAspect_color);
 
@@ -1499,7 +1443,7 @@ TEST(testUniformBufferVertexShader)
     GpuGraphicsPipelineCreateInfo ci{};
     ci.vertexShader = {test_uniform_vert_spv, sizeof(test_uniform_vert_spv)};
     ci.fragmentShader = {test_uniform_frag_spv, sizeof(test_uniform_frag_spv)};
-    Format colorFmt = Format_r8g8b8a8_unorm;
+    Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
     ci.pushConstantSize = sizeof(Push);
 
@@ -1509,16 +1453,13 @@ TEST(testUniformBufferVertexShader)
 
     GpuCmd* cmd = gpuCmdBegin();
 
-    GpuRenderAttachment colorAtt{};
+    GpuAttachment colorAtt{};
     colorAtt.image = &colorView;
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color.float32[0] = 0.0f;
-    colorAtt.clearValue.color.float32[1] = 0.0f;
-    colorAtt.clearValue.color.float32[2] = 0.0f;
-    colorAtt.clearValue.color.float32[3] = 0.0f;
+    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 0.0f};
 
-    GpuRenderPass pass{};
+    GpuPass pass{};
     GpuBuffer* uniformBufs[] = {&uniformBuf};
     pass.uniformBuffers = uniformBufs;
     pass.colorAttachments = {&colorAtt, 1};
@@ -1551,7 +1492,7 @@ TEST(testStorageImageComputeShader)
 {
     static constexpr u32 imgSize = 4;
 
-    GpuImage img = GpuImage::create(imgSize, imgSize, Format_r8g8b8a8_unorm,
+    GpuImage img = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_transferSrc | GpuImageUsage_transferDst
             | GpuImageUsage_storage | GpuImageUsage_sampled);
     GpuView view = GpuView::create(img, GpuAspect_color, GpuFilter_nearest);
@@ -1567,13 +1508,12 @@ TEST(testStorageImageComputeShader)
     // Barrier: image to general for storage write
     GpuImageBarrier ib{};
     ib.image = &view;
-    ib.nextStage = GpuStage_computeShader;
-    ib.nextAccess = GpuAccess_shaderWrite;
+    ib.nextAccess = GpuAccess_storageImageCompute;
     ib.nextLayout = GpuLayout_general;
     gpuMemoryBarrier(cmd, {}, {&ib, 1});
 
     {
-        GpuComputePass pass{};
+        GpuPass pass{};
         GpuView* storageImages[] = {&view};
         pass.storageImages = storageImages;
         gpuComputePass(cmd, pass);
@@ -1585,8 +1525,7 @@ TEST(testStorageImageComputeShader)
     }
 
     // Barrier: image to transferSrc for readback
-    ib.nextStage = GpuStage_transfer;
-    ib.nextAccess = GpuAccess_transferRead;
+    ib.nextAccess = GpuAccess_transferSrc;
     ib.nextLayout = GpuLayout_transferSrc;
     gpuMemoryBarrier(cmd, {}, {&ib, 1});
 
@@ -1615,7 +1554,7 @@ TEST(testGpuViewWriteCubemap)
     GpuImageCreateInfo ci{};
     ci.width = faceSize;
     ci.height = faceSize;
-    ci.format = Format_r8g8b8a8_unorm;
+    ci.format = Format_rgba8_unorm;
     ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled;
     ci.arrayLayers = 6;
     ci.flags = GpuImageConfig_cubeCompatible;
@@ -1687,7 +1626,7 @@ TEST(testGpuViewGenMipmapsBaseLevel)
     GpuImageCreateInfo ci{};
     ci.width = imgSize;
     ci.height = imgSize;
-    ci.format = Format_r8g8b8a8_unorm;
+    ci.format = Format_rgba8_unorm;
     ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled;
     ci.mipLevels = mipLevels;
     GpuImage mipImg = GpuImage::createEx(ci);
@@ -1722,7 +1661,7 @@ TEST(testGpuViewGenMipmapsMip1Content)
     GpuImageCreateInfo ci{};
     ci.width = w;
     ci.height = h;
-    ci.format = Format_r8g8b8a8_unorm;
+    ci.format = Format_rgba8_unorm;
     ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst
              | GpuImageUsage_sampled;
     ci.mipLevels = mipLevels;
@@ -1775,7 +1714,7 @@ TEST(testGpuLoadOpLoadPreservesContent)
     static constexpr u32 h = 4;
     static constexpr u32 halfW = 2;
 
-    GpuImage img = GpuImage::create(w, h, Format_r8g8b8a8_unorm,
+    GpuImage img = GpuImage::create(w, h, Format_rgba8_unorm,
             GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc
             | GpuImageUsage_transferDst);
     GpuView view = GpuView::create(img, GpuAspect_color);
@@ -1791,9 +1730,9 @@ TEST(testGpuLoadOpLoadPreservesContent)
 
     GpuCmd* cmd = gpuCmdBegin();
 
-    GpuRenderAttachment att = makeColorAtt(&view, 0.0f, 0.0f, 0.0f, 0.0f,
+    GpuAttachment att = makeColorAtt(&view, 0.0f, 0.0f, 0.0f, 0.0f,
                                             GpuLoadOp_load, GpuStoreOp_store);
-    GpuRenderPass pass = simpleColorPass(&att);
+    GpuPass pass = simpleColorPass(&att);
 
     gpuBeginRenderPass(cmd, pass);
     gpuBindPipeline(cmd, pipe);
@@ -1820,7 +1759,7 @@ TEST(testGpuViewMirroredRepeat)
     static constexpr u32 texSize = 2;
     static constexpr u32 outSize = 2;
 
-    GpuImage texImg = GpuImage::create(texSize, texSize, Format_r8g8b8a8_unorm,
+    GpuImage texImg = GpuImage::create(texSize, texSize, Format_rgba8_unorm,
             GpuImageUsage_transferSrc | GpuImageUsage_transferDst
             | GpuImageUsage_sampled);
 
@@ -1847,8 +1786,8 @@ TEST(testGpuViewMirroredRepeat)
 
     GpuCmd* cmd = gpuCmdBegin();
 
-    GpuRenderAttachment att = makeColorAtt(&outView, 0.0f, 0.0f, 0.0f, 0.0f);
-    GpuRenderPass pass = simpleColorPass(&att);
+    GpuAttachment att = makeColorAtt(&outView, 0.0f, 0.0f, 0.0f, 0.0f);
+    GpuPass pass = simpleColorPass(&att);
     GpuView* sampledImages[] = {&view};
     pass.sampledImages = sampledImages;
 
@@ -1876,8 +1815,8 @@ TEST(testBarrierFlagsAllGraphics)
 
     GpuCmd* cmd = gpuCmdBegin();
 
-    GpuRenderAttachment att = makeColorAtt(&colorView, 1.0f, 0.0f, 0.0f, 1.0f);
-    GpuRenderPass pass = simpleColorPass(&att);
+    GpuAttachment att = makeColorAtt(&colorView, 1.0f, 0.0f, 0.0f, 1.0f);
+    GpuPass pass = simpleColorPass(&att);
 
     gpuBeginRenderPass(cmd, pass);
     gpuBindPipeline(cmd, pipe);
@@ -1887,14 +1826,12 @@ TEST(testBarrierFlagsAllGraphics)
     // Barrier with allGraphics / colorAttachmentWrite
     GpuImageBarrier ib{};
     ib.image = &colorView;
-    ib.nextStage = GpuStage_allGraphics;
-    ib.nextAccess = GpuAccess_colorAttachmentWrite;
+    ib.nextAccess = GpuAccess_colorAttachment;
     ib.nextLayout = GpuLayout_transferSrc;
     gpuMemoryBarrier(cmd, {}, {&ib, 1});
 
     // Barrier from read-after-write: allCommands + memoryRead
-    ib.nextStage = GpuStage_allCommands;
-    ib.nextAccess = GpuAccess_memoryRead;
+    ib.nextAccess = GpuAccess_transferSrc;
     ib.nextLayout = GpuLayout_general;
     gpuMemoryBarrier(cmd, {}, {&ib, 1});
 

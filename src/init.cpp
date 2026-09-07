@@ -21,13 +21,6 @@ Maybe<HurdyGurdy> init()
         return {};
     }
 
-    if (!internal::initAudio())
-    {
-        internal::deinitGpu();
-        internal::deinitPlatform();
-        return {};
-    }
-
     internal::initRender2D();
 
     initialized = true;
@@ -67,7 +60,6 @@ HurdyGurdy::~HurdyGurdy() noexcept
     {
         internal::deinitRender2D();
 
-        internal::deinitAudio();
         internal::deinitGpu();
         internal::deinitPlatform();
 

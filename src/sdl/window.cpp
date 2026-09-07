@@ -12,7 +12,7 @@
 namespace hg {
 
 struct WindowData {
-    internal::Swapchain swap{};
+    GpuSwapchain swap{};
 
     SDL_Window* sdlWindow = nullptr;
     f32 mouseX = 0;
@@ -182,7 +182,7 @@ Maybe<Window> Window::create(const WindowConfig& config)
         goto surfaceFailed;
     }
 
-    window->data->swap = internal::Swapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
+    window->data->swap = GpuSwapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
     if (window->data->swap.data == nullptr)
     {
         windowState.ids.remove(SDL_GetWindowID(window->data->sdlWindow));
@@ -199,6 +199,11 @@ surfaceFailed:
     SDL_DestroyWindow(window->data->sdlWindow);
     window->data = {};
     return {};
+}
+
+GpuSwapchain& Window::swapchain()
+{
+    return data->swap;
 }
 
 Format Window::imageFormat() const

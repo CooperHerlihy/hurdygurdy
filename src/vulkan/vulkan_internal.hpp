@@ -1,6 +1,5 @@
 #pragma once
 
-#include "internal.hpp"
 #include "hg/gpu.hpp"
 #include "hg/map.hpp"
 #include "hg/pool.hpp"
@@ -14,6 +13,12 @@ namespace hg {
 
 using GpuDescriptor = Handle;
 
+enum GpuMemoryHostAccess : u32 {
+    GpuMemoryHostAccess_none = 0x0,
+    GpuMemoryHostAccess_write = 0x1,
+    GpuMemoryHostAccess_read = 0x2,
+};
+
 struct GpuBufferData {
     VkBuffer buffer = nullptr;
     VmaAllocation alloc = nullptr;
@@ -22,8 +27,7 @@ struct GpuBufferData {
     GpuDescriptor storageDesc = {};
     GpuBufferUsageFlags usage = 0;
     GpuMemoryHostAccess access = GpuMemoryHostAccess_none;
-    GpuStageFlags lastStage = 0;
-    GpuAccessFlags lastAccess = 0;
+    GpuAccess lastState = GpuAccess_transferDst;
 
     GpuBufferData() = default;
     ~GpuBufferData();
@@ -36,8 +40,7 @@ struct GpuBufferData {
         , storageDesc{std::exchange(other.storageDesc, {})}
         , usage{other.usage}
         , access{other.access}
-        , lastStage{other.lastStage}
-        , lastAccess{other.lastAccess}
+        , lastState{other.lastState}
     {}
 
     GpuBufferData& operator=(GpuBufferData&& other) noexcept
@@ -110,8 +113,7 @@ struct GpuViewData {
     u8 levelCount = 0;
     u8 baseArrayLayer = 0;
     u8 layerCount = 0;
-    GpuStageFlags lastStage = 0;
-    GpuAccessFlags lastAccess = 0;
+    GpuAccess lastState = GpuAccess_transferDst;
     GpuLayout lastLayout = GpuLayout_undefined;
 
     GpuViewData() = default;
@@ -129,8 +131,7 @@ struct GpuViewData {
         , levelCount{other.levelCount}
         , baseArrayLayer{other.baseArrayLayer}
         , layerCount{other.layerCount}
-        , lastStage{other.lastStage}
-        , lastAccess{other.lastAccess}
+        , lastState{other.lastState}
         , lastLayout{other.lastLayout}
     {}
 
@@ -176,9 +177,7 @@ struct GpuPipelineData {
     GpuPipelineData& operator=(const GpuPipelineData&) = delete;
 };
 
-namespace internal {
-
-struct SwapchainData {
+struct GpuSwapchainData {
     VkSurfaceKHR surface = nullptr;
     VkSwapchainKHR swapchain = nullptr;
     Array<GpuImage> images{};
@@ -192,10 +191,10 @@ struct SwapchainData {
     GpuImageUsageFlags imageUsage = {};
     GpuPresentMode presentMode = {};
 
-    SwapchainData() = default;
-    ~SwapchainData();
+    GpuSwapchainData() = default;
+    ~GpuSwapchainData();
 
-    SwapchainData(SwapchainData&& other) noexcept
+    GpuSwapchainData(GpuSwapchainData&& other) noexcept
         : surface{std::exchange(other.surface, nullptr)}
         , swapchain{std::exchange(other.swapchain, nullptr)}
         , images{std::exchange(other.images, {})}
@@ -210,21 +209,19 @@ struct SwapchainData {
         , presentMode{std::exchange(other.presentMode, {})}
     {}
 
-    SwapchainData& operator=(SwapchainData&& other) noexcept
+    GpuSwapchainData& operator=(GpuSwapchainData&& other) noexcept
     {
         if (this != &other)
         {
-            this->~SwapchainData();
-            new (this) SwapchainData{std::move(other)};
+            this->~GpuSwapchainData();
+            new (this) GpuSwapchainData{std::move(other)};
         }
         return *this;
     }
 
-    SwapchainData(const SwapchainData&) = delete;
-    SwapchainData& operator=(const SwapchainData&) = delete;
+    GpuSwapchainData(const GpuSwapchainData&) = delete;
+    GpuSwapchainData& operator=(const GpuSwapchainData&) = delete;
 };
-
-} // namespace internal
 
 namespace vulkan {
 
@@ -250,7 +247,7 @@ constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
 }
 
 struct Frame {
-    Array<internal::Swapchain*> swapchains = {};
+    Array<GpuSwapchain*> swapchains = {};
     VkCommandPool cmdPool = nullptr;
     VkCommandBuffer cmd = nullptr;
     VkFence fence = nullptr;
@@ -279,21 +276,97 @@ struct VulkanState {
 
 extern VulkanState vk;
 
-// -- inline conversion helpers --
-
 inline VkFormat formatToVk(Format format)
 {
-    return static_cast<VkFormat>(format);
+    switch (format)
+    {
+        case Format_undefined: return VK_FORMAT_UNDEFINED;
+        case Format_r8_unorm: return VK_FORMAT_R8_UNORM;
+        case Format_rg8_unorm: return VK_FORMAT_R8G8_UNORM;
+        case Format_rgba8_unorm: return VK_FORMAT_R8G8B8A8_UNORM;
+        case Format_bgra8_unorm: return VK_FORMAT_B8G8R8A8_UNORM;
+        case Format_rgba8_srgb: return VK_FORMAT_R8G8B8A8_SRGB;
+        case Format_bgra8_srgb: return VK_FORMAT_B8G8R8A8_SRGB;
+        case Format_r16_unorm: return VK_FORMAT_R16_UNORM;
+        case Format_r16_sfloat: return VK_FORMAT_R16_SFLOAT;
+        case Format_rg16_unorm: return VK_FORMAT_R16G16_UNORM;
+        case Format_rg16_sfloat: return VK_FORMAT_R16G16_SFLOAT;
+        case Format_rgba16_unorm: return VK_FORMAT_R16G16B16A16_UNORM;
+        case Format_rgba16_sfloat: return VK_FORMAT_R16G16B16A16_SFLOAT;
+        case Format_r32_uint: return VK_FORMAT_R32_UINT;
+        case Format_r32_sfloat: return VK_FORMAT_R32_SFLOAT;
+        case Format_rg32_sfloat: return VK_FORMAT_R32G32_SFLOAT;
+        case Format_rgba32_sfloat: return VK_FORMAT_R32G32B32A32_SFLOAT;
+        case Format_a2b10g10r10_unorm_pack32: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+        case Format_b10g11r11_ufloat_pack32: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+        case Format_d16_unorm: return VK_FORMAT_D16_UNORM;
+        case Format_d32_sfloat: return VK_FORMAT_D32_SFLOAT;
+        case Format_s8_uint: return VK_FORMAT_S8_UINT;
+        case Format_d16_unorm_s8_uint: return VK_FORMAT_D16_UNORM_S8_UINT;
+        case Format_d24_unorm_s8_uint: return VK_FORMAT_D24_UNORM_S8_UINT;
+        case Format_d32_sfloat_s8_uint: return VK_FORMAT_D32_SFLOAT_S8_UINT;
+        case Format_bc1_rgb_unorm_block: return VK_FORMAT_BC1_RGB_UNORM_BLOCK;
+        case Format_bc3_unorm_block: return VK_FORMAT_BC3_UNORM_BLOCK;
+        case Format_bc4_unorm_block: return VK_FORMAT_BC4_UNORM_BLOCK;
+        case Format_bc5_unorm_block: return VK_FORMAT_BC5_UNORM_BLOCK;
+        case Format_bc7_unorm_block: return VK_FORMAT_BC7_UNORM_BLOCK;
+        case Format_astc_4x4_unorm_block: return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+        case Format_astc_8x8_unorm_block: return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
+    }
+    HG_PANIC("Unknown format\n");
+    return VK_FORMAT_UNDEFINED;
 }
 
-inline VkPipelineStageFlags gpuStageToVk(GpuStageFlags stage)
+inline VkPipelineStageFlags gpuStateToVkStage(GpuAccess state)
 {
-    return static_cast<VkPipelineStageFlags>(stage);
+    switch (state)
+    {
+        case GpuAccess_indirectBuffer: return VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+        case GpuAccess_uniformBufferCompute: return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        case GpuAccess_uniformBufferVertex: return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+        case GpuAccess_uniformBufferFragment: return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        case GpuAccess_uniformBufferAllGraphics: return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        case GpuAccess_storageBufferCompute: return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        case GpuAccess_storageBufferVertex: return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+        case GpuAccess_storageBufferFragment: return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        case GpuAccess_storageBufferAllGraphics: return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        case GpuAccess_sampledImageCompute: return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        case GpuAccess_sampledImageFragment: return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        case GpuAccess_storageImageCompute: return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        case GpuAccess_storageImageFragment: return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        case GpuAccess_colorAttachment: return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        case GpuAccess_depthStencilAttachment: return VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        case GpuAccess_transferSrc: return VK_PIPELINE_STAGE_TRANSFER_BIT;
+        case GpuAccess_transferDst: return VK_PIPELINE_STAGE_TRANSFER_BIT;
+        case GpuAccess_hostRead: return VK_PIPELINE_STAGE_HOST_BIT;
+    }
+    return VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 }
 
-inline VkAccessFlags gpuAccessToVk(GpuAccessFlags access)
+inline VkAccessFlags gpuStateToVkAccess(GpuAccess state)
 {
-    return static_cast<VkAccessFlags>(access);
+    switch (state)
+    {
+        case GpuAccess_indirectBuffer: return VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+        case GpuAccess_uniformBufferCompute:
+        case GpuAccess_uniformBufferVertex:
+        case GpuAccess_uniformBufferFragment:
+        case GpuAccess_uniformBufferAllGraphics: return VK_ACCESS_UNIFORM_READ_BIT;
+        case GpuAccess_storageBufferCompute:
+        case GpuAccess_storageBufferVertex:
+        case GpuAccess_storageBufferFragment:
+        case GpuAccess_storageBufferAllGraphics: return VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        case GpuAccess_sampledImageCompute:
+        case GpuAccess_sampledImageFragment: return VK_ACCESS_SHADER_READ_BIT;
+        case GpuAccess_storageImageCompute:
+        case GpuAccess_storageImageFragment: return VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        case GpuAccess_colorAttachment: return VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        case GpuAccess_depthStencilAttachment: return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        case GpuAccess_transferSrc: return VK_ACCESS_TRANSFER_READ_BIT;
+        case GpuAccess_transferDst: return VK_ACCESS_TRANSFER_WRITE_BIT;
+        case GpuAccess_hostRead: return VK_ACCESS_HOST_READ_BIT;
+    }
+    return VK_ACCESS_NONE;
 }
 
 inline VkBufferUsageFlags gpuBufferUsageToVk(GpuBufferUsageFlags usage)
@@ -308,7 +381,19 @@ inline VkImageUsageFlags gpuImageUsageToVk(GpuImageUsageFlags usage)
 
 inline VkImageLayout gpuLayoutToVk(GpuLayout layout)
 {
-    return static_cast<VkImageLayout>(layout);
+    switch (layout)
+    {
+        case GpuLayout_undefined: return VK_IMAGE_LAYOUT_UNDEFINED;
+        case GpuLayout_general: return VK_IMAGE_LAYOUT_GENERAL;
+        case GpuLayout_colorAttachment: return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        case GpuLayout_depthStencilAttachment: return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        case GpuLayout_shaderReadOnly: return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        case GpuLayout_transferSrc: return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        case GpuLayout_transferDst: return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        case GpuLayout_presentSrc: return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    }
+    HG_PANIC("Unknown layout\n");
+    return VK_IMAGE_LAYOUT_UNDEFINED;
 }
 
 inline VkImageViewType gpuViewTypeToVk(GpuViewType type)

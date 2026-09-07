@@ -3,6 +3,7 @@
 #include "hg/inttypes.hpp"
 #include "hg/span.hpp"
 #include "hg/smart_ptr.hpp"
+#include "hg/math.hpp"
 
 namespace hg {
 
@@ -15,271 +16,62 @@ void gpuWaitIdle();
  * Pixel formats
  */
 enum Format : u32 {
+    /**
+     * No format
+     */
     Format_undefined = 0,
-    Format_r4g4_unorm_pack8 = 1,
-    Format_r4g4b4a4_unorm_pack16 = 2,
-    Format_b4g4r4a4_unorm_pack16 = 3,
-    Format_r5g6b5_unorm_pack16 = 4,
-    Format_b5g6r5_unorm_pack16 = 5,
-    Format_r5g5b5a1_unorm_pack16 = 6,
-    Format_b5g5r5a1_unorm_pack16 = 7,
-    Format_a1r5g5b5_unorm_pack16 = 8,
-    Format_r8_unorm = 9,
-    Format_r8_snorm = 10,
-    Format_r8_uscaled = 11,
-    Format_r8_sscaled = 12,
-    Format_r8_uint = 13,
-    Format_r8_sint = 14,
-    Format_r8_srgb = 15,
-    Format_r8g8_unorm = 16,
-    Format_r8g8_snorm = 17,
-    Format_r8g8_uscaled = 18,
-    Format_r8g8_sscaled = 19,
-    Format_r8g8_uint = 20,
-    Format_r8g8_sint = 21,
-    Format_r8g8_srgb = 22,
-    Format_r8g8b8_unorm = 23,
-    Format_r8g8b8_snorm = 24,
-    Format_r8g8b8_uscaled = 25,
-    Format_r8g8b8_sscaled = 26,
-    Format_r8g8b8_uint = 27,
-    Format_r8g8b8_sint = 28,
-    Format_r8g8b8_srgb = 29,
-    Format_b8g8r8_unorm = 30,
-    Format_b8g8r8_snorm = 31,
-    Format_b8g8r8_uscaled = 32,
-    Format_b8g8r8_sscaled = 33,
-    Format_b8g8r8_uint = 34,
-    Format_b8g8r8_sint = 35,
-    Format_b8g8r8_srgb = 36,
-    Format_r8g8b8a8_unorm = 37,
-    Format_r8g8b8a8_snorm = 38,
-    Format_r8g8b8a8_uscaled = 39,
-    Format_r8g8b8a8_sscaled = 40,
-    Format_r8g8b8a8_uint = 41,
-    Format_r8g8b8a8_sint = 42,
-    Format_r8g8b8a8_srgb = 43,
-    Format_b8g8r8a8_unorm = 44,
-    Format_b8g8r8a8_snorm = 45,
-    Format_b8g8r8a8_uscaled = 46,
-    Format_b8g8r8a8_sscaled = 47,
-    Format_b8g8r8a8_uint = 48,
-    Format_b8g8r8a8_sint = 49,
-    Format_b8g8r8a8_srgb = 50,
-    Format_a8b8g8r8_unorm_pack32 = 51,
-    Format_a8b8g8r8_snorm_pack32 = 52,
-    Format_a8b8g8r8_uscaled_pack32 = 53,
-    Format_a8b8g8r8_sscaled_pack32 = 54,
-    Format_a8b8g8r8_uint_pack32 = 55,
-    Format_a8b8g8r8_sint_pack32 = 56,
-    Format_a8b8g8r8_srgb_pack32 = 57,
-    Format_a2r10g10b10_unorm_pack32 = 58,
-    Format_a2r10g10b10_snorm_pack32 = 59,
-    Format_a2r10g10b10_uscaled_pack32 = 60,
-    Format_a2r10g10b10_sscaled_pack32 = 61,
-    Format_a2r10g10b10_uint_pack32 = 62,
-    Format_a2r10g10b10_sint_pack32 = 63,
-    Format_a2b10g10r10_unorm_pack32 = 64,
-    Format_a2b10g10r10_snorm_pack32 = 65,
-    Format_a2b10g10r10_uscaled_pack32 = 66,
-    Format_a2b10g10r10_sscaled_pack32 = 67,
-    Format_a2b10g10r10_uint_pack32 = 68,
-    Format_a2b10g10r10_sint_pack32 = 69,
-    Format_r16_unorm = 70,
-    Format_r16_snorm = 71,
-    Format_r16_uscaled = 72,
-    Format_r16_sscaled = 73,
-    Format_r16_uint = 74,
-    Format_r16_sint = 75,
-    Format_r16_sfloat = 76,
-    Format_r16g16_unorm = 77,
-    Format_r16g16_snorm = 78,
-    Format_r16g16_uscaled = 79,
-    Format_r16g16_sscaled = 80,
-    Format_r16g16_uint = 81,
-    Format_r16g16_sint = 82,
-    Format_r16g16_sfloat = 83,
-    Format_r16g16b16_unorm = 84,
-    Format_r16g16b16_snorm = 85,
-    Format_r16g16b16_uscaled = 86,
-    Format_r16g16b16_sscaled = 87,
-    Format_r16g16b16_uint = 88,
-    Format_r16g16b16_sint = 89,
-    Format_r16g16b16_sfloat = 90,
-    Format_r16g16b16a16_unorm = 91,
-    Format_r16g16b16a16_snorm = 92,
-    Format_r16g16b16a16_uscaled = 93,
-    Format_r16g16b16a16_sscaled = 94,
-    Format_r16g16b16a16_uint = 95,
-    Format_r16g16b16a16_sint = 96,
-    Format_r16g16b16a16_sfloat = 97,
-    Format_r32_uint = 98,
-    Format_r32_sint = 99,
-    Format_r32_sfloat = 100,
-    Format_r32g32_uint = 101,
-    Format_r32g32_sint = 102,
-    Format_r32g32_sfloat = 103,
-    Format_r32g32b32_uint = 104,
-    Format_r32g32b32_sint = 105,
-    Format_r32g32b32_sfloat = 106,
-    Format_r32g32b32a32_uint = 107,
-    Format_r32g32b32a32_sint = 108,
-    Format_r32g32b32a32_sfloat = 109,
-    Format_r64_uint = 110,
-    Format_r64_sint = 111,
-    Format_r64_sfloat = 112,
-    Format_r64g64_uint = 113,
-    Format_r64g64_sint = 114,
-    Format_r64g64_sfloat = 115,
-    Format_r64g64b64_uint = 116,
-    Format_r64g64b64_sint = 117,
-    Format_r64g64b64_sfloat = 118,
-    Format_r64g64b64a64_uint = 119,
-    Format_r64g64b64a64_sint = 120,
-    Format_r64g64b64a64_sfloat = 121,
-    Format_b10g11r11_ufloat_pack32 = 122,
-    Format_e5b9g9r9_ufloat_pack32 = 123,
-    Format_d16_unorm = 124,
-    Format_x8_d24_unorm_pack32 = 125,
-    Format_d32_sfloat = 126,
-    Format_s8_uint = 127,
-    Format_d16_unorm_s8_uint = 128,
-    Format_d24_unorm_s8_uint = 129,
-    Format_d32_sfloat_s8_uint = 130,
-    Format_bc1_rgb_unorm_block = 131,
-    Format_bc1_rgb_srgb_block = 132,
-    Format_bc1_rgba_unorm_block = 133,
-    Format_bc1_rgba_srgb_block = 134,
-    Format_bc2_unorm_block = 135,
-    Format_bc2_srgb_block = 136,
-    Format_bc3_unorm_block = 137,
-    Format_bc3_srgb_block = 138,
-    Format_bc4_unorm_block = 139,
-    Format_bc4_snorm_block = 140,
-    Format_bc5_unorm_block = 141,
-    Format_bc5_snorm_block = 142,
-    Format_bc6h_ufloat_block = 143,
-    Format_bc6h_sfloat_block = 144,
-    Format_bc7_unorm_block = 145,
-    Format_bc7_srgb_block = 146,
-    Format_etc2_r8g8b8_unorm_block = 147,
-    Format_etc2_r8g8b8_srgb_block = 148,
-    Format_etc2_r8g8b8a1_unorm_block = 149,
-    Format_etc2_r8g8b8a1_srgb_block = 150,
-    Format_etc2_r8g8b8a8_unorm_block = 151,
-    Format_etc2_r8g8b8a8_srgb_block = 152,
-    Format_eac_r11_unorm_block = 153,
-    Format_eac_r11_snorm_block = 154,
-    Format_eac_r11g11_unorm_block = 155,
-    Format_eac_r11g11_snorm_block = 156,
-    Format_astc_4x4_unorm_block = 157,
-    Format_astc_4x4_srgb_block = 158,
-    Format_astc_5x4_unorm_block = 159,
-    Format_astc_5x4_srgb_block = 160,
-    Format_astc_5x5_unorm_block = 161,
-    Format_astc_5x5_srgb_block = 162,
-    Format_astc_6x5_unorm_block = 163,
-    Format_astc_6x5_srgb_block = 164,
-    Format_astc_6x6_unorm_block = 165,
-    Format_astc_6x6_srgb_block = 166,
-    Format_astc_8x5_unorm_block = 167,
-    Format_astc_8x5_srgb_block = 168,
-    Format_astc_8x6_unorm_block = 169,
-    Format_astc_8x6_srgb_block = 170,
-    Format_astc_8x8_unorm_block = 171,
-    Format_astc_8x8_srgb_block = 172,
-    Format_astc_10x5_unorm_block = 173,
-    Format_astc_10x5_srgb_block = 174,
-    Format_astc_10x6_unorm_block = 175,
-    Format_astc_10x6_srgb_block = 176,
-    Format_astc_10x8_unorm_block = 177,
-    Format_astc_10x8_srgb_block = 178,
-    Format_astc_10x10_unorm_block = 179,
-    Format_astc_10x10_srgb_block = 180,
-    Format_astc_12x10_unorm_block = 181,
-    Format_astc_12x10_srgb_block = 182,
-    Format_astc_12x12_unorm_block = 183,
-    Format_astc_12x12_srgb_block = 184,
-    Format_g8b8g8r8_422_unorm = 1000156000,
-    Format_b8g8r8g8_422_unorm = 1000156001,
-    Format_g8_b8_r8_3plane_420_unorm = 1000156002,
-    Format_g8_b8r8_2plane_420_unorm = 1000156003,
-    Format_g8_b8_r8_3plane_422_unorm = 1000156004,
-    Format_g8_b8r8_2plane_422_unorm = 1000156005,
-    Format_g8_b8_r8_3plane_444_unorm = 1000156006,
-    Format_r10x6_unorm_pack16 = 1000156007,
-    Format_r10x6g10x6_unorm_2pack16 = 1000156008,
-    Format_r10x6g10x6b10x6a10x6_unorm_4pack16 = 1000156009,
-    Format_g10x6b10x6g10x6r10x6_422_unorm_4pack16 = 1000156010,
-    Format_b10x6g10x6r10x6g10x6_422_unorm_4pack16 = 1000156011,
-    Format_g10x6_b10x6_r10x6_3plane_420_unorm_3pack16 = 1000156012,
-    Format_g10x6_b10x6r10x6_2plane_420_unorm_3pack16 = 1000156013,
-    Format_g10x6_b10x6_r10x6_3plane_422_unorm_3pack16 = 1000156014,
-    Format_g10x6_b10x6r10x6_2plane_422_unorm_3pack16 = 1000156015,
-    Format_g10x6_b10x6_r10x6_3plane_444_unorm_3pack16 = 1000156016,
-    Format_r12x4_unorm_pack16 = 1000156017,
-    Format_r12x4g12x4_unorm_2pack16 = 1000156018,
-    Format_r12x4g12x4b12x4a12x4_unorm_4pack16 = 1000156019,
-    Format_g12x4b12x4g12x4r12x4_422_unorm_4pack16 = 1000156020,
-    Format_b12x4g12x4r12x4g12x4_422_unorm_4pack16 = 1000156021,
-    Format_g12x4_b12x4_r12x4_3plane_420_unorm_3pack16 = 1000156022,
-    Format_g12x4_b12x4r12x4_2plane_420_unorm_3pack16 = 1000156023,
-    Format_g12x4_b12x4_r12x4_3plane_422_unorm_3pack16 = 1000156024,
-    Format_g12x4_b12x4r12x4_2plane_422_unorm_3pack16 = 1000156025,
-    Format_g12x4_b12x4_r12x4_3plane_444_unorm_3pack16 = 1000156026,
-    Format_g16b16g16r16_422_unorm = 1000156027,
-    Format_b16g16r16g16_422_unorm = 1000156028,
-    Format_g16_b16_r16_3plane_420_unorm = 1000156029,
-    Format_g16_b16r16_2plane_420_unorm = 1000156030,
-    Format_g16_b16_r16_3plane_422_unorm = 1000156031,
-    Format_g16_b16r16_2plane_422_unorm = 1000156032,
-    Format_g16_b16_r16_3plane_444_unorm = 1000156033,
-    Format_g8_b8r8_2plane_444_unorm = 1000330000,
-    Format_g10x6_b10x6r10x6_2plane_444_unorm_3pack16 = 1000330001,
-    Format_g12x4_b12x4r12x4_2plane_444_unorm_3pack16 = 1000330002,
-    Format_g16_b16r16_2plane_444_unorm = 1000330003,
-    Format_a4r4g4b4_unorm_pack16 = 1000340000,
-    Format_a4b4g4r4_unorm_pack16 = 1000340001,
-    Format_astc_4x4_sfloat_block = 1000066000,
-    Format_astc_5x4_sfloat_block = 1000066001,
-    Format_astc_5x5_sfloat_block = 1000066002,
-    Format_astc_6x5_sfloat_block = 1000066003,
-    Format_astc_6x6_sfloat_block = 1000066004,
-    Format_astc_8x5_sfloat_block = 1000066005,
-    Format_astc_8x6_sfloat_block = 1000066006,
-    Format_astc_8x8_sfloat_block = 1000066007,
-    Format_astc_10x5_sfloat_block = 1000066008,
-    Format_astc_10x6_sfloat_block = 1000066009,
-    Format_astc_10x8_sfloat_block = 1000066010,
-    Format_astc_10x10_sfloat_block = 1000066011,
-    Format_astc_12x10_sfloat_block = 1000066012,
-    Format_astc_12x12_sfloat_block = 1000066013,
-    Format_a1b5g5r5_unorm_pack16 = 1000470000,
-    Format_a8_unorm = 1000470001,
-    Format_pvrtc1_2bpp_unorm_block_img = 1000054000,
-    Format_pvrtc1_4bpp_unorm_block_img = 1000054001,
-    Format_pvrtc2_2bpp_unorm_block_img = 1000054002,
-    Format_pvrtc2_4bpp_unorm_block_img = 1000054003,
-    Format_pvrtc1_2bpp_srgb_block_img = 1000054004,
-    Format_pvrtc1_4bpp_srgb_block_img = 1000054005,
-    Format_pvrtc2_2bpp_srgb_block_img = 1000054006,
-    Format_pvrtc2_4bpp_srgb_block_img = 1000054007,
-    Format_r8_bool_arm = 1000460000,
-    Format_r16g16_sfixed5_nv = 1000464000,
-    Format_r10x6_uint_pack16_arm = 1000609000,
-    Format_r10x6g10x6_uint_2pack16_arm = 1000609001,
-    Format_r10x6g10x6b10x6a10x6_uint_4pack16_arm = 1000609002,
-    Format_r12x4_uint_pack16_arm = 1000609003,
-    Format_r12x4g12x4_uint_2pack16_arm = 1000609004,
-    Format_r12x4g12x4b12x4a12x4_uint_4pack16_arm = 1000609005,
-    Format_r14x2_uint_pack16_arm = 1000609006,
-    Format_r14x2g14x2_uint_2pack16_arm = 1000609007,
-    Format_r14x2g14x2b14x2a14x2_uint_4pack16_arm = 1000609008,
-    Format_r14x2_unorm_pack16_arm = 1000609009,
-    Format_r14x2g14x2_unorm_2pack16_arm = 1000609010,
-    Format_r14x2g14x2b14x2a14x2_unorm_4pack16_arm = 1000609011,
-    Format_g14x2_b14x2r14x2_2plane_420_unorm_3pack16_arm = 1000609012,
-    Format_g14x2_b14x2r14x2_2plane_422_unorm_3pack16_arm = 1000609013,
+    /**
+     * 8 bit
+     */
+    Format_r8_unorm,
+    Format_rg8_unorm,
+    Format_rgba8_unorm,
+    Format_bgra8_unorm,
+    Format_rgba8_srgb,
+    Format_bgra8_srgb,
+    /**
+     * 16 bit
+     */
+    Format_r16_unorm,
+    Format_r16_sfloat,
+    Format_rg16_unorm,
+    Format_rg16_sfloat,
+    Format_rgba16_unorm,
+    Format_rgba16_sfloat,
+    /**
+     * 32 bit
+     */
+    Format_r32_uint,
+    Format_r32_sfloat,
+    Format_rg32_sfloat,
+    Format_rgba32_sfloat,
+    /**
+     * Packed
+     */
+    Format_a2b10g10r10_unorm_pack32,
+    Format_b10g11r11_ufloat_pack32,
+    /**
+     * Depth/stencil
+     */
+    Format_d16_unorm,
+    Format_d32_sfloat,
+    Format_s8_uint,
+    Format_d16_unorm_s8_uint,
+    Format_d24_unorm_s8_uint,
+    Format_d32_sfloat_s8_uint,
+    /**
+     * BC compressed
+     */
+    Format_bc1_rgb_unorm_block,
+    Format_bc3_unorm_block,
+    Format_bc4_unorm_block,
+    Format_bc5_unorm_block,
+    Format_bc7_unorm_block,
+    /**
+     * ASTC compressed
+     */
+    Format_astc_4x4_unorm_block,
+    Format_astc_8x8_unorm_block,
 };
 
 /**
@@ -294,56 +86,6 @@ enum Format : u32 {
 u32 formatToSize(Format format);
 
 // Vulkan allocator : TODO?
-
-/**
- * Where in the pipeline a resource can be accessed
- */
-enum GpuStage : u32 {
-    GpuStage_none = 0,
-    GpuStage_topOfPipe = 0x00000001,
-    GpuStage_drawIndirect = 0x00000002,
-    GpuStage_vertexInput = 0x00000004,
-    GpuStage_vertexShader = 0x00000008,
-    GpuStage_tessellationControlShader = 0x00000010,
-    GpuStage_tessellationEvaluationShader = 0x00000020,
-    GpuStage_geometryShader = 0x00000040,
-    GpuStage_fragmentShader = 0x00000080,
-    GpuStage_earlyFragmentTests = 0x00000100,
-    GpuStage_lateFragmentTests = 0x00000200,
-    GpuStage_colorAttachmentOutput = 0x00000400,
-    GpuStage_computeShader = 0x00000800,
-    GpuStage_transfer = 0x00001000,
-    GpuStage_bottomOfPipe = 0x00002000,
-    GpuStage_host = 0x00004000,
-    GpuStage_allGraphics = 0x00008000,
-    GpuStage_allCommands = 0x00010000,
-};
-using GpuStageFlags = u32;
-
-/**
- * How a resource can be accessed
- */
-enum GpuAccess : u32 {
-    GpuAccess_none = 0,
-    GpuAccess_indirectCommandRead = 0x00000001,
-    GpuAccess_indexRead = 0x00000002,
-    GpuAccess_vertexAttributeRead = 0x00000004,
-    GpuAccess_uniformRead = 0x00000008,
-    GpuAccess_inputAttachmentRead = 0x00000010,
-    GpuAccess_shaderRead = 0x00000020,
-    GpuAccess_shaderWrite = 0x00000040,
-    GpuAccess_colorAttachmentRead = 0x00000080,
-    GpuAccess_colorAttachmentWrite = 0x00000100,
-    GpuAccess_depthStencilAttachmentRead = 0x00000200,
-    GpuAccess_depthStencilAttachmentWrite = 0x00000400,
-    GpuAccess_transferRead = 0x00000800,
-    GpuAccess_transferWrite = 0x00001000,
-    GpuAccess_hostRead = 0x00002000,
-    GpuAccess_hostWrite = 0x00004000,
-    GpuAccess_memoryRead = 0x00008000,
-    GpuAccess_memoryWrite = 0x00010000,
-};
-using GpuAccessFlags = u32;
 
 /**
  * How a gpu buffer will be used
@@ -366,37 +108,19 @@ enum GpuMemoryUsage : u32 {
     /**
      * It will only be accessed from the device
      */
-    GpuMemoryUsage_deviceOnly = 0,
+    GpuMemoryUsage_deviceOnly,
     /**
      * It will be used as a staging buffer to transfer from host to device
      */
-    GpuMemoryUsage_stagingWrite = 1,
+    GpuMemoryUsage_stagingWrite,
     /**
      * It will be used as a staging buffer to transfer from device to host
      */
-    GpuMemoryUsage_stagingRead = 2,
+    GpuMemoryUsage_stagingRead,
     /**
      * It will be frequently written from the host and read on the device
      */
-    GpuMemoryUsage_frequentUpdate = 3,
-};
-
-/**
- * How a gpu buffer can be accessed
- */
-enum GpuMemoryHostAccess : u32 {
-    /**
-     * The buffer cannot be accessed by the host
-     */
-    GpuMemoryHostAccess_none = 0x0,
-    /**
-     * The buffer can be written to by the host
-     */
-    GpuMemoryHostAccess_write = 0x1,
-    /**
-     * The buffer can be read from by the host
-     */
-    GpuMemoryHostAccess_read = 0x2,
+    GpuMemoryUsage_frequentUpdate,
 };
 
 /**
@@ -501,15 +225,13 @@ using GpuImageUsageFlags = u32;
  */
 enum GpuLayout : u32 {
     GpuLayout_undefined = 0,
-    GpuLayout_general = 1,
-    GpuLayout_colorAttachment = 2,
-    GpuLayout_depthStencilAttachment = 3,
-    GpuLayout_depthStencilReadOnly = 4,
-    GpuLayout_shaderReadOnly = 5,
-    GpuLayout_transferSrc = 6,
-    GpuLayout_transferDst = 7,
-    GpuLayout_preinitialized = 8,
-    GpuLayout_presentSrc = 1000001002,
+    GpuLayout_general,
+    GpuLayout_colorAttachment,
+    GpuLayout_depthStencilAttachment,
+    GpuLayout_shaderReadOnly,
+    GpuLayout_transferSrc,
+    GpuLayout_transferDst,
+    GpuLayout_presentSrc,
 };
 
 /**
@@ -1075,24 +797,35 @@ void gpuDraw(GpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u
 void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
 
 /**
+ * How a gpu resource will be accessed
+ */
+enum GpuAccess : u32 {
+    GpuAccess_indirectBuffer,
+    GpuAccess_uniformBufferCompute,
+    GpuAccess_uniformBufferVertex,
+    GpuAccess_uniformBufferFragment,
+    GpuAccess_uniformBufferAllGraphics,
+    GpuAccess_storageBufferCompute,
+    GpuAccess_storageBufferVertex,
+    GpuAccess_storageBufferFragment,
+    GpuAccess_storageBufferAllGraphics,
+    GpuAccess_sampledImageCompute,
+    GpuAccess_sampledImageFragment,
+    GpuAccess_storageImageCompute,
+    GpuAccess_storageImageFragment,
+    GpuAccess_colorAttachment,
+    GpuAccess_depthStencilAttachment,
+    GpuAccess_transferSrc,
+    GpuAccess_transferDst,
+    GpuAccess_hostRead,
+};
+
+/**
  * An image dependency barrier
  */
 struct GpuImageBarrier {
-    /**
-     * The image to sychronize
-     */
     GpuView* image = nullptr;
-    /**
-     * Where the image will be used next
-     */
-    GpuStageFlags nextStage = 0;
-    /**
-     * How the image will be accessed next
-     */
-    GpuAccessFlags nextAccess = 0;
-    /**
-     * The next layout the image needs to be in
-     */
+    GpuAccess nextAccess = GpuAccess_transferDst;
     GpuLayout nextLayout = GpuLayout_undefined;
 };
 
@@ -1100,18 +833,8 @@ struct GpuImageBarrier {
  * A buffer dependency barrier
  */
 struct GpuBufferBarrier {
-    /**
-     * The buffer to sychronize
-     */
     GpuBuffer* buffer = nullptr;
-    /**
-     * Where the image will be used next
-     */
-    GpuStageFlags nextStage = 0;
-    /**
-     * How the image will be accessed next
-     */
-    GpuAccessFlags nextAccess = 0;
+    GpuAccess nextAccess = GpuAccess_transferDst;
 };
 
 /**
@@ -1126,37 +849,6 @@ void gpuMemoryBarrier(
     GpuCmd* cmd,
     Span<const GpuBufferBarrier> bufferBarriers,
     Span<const GpuImageBarrier> imageBarriers);
-
-/**
- * A compute pass description
- */
-struct GpuComputePass {
-    /**
-     * The uniforms buffer dependencies
-     */
-    Span<GpuBuffer*> uniformBuffers{};
-    /**
-     * The storage buffer dependencies
-     */
-    Span<GpuBuffer*> storageBuffers{};
-    /**
-     * The sampled image dependencies
-     */
-    Span<GpuView*> sampledImages{};
-    /**
-     * The storage image dependencies
-     */
-    Span<GpuView*> storageImages{};
-};
-
-/**
- * Performs memory barriers for compute shader resources
- *
- * Parameters
- * - cmd The command buffer
- * - pass The compute pass description
- */
-void gpuComputePass(GpuCmd* cmd, const GpuComputePass& pass);
 
 /**
  * The operation to load a render attachment
@@ -1176,34 +868,10 @@ enum GpuStoreOp : u32 {
 };
 
 /**
- * The value to clear color attachments to
- */
-union GpuClearValueColor {
-    /**
-     * The value as f32
-     */
-    f32 float32[4];
-    /**
-     * The value as i32
-     */
-    i32 int32[4];
-    /**
-     * The value as u32
-     */
-    u32 uint32[4];
-};
-
-/**
  * The value to clear depth and stencil attachments to
  */
 struct GpuClearValueDepthStencil {
-    /**
-     * The depth value
-     */
     f32 depth = 0.0f;
-    /**
-     * The stencil value
-     */
     u32 stencil = 0;
 };
 
@@ -1211,20 +879,14 @@ struct GpuClearValueDepthStencil {
  * The value to clear a render attachment to
  */
 union GpuClearValue {
-    /**
-     * The value for color attachments
-     */
-    GpuClearValueColor color;
-    /**
-     * The value for depth and stencil attachments
-     */
+    Vec4 color;
     GpuClearValueDepthStencil depthStencil;
 };
 
 /**
  * A rendering attachment
  */
-struct GpuRenderAttachment {
+struct GpuAttachment {
     /**
      * The image attached, must not be nullptr
      */
@@ -1244,11 +906,11 @@ struct GpuRenderAttachment {
 };
 
 /**
- * A render pass description
+ * A render/compute pass description
  */
-struct GpuRenderPass {
+struct GpuPass {
     /**
-     * The uniforms buffer dependencies
+     * The uniform buffer dependencies
      */
     Span<GpuBuffer*> uniformBuffers{};
     /**
@@ -1266,7 +928,7 @@ struct GpuRenderPass {
     /**
      * The color images to write to
      */
-    Span<const GpuRenderAttachment> colorAttachments{};
+    Span<const GpuAttachment> colorAttachments{};
     /**
      * The number of layers in each color attachment to write to
      */
@@ -1274,12 +936,23 @@ struct GpuRenderPass {
     /**
      * The depth attachment, if any
      */
-    const GpuRenderAttachment* depthAttachment = nullptr;
+    const GpuAttachment* depthAttachment = nullptr;
     /**
      * The stencil attachment, if any
      */
-    const GpuRenderAttachment* stencilAttachment = nullptr;
+    const GpuAttachment* stencilAttachment = nullptr;
 };
+
+/**
+ * Performs memory barriers for compute shader resources
+ *
+ * Note, all attachments in the pass description are ignored
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - pass The compute pass description
+ */
+void gpuComputePass(GpuCmd* cmd, const GpuPass& pass);
 
 /**
  * Performs render barrier and begins a render pass
@@ -1288,7 +961,7 @@ struct GpuRenderPass {
  * - cmd The command buffer
  * - pass The render pass description
  */
-void gpuBeginRenderPass(GpuCmd* cmd, const GpuRenderPass& pass);
+void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass);
 
 /**
  * Ends the render pass
@@ -1308,5 +981,113 @@ void gpuSetViewport(GpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near =
  */
 void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
 
-} // namespace hg
+/**
+ * The present mode for the swapchain
+ */
+enum GpuPresentMode : u32 {
+    GpuPresentMode_immediate = 0,
+    GpuPresentMode_mailbox = 1,
+    GpuPresentMode_fifo = 2,
+    GpuPresentMode_fifoRelaxed = 3,
+};
 
+/**
+ * GpuSwapchain implementation data
+ */
+struct GpuSwapchainData;
+
+/**
+ * A gpu swapchain, used internally for window implementations
+ */
+struct GpuSwapchain {
+    /**
+     * The implementation data
+     */
+    UniquePtr<GpuSwapchainData> data;
+
+    /**
+     * Construct empty
+     */
+    GpuSwapchain() noexcept;
+
+    /**
+     * Create a gpu swapchain
+     */
+    static GpuSwapchain create(
+        void* surface,
+        u32 width,
+        u32 height,
+        GpuPresentMode presentMode,
+        GpuImageUsageFlags imageUsage);
+
+    /**
+     * Recreate the swapchain with a new size
+     */
+    void resize(u32 width, u32 height);
+
+    /**
+     * Destroy the gpu swapchain
+     */
+    ~GpuSwapchain() noexcept;
+
+    /**
+     * Get the current swapchain width
+     */
+    u32 width() const;
+
+    /**
+     * Get the current swapchain height
+     */
+    u32 height() const;
+
+    /**
+     * Get the current swapchain format
+     */
+    Format format() const;
+
+    /**
+     * Get the current swapchain image view
+     */
+    GpuView* currentView() const;
+
+    /**
+     * Get the current swapchain image count
+     */
+    u32 imageCount() const;
+
+    /**
+     * Move construct
+     */
+    GpuSwapchain(GpuSwapchain&& other) noexcept;
+
+    /**
+     * Move assign
+     */
+    GpuSwapchain& operator=(GpuSwapchain&& other) noexcept;
+
+    GpuSwapchain(const GpuSwapchain&) = delete;
+    GpuSwapchain& operator=(const GpuSwapchain&) = delete;
+};
+
+/**
+ * Forward declaration of Window
+ */
+struct Window;
+
+/**
+ * Acquire an image from each swapchain and begin a command buffer
+ *
+ * Returns
+ * - The command buffer to record this frame
+ */
+GpuCmd* gpuBeginFrame(Span<Window*> windows);
+
+/**
+ * Finishes recording the command buffer and presents the window images
+ *
+ * Parameters
+ * - cmd The command buffer given from beginFrame
+ */
+void gpuEndFrame(GpuCmd* cmd);
+
+} // namespace hg

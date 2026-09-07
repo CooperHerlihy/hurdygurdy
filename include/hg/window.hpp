@@ -192,16 +192,6 @@ struct DisplayInfo {
 Span<DisplayInfo> displayInfo();
 
 /**
- * The present mode for the swapchain
- */
-enum GpuPresentMode : u32 {
-    GpuPresentMode_immediate = 0,
-    GpuPresentMode_mailbox = 1,
-    GpuPresentMode_fifo = 2,
-    GpuPresentMode_fifoRelaxed = 3,
-};
-
-/**
  * Configuration for a window
  */
 struct WindowConfig {
@@ -249,6 +239,11 @@ struct Window {
      * Close the window
      */
     ~Window() noexcept;
+
+    /**
+     * Return the window's swapchain
+     */
+    GpuSwapchain& swapchain();
 
     /**
      * Returns the window's pixel format
@@ -456,21 +451,5 @@ void setClipboardText(const char* text);
  * Opens a URL in the platform's default handler
  */
 void openURL(const char* url);
-
-/**
- * Acquire an image from each swapchain and begin a command buffer
- *
- * Returns
- * - The command buffer to record this frame
- */
-GpuCmd* gpuBeginFrame(Span<Window*> windows);
-
-/**
- * Finishes recording the command buffer and presents the window images
- *
- * Parameters
- * - cmd The command buffer given from beginFrame
- */
-void gpuEndFrame(GpuCmd* cmd);
 
 } // namespace hg

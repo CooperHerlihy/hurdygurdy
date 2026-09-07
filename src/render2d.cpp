@@ -30,13 +30,14 @@ void initRender2D()
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    render2D.defaultTex.image = GpuImage::create(2, 2, Format_r8g8b8a8_srgb,
+    render2D.defaultTex.image = GpuImage::create(2, 2, Format_rgba8_srgb,
         GpuImageUsage_sampled | GpuImageUsage_transferDst);
     render2D.defaultTex.view = GpuView::create(render2D.defaultTex.image, GpuAspect_color, GpuFilter_nearest);
     render2D.defaultTex.view.write(defaultColors);
 
     TextureData fontData{};
     Serializer s = readSerialBinary(scratch, {pixel_font, sizeof(pixel_font)});
+
     serializeBegin(&s);
     serializeObject(&s, &fontData.width, &fontData.height, &fontData.format);
     u64 size = fontData.width * fontData.height * formatToSize(fontData.format);
@@ -48,13 +49,7 @@ void initRender2D()
     *render2D.defaultFont.texture = createTextureFromData(fontData);
 
     render2D.defaultFont.addEmpty(32);
-    render2D.defaultFont.addGrid(
-        {{0, 0}, {1, 1}},
-        12,
-        8,
-        95);
-        // 1.0f / 6.0f,
-        // 1.0f / 8.0f);
+    render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95);
 }
 
 void deinitRender2D()
@@ -80,7 +75,7 @@ void assetLoadImpl(AssetData<TextureData>* data)
     data->asset.width = static_cast<u32>(x);
     data->asset.height = static_cast<u32>(y);
     data->asset.depth = 1;
-    data->asset.format = Format_r8g8b8a8_srgb;
+    data->asset.format = Format_rgba8_srgb;
 }
 
 TextureData::~TextureData() noexcept

@@ -9,6 +9,9 @@ namespace hg {
 void windowInit();
 void windowDeinit();
 
+bool initAudio();
+void deinitAudio();
+
 namespace sdl {
 
 bool loadSDL();
