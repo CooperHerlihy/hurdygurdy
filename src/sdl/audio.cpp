@@ -13,8 +13,6 @@ struct AudioState {
     AudioCallback callback = nullptr;
     void* callbackData = nullptr;
     AudioConfig callbackConfig{};
-
-    AudioDevice defaultAudioDevice = {0};
 };
 
 static AudioState audio{};
@@ -76,7 +74,7 @@ void sdlCallback(
         HG_PANIC("SDL could not push audio stream data: %s\n", SDL_GetError());
 }
 
-void AudioDevice::setCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
+void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
 {
     SDL_AudioSpec audioSpec{};
     audioSpec.format = SDL_AUDIO_F32;
@@ -94,16 +92,11 @@ void AudioDevice::setCallback(AudioCallback callback, void* userData, const Audi
         HG_PANIC("SDL could not set audio stream callback: %s\n", SDL_GetError());
 }
 
-void AudioDevice::unsetCallback()
+void unsetAudioCallback()
 {
     audio.callback = nullptr;
     audio.callbackData = nullptr;
     audio.callbackConfig = {};
-}
-
-AudioDevice& defaultAudioDevice()
-{
-    return audio.defaultAudioDevice;
 }
 
 } // namespace hg

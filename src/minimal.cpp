@@ -51,7 +51,7 @@ int main()
     }
 
     AudioPlayer audio{};
-    defaultAudioDevice().setCallback(audio.callback, &audio);
+    setAudioCallback(audio.callback, &audio);
 
     audio.playMusic(music);
     audio.setMusicGain(music, 0.3f);

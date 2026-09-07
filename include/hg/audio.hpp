@@ -33,29 +33,14 @@ struct AudioConfig {
 using AudioCallback = void (*)(void* userData, Span<f32> audioBuffer, AudioConfig config);
 
 /**
- * An audio device
+ * Set the current audio callback and start the device
  */
-struct AudioDevice {
-    /**
-     * The audio device identifier
-     */
-    u32 id;
-
-    /**
-     * Set the current audio callback and start the device
-     */
-    void setCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig = {});
-
-    /**
-     * Remove the callback and stop the device
-     */
-    void unsetCallback();
-};
+void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig = {});
 
 /**
- * Get the default audio device
+ * Remove the callback and stop the device
  */
-AudioDevice& defaultAudioDevice();
+void unsetAudioCallback();
 
 /**
  * Audio data asset
