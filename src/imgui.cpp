@@ -4,7 +4,6 @@
 
 #include "hg/window.hpp"
 #include "hg/time.hpp"
-#include "hg/array.hpp"
 
 #include <imgui.h>
 
@@ -13,13 +12,9 @@ namespace hg {
 struct ImGuiState {
     Window* window = nullptr;
     Clock clock{};
-
     CursorType cursors[ImGuiMouseCursor_COUNT]{};
     CursorType lastCursor = CursorType_count;
-
     String clipboardText;
-
-    Array<UniquePtr<Window>> ownedWindows;
 };
 
 static ImGuiState state;
@@ -118,13 +113,120 @@ static ImGuiKey hgButtonToImGuiKey(Button button)
     }
 }
 
-static void processWindowEvents(ImGuiIO& io, Window* window)
+void initImGui(
+    const Window& window,
+    Format colorFormat,
+    Format depthFormat,
+    Format stencilFormat)
 {
-    Span<WindowEvent> events = window->events();
-    for (u32 n = 0; n < events.count; n++)
-    {
-        const WindowEvent& event = events[n];
+    ImGuiIO& io = ImGui::GetIO();
+    IMGUI_CHECKVERSION();
 
+    state.window = const_cast<Window*>(&window);
+    state.clock = Clock{};
+    state.lastCursor = CursorType_count;
+
+    io.BackendPlatformName = "imgui_hurdygurdy";
+    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+    io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
+
+    state.cursors[ImGuiMouseCursor_Arrow] = CursorType_arrow;
+    state.cursors[ImGuiMouseCursor_TextInput] = CursorType_textInput;
+    state.cursors[ImGuiMouseCursor_ResizeAll] = CursorType_resizeAll;
+    state.cursors[ImGuiMouseCursor_ResizeNS] = CursorType_resizeNS;
+    state.cursors[ImGuiMouseCursor_ResizeEW] = CursorType_resizeEW;
+    state.cursors[ImGuiMouseCursor_ResizeNESW] = CursorType_resizeNESW;
+    state.cursors[ImGuiMouseCursor_ResizeNWSE] = CursorType_resizeNWSE;
+    state.cursors[ImGuiMouseCursor_Hand] = CursorType_hand;
+    state.cursors[ImGuiMouseCursor_Wait] = CursorType_wait;
+    state.cursors[ImGuiMouseCursor_Progress] = CursorType_progress;
+    state.cursors[ImGuiMouseCursor_NotAllowed] = CursorType_notAllowed;
+
+    ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+
+    pio.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* text) -> void
+    {
+        setClipboardText(text);
+    };
+    pio.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char*
+    {
+        if (hasClipboardText())
+            state.clipboardText = getClipboardText();
+        return state.clipboardText.chars;
+    };
+    pio.Platform_OpenInShellFn = [](ImGuiContext*, const char* url) -> bool
+    {
+        openURL(url);
+        return true;
+    };
+
+    pio.Monitors.resize(0);
+    Span<DisplayInfo> displays = displayInfo();
+    for (u32 i = 0; i < displays.count; i++)
+    {
+        ImGuiPlatformMonitor monitor;
+
+        monitor.DpiScale = displays[i].dpiScale;
+        if (monitor.DpiScale <= 0.0f)
+            continue;
+
+        monitor.MainPos = monitor.WorkPos = ImVec2(
+            static_cast<f32>(displays[i].posX),
+            static_cast<f32>(displays[i].posY));
+        monitor.MainSize = monitor.WorkSize = ImVec2(
+            static_cast<f32>(displays[i].sizeW),
+            static_cast<f32>(displays[i].sizeH));
+
+        if (displays[i].workSizeW > 0 && displays[i].workSizeH > 0)
+        {
+            monitor.WorkPos = ImVec2(
+                static_cast<f32>(displays[i].workPosX),
+                static_cast<f32>(displays[i].workPosY));
+            monitor.WorkSize = ImVec2(
+                static_cast<f32>(displays[i].workSizeW),
+                static_cast<f32>(displays[i].workSizeH));
+        }
+
+        monitor.PlatformHandle = reinterpret_cast<void*>(static_cast<intptr_t>(i));
+
+        pio.Monitors.push_back(monitor);
+    }
+
+    internal::initImGuiGpu(
+        *reinterpret_cast<const internal::Swapchain*>(window.data.ptr),
+        colorFormat,
+        depthFormat,
+        stencilFormat);
+
+    ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+    mainViewport->PlatformUserData = state.window;
+    mainViewport->PlatformHandle = state.window;
+}
+
+void deinitImGui()
+{
+    ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+    mainViewport->PlatformUserData = nullptr;
+    mainViewport->PlatformHandle = nullptr;
+
+    internal::deinitImGuiGpu();
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendPlatformName = nullptr;
+    io.BackendFlags &= ~(ImGuiBackendFlags_HasMouseCursors
+        | ImGuiBackendFlags_HasSetMousePos
+        | ImGuiBackendFlags_HasGamepad);
+
+    ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+    platformIO.ClearPlatformHandlers();
+}
+
+void beginImGuiFrame()
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    for (WindowEvent& event : state.window->events())
+    {
         switch (event.type)
         {
             case WindowEventType_buttonPress:
@@ -181,292 +283,9 @@ static void processWindowEvents(ImGuiIO& io, Window* window)
                 break;
         }
     }
-}
 
-static void platformCreateWindow(ImGuiViewport* viewport)
-{
-    WindowConfig config;
-    config.hidden = true;
+    io.AddMousePosEvent(state.window->mouseX(), state.window->mouseY());
 
-    Maybe<Window> window = Window::create(config);
-    if (window.has)
-    {
-        UniquePtr<Window> owned = makeUnique<Window>(std::move(window.val));
-        viewport->PlatformUserData = owned;
-        viewport->PlatformHandle = owned;
-        state.ownedWindows.push(std::move(owned));
-    }
-}
-
-static void platformDestroyWindow(ImGuiViewport* viewport)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-    {
-        for (u64 i = 0; i < state.ownedWindows.count; i++)
-        {
-            if (state.ownedWindows[i] == window)
-            {
-                state.ownedWindows.removeSwap(i);
-                break;
-            }
-        }
-    }
-    viewport->PlatformUserData = nullptr;
-    viewport->PlatformHandle = nullptr;
-}
-
-static void platformShowWindow(ImGuiViewport* viewport)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        window->show();
-}
-
-static ImVec2 platformGetWindowPos(ImGuiViewport* viewport)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        return ImVec2(static_cast<f32>(window->posX()), static_cast<f32>(window->posY()));
-    return ImVec2(0, 0);
-}
-
-static void platformSetWindowPos(ImGuiViewport* viewport, ImVec2 pos)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        window->setPosition(static_cast<i32>(pos.x), static_cast<i32>(pos.y));
-}
-
-static ImVec2 platformGetWindowSize(ImGuiViewport* viewport)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        return ImVec2(static_cast<f32>(window->width()), static_cast<f32>(window->height()));
-    return ImVec2(0, 0);
-}
-
-static void platformSetWindowSize(ImGuiViewport* viewport, ImVec2 size)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        window->setSize(static_cast<u32>(size.x), static_cast<u32>(size.y));
-}
-
-static ImVec2 platformGetWindowFramebufferScale(ImGuiViewport* viewport)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        return ImVec2(window->scaleX(), window->scaleY());
-    return ImVec2(1, 1);
-}
-
-static void platformSetWindowFocus(ImGuiViewport* viewport)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        window->setFocus();
-}
-
-static bool platformGetWindowFocus(ImGuiViewport* viewport)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        return window->isFocused();
-    return false;
-}
-
-static bool platformGetWindowMinimized(ImGuiViewport* viewport)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        return window->isMinimized();
-    return false;
-}
-
-static void platformSetWindowTitle(ImGuiViewport* viewport, const char* title)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        window->setTitle(title);
-}
-
-static void platformSetWindowAlpha(ImGuiViewport* viewport, float alpha)
-{
-    Window* window = static_cast<Window*>(viewport->PlatformUserData);
-    if (window != nullptr)
-        window->setOpacity(alpha);
-}
-
-static int platformCreateVkSurface(ImGuiViewport* viewport, ImU64 vkInstance, const void* vkAllocator, ImU64* outVkSurface)
-{
-    (void)viewport;
-    (void)vkInstance;
-    (void)vkAllocator;
-    (void)outVkSurface;
-    return 1;
-}
-
-void initImGui(
-    const Window& window,
-    Format colorFormat,
-    Format depthFormat,
-    Format stencilFormat)
-{
-    ImGuiIO& io = ImGui::GetIO();
-    IMGUI_CHECKVERSION();
-
-    state.window = const_cast<Window*>(&window);
-    state.clock = Clock{};
-    state.lastCursor = CursorType_count;
-
-    io.BackendPlatformName = "imgui_hurdygurdy";
-    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
-    io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
-
-    state.cursors[ImGuiMouseCursor_Arrow] = CursorType_arrow;
-    state.cursors[ImGuiMouseCursor_TextInput] = CursorType_textInput;
-    state.cursors[ImGuiMouseCursor_ResizeAll] = CursorType_resizeAll;
-    state.cursors[ImGuiMouseCursor_ResizeNS] = CursorType_resizeNS;
-    state.cursors[ImGuiMouseCursor_ResizeEW] = CursorType_resizeEW;
-    state.cursors[ImGuiMouseCursor_ResizeNESW] = CursorType_resizeNESW;
-    state.cursors[ImGuiMouseCursor_ResizeNWSE] = CursorType_resizeNWSE;
-    state.cursors[ImGuiMouseCursor_Hand] = CursorType_hand;
-    state.cursors[ImGuiMouseCursor_Wait] = CursorType_wait;
-    state.cursors[ImGuiMouseCursor_Progress] = CursorType_progress;
-    state.cursors[ImGuiMouseCursor_NotAllowed] = CursorType_notAllowed;
-
-    ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
-    platformIO.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* text) -> void
-    {
-        setClipboardText(text);
-    };
-    platformIO.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char*
-    {
-        if (state.clipboardText.length == 0 && hasClipboardText())
-            state.clipboardText = getClipboardText();
-        return state.clipboardText.chars;
-    };
-    platformIO.Platform_OpenInShellFn = [](ImGuiContext*, const char* url) -> bool { openURL(url); return true; };
-
-    ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
-    pio.Monitors.resize(0);
-
-    Span<DisplayInfo> displays = displayInfo();
-    for (u32 n = 0; n < displays.count; n++)
-    {
-        DisplayInfo& info = displays[n];
-        ImGuiPlatformMonitor monitor;
-        monitor.MainPos = monitor.WorkPos = ImVec2(
-            static_cast<f32>(info.posX),
-            static_cast<f32>(info.posY));
-        monitor.MainSize = monitor.WorkSize = ImVec2(
-            static_cast<f32>(info.sizeW),
-            static_cast<f32>(info.sizeH));
-        if (info.workSizeW > 0 && info.workSizeH > 0)
-        {
-            monitor.WorkPos = ImVec2(
-                static_cast<f32>(info.workPosX),
-                static_cast<f32>(info.workPosY));
-            monitor.WorkSize = ImVec2(
-                static_cast<f32>(info.workSizeW),
-                static_cast<f32>(info.workSizeH));
-        }
-        monitor.DpiScale = info.dpiScale;
-        monitor.PlatformHandle = reinterpret_cast<void*>(static_cast<intptr_t>(n));
-        if (monitor.DpiScale <= 0.0f)
-            continue;
-        pio.Monitors.push_back(monitor);
-    }
-
-    internal::initImGuiGpu(
-        *reinterpret_cast<const internal::Swapchain*>(window.data.ptr),
-        colorFormat,
-        depthFormat,
-        stencilFormat);
-
-    // Multi-viewport support
-    io.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;
-    io.BackendFlags |= ImGuiBackendFlags_HasParentViewport;
-
-    platformIO.Platform_CreateWindow = platformCreateWindow;
-    platformIO.Platform_DestroyWindow = platformDestroyWindow;
-    platformIO.Platform_ShowWindow = platformShowWindow;
-    platformIO.Platform_UpdateWindow = [](ImGuiViewport*) {};
-    platformIO.Platform_SetWindowPos = platformSetWindowPos;
-    platformIO.Platform_GetWindowPos = platformGetWindowPos;
-    platformIO.Platform_SetWindowSize = platformSetWindowSize;
-    platformIO.Platform_GetWindowSize = platformGetWindowSize;
-    platformIO.Platform_GetWindowFramebufferScale = platformGetWindowFramebufferScale;
-    platformIO.Platform_SetWindowFocus = platformSetWindowFocus;
-    platformIO.Platform_GetWindowFocus = platformGetWindowFocus;
-    platformIO.Platform_GetWindowMinimized = platformGetWindowMinimized;
-    platformIO.Platform_SetWindowTitle = platformSetWindowTitle;
-    platformIO.Platform_RenderWindow = [](ImGuiViewport*, void*) {};
-    platformIO.Platform_SwapBuffers = [](ImGuiViewport*, void*) {};
-    platformIO.Platform_SetWindowAlpha = platformSetWindowAlpha;
-    platformIO.Platform_CreateVkSurface = platformCreateVkSurface;
-
-    // Register main viewport
-    ImGuiViewport* mainViewport = ImGui::GetMainViewport();
-    mainViewport->PlatformUserData = state.window;
-    mainViewport->PlatformHandle = state.window;
-}
-
-void deinitImGui()
-{
-    internal::deinitImGuiGpu();
-
-    ImGuiIO& io = ImGui::GetIO();
-    ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
-
-    ImGui::DestroyPlatformWindows();
-
-    state.clipboardText = String{};
-
-    // Clean up main viewport (but not the window - it's owned by the caller)
-    ImGuiViewport* mainViewport = ImGui::GetMainViewport();
-    mainViewport->PlatformUserData = nullptr;
-    mainViewport->PlatformHandle = nullptr;
-
-    io.BackendPlatformName = nullptr;
-    io.BackendFlags &= ~(ImGuiBackendFlags_HasMouseCursors
-        | ImGuiBackendFlags_HasSetMousePos
-        | ImGuiBackendFlags_HasGamepad
-        | ImGuiBackendFlags_PlatformHasViewports
-        | ImGuiBackendFlags_HasParentViewport);
-    platformIO.ClearPlatformHandlers();
-}
-
-void beginImGuiFrame()
-{
-    ImGuiIO& io = ImGui::GetIO();
-
-    // Process events for all viewports
-    ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
-    for (int n = 0; n < pio.Viewports.Size; n++)
-    {
-        ImGuiViewport* viewport = pio.Viewports[n];
-        Window* window = static_cast<Window*>(viewport->PlatformUserData);
-        if (window == nullptr)
-            continue;
-
-        bool isMainViewport = (window == state.window);
-        processWindowEvents(io, window);
-
-        // Update mouse position
-        if (isMainViewport)
-        {
-            io.AddMousePosEvent(window->mouseX(), window->mouseY());
-        }
-        else
-        {
-            // Secondary viewports use global mouse coordinates
-            io.AddMousePosEvent(window->globalMouseX(), window->globalMouseY());
-        }
-    }
-
-    // Update display size for main viewport
     io.DisplaySize = ImVec2(
         static_cast<f32>(state.window->width()),
         static_cast<f32>(state.window->height()));
@@ -476,13 +295,11 @@ void beginImGuiFrame()
     if (io.DeltaTime <= 0.0f)
         io.DeltaTime = 1.0f / 60.0f;
 
-    // Mouse wheel (from main window)
     f32 wheelDX = state.window->wheelDX();
     f32 wheelDY = state.window->wheelDY();
     if (wheelDX != 0.0f || wheelDY != 0.0f)
         io.AddMouseWheelEvent(wheelDX, wheelDY);
 
-    // Mouse cursor
     if (!(io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange))
     {
         ImGuiMouseCursor imguiCursor = ImGui::GetMouseCursor();
