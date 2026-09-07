@@ -1,13 +1,75 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/maybe.hpp"
 #include "hg/span.hpp"
 #include "hg/smart_ptr.hpp"
 #include "hg/strings.hpp"
 #include "hg/gpu.hpp"
 
 namespace hg {
+
+/**
+ * Display enumeration info
+ */
+struct DisplayInfo {
+    i32 posX = 0;
+    i32 posY = 0;
+    u32 sizeW = 0;
+    u32 sizeH = 0;
+    i32 workPosX = 0;
+    i32 workPosY = 0;
+    u32 workSizeW = 0;
+    u32 workSizeH = 0;
+    f32 dpiScale = 1.0f;
+};
+
+/**
+ * Returns the display info
+ */
+Span<DisplayInfo> displayInfo();
+
+/**
+ * The types of cursors
+ */
+enum CursorType : u32 {
+    CursorType_arrow,
+    CursorType_textInput,
+    CursorType_resizeAll,
+    CursorType_resizeNS,
+    CursorType_resizeEW,
+    CursorType_resizeNESW,
+    CursorType_resizeNWSE,
+    CursorType_hand,
+    CursorType_wait,
+    CursorType_progress,
+    CursorType_notAllowed,
+    CursorType_count,
+};
+
+/**
+ * Set the current cursor
+ */
+void setCursor(CursorType type);
+
+/**
+ * Show or hide the cursor
+ */
+void showCursor(bool show = true);
+
+/**
+ * Returns the platform clipboard text
+ */
+String getClipboardText();
+
+/**
+ * Set the platform clipboard text
+ */
+void setClipboardText(StringView text);
+
+/**
+ * Open a URL in the platform's default handler
+ */
+void openURL(StringView url);
 
 /**
  * Processes all events since startup or the last call to process events
@@ -24,9 +86,21 @@ bool wasQuit();
  */
 enum WindowEventType : u32 {
     WindowEventType_none = 0,
+    WindowEventType_quit,
+    WindowEventType_close,
+    WindowEventType_focusGained,
+    WindowEventType_focusLost,
+    WindowEventType_resize,
+    WindowEventType_maximize,
+    WindowEventType_minimize,
+    WindowEventType_restore,
+    WindowEventType_textInput,
     WindowEventType_buttonPress,
     WindowEventType_buttonRelease,
-    WindowEventType_textInput,
+    WindowEventType_gamepadButtonPress,
+    WindowEventType_gamepadButtonRelease,
+    WindowEventType_gamepadConnected,
+    WindowEventType_gamepadDisconnected,
     WindowEventType_count,
 };
 
@@ -72,37 +146,16 @@ enum Button : u32 {
     Button_n,
     Button_m,
     Button_semicolon,
-    Button_colon,
     Button_apostrophe,
-    Button_quotation,
     Button_comma,
     Button_period,
-    Button_question,
     Button_grave,
-    Button_tilde,
-    Button_exclamation,
-    Button_at,
-    Button_hash,
-    Button_dollar,
-    Button_percent,
-    Button_carot,
-    Button_ampersand,
-    Button_asterisk,
-    Button_lparen,
-    Button_rparen,
     Button_lbracket,
     Button_rbracket,
-    Button_lbrace,
-    Button_rbrace,
     Button_equal,
-    Button_less,
-    Button_greater,
-    Button_plus,
     Button_minus,
     Button_slash,
     Button_backslash,
-    Button_underscore,
-    Button_bar,
     Button_up,
     Button_down,
     Button_left,
@@ -138,6 +191,24 @@ enum Button : u32 {
     Button_f10,
     Button_f11,
     Button_f12,
+    Button_printscreen,
+    Button_context,
+    Button_numpad0,
+    Button_numpad1,
+    Button_numpad2,
+    Button_numpad3,
+    Button_numpad4,
+    Button_numpad5,
+    Button_numpad6,
+    Button_numpad7,
+    Button_numpad8,
+    Button_numpad9,
+    Button_numpaddecimal,
+    Button_numpaddiv,
+    Button_numpadmul,
+    Button_numpadminus,
+    Button_numpadplus,
+    Button_numpadenter,
     Button_lshift,
     Button_rshift,
     Button_lctrl,
@@ -146,6 +217,21 @@ enum Button : u32 {
     Button_ralt,
     Button_lsuper,
     Button_rsuper,
+    Button_gamepadSouth,
+    Button_gamepadEast,
+    Button_gamepadWest,
+    Button_gamepadNorth,
+    Button_gamepadBack,
+    Button_gamepadGuide,
+    Button_gamepadStart,
+    Button_gamepadLeftStick,
+    Button_gamepadRightStick,
+    Button_gamepadLeftShoulder,
+    Button_gamepadRightShoulder,
+    Button_gamepadDpadUp,
+    Button_gamepadDpadDown,
+    Button_gamepadDpadLeft,
+    Button_gamepadDpadRight,
     Button_capslock,
     Button_numlock,
     Button_scrolllock,
@@ -162,34 +248,22 @@ struct WindowEvent {
      */
     WindowEventType type;
     /**
-     * The button that was pressed or released (buttonPress/buttonRelease)
+     * The button that was pressed or released (button events)
      */
     Button button;
     /**
      * UTF-8 text input (textInput)
      */
     char text[32];
+    /**
+     * Gamepad device index, 0-based (gamepad events only)
+     */
+    u32 gamepad;
+    /**
+     * Timestamp in nanoseconds
+     */
+    u64 timestamp;
 };
-
-/**
- * Display enumeration info
- */
-struct DisplayInfo {
-    i32 posX = 0;
-    i32 posY = 0;
-    i32 sizeW = 0;
-    i32 sizeH = 0;
-    i32 workPosX = 0;
-    i32 workPosY = 0;
-    i32 workSizeW = 0;
-    i32 workSizeH = 0;
-    f32 dpiScale = 1.0f;
-};
-
-/**
- * Returns the display info
- */
-Span<DisplayInfo> displayInfo();
 
 /**
  * Configuration for a window
@@ -205,10 +279,6 @@ struct WindowConfig {
      * How the swapchain images will be used
      */
     GpuImageUsageFlags imageUsage = GpuImageUsage_colorAttachment;
-    /**
-     * Whether the window starts hidden
-     */
-    bool hidden = false;
 };
 
 /**
@@ -233,7 +303,7 @@ struct Window {
     /**
      * Open a new window
      */
-    static Maybe<Window> create(const WindowConfig& config = {});
+    static Window create(const WindowConfig& config = {});
 
     /**
      * Close the window
@@ -246,14 +316,14 @@ struct Window {
     GpuSwapchain& swapchain();
 
     /**
-     * Returns the window's pixel format
-     */
-    Format imageFormat() const;
-
-    /**
      * Returns the window's current image, or nullptr if unavailable this frame
      */
     GpuView* imageView() const;
+
+    /**
+     * Returns the window's pixel format
+     */
+    Format imageFormat() const;
 
     /**
      * Set the window title
@@ -261,29 +331,29 @@ struct Window {
     void setTitle(StringView title);
 
     /**
-     * Returns whether the window was closed
+     * Get the position
      */
-    bool wasClosed() const;
+    void pos(i32* x, i32* y) const;
 
     /**
-     * Set the focus to this window
+     * Set the position
      */
-    void setFocus();
+    void setPos(i32 x, i32 y);
 
     /**
-     * Returns whether the mouse is focused on the window
+     * Get the width and height
      */
-    bool isFocused() const;
-
-    /**
-     * Returns whether this window is minimized
-     */
-    bool isMinimized() const;
+    void size(u32* width, u32* height) const;
 
     /**
      * Set the width and height
      */
-    void setSize(u32 width, u32 height, bool resizeable = true);
+    void setSize(u32 width, u32 height);
+
+    /**
+     * Returns whether this window is fullscreen
+     */
+    bool isFullscreen() const;
 
     /**
      * Set to fullscreen or disable fullscreen
@@ -291,89 +361,69 @@ struct Window {
     void setFullscreen(bool set = true);
 
     /**
-     * Get the window's width in pixels
+     * Set the window to resizeable or not
      */
-    u32 width() const;
+    void setResizeable(bool set = true);
 
     /**
-     * Get the window's width in pixels
+     * Returns whether the mouse is focused on the window
      */
-    u32 height() const;
+    bool isFocused() const;
 
     /**
-     * Get the framebuffer scale in the x direction
+     * Returns whether the window was closed
      */
-    f32 scaleX() const;
+    bool wasClosed() const;
 
     /**
-     * Get the framebuffer scale in the y direction
+     * Returns whether the window was resized since last processEvents
      */
-    f32 scaleY() const;
+    bool wasResized() const;
 
     /**
-     * Set the position
+     * Returns whether the window is maximized
      */
-    void setPosition(i32 x, i32 y);
+    bool isMaximized() const;
 
     /**
-     * Get the window's x position
+     * Returns whether the window is minimized
      */
-    u32 posX() const;
+    bool isMinimized() const;
 
     /**
-     * Get the window's y position
+     * Maximize the window
      */
-    u32 posY() const;
+    void maximize();
 
     /**
-     * Set the window's opacity
+     * Minimize the window
      */
-    void setOpacity(f32 alpha);
+    void minimize();
 
     /**
-     * Show the window
+     * Restore the window from minimized or maximized state
      */
-    void show();
+    void restore();
 
     /**
-     * Get the current mouse x position in screen coordinates
+     * Get the current mouse position in screen coordinates
      */
-    f32 globalMouseX() const;
+    Vec2 globalMousePos() const;
 
     /**
-     * Get the current mouse y position in screen coordinates
+     * Get the current mouse position relative to the window height
      */
-    f32 globalMouseY() const;
+    Vec2 mousePos() const;
 
     /**
-     * Get the current mouse x position relative to the window height
+     * Get the change in mouse position relative to the window height
      */
-    f32 mouseX() const;
+    Vec2 mouseDelta() const;
 
     /**
-     * Get the current mouse y position relative to the window height
+     * Get the mouse wheel movement
      */
-    f32 mouseY() const;
-
-    /**
-     * Get the change in mouse x position relative to the window height
-     */
-    f32 mouseDX() const;
-
-    /**
-     * Get the change in mouse y position relative to the window height
-     */
-    f32 mouseDY() const;
-
-    /**
-     * Get the horizontal mouse wheel movement
-     */
-    f32 wheelDX() const;
-
-    /**
-     * Get the vertical mouse wheel movement
-     */
-    f32 wheelDY() const;
+    Vec2 wheelDelta() const;
 
     /**
      * Get whether the key is currently down
@@ -400,56 +450,40 @@ struct Window {
 };
 
 /**
- * The types of cursors
+ * Returns the number of connected gamepads
+ *
+ * Note, any combination of indices 0-3 may be active
  */
-enum CursorType : u32 {
-    CursorType_arrow,
-    CursorType_textInput,
-    CursorType_resizeAll,
-    CursorType_resizeNS,
-    CursorType_resizeEW,
-    CursorType_resizeNESW,
-    CursorType_resizeNWSE,
-    CursorType_hand,
-    CursorType_wait,
-    CursorType_progress,
-    CursorType_notAllowed,
-    CursorType_count,
-};
+u32 gamepadCount();
 
 /**
- * Sets the current cursor
+ * Returns whether a gamepad index is active
  */
-void setCursor(CursorType type);
+bool isGamepadActive(u32 gamepad);
 
 /**
- * Shows the cursor
+ * Get whether a gamepad button is currently down
  */
-void showCursor();
+bool isGamepadButtonDown(u32 gamepad, Button key);
 
 /**
- * Hides the cursor
+ * Get the left stick position, each axis in range -1..1
  */
-void hideCursor();
+Vec2 gamepadLeftStick(u32 gamepad);
 
 /**
- * Returns whether the platform has clipboard text
+ * Get the right stick position, each axis in range -1..1
  */
-bool hasClipboardText();
+Vec2 gamepadRightStick(u32 gamepad);
 
 /**
- * Returns the platform clipboard text
+ * Get the left trigger value, in range 0..1
  */
-String getClipboardText();
+f32 gamepadLeftTrigger(u32 gamepad);
 
 /**
- * Sets the platform clipboard text
+ * Get the right trigger value, in range 0..1
  */
-void setClipboardText(const char* text);
-
-/**
- * Opens a URL in the platform's default handler
- */
-void openURL(const char* url);
+f32 gamepadRightTrigger(u32 gamepad);
 
 } // namespace hg

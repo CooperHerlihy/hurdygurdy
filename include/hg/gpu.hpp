@@ -1031,19 +1031,14 @@ struct GpuSwapchain {
     ~GpuSwapchain() noexcept;
 
     /**
-     * Get the current swapchain width
+     * Get the current swapchain size
      */
-    u32 width() const;
+    void size(u32* width, u32* height) const;
 
     /**
-     * Get the current swapchain height
+     * Get the current swapchain image count
      */
-    u32 height() const;
-
-    /**
-     * Get the current swapchain format
-     */
-    Format format() const;
+    u32 imageCount() const;
 
     /**
      * Get the current swapchain image view
@@ -1051,9 +1046,9 @@ struct GpuSwapchain {
     GpuView* currentView() const;
 
     /**
-     * Get the current swapchain image count
+     * Get the current swapchain format
      */
-    u32 imageCount() const;
+    Format format() const;
 
     /**
      * Move construct

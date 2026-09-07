@@ -1735,31 +1735,27 @@ GpuSwapchain GpuSwapchain::create(
     return swap;
 }
 
-u32 GpuSwapchain::width() const
+void GpuSwapchain::size(u32* width, u32* height) const
 {
-    return data ? data->width : 0;
-}
-
-u32 GpuSwapchain::height() const
-{
-    return data ? data->height : 0;
-}
-
-Format GpuSwapchain::format() const
-{
-    return data ? data->format : Format_undefined;
-}
-
-GpuView* GpuSwapchain::currentView() const
-{
-    return (data && data->imageIdx < data->images.count)
-        ? &data->views[data->imageIdx]
-        : nullptr;
+    if (width != nullptr)
+        *width = data != nullptr ? data->width : 0;
+    if (height != nullptr)
+        *height = data != nullptr ? data->height : 0;
 }
 
 u32 GpuSwapchain::imageCount() const
 {
-    return data ? static_cast<u32>(data->images.count) : 0;
+    return data != nullptr ? static_cast<u32>(data->images.count) : 0;
+}
+
+GpuView* GpuSwapchain::currentView() const
+{
+    return (data != nullptr && data->imageIdx < data->images.count) ? &data->views[data->imageIdx] : nullptr;
+}
+
+Format GpuSwapchain::format() const
+{
+    return data != nullptr ? data->format : Format_undefined;
 }
 
 GpuCmd* gpuBeginFrame(Span<Window*> windows)

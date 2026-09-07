@@ -150,8 +150,7 @@ void initImGui(
     };
     pio.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char*
     {
-        if (hasClipboardText())
-            state.clipboardText = getClipboardText();
+        state.clipboardText = getClipboardText();
         return state.clipboardText.chars;
     };
     pio.Platform_OpenInShellFn = [](ImGuiContext*, const char* url) -> bool
@@ -284,28 +283,27 @@ void beginImGuiFrame()
         }
     }
 
-    io.AddMousePosEvent(state.window->mouseX(), state.window->mouseY());
+    Vec2 mousePos = state.window->mousePos();
+    io.AddMousePosEvent(mousePos.x, mousePos.y);
 
-    io.DisplaySize = ImVec2(
-        static_cast<f32>(state.window->width()),
-        static_cast<f32>(state.window->height()));
-    io.DisplayFramebufferScale = ImVec2(state.window->scaleX(), state.window->scaleY());
+    u32 width, height;
+    state.window->size(&width, &height);
+    io.DisplaySize = ImVec2(static_cast<f32>(width), static_cast<f32>(height));
 
     io.DeltaTime = static_cast<f32>(state.clock.tick());
     if (io.DeltaTime <= 0.0f)
         io.DeltaTime = 1.0f / 60.0f;
 
-    f32 wheelDX = state.window->wheelDX();
-    f32 wheelDY = state.window->wheelDY();
-    if (wheelDX != 0.0f || wheelDY != 0.0f)
-        io.AddMouseWheelEvent(wheelDX, wheelDY);
+    Vec2 wheel = state.window->wheelDelta();
+    if (wheel.x != 0.0f || wheel.y != 0.0f)
+        io.AddMouseWheelEvent(wheel.x, wheel.y);
 
     if (!(io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange))
     {
         ImGuiMouseCursor imguiCursor = ImGui::GetMouseCursor();
         if (io.MouseDrawCursor || imguiCursor == ImGuiMouseCursor_None)
         {
-            hideCursor();
+            showCursor(false);
         }
         else
         {
@@ -315,7 +313,7 @@ void beginImGuiFrame()
                 setCursor(expected);
                 state.lastCursor = expected;
             }
-            showCursor();
+            showCursor(true);
         }
     }
 

@@ -650,11 +650,6 @@ VkSampler samplerGet(
 
 namespace internal {
 
-void* getVulkanInstance()
-{
-    return vk.instance;
-}
-
 bool initGpu()
 {
     ArenaScope scratch = getScratch();
@@ -810,6 +805,11 @@ void deinitGpu()
     vkDestroyInstance(vk.instance, nullptr);
 
     unloadVulkan();
+}
+
+void* getVulkanInstance()
+{
+    return vk.instance;
 }
 
 void initImGuiGpu(

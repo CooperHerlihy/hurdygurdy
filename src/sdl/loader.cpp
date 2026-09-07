@@ -21,31 +21,15 @@ struct SdlFuncs {
     HG_MAKE_SDL_FUNC(SDL_SetWindowPosition);
     HG_MAKE_SDL_FUNC(SDL_SetWindowSize);
     HG_MAKE_SDL_FUNC(SDL_SetWindowTitle);
-    HG_MAKE_SDL_FUNC(SDL_SetWindowOpacity);
     HG_MAKE_SDL_FUNC(SDL_SetWindowResizable);
     HG_MAKE_SDL_FUNC(SDL_SetWindowFullscreen);
-    HG_MAKE_SDL_FUNC(SDL_ShowWindow);
-    HG_MAKE_SDL_FUNC(SDL_RaiseWindow);
-    HG_MAKE_SDL_FUNC(SDL_SetWindowParent);
     HG_MAKE_SDL_FUNC(SDL_GetWindowFlags);
-    HG_MAKE_SDL_FUNC(SDL_GetWindowDisplayScale);
-    HG_MAKE_SDL_FUNC(SDL_GetWindowRelativeMouseMode);
-    HG_MAKE_SDL_FUNC(SDL_GetWindowFromID);
-    HG_MAKE_SDL_FUNC(SDL_GetWindowProperties);
     HG_MAKE_SDL_FUNC(SDL_GetDisplays);
-    HG_MAKE_SDL_FUNC(SDL_GetPrimaryDisplay);
-    HG_MAKE_SDL_FUNC(SDL_GetFullscreenDisplayModes);
     HG_MAKE_SDL_FUNC(SDL_GetDisplayBounds);
     HG_MAKE_SDL_FUNC(SDL_GetDisplayUsableBounds);
     HG_MAKE_SDL_FUNC(SDL_GetDisplayContentScale);
-    HG_MAKE_SDL_FUNC(SDL_WarpMouseInWindow);
-    HG_MAKE_SDL_FUNC(SDL_WarpMouseGlobal);
     HG_MAKE_SDL_FUNC(SDL_GetGlobalMouseState);
     HG_MAKE_SDL_FUNC(SDL_GetMouseFocus);
-    HG_MAKE_SDL_FUNC(SDL_GetKeyboardFocus);
-    HG_MAKE_SDL_FUNC(SDL_CaptureMouse);
-    HG_MAKE_SDL_FUNC(SDL_GetKeyName);
-    HG_MAKE_SDL_FUNC(SDL_GetScancodeName);
     HG_MAKE_SDL_FUNC(SDL_HasClipboardText);
     HG_MAKE_SDL_FUNC(SDL_GetClipboardText);
     HG_MAKE_SDL_FUNC(SDL_SetClipboardText);
@@ -54,19 +38,7 @@ struct SdlFuncs {
     HG_MAKE_SDL_FUNC(SDL_SetCursor);
     HG_MAKE_SDL_FUNC(SDL_ShowCursor);
     HG_MAKE_SDL_FUNC(SDL_HideCursor);
-    HG_MAKE_SDL_FUNC(SDL_SetHint);
     HG_MAKE_SDL_FUNC(SDL_PollEvent);
-    HG_MAKE_SDL_FUNC(SDL_GetTicksNS);
-    HG_MAKE_SDL_FUNC(SDL_GetPerformanceCounter);
-    HG_MAKE_SDL_FUNC(SDL_GetPerformanceFrequency);
-    HG_MAKE_SDL_FUNC(SDL_GetVersion);
-    HG_MAKE_SDL_FUNC(SDL_GL_CreateContext);
-    HG_MAKE_SDL_FUNC(SDL_GL_DestroyContext);
-    HG_MAKE_SDL_FUNC(SDL_GL_GetCurrentContext);
-    HG_MAKE_SDL_FUNC(SDL_GL_MakeCurrent);
-    HG_MAKE_SDL_FUNC(SDL_GL_SetAttribute);
-    HG_MAKE_SDL_FUNC(SDL_GL_SetSwapInterval);
-    HG_MAKE_SDL_FUNC(SDL_GL_SwapWindow);
     HG_MAKE_SDL_FUNC(SDL_Vulkan_CreateSurface);
     HG_MAKE_SDL_FUNC(SDL_Vulkan_GetInstanceExtensions);
     HG_MAKE_SDL_FUNC(SDL_OpenAudioDevice);
@@ -77,21 +49,19 @@ struct SdlFuncs {
     HG_MAKE_SDL_FUNC(SDL_SetAudioStreamGetCallback);
     HG_MAKE_SDL_FUNC(SDL_SetAudioStreamFormat);
     HG_MAKE_SDL_FUNC(SDL_PutAudioStreamData);
-    HG_MAKE_SDL_FUNC(SDL_GetAudioStreamQueued);
-    HG_MAKE_SDL_FUNC(SDL_SetAudioStreamGain);
-    HG_MAKE_SDL_FUNC(SDL_StartTextInput);
-    HG_MAKE_SDL_FUNC(SDL_StopTextInput);
-    HG_MAKE_SDL_FUNC(SDL_TextInputActive);
-    HG_MAKE_SDL_FUNC(SDL_SetTextInputArea);
-    HG_MAKE_SDL_FUNC(SDL_OpenGamepad);
-    HG_MAKE_SDL_FUNC(SDL_CloseGamepad);
-    HG_MAKE_SDL_FUNC(SDL_GetGamepads);
-    HG_MAKE_SDL_FUNC(SDL_GetGamepadAxis);
-    HG_MAKE_SDL_FUNC(SDL_GetGamepadButton);
     HG_MAKE_SDL_FUNC(SDL_free);
     HG_MAKE_SDL_FUNC(SDL_OpenURL);
-    HG_MAKE_SDL_FUNC(SDL_GetCurrentVideoDriver);
-    HG_MAKE_SDL_FUNC(SDL_GetPointerProperty);
+    HG_MAKE_SDL_FUNC(SDL_GetGamepads);
+    HG_MAKE_SDL_FUNC(SDL_IsGamepad);
+    HG_MAKE_SDL_FUNC(SDL_OpenGamepad);
+    HG_MAKE_SDL_FUNC(SDL_CloseGamepad);
+    HG_MAKE_SDL_FUNC(SDL_GetGamepadButton);
+    HG_MAKE_SDL_FUNC(SDL_GetGamepadAxis);
+    HG_MAKE_SDL_FUNC(SDL_GamepadConnected);
+    HG_MAKE_SDL_FUNC(SDL_MaximizeWindow);
+    HG_MAKE_SDL_FUNC(SDL_MinimizeWindow);
+    HG_MAKE_SDL_FUNC(SDL_RestoreWindow);
+    HG_MAKE_SDL_FUNC(SDL_GetTicksNS);
 };
 
 #undef HG_MAKE_SDL_FUNC
@@ -137,31 +107,15 @@ bool loadSDL()
     HG_LOAD_SDL_FUNC(SDL_SetWindowPosition);
     HG_LOAD_SDL_FUNC(SDL_SetWindowSize);
     HG_LOAD_SDL_FUNC(SDL_SetWindowTitle);
-    HG_LOAD_SDL_FUNC(SDL_SetWindowOpacity);
     HG_LOAD_SDL_FUNC(SDL_SetWindowResizable);
     HG_LOAD_SDL_FUNC(SDL_SetWindowFullscreen);
-    HG_LOAD_SDL_FUNC(SDL_ShowWindow);
-    HG_LOAD_SDL_FUNC(SDL_RaiseWindow);
-    HG_LOAD_SDL_FUNC(SDL_SetWindowParent);
     HG_LOAD_SDL_FUNC(SDL_GetWindowFlags);
-    HG_LOAD_SDL_FUNC(SDL_GetWindowDisplayScale);
-    HG_LOAD_SDL_FUNC(SDL_GetWindowRelativeMouseMode);
-    HG_LOAD_SDL_FUNC(SDL_GetWindowFromID);
-    HG_LOAD_SDL_FUNC(SDL_GetWindowProperties);
     HG_LOAD_SDL_FUNC(SDL_GetDisplays);
-    HG_LOAD_SDL_FUNC(SDL_GetPrimaryDisplay);
-    HG_LOAD_SDL_FUNC(SDL_GetFullscreenDisplayModes);
     HG_LOAD_SDL_FUNC(SDL_GetDisplayBounds);
     HG_LOAD_SDL_FUNC(SDL_GetDisplayUsableBounds);
     HG_LOAD_SDL_FUNC(SDL_GetDisplayContentScale);
-    HG_LOAD_SDL_FUNC(SDL_WarpMouseInWindow);
-    HG_LOAD_SDL_FUNC(SDL_WarpMouseGlobal);
     HG_LOAD_SDL_FUNC(SDL_GetGlobalMouseState);
     HG_LOAD_SDL_FUNC(SDL_GetMouseFocus);
-    HG_LOAD_SDL_FUNC(SDL_GetKeyboardFocus);
-    HG_LOAD_SDL_FUNC(SDL_CaptureMouse);
-    HG_LOAD_SDL_FUNC(SDL_GetKeyName);
-    HG_LOAD_SDL_FUNC(SDL_GetScancodeName);
     HG_LOAD_SDL_FUNC(SDL_HasClipboardText);
     HG_LOAD_SDL_FUNC(SDL_GetClipboardText);
     HG_LOAD_SDL_FUNC(SDL_SetClipboardText);
@@ -170,19 +124,7 @@ bool loadSDL()
     HG_LOAD_SDL_FUNC(SDL_SetCursor);
     HG_LOAD_SDL_FUNC(SDL_ShowCursor);
     HG_LOAD_SDL_FUNC(SDL_HideCursor);
-    HG_LOAD_SDL_FUNC(SDL_SetHint);
     HG_LOAD_SDL_FUNC(SDL_PollEvent);
-    HG_LOAD_SDL_FUNC(SDL_GetTicksNS);
-    HG_LOAD_SDL_FUNC(SDL_GetPerformanceCounter);
-    HG_LOAD_SDL_FUNC(SDL_GetPerformanceFrequency);
-    HG_LOAD_SDL_FUNC(SDL_GetVersion);
-    HG_LOAD_SDL_FUNC(SDL_GL_CreateContext);
-    HG_LOAD_SDL_FUNC(SDL_GL_DestroyContext);
-    HG_LOAD_SDL_FUNC(SDL_GL_GetCurrentContext);
-    HG_LOAD_SDL_FUNC(SDL_GL_MakeCurrent);
-    HG_LOAD_SDL_FUNC(SDL_GL_SetAttribute);
-    HG_LOAD_SDL_FUNC(SDL_GL_SetSwapInterval);
-    HG_LOAD_SDL_FUNC(SDL_GL_SwapWindow);
     HG_LOAD_SDL_FUNC(SDL_Vulkan_CreateSurface);
     HG_LOAD_SDL_FUNC(SDL_Vulkan_GetInstanceExtensions);
     HG_LOAD_SDL_FUNC(SDL_OpenAudioDevice);
@@ -193,21 +135,19 @@ bool loadSDL()
     HG_LOAD_SDL_FUNC(SDL_SetAudioStreamGetCallback);
     HG_LOAD_SDL_FUNC(SDL_SetAudioStreamFormat);
     HG_LOAD_SDL_FUNC(SDL_PutAudioStreamData);
-    HG_LOAD_SDL_FUNC(SDL_GetAudioStreamQueued);
-    HG_LOAD_SDL_FUNC(SDL_SetAudioStreamGain);
-    HG_LOAD_SDL_FUNC(SDL_StartTextInput);
-    HG_LOAD_SDL_FUNC(SDL_StopTextInput);
-    HG_LOAD_SDL_FUNC(SDL_TextInputActive);
-    HG_LOAD_SDL_FUNC(SDL_SetTextInputArea);
-    HG_LOAD_SDL_FUNC(SDL_OpenGamepad);
-    HG_LOAD_SDL_FUNC(SDL_CloseGamepad);
-    HG_LOAD_SDL_FUNC(SDL_GetGamepads);
-    HG_LOAD_SDL_FUNC(SDL_GetGamepadAxis);
-    HG_LOAD_SDL_FUNC(SDL_GetGamepadButton);
     HG_LOAD_SDL_FUNC(SDL_free);
     HG_LOAD_SDL_FUNC(SDL_OpenURL);
-    HG_LOAD_SDL_FUNC(SDL_GetCurrentVideoDriver);
-    HG_LOAD_SDL_FUNC(SDL_GetPointerProperty);
+    HG_LOAD_SDL_FUNC(SDL_GetGamepads);
+    HG_LOAD_SDL_FUNC(SDL_IsGamepad);
+    HG_LOAD_SDL_FUNC(SDL_OpenGamepad);
+    HG_LOAD_SDL_FUNC(SDL_CloseGamepad);
+    HG_LOAD_SDL_FUNC(SDL_GetGamepadButton);
+    HG_LOAD_SDL_FUNC(SDL_GetGamepadAxis);
+    HG_LOAD_SDL_FUNC(SDL_GamepadConnected);
+    HG_LOAD_SDL_FUNC(SDL_MaximizeWindow);
+    HG_LOAD_SDL_FUNC(SDL_MinimizeWindow);
+    HG_LOAD_SDL_FUNC(SDL_RestoreWindow);
+    HG_LOAD_SDL_FUNC(SDL_GetTicksNS);
 
 #undef HG_LOAD_SDL_FUNC
 
@@ -282,11 +222,6 @@ extern "C" bool SDLCALL SDL_SetWindowTitle(SDL_Window* window, const char* title
     return ::hg::sdl::sdlFuncs.SDL_SetWindowTitle(window, title);
 }
 
-extern "C" bool SDLCALL SDL_SetWindowOpacity(SDL_Window* window, float opacity)
-{
-    return ::hg::sdl::sdlFuncs.SDL_SetWindowOpacity(window, opacity);
-}
-
 extern "C" bool SDLCALL SDL_SetWindowResizable(SDL_Window* window, bool resizable)
 {
     return ::hg::sdl::sdlFuncs.SDL_SetWindowResizable(window, resizable);
@@ -297,59 +232,14 @@ extern "C" bool SDLCALL SDL_SetWindowFullscreen(SDL_Window* window, bool fullscr
     return ::hg::sdl::sdlFuncs.SDL_SetWindowFullscreen(window, fullscreen);
 }
 
-extern "C" bool SDLCALL SDL_ShowWindow(SDL_Window* window)
-{
-    return ::hg::sdl::sdlFuncs.SDL_ShowWindow(window);
-}
-
-extern "C" bool SDLCALL SDL_RaiseWindow(SDL_Window* window)
-{
-    return ::hg::sdl::sdlFuncs.SDL_RaiseWindow(window);
-}
-
-extern "C" bool SDLCALL SDL_SetWindowParent(SDL_Window* window, SDL_Window* parent)
-{
-    return ::hg::sdl::sdlFuncs.SDL_SetWindowParent(window, parent);
-}
-
 extern "C" SDL_WindowFlags SDLCALL SDL_GetWindowFlags(SDL_Window* window)
 {
     return ::hg::sdl::sdlFuncs.SDL_GetWindowFlags(window);
 }
 
-extern "C" float SDLCALL SDL_GetWindowDisplayScale(SDL_Window* window)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetWindowDisplayScale(window);
-}
-
-extern "C" bool SDLCALL SDL_GetWindowRelativeMouseMode(SDL_Window* window)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetWindowRelativeMouseMode(window);
-}
-
-extern "C" SDL_Window* SDLCALL SDL_GetWindowFromID(SDL_WindowID id)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetWindowFromID(id);
-}
-
-extern "C" SDL_PropertiesID SDLCALL SDL_GetWindowProperties(SDL_Window* window)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetWindowProperties(window);
-}
-
 extern "C" SDL_DisplayID* SDLCALL SDL_GetDisplays(int* count)
 {
     return ::hg::sdl::sdlFuncs.SDL_GetDisplays(count);
-}
-
-extern "C" SDL_DisplayID SDLCALL SDL_GetPrimaryDisplay()
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetPrimaryDisplay();
-}
-
-extern "C" SDL_DisplayMode** SDLCALL SDL_GetFullscreenDisplayModes(SDL_DisplayID displayID, int* count)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetFullscreenDisplayModes(displayID, count);
 }
 
 extern "C" bool SDLCALL SDL_GetDisplayBounds(SDL_DisplayID displayID, SDL_Rect* rect)
@@ -367,16 +257,6 @@ extern "C" float SDLCALL SDL_GetDisplayContentScale(SDL_DisplayID displayID)
     return ::hg::sdl::sdlFuncs.SDL_GetDisplayContentScale(displayID);
 }
 
-extern "C" void SDLCALL SDL_WarpMouseInWindow(SDL_Window* window, float x, float y)
-{
-    ::hg::sdl::sdlFuncs.SDL_WarpMouseInWindow(window, x, y);
-}
-
-extern "C" bool SDLCALL SDL_WarpMouseGlobal(float x, float y)
-{
-    return ::hg::sdl::sdlFuncs.SDL_WarpMouseGlobal(x, y);
-}
-
 extern "C" SDL_MouseButtonFlags SDLCALL SDL_GetGlobalMouseState(float* x, float* y)
 {
     return ::hg::sdl::sdlFuncs.SDL_GetGlobalMouseState(x, y);
@@ -385,26 +265,6 @@ extern "C" SDL_MouseButtonFlags SDLCALL SDL_GetGlobalMouseState(float* x, float*
 extern "C" SDL_Window* SDLCALL SDL_GetMouseFocus()
 {
     return ::hg::sdl::sdlFuncs.SDL_GetMouseFocus();
-}
-
-extern "C" SDL_Window* SDLCALL SDL_GetKeyboardFocus()
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetKeyboardFocus();
-}
-
-extern "C" bool SDLCALL SDL_CaptureMouse(bool capture)
-{
-    return ::hg::sdl::sdlFuncs.SDL_CaptureMouse(capture);
-}
-
-extern "C" const char* SDLCALL SDL_GetKeyName(SDL_Keycode key)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetKeyName(key);
-}
-
-extern "C" const char* SDLCALL SDL_GetScancodeName(SDL_Scancode scancode)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetScancodeName(scancode);
 }
 
 extern "C" bool SDLCALL SDL_HasClipboardText()
@@ -447,69 +307,9 @@ extern "C" bool SDLCALL SDL_HideCursor()
     return ::hg::sdl::sdlFuncs.SDL_HideCursor();
 }
 
-extern "C" bool SDLCALL SDL_SetHint(const char* name, const char* value)
-{
-    return ::hg::sdl::sdlFuncs.SDL_SetHint(name, value);
-}
-
 extern "C" bool SDLCALL SDL_PollEvent(SDL_Event* event)
 {
     return ::hg::sdl::sdlFuncs.SDL_PollEvent(event);
-}
-
-extern "C" Uint64 SDLCALL SDL_GetTicksNS()
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetTicksNS();
-}
-
-extern "C" Uint64 SDLCALL SDL_GetPerformanceCounter()
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetPerformanceCounter();
-}
-
-extern "C" Uint64 SDLCALL SDL_GetPerformanceFrequency()
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetPerformanceFrequency();
-}
-
-extern "C" int SDLCALL SDL_GetVersion()
-{
-    return ::hg::sdl::sdlFuncs.SDL_GetVersion();
-}
-
-extern "C" SDL_GLContext SDLCALL SDL_GL_CreateContext(SDL_Window* window)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GL_CreateContext(window);
-}
-
-extern "C" bool SDLCALL SDL_GL_DestroyContext(SDL_GLContext context)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GL_DestroyContext(context);
-}
-
-extern "C" SDL_GLContext SDLCALL SDL_GL_GetCurrentContext()
-{
-    return ::hg::sdl::sdlFuncs.SDL_GL_GetCurrentContext();
-}
-
-extern "C" bool SDLCALL SDL_GL_MakeCurrent(SDL_Window* window, SDL_GLContext context)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GL_MakeCurrent(window, context);
-}
-
-extern "C" bool SDLCALL SDL_GL_SetAttribute(SDL_GLAttr attr, int value)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GL_SetAttribute(attr, value);
-}
-
-extern "C" bool SDLCALL SDL_GL_SetSwapInterval(int interval)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GL_SetSwapInterval(interval);
-}
-
-extern "C" bool SDLCALL SDL_GL_SwapWindow(SDL_Window* window)
-{
-    return ::hg::sdl::sdlFuncs.SDL_GL_SwapWindow(window);
 }
 
 extern "C" bool SDLCALL SDL_Vulkan_CreateSurface(SDL_Window* window, VkInstance instance,
@@ -565,34 +365,24 @@ extern "C" bool SDLCALL SDL_PutAudioStreamData(SDL_AudioStream* stream, const vo
     return ::hg::sdl::sdlFuncs.SDL_PutAudioStreamData(stream, data, len);
 }
 
-extern "C" int SDLCALL SDL_GetAudioStreamQueued(SDL_AudioStream* stream)
+extern "C" void SDLCALL SDL_free(void* mem)
 {
-    return ::hg::sdl::sdlFuncs.SDL_GetAudioStreamQueued(stream);
+    ::hg::sdl::sdlFuncs.SDL_free(mem);
 }
 
-extern "C" bool SDLCALL SDL_SetAudioStreamGain(SDL_AudioStream* stream, float gain)
+extern "C" bool SDLCALL SDL_OpenURL(const char* url)
 {
-    return ::hg::sdl::sdlFuncs.SDL_SetAudioStreamGain(stream, gain);
+    return ::hg::sdl::sdlFuncs.SDL_OpenURL(url);
 }
 
-extern "C" bool SDLCALL SDL_StartTextInput(SDL_Window* window)
+extern "C" SDL_JoystickID* SDLCALL SDL_GetGamepads(int* count)
 {
-    return ::hg::sdl::sdlFuncs.SDL_StartTextInput(window);
+    return ::hg::sdl::sdlFuncs.SDL_GetGamepads(count);
 }
 
-extern "C" bool SDLCALL SDL_StopTextInput(SDL_Window* window)
+extern "C" bool SDLCALL SDL_IsGamepad(SDL_JoystickID instance_id)
 {
-    return ::hg::sdl::sdlFuncs.SDL_StopTextInput(window);
-}
-
-extern "C" bool SDLCALL SDL_TextInputActive(SDL_Window* window)
-{
-    return ::hg::sdl::sdlFuncs.SDL_TextInputActive(window);
-}
-
-extern "C" bool SDLCALL SDL_SetTextInputArea(SDL_Window* window, const SDL_Rect* rect, int cursor)
-{
-    return ::hg::sdl::sdlFuncs.SDL_SetTextInputArea(window, rect, cursor);
+    return ::hg::sdl::sdlFuncs.SDL_IsGamepad(instance_id);
 }
 
 extern "C" SDL_Gamepad* SDLCALL SDL_OpenGamepad(SDL_JoystickID instance_id)
@@ -605,9 +395,9 @@ extern "C" void SDLCALL SDL_CloseGamepad(SDL_Gamepad* gamepad)
     ::hg::sdl::sdlFuncs.SDL_CloseGamepad(gamepad);
 }
 
-extern "C" SDL_JoystickID* SDLCALL SDL_GetGamepads(int* count)
+extern "C" bool SDLCALL SDL_GetGamepadButton(SDL_Gamepad* gamepad, SDL_GamepadButton button)
 {
-    return ::hg::sdl::sdlFuncs.SDL_GetGamepads(count);
+    return ::hg::sdl::sdlFuncs.SDL_GetGamepadButton(gamepad, button);
 }
 
 extern "C" Sint16 SDLCALL SDL_GetGamepadAxis(SDL_Gamepad* gamepad, SDL_GamepadAxis axis)
@@ -615,27 +405,27 @@ extern "C" Sint16 SDLCALL SDL_GetGamepadAxis(SDL_Gamepad* gamepad, SDL_GamepadAx
     return ::hg::sdl::sdlFuncs.SDL_GetGamepadAxis(gamepad, axis);
 }
 
-extern "C" bool SDLCALL SDL_GetGamepadButton(SDL_Gamepad* gamepad, SDL_GamepadButton button)
+extern "C" bool SDLCALL SDL_GamepadConnected(SDL_Gamepad* gamepad)
 {
-    return ::hg::sdl::sdlFuncs.SDL_GetGamepadButton(gamepad, button);
+    return ::hg::sdl::sdlFuncs.SDL_GamepadConnected(gamepad);
 }
 
-extern "C" void SDLCALL SDL_free(void* mem)
+extern "C" bool SDLCALL SDL_MaximizeWindow(SDL_Window* window)
 {
-    ::hg::sdl::sdlFuncs.SDL_free(mem);
+    return ::hg::sdl::sdlFuncs.SDL_MaximizeWindow(window);
 }
 
-extern "C" bool SDLCALL SDL_OpenURL(const char* url)
+extern "C" bool SDLCALL SDL_MinimizeWindow(SDL_Window* window)
 {
-    return ::hg::sdl::sdlFuncs.SDL_OpenURL(url);
+    return ::hg::sdl::sdlFuncs.SDL_MinimizeWindow(window);
 }
 
-extern "C" const char* SDLCALL SDL_GetCurrentVideoDriver()
+extern "C" bool SDLCALL SDL_RestoreWindow(SDL_Window* window)
 {
-    return ::hg::sdl::sdlFuncs.SDL_GetCurrentVideoDriver();
+    return ::hg::sdl::sdlFuncs.SDL_RestoreWindow(window);
 }
 
-extern "C" void* SDLCALL SDL_GetPointerProperty(SDL_PropertiesID props, const char* name, void* defaultVal)
+extern "C" Uint64 SDLCALL SDL_GetTicksNS()
 {
-    return ::hg::sdl::sdlFuncs.SDL_GetPointerProperty(props, name, defaultVal);
+    return ::hg::sdl::sdlFuncs.SDL_GetTicksNS();
 }

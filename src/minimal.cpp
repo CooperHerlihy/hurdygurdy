@@ -15,11 +15,8 @@ int main()
 
     Window window = Window::create({
         // .preferredPresentMode = GpuPresentMode_mailbox,
-    }).expect("Could not create window\n");
-
+    });
     window.setTitle("Hg Minimal Example");
-    // window.setSize(1200, 800);
-    // window.setFullscreen();
 
     f32 musicData[8000];
     Asset<Sound> music = newAsset<Sound>();
@@ -60,8 +57,8 @@ int main()
     Renderer2D renderer{window.imageFormat()};
     DebugRenderer2D debugRenderer{window.imageFormat()};
 
-    u32 width = window.width();
-    u32 height = window.height();
+    u32 width, height;
+    window.size(&width, &height);
 
     Camera camera{};
 
@@ -111,8 +108,7 @@ int main()
             if (wasQuit() || window.wasClosed())
                 goto quit;
 
-            width = window.width();
-            height = window.height();
+            window.size(&width, &height);
             camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
 
             Span<WindowEvent> events = window.events();
@@ -129,9 +125,10 @@ int main()
 
             if (window.isButtonDown(Button_lmouse))
             {
+                Vec2 mouseDelta = window.mouseDelta();
                 f32 moveSpeed = 1.0f;
-                camera.position.x -= window.mouseDX() * moveSpeed;
-                camera.position.y -= window.mouseDY() * moveSpeed;
+                camera.position.x -= mouseDelta.x * moveSpeed;
+                camera.position.y -= mouseDelta.y * moveSpeed;
             }
 
             camera.update();

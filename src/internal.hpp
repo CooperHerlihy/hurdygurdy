@@ -11,12 +11,11 @@ namespace internal {
 
 bool initPlatform();
 void deinitPlatform();
-
 Span<StringView> getPlatformVulkanExtensions(Arena* arena);
-void* getVulkanInstance();
 
 bool initGpu();
 void deinitGpu();
+void* getVulkanInstance();
 
 void initRender2D();
 void deinitRender2D();
