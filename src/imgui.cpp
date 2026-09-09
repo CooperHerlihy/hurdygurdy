@@ -192,7 +192,7 @@ void initImGui(
     }
 
     internal::initImGuiGpu(
-        *reinterpret_cast<const GpuSwapchain*>(window.data.ptr),
+        window.swapchain(),
         colorFormat,
         depthFormat,
         stencilFormat);

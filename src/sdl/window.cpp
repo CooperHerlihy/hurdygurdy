@@ -1,14 +1,15 @@
-#include "sdl_internal.hpp"
+#include "hg/window.hpp"
 
 #include "internal.hpp"
-
-#include "hg/window.hpp"
+#include "hg/error.hpp"
 #include "hg/array.hpp"
 #include "hg/map.hpp"
 
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 #include "vulkan/vulkan.h"
 
-namespace hg {
+namespace hg::sdl {
 
 struct WindowData {
     GpuSwapchain swap{};
@@ -55,12 +56,18 @@ struct WindowState {
 
 static WindowState windowState{};
 
-void windowInit()
+bool windowInit()
 {
     windowState = WindowState{};
 
     int count = 0;
     SDL_DisplayID* ids = SDL_GetDisplays(&count);
+    if (ids == nullptr)
+    {
+        setError(SDL_GetError());
+        return false;
+    }
+
     HG_DEFER(SDL_free(ids));
 
     windowState.displays.resize(static_cast<u64>(count));
@@ -93,6 +100,8 @@ void windowInit()
 
         info.dpiScale = SDL_GetDisplayContentScale(displayId);
     }
+
+    return true;
 }
 
 void windowDeinit()
@@ -111,9 +120,36 @@ void windowDeinit()
     windowState.currentCursor = nullptr;
 }
 
-Span<DisplayInfo> displayInfo()
+WindowData::~WindowData() noexcept
 {
-    return windowState.displays;
+    if (sdlWindow != nullptr)
+    {
+        windowState.windowIds.remove(SDL_GetWindowID(sdlWindow));
+        SDL_DestroyWindow(sdlWindow);
+    }
+}
+
+WindowData::WindowData(WindowData&& other) noexcept
+    : swap{std::move(other.swap)}
+    , sdlWindow{std::exchange(other.sdlWindow, nullptr)}
+    , mouseX{std::exchange(other.mouseX, 0.0f)}
+    , mouseY{std::exchange(other.mouseY, 0.0f)}
+    , wasClosed{std::exchange(other.wasClosed, false)}
+    , wasResized{std::exchange(other.wasResized, false)}
+    , events{std::move(other.events)}
+{
+    memcpy(isKeyDown, other.isKeyDown, sizeof(isKeyDown));
+    memset(other.isKeyDown, 0, sizeof(other.isKeyDown));
+}
+
+WindowData& WindowData::operator=(WindowData&& other) noexcept
+{
+    if (this != &other)
+    {
+        this->~WindowData();
+        new (this) WindowData{std::move(other)};
+    }
+    return *this;
 }
 
 static SDL_SystemCursor cursorToSdl(CursorType type)
@@ -145,44 +181,6 @@ static SDL_SystemCursor cursorToSdl(CursorType type)
         default:
             return SDL_SYSTEM_CURSOR_DEFAULT;
     }
-}
-
-void setCursor(CursorType type)
-{
-    SDL_Cursor*& cursor = windowState.cursors[static_cast<u32>(type)];
-    if (cursor == nullptr)
-        cursor = SDL_CreateSystemCursor(cursorToSdl(type));
-
-    if (windowState.currentCursor != cursor)
-    {
-        SDL_SetCursor(cursor);
-        windowState.currentCursor = cursor;
-    }
-}
-
-void showCursor(bool show)
-{
-    if (show)
-        SDL_ShowCursor();
-    else
-        SDL_HideCursor();
-}
-
-String getClipboardText()
-{
-    char* sdlText = SDL_GetClipboardText();
-    HG_DEFER(SDL_free(sdlText));
-    return String::create(sdlText);
-}
-
-void setClipboardText(StringView text)
-{
-    SDL_SetClipboardText(cString(getScratch(), text));
-}
-
-void openURL(StringView url)
-{
-    SDL_OpenURL(cString(getScratch(), url));
 }
 
 static Button sdlKeycodeToHgButton(u32 key)
@@ -392,6 +390,49 @@ static void closeGamepad(SDL_JoystickID id)
     SDL_CloseGamepad(windowState.gamepads[*idx]);
     windowState.gamepads[*idx] = nullptr;
     windowState.gamepadIds.remove(id);
+}
+
+Span<DisplayInfo> displayInfo()
+{
+    return windowState.displays;
+}
+
+void setCursor(CursorType type)
+{
+    SDL_Cursor*& cursor = windowState.cursors[static_cast<u32>(type)];
+    if (cursor == nullptr)
+        cursor = SDL_CreateSystemCursor(cursorToSdl(type));
+
+    if (windowState.currentCursor != cursor)
+    {
+        SDL_SetCursor(cursor);
+        windowState.currentCursor = cursor;
+    }
+}
+
+void showCursor(bool show)
+{
+    if (show)
+        SDL_ShowCursor();
+    else
+        SDL_HideCursor();
+}
+
+String getClipboardText()
+{
+    char* sdlText = SDL_GetClipboardText();
+    HG_DEFER(SDL_free(sdlText));
+    return String::create(sdlText);
+}
+
+void setClipboardText(StringView text)
+{
+    SDL_SetClipboardText(cString(getScratch(), text));
+}
+
+void openURL(StringView url)
+{
+    SDL_OpenURL(cString(getScratch(), url));
 }
 
 void processEvents()
@@ -695,239 +736,6 @@ bool wasQuit()
     return windowState.wasQuit;
 }
 
-WindowData::~WindowData() noexcept
-{
-    if (sdlWindow != nullptr)
-    {
-        windowState.windowIds.remove(SDL_GetWindowID(sdlWindow));
-        SDL_DestroyWindow(sdlWindow);
-    }
-}
-
-WindowData::WindowData(WindowData&& other) noexcept
-    : swap{std::move(other.swap)}
-    , sdlWindow{std::exchange(other.sdlWindow, nullptr)}
-    , mouseX{std::exchange(other.mouseX, 0.0f)}
-    , mouseY{std::exchange(other.mouseY, 0.0f)}
-    , wasClosed{std::exchange(other.wasClosed, false)}
-    , wasResized{std::exchange(other.wasResized, false)}
-    , events{std::move(other.events)}
-{
-    memcpy(isKeyDown, other.isKeyDown, sizeof(isKeyDown));
-    memset(other.isKeyDown, 0, sizeof(other.isKeyDown));
-}
-
-WindowData& WindowData::operator=(WindowData&& other) noexcept
-{
-    if (this != &other)
-    {
-        this->~WindowData();
-        new (this) WindowData{std::move(other)};
-    }
-    return *this;
-}
-
-Window::Window() noexcept
-    : data{nullptr}
-{}
-
-Window::~Window() noexcept = default;
-Window::Window(Window&& other) noexcept = default;
-Window& Window::operator=(Window&& other) noexcept = default;
-
-Window Window::create(const WindowConfig& config)
-{
-    Window window{};
-    window.data = makeUnique<WindowData>();
-
-    ArenaScope scratch = getScratch();
-
-    window.data->sdlWindow = SDL_CreateWindow(
-        "Hurdy Gurdy",
-        800, 600,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-    if (window.data->sdlWindow == nullptr)
-        HG_PANIC("SDL could not create window: %s\n", SDL_GetError());
-
-    windowState.windowIds.add(SDL_GetWindowID(window.data->sdlWindow), window.data);
-
-    u32 w, h;
-    SDL_GetWindowSize(window.data->sdlWindow,
-        reinterpret_cast<int*>(&w),
-        reinterpret_cast<int*>(&h));
-
-    VkSurfaceKHR surface;
-    if (!SDL_Vulkan_CreateSurface(
-        window.data->sdlWindow,
-        static_cast<VkInstance>(internal::getVulkanInstance()),
-        nullptr,
-        &surface))
-        HG_PANIC("SDL could not create Vulkan surface: %s\n", SDL_GetError());
-
-    window.data->swap = GpuSwapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
-
-    return window;
-}
-
-GpuSwapchain& Window::swapchain()
-{
-    return data->swap;
-}
-
-GpuView* Window::imageView() const
-{
-    return data->swap.currentView();
-}
-
-Format Window::imageFormat() const
-{
-    return data->swap.format();
-}
-
-void Window::setTitle(StringView title)
-{
-    SDL_SetWindowTitle(data->sdlWindow, cString(getScratch(), title));
-}
-
-void Window::pos(i32* x, i32* y) const
-{
-    SDL_GetWindowPosition(data->sdlWindow, x, y);
-}
-
-void Window::setPos(i32 x, i32 y)
-{
-    SDL_SetWindowPosition(data->sdlWindow, x, y);
-}
-
-void Window::size(u32* w, u32* h) const
-{
-    if (data != nullptr)
-    {
-        u32 sw;
-        u32 sh;
-        data->swap.size(&sw, &sh);
-        if (w != nullptr)
-            *w = sw;
-        if (h != nullptr)
-            *h = sh;
-    }
-    else
-    {
-        if (w != nullptr)
-            *w = 0;
-        if (h != nullptr)
-            *h = 0;
-    }
-}
-
-void Window::setSize(u32 width, u32 height)
-{
-    SDL_SetWindowSize(data->sdlWindow, static_cast<int>(width), static_cast<int>(height));
-    data->swap.resize(width, height);
-}
-
-bool Window::isFullscreen() const
-{
-    return (SDL_GetWindowFlags(data->sdlWindow) & SDL_WINDOW_FULLSCREEN) != 0;
-}
-
-void Window::setFullscreen(bool set)
-{
-    SDL_SetWindowFullscreen(data->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
-
-    u32 w, h;
-    size(&w, &h);
-    data->swap.resize(w, h);
-}
-
-void Window::setResizeable(bool set)
-{
-    SDL_SetWindowResizable(data->sdlWindow, set);
-}
-
-bool Window::isFocused() const
-{
-    return SDL_GetMouseFocus() == data->sdlWindow;
-}
-
-bool Window::wasClosed() const
-{
-    return data->wasClosed;
-}
-
-bool Window::wasResized() const
-{
-    return data->wasResized;
-}
-
-bool Window::isMaximized() const
-{
-    return (SDL_GetWindowFlags(data->sdlWindow) & SDL_WINDOW_MAXIMIZED) != 0;
-}
-
-bool Window::isMinimized() const
-{
-    return (SDL_GetWindowFlags(data->sdlWindow) & SDL_WINDOW_MINIMIZED) != 0;
-}
-
-void Window::maximize()
-{
-    SDL_MaximizeWindow(data->sdlWindow);
-}
-
-void Window::minimize()
-{
-    SDL_MinimizeWindow(data->sdlWindow);
-}
-
-void Window::restore()
-{
-    SDL_RestoreWindow(data->sdlWindow);
-}
-
-Vec2 Window::globalMousePos() const
-{
-    f32 x, y;
-    SDL_GetGlobalMouseState(&x, &y);
-    return Vec2{x, y};
-}
-
-Vec2 Window::mousePos() const
-{
-    if (data != nullptr)
-        return Vec2{data->mouseX, data->mouseY};
-    return Vec2{0};
-}
-
-Vec2 Window::mouseDelta() const
-{
-    if (data != nullptr)
-    {
-        u32 h;
-        data->swap.size(nullptr, &h);
-        return Vec2{
-            windowState.mouseDX / static_cast<f32>(h),
-            windowState.mouseDY / static_cast<f32>(h),
-        };
-    }
-    return Vec2{0};
-}
-
-Vec2 Window::wheelDelta() const
-{
-    return Vec2{windowState.wheelDX, windowState.wheelDY};
-}
-
-bool Window::isButtonDown(Button key) const
-{
-    return data->isKeyDown[key];
-}
-
-Span<WindowEvent> Window::events() const
-{
-    return data->events;
-}
-
 u32 gamepadCount()
 {
     u32 count = 0;
@@ -989,4 +797,210 @@ f32 gamepadRightTrigger(u32 gamepad)
         return 0;
 }
 
-} // namespace hg
+void* windowCreate(const WindowConfig& config)
+{
+    WindowData* wd = new (heapAlloc(sizeof(WindowData), alignof(WindowData))) WindowData{};
+
+    ArenaScope scratch = getScratch();
+
+    wd->sdlWindow = SDL_CreateWindow(
+        "Hurdy Gurdy",
+        800, 600,
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    if (wd->sdlWindow == nullptr)
+        HG_PANIC("SDL could not create window: %s\n", SDL_GetError());
+
+    windowState.windowIds.add(SDL_GetWindowID(wd->sdlWindow), wd);
+
+    u32 w, h;
+    SDL_GetWindowSize(wd->sdlWindow,
+        reinterpret_cast<int*>(&w),
+        reinterpret_cast<int*>(&h));
+
+    VkSurfaceKHR surface;
+    if (!SDL_Vulkan_CreateSurface(
+        wd->sdlWindow,
+        static_cast<VkInstance>(internal::getVulkanInstance()),
+        nullptr,
+        &surface))
+        HG_PANIC("SDL could not create Vulkan surface: %s\n", SDL_GetError());
+
+    wd->swap = GpuSwapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
+
+    return wd;
+}
+
+void windowDestroy(void* data)
+{
+    WindowData* wd = static_cast<WindowData*>(data);
+    wd->~WindowData();
+    heapFree(wd, 1);
+}
+
+GpuSwapchain& windowSwapchain(void* data)
+{
+    return static_cast<WindowData*>(data)->swap;
+}
+
+GpuView* windowImageView(void* data)
+{
+    return static_cast<WindowData*>(data)->swap.currentView();
+}
+
+Format windowImageFormat(void* data)
+{
+    return static_cast<WindowData*>(data)->swap.format();
+}
+
+void windowSetTitle(void* data, StringView title)
+{
+    SDL_SetWindowTitle(static_cast<WindowData*>(data)->sdlWindow, cString(getScratch(), title));
+}
+
+void windowGetPos(void* data, i32* x, i32* y)
+{
+    SDL_GetWindowPosition(static_cast<WindowData*>(data)->sdlWindow, x, y);
+}
+
+void windowSetPos(void* data, i32 x, i32 y)
+{
+    SDL_SetWindowPosition(static_cast<WindowData*>(data)->sdlWindow, x, y);
+}
+
+void windowGetSize(void* data, u32* w, u32* h)
+{
+    WindowData* wd = static_cast<WindowData*>(data);
+    if (wd != nullptr)
+    {
+        u32 sw;
+        u32 sh;
+        wd->swap.size(&sw, &sh);
+        if (w != nullptr)
+            *w = sw;
+        if (h != nullptr)
+            *h = sh;
+    }
+    else
+    {
+        if (w != nullptr)
+            *w = 0;
+        if (h != nullptr)
+            *h = 0;
+    }
+}
+
+void windowSetSize(void* data, u32 width, u32 height)
+{
+    WindowData* wd = static_cast<WindowData*>(data);
+    SDL_SetWindowSize(wd->sdlWindow, static_cast<int>(width), static_cast<int>(height));
+    wd->swap.resize(width, height);
+}
+
+bool windowIsFullscreen(void* data)
+{
+    return (SDL_GetWindowFlags(static_cast<WindowData*>(data)->sdlWindow) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+void windowSetFullscreen(void* data, bool set)
+{
+    WindowData* wd = static_cast<WindowData*>(data);
+    SDL_SetWindowFullscreen(wd->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
+
+    u32 w, h;
+    wd->swap.size(&w, &h);
+    wd->swap.resize(w, h);
+}
+
+void windowSetResizeable(void* data, bool set)
+{
+    SDL_SetWindowResizable(static_cast<WindowData*>(data)->sdlWindow, set);
+}
+
+bool windowIsFocused(void* data)
+{
+    return SDL_GetMouseFocus() == static_cast<WindowData*>(data)->sdlWindow;
+}
+
+bool windowWasClosed(void* data)
+{
+    return static_cast<WindowData*>(data)->wasClosed;
+}
+
+bool windowWasResized(void* data)
+{
+    return static_cast<WindowData*>(data)->wasResized;
+}
+
+bool windowIsMaximized(void* data)
+{
+    return (SDL_GetWindowFlags(static_cast<WindowData*>(data)->sdlWindow) & SDL_WINDOW_MAXIMIZED) != 0;
+}
+
+bool windowIsMinimized(void* data)
+{
+    return (SDL_GetWindowFlags(static_cast<WindowData*>(data)->sdlWindow) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
+void windowMaximize(void* data)
+{
+    SDL_MaximizeWindow(static_cast<WindowData*>(data)->sdlWindow);
+}
+
+void windowMinimize(void* data)
+{
+    SDL_MinimizeWindow(static_cast<WindowData*>(data)->sdlWindow);
+}
+
+void windowRestore(void* data)
+{
+    SDL_RestoreWindow(static_cast<WindowData*>(data)->sdlWindow);
+}
+
+Vec2 windowGlobalMousePos(void* data)
+{
+    (void)data;
+    f32 x, y;
+    SDL_GetGlobalMouseState(&x, &y);
+    return Vec2{x, y};
+}
+
+Vec2 windowMousePos(void* data)
+{
+    WindowData* wd = static_cast<WindowData*>(data);
+    if (wd != nullptr)
+        return Vec2{wd->mouseX, wd->mouseY};
+    return Vec2{0};
+}
+
+Vec2 windowMouseDelta(void* data)
+{
+    WindowData* wd = static_cast<WindowData*>(data);
+    if (wd != nullptr)
+    {
+        u32 h;
+        wd->swap.size(nullptr, &h);
+        return Vec2{
+            windowState.mouseDX / static_cast<f32>(h),
+            windowState.mouseDY / static_cast<f32>(h),
+        };
+    }
+    return Vec2{0};
+}
+
+Vec2 windowWheelDelta(void* data)
+{
+    (void)data;
+    return Vec2{windowState.wheelDX, windowState.wheelDY};
+}
+
+bool windowIsButtonDown(void* data, Button key)
+{
+    return static_cast<WindowData*>(data)->isKeyDown[key];
+}
+
+Span<WindowEvent> windowEvents(void* data)
+{
+    return static_cast<WindowData*>(data)->events;
+}
+
+} // namespace hg::sdl

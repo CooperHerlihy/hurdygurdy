@@ -4,7 +4,7 @@
 
 #include <SDL3/SDL_audio.h>
 
-namespace hg {
+namespace hg::sdl {
 
 struct AudioState {
     SDL_AudioDeviceID device = 0;
@@ -51,7 +51,7 @@ void deinitAudio()
     SDL_CloseAudioDevice(audio.device);
 }
 
-void sdlCallback(
+static void sdlCallback(
     void* userData,
     SDL_AudioStream* stream,
     int additionalAmount,
@@ -99,4 +99,4 @@ void unsetAudioCallback()
     audio.callbackConfig = {};
 }
 
-} // namespace hg
+} // namespace hg::sdl

@@ -3,8 +3,7 @@
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"
 
-namespace hg {
-namespace sdl {
+namespace hg::sdl {
 
 #define HG_MAKE_SDL_FUNC(name) decltype(&::name) name = nullptr
 
@@ -154,13 +153,7 @@ bool loadSDL()
     return true;
 }
 
-void unloadSDL()
-{
-    libsdl = {};
-}
-
-} // namespace sdl
-} // namespace hg
+} // namespace hg::sdl
 
 extern "C" bool SDLCALL SDL_Init(SDL_InitFlags flags)
 {

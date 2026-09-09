@@ -1,15 +1,12 @@
-#include "internal.hpp"
-
 #include "sdl_internal.hpp"
+#include "sdl_platform.hpp"
 #include "hg/error.hpp"
 
-namespace hg {
-
-namespace internal {
+namespace hg::sdl {
 
 bool initPlatform()
 {
-    if (!sdl::loadSDL())
+    if (!loadSDL())
         return false;
 
     if (!SDL_Init(
@@ -20,21 +17,23 @@ bool initPlatform()
         SDL_INIT_EVENTS))
     {
         setError(static_cast<StringView>(SDL_GetError()));
-        sdl::unloadSDL();
-        return false;
+        goto sdlFailed;
     }
 
-    windowInit();
+    if (!windowInit())
+        goto windowFailed;
 
     if (!initAudio())
-    {
-        windowDeinit();
-        SDL_Quit();
-        sdl::unloadSDL();
-        return false;
-    }
+        goto audioFailed;
 
     return true;
+
+audioFailed:
+    windowDeinit();
+windowFailed:
+    SDL_Quit();
+sdlFailed:
+    return false;
 }
 
 void deinitPlatform()
@@ -42,13 +41,14 @@ void deinitPlatform()
     deinitAudio();
     windowDeinit();
     SDL_Quit();
-    sdl::unloadSDL();
 }
 
 Span<StringView> getPlatformVulkanExtensions(Arena* arena)
 {
-    u32 extCount;
+    u32 extCount = 0;
     const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);
+    if (exts == nullptr)
+        HG_PANIC("SDL could not get Vulkan instance extensions: %s\n", SDL_GetError());
 
     Span<StringView> extBuffer{arena->alloc<StringView>(extCount), extCount};
     for (u32 i = 0; i < extCount; ++i)
@@ -59,6 +59,4 @@ Span<StringView> getPlatformVulkanExtensions(Arena* arena)
     return extBuffer;
 }
 
-} // namespace internal
-
-} // namespace hg
+} // namespace hg::sdl

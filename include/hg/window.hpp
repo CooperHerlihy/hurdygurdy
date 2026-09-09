@@ -2,7 +2,6 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/span.hpp"
-#include "hg/smart_ptr.hpp"
 #include "hg/strings.hpp"
 #include "hg/gpu.hpp"
 
@@ -282,18 +281,13 @@ struct WindowConfig {
 };
 
 /**
- * Window implementation data
- */
-struct WindowData;
-
-/**
  * A window
  */
 struct Window {
     /**
      * Implementation data
      */
-    UniquePtr<WindowData> data;
+    void* data = nullptr;
 
     /**
      * Construct empty
@@ -313,7 +307,7 @@ struct Window {
     /**
      * Return the window's swapchain
      */
-    GpuSwapchain& swapchain();
+    GpuSwapchain& swapchain() const;
 
     /**
      * Returns the window's current image, or nullptr if unavailable this frame

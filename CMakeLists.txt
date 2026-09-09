@@ -125,6 +125,7 @@ set(SDL_SOURCES
 set(CORE_SOURCES
     src/error.cpp
     src/init.cpp
+    src/platform.cpp
     src/memory.cpp
     src/concurrency.cpp
     src/math.cpp
