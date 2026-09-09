@@ -224,14 +224,14 @@ void beginImGuiFrame()
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    for (WindowEvent& event : state.window->events())
+    for (Event& event : state.window->events())
     {
         switch (event.type)
         {
-            case WindowEventType_buttonPress:
-            case WindowEventType_buttonRelease:
+            case EventType_keyPress:
+            case EventType_keyRelease:
             {
-                bool down = (event.type == WindowEventType_buttonPress);
+                bool down = (event.type == EventType_keyPress);
                 int mouseButton = -1;
 
                 switch (event.button)
@@ -273,7 +273,7 @@ void beginImGuiFrame()
                 }
             } break;
 
-            case WindowEventType_textInput:
+            case EventType_text:
             {
                 io.AddInputCharactersUTF8(event.text);
             } break;
@@ -294,7 +294,7 @@ void beginImGuiFrame()
     if (io.DeltaTime <= 0.0f)
         io.DeltaTime = 1.0f / 60.0f;
 
-    Vec2 wheel = state.window->wheelDelta();
+    Vec2 wheel = wheelDelta();
     if (wheel.x != 0.0f || wheel.y != 0.0f)
         io.AddMouseWheelEvent(wheel.x, wheel.y);
 

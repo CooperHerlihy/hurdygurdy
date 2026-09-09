@@ -17,10 +17,18 @@ struct WindowData {
     SDL_Window* sdlWindow = nullptr;
     f32 mouseX = 0;
     f32 mouseY = 0;
+    i32 posX = 0;
+    i32 posY = 0;
+    u32 sizeW = 0;
+    u32 sizeH = 0;
     bool isKeyDown[Button_count]{};
+    bool prevKeyDown[Button_count]{};
     bool wasClosed = false;
     bool wasResized = false;
-    Array<WindowEvent> events{};
+    bool wasFocusGained = false;
+    bool wasFocusLost = false;
+    bool wasMoved = false;
+    Array<Event> events{};
 
     WindowData() noexcept = default;
     ~WindowData() noexcept;
@@ -39,6 +47,7 @@ struct WindowState {
 
     Map<SDL_WindowID, WindowData*> windowIds{};
 
+    Array<Event> globalEvents{};
     f32 mouseDX = 0.0f;
     f32 mouseDY = 0.0f;
     f32 wheelDX = 0.0f;
@@ -51,6 +60,7 @@ struct WindowState {
     SDL_Gamepad* gamepads[maxGamepads]{};
     Map<SDL_JoystickID, u32> gamepadIds{};
     bool isGamepadButtonDown[maxGamepads][Button_count]{};
+    bool prevGamepadButtonDown[maxGamepads][Button_count]{};
     i16 gamepadAxis[maxGamepads][6]{};
 };
 
@@ -134,6 +144,10 @@ WindowData::WindowData(WindowData&& other) noexcept
     , sdlWindow{std::exchange(other.sdlWindow, nullptr)}
     , mouseX{std::exchange(other.mouseX, 0.0f)}
     , mouseY{std::exchange(other.mouseY, 0.0f)}
+    , posX{std::exchange(other.posX, 0)}
+    , posY{std::exchange(other.posY, 0)}
+    , sizeW{std::exchange(other.sizeW, 0)}
+    , sizeH{std::exchange(other.sizeH, 0)}
     , wasClosed{std::exchange(other.wasClosed, false)}
     , wasResized{std::exchange(other.wasResized, false)}
     , events{std::move(other.events)}
@@ -444,9 +458,17 @@ void processEvents()
 
     windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& window)
     {
+        memcpy(window->prevKeyDown, window->isKeyDown, sizeof(window->isKeyDown));
         window->events.count = 0;
         window->wasResized = false;
+        window->wasFocusGained = false;
+        window->wasFocusLost = false;
+        window->wasMoved = false;
     });
+
+    memcpy(windowState.prevGamepadButtonDown, windowState.isGamepadButtonDown, sizeof(windowState.prevGamepadButtonDown));
+
+    windowState.globalEvents.count = 0;
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -457,9 +479,10 @@ void processEvents()
             {
                 windowState.wasQuit = true;
 
-                WindowEvent windowEvent{};
-                windowEvent.type = WindowEventType_quit;
+                Event windowEvent{};
+                windowEvent.type = EventType_quit;
                 windowEvent.timestamp = event.common.timestamp;
+                windowState.globalEvents.push(windowEvent);
 
                 windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
                 {
@@ -469,123 +492,194 @@ void processEvents()
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             {
                 WindowData** w = windowState.windowIds.get(event.window.windowID);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_windowClosed;
+                windowEvent.timestamp = event.common.timestamp;
                 if (w != nullptr)
                 {
                     (*w)->wasClosed = true;
-
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_close;
-                    windowEvent.timestamp = event.common.timestamp;
-
-                    (*w)->events.push(windowEvent);
+                    windowEvent.window = {nullptr, (*w)->posX, (*w)->posY, (*w)->sizeW, (*w)->sizeH};
                 }
+                windowState.globalEvents.push(windowEvent);
+
+                if (w != nullptr)
+                    (*w)->events.push(windowEvent);
             } break;
             case SDL_EVENT_WINDOW_RESIZED:
             {
                 WindowData** w = windowState.windowIds.get(event.window.windowID);
+
+                u32 w2 = static_cast<u32>(event.window.data1);
+                u32 h2 = static_cast<u32>(event.window.data2);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_windowResized;
+                windowEvent.timestamp = event.common.timestamp;
+
                 if (w != nullptr)
                 {
-                    u32 w2, h2;
-                    SDL_GetWindowSize((*w)->sdlWindow,
-                        reinterpret_cast<int*>(&w2),
-                        reinterpret_cast<int*>(&h2));
                     (*w)->swap.resize(w2, h2);
+                    (*w)->sizeW = w2;
+                    (*w)->sizeH = h2;
                     (*w)->wasResized = true;
-
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_resize;
-                    windowEvent.timestamp = event.common.timestamp;
-
-                    (*w)->events.push(windowEvent);
+                    windowEvent.window = {nullptr, (*w)->posX, (*w)->posY, w2, h2};
                 }
+                windowState.globalEvents.push(windowEvent);
+
+                if (w != nullptr)
+                    (*w)->events.push(windowEvent);
             } break;
             case SDL_EVENT_WINDOW_MAXIMIZED:
             {
                 WindowData** w = windowState.windowIds.get(event.window.windowID);
-                if (w != nullptr)
-                {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_maximize;
-                    windowEvent.timestamp = event.common.timestamp;
 
+                Event windowEvent{};
+                windowEvent.type = EventType_windowMaximized;
+                windowEvent.timestamp = event.common.timestamp;
+                if (w != nullptr)
+                    windowEvent.window = {nullptr, (*w)->posX, (*w)->posY, (*w)->sizeW, (*w)->sizeH};
+                windowState.globalEvents.push(windowEvent);
+
+                if (w != nullptr)
                     (*w)->events.push(windowEvent);
-                }
             } break;
             case SDL_EVENT_WINDOW_MINIMIZED:
             {
                 WindowData** w = windowState.windowIds.get(event.window.windowID);
-                if (w != nullptr)
-                {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_minimize;
-                    windowEvent.timestamp = event.common.timestamp;
 
+                Event windowEvent{};
+                windowEvent.type = EventType_windowMinimized;
+                windowEvent.timestamp = event.common.timestamp;
+                if (w != nullptr)
+                    windowEvent.window = {nullptr, (*w)->posX, (*w)->posY, (*w)->sizeW, (*w)->sizeH};
+                windowState.globalEvents.push(windowEvent);
+
+                if (w != nullptr)
                     (*w)->events.push(windowEvent);
-                }
             } break;
             case SDL_EVENT_WINDOW_RESTORED:
             {
                 WindowData** w = windowState.windowIds.get(event.window.windowID);
-                if (w != nullptr)
-                {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_restore;
-                    windowEvent.timestamp = event.common.timestamp;
 
+                Event windowEvent{};
+                windowEvent.type = EventType_windowRestored;
+                windowEvent.timestamp = event.common.timestamp;
+                if (w != nullptr)
+                    windowEvent.window = {nullptr, (*w)->posX, (*w)->posY, (*w)->sizeW, (*w)->sizeH};
+                windowState.globalEvents.push(windowEvent);
+
+                if (w != nullptr)
                     (*w)->events.push(windowEvent);
-                }
             } break;
             case SDL_EVENT_WINDOW_FOCUS_GAINED:
             {
                 WindowData** w = windowState.windowIds.get(event.window.windowID);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_focusGained;
+                windowEvent.timestamp = event.common.timestamp;
                 if (w != nullptr)
                 {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_focusGained;
-                    windowEvent.timestamp = event.common.timestamp;
-
-                    (*w)->events.push(windowEvent);
+                    (*w)->wasFocusGained = true;
+                    windowEvent.window = {nullptr, (*w)->posX, (*w)->posY, (*w)->sizeW, (*w)->sizeH};
                 }
+                windowState.globalEvents.push(windowEvent);
+
+                if (w != nullptr)
+                    (*w)->events.push(windowEvent);
             } break;
             case SDL_EVENT_WINDOW_FOCUS_LOST:
             {
                 WindowData** w = windowState.windowIds.get(event.window.windowID);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_focusLost;
+                windowEvent.timestamp = event.common.timestamp;
                 if (w != nullptr)
                 {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_focusLost;
-                    windowEvent.timestamp = event.common.timestamp;
-
-                    (*w)->events.push(windowEvent);
+                    (*w)->wasFocusLost = true;
+                    windowEvent.window = {nullptr, (*w)->posX, (*w)->posY, (*w)->sizeW, (*w)->sizeH};
                 }
+                windowState.globalEvents.push(windowEvent);
+
+                if (w != nullptr)
+                    (*w)->events.push(windowEvent);
+            } break;
+            case SDL_EVENT_WINDOW_MOVED:
+            {
+                WindowData** w = windowState.windowIds.get(event.window.windowID);
+
+                i32 nx = event.window.data1;
+                i32 ny = event.window.data2;
+
+                Event windowEvent{};
+                windowEvent.type = EventType_windowMoved;
+                windowEvent.timestamp = event.common.timestamp;
+                if (w != nullptr)
+                {
+                    (*w)->wasMoved = true;
+                    (*w)->posX = nx;
+                    (*w)->posY = ny;
+                    windowEvent.window = {nullptr, nx, ny, (*w)->sizeW, (*w)->sizeH};
+                }
+                windowState.globalEvents.push(windowEvent);
+
+                if (w != nullptr)
+                    (*w)->events.push(windowEvent);
             } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
+                f32 gmx, gmy;
+                SDL_GetGlobalMouseState(&gmx, &gmy);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_mouseMoved;
+                windowEvent.timestamp = event.common.timestamp;
+                windowEvent.mouse.globalPos = {gmx, gmy};
+                windowEvent.mouse.pos = {event.motion.x, event.motion.y};
+                windowEvent.mouse.delta = {event.motion.xrel, event.motion.yrel};
+                windowState.globalEvents.push(windowEvent);
+
                 WindowData** w = windowState.windowIds.get(event.button.windowID);
                 if (w != nullptr)
                 {
                     (*w)->mouseX = event.motion.x;
                     (*w)->mouseY = event.motion.y;
+                    (*w)->events.push(windowEvent);
                 }
                 windowState.mouseDX += event.motion.xrel;
                 windowState.mouseDY += event.motion.yrel;
             } break;
             case SDL_EVENT_MOUSE_WHEEL:
             {
+                Event windowEvent{};
+                windowEvent.type = EventType_mouseWheel;
+                windowEvent.timestamp = event.common.timestamp;
+                windowEvent.mouse.wheel = {event.wheel.x, event.wheel.y};
+                windowState.globalEvents.push(windowEvent);
+
+                windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
+                {
+                    w->events.push(windowEvent);
+                });
+
                 windowState.wheelDX += event.wheel.x;
                 windowState.wheelDY += event.wheel.y;
             } break;
             case SDL_EVENT_KEY_DOWN:
             {
                 Button key = sdlKeycodeToHgButton(event.key.key);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_keyPress;
+                windowEvent.button = key;
+                windowEvent.timestamp = event.common.timestamp;
+                windowState.globalEvents.push(windowEvent);
+
                 WindowData** w = windowState.windowIds.get(event.key.windowID);
                 if (w != nullptr)
                 {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_buttonPress;
-                    windowEvent.button = key;
-                    windowEvent.timestamp = event.common.timestamp;
-
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = true;
                 }
@@ -593,43 +687,46 @@ void processEvents()
             case SDL_EVENT_KEY_UP:
             {
                 Button key = sdlKeycodeToHgButton(event.key.key);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_keyRelease;
+                windowEvent.button = key;
+                windowEvent.timestamp = event.common.timestamp;
+                windowState.globalEvents.push(windowEvent);
+
                 WindowData** w = windowState.windowIds.get(event.key.windowID);
                 if (w != nullptr)
                 {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_buttonRelease;
-                    windowEvent.button = key;
-                    windowEvent.timestamp = event.common.timestamp;
-
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = false;
                 }
             } break;
             case SDL_EVENT_TEXT_INPUT:
             {
+                Event windowEvent{};
+                windowEvent.type = EventType_text;
+                memset(windowEvent.text, 0, sizeof(windowEvent.text));
+                strncpy(windowEvent.text, event.text.text, sizeof(windowEvent.text) - 1);
+                windowEvent.timestamp = event.common.timestamp;
+                windowState.globalEvents.push(windowEvent);
+
                 WindowData** w = windowState.windowIds.get(event.text.windowID);
                 if (w != nullptr)
-                {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_textInput;
-                    memset(windowEvent.text, 0, sizeof(windowEvent.text));
-                    strncpy(windowEvent.text, event.text.text, sizeof(windowEvent.text) - 1);
-                    windowEvent.timestamp = event.common.timestamp;
-
                     (*w)->events.push(windowEvent);
-                }
             } break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 Button key = sdlButtonToHgButton(event.button.button);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_keyPress;
+                windowEvent.button = key;
+                windowEvent.timestamp = event.common.timestamp;
+                windowState.globalEvents.push(windowEvent);
+
                 WindowData** w = windowState.windowIds.get(event.button.windowID);
                 if (w != nullptr)
                 {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_buttonPress;
-                    windowEvent.button = key;
-                    windowEvent.timestamp = event.common.timestamp;
-
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = true;
                 }
@@ -637,14 +734,16 @@ void processEvents()
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
                 Button key = sdlButtonToHgButton(event.button.button);
+
+                Event windowEvent{};
+                windowEvent.type = EventType_keyRelease;
+                windowEvent.button = key;
+                windowEvent.timestamp = event.common.timestamp;
+                windowState.globalEvents.push(windowEvent);
+
                 WindowData** w = windowState.windowIds.get(event.button.windowID);
                 if (w != nullptr)
                 {
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_buttonRelease;
-                    windowEvent.button = key;
-                    windowEvent.timestamp = event.common.timestamp;
-
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = false;
                 }
@@ -653,11 +752,12 @@ void processEvents()
             {
                 openGamepad(event.gdevice.which);
 
-                WindowEvent windowEvent{};
-                windowEvent.type = WindowEventType_gamepadConnected;
-                windowEvent.button = Button_none;
-                windowEvent.gamepad = findGamepadIndex(event.gdevice.which);
+                Event windowEvent{};
+                windowEvent.type = EventType_gamepadConnected;
                 windowEvent.timestamp = event.common.timestamp;
+                windowEvent.gamepad.idx = findGamepadIndex(event.gdevice.which);
+                windowEvent.gamepad.button = Button_none;
+                windowState.globalEvents.push(windowEvent);
 
                 windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
                 {
@@ -668,11 +768,12 @@ void processEvents()
             {
                 u32 idx = findGamepadIndex(event.gdevice.which);
 
-                WindowEvent windowEvent{};
-                windowEvent.type = WindowEventType_gamepadDisconnected;
-                windowEvent.button = Button_none;
-                windowEvent.gamepad = idx;
+                Event windowEvent{};
+                windowEvent.type = EventType_gamepadDisconnected;
                 windowEvent.timestamp = event.common.timestamp;
+                windowEvent.gamepad.idx = idx;
+                windowEvent.gamepad.button = Button_none;
+                windowState.globalEvents.push(windowEvent);
 
                 windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
                 {
@@ -689,11 +790,12 @@ void processEvents()
                 {
                     windowState.isGamepadButtonDown[idx][key] = true;
 
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_gamepadButtonPress;
-                    windowEvent.button = key;
-                    windowEvent.gamepad = idx;
+                    Event windowEvent{};
+                    windowEvent.type = EventType_gamepadPress;
                     windowEvent.timestamp = event.common.timestamp;
+                    windowEvent.gamepad.idx = idx;
+                    windowEvent.gamepad.button = key;
+                    windowState.globalEvents.push(windowEvent);
 
                     windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
                     {
@@ -709,11 +811,12 @@ void processEvents()
                 {
                     windowState.isGamepadButtonDown[idx][key] = false;
 
-                    WindowEvent windowEvent{};
-                    windowEvent.type = WindowEventType_gamepadButtonRelease;
-                    windowEvent.button = key;
-                    windowEvent.gamepad = idx;
+                    Event windowEvent{};
+                    windowEvent.type = EventType_gamepadRelease;
                     windowEvent.timestamp = event.common.timestamp;
+                    windowEvent.gamepad.idx = idx;
+                    windowEvent.gamepad.button = key;
+                    windowState.globalEvents.push(windowEvent);
 
                     windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
                     {
@@ -734,6 +837,11 @@ void processEvents()
 bool wasQuit()
 {
     return windowState.wasQuit;
+}
+
+Span<Event> getEvents()
+{
+    return windowState.globalEvents;
 }
 
 u32 gamepadCount()
@@ -812,10 +920,17 @@ void* windowCreate(const WindowConfig& config)
 
     windowState.windowIds.add(SDL_GetWindowID(wd->sdlWindow), wd);
 
+    i32 px, py;
+    SDL_GetWindowPosition(wd->sdlWindow, &px, &py);
+    wd->posX = px;
+    wd->posY = py;
+
     u32 w, h;
     SDL_GetWindowSize(wd->sdlWindow,
         reinterpret_cast<int*>(&w),
         reinterpret_cast<int*>(&h));
+    wd->sizeW = w;
+    wd->sizeH = h;
 
     VkSurfaceKHR surface;
     if (!SDL_Vulkan_CreateSurface(
@@ -864,7 +979,10 @@ void windowGetPos(void* data, i32* x, i32* y)
 
 void windowSetPos(void* data, i32 x, i32 y)
 {
-    SDL_SetWindowPosition(static_cast<WindowData*>(data)->sdlWindow, x, y);
+    WindowData* wd = static_cast<WindowData*>(data);
+    SDL_SetWindowPosition(wd->sdlWindow, x, y);
+    wd->posX = x;
+    wd->posY = y;
 }
 
 void windowGetSize(void* data, u32* w, u32* h)
@@ -894,6 +1012,8 @@ void windowSetSize(void* data, u32 width, u32 height)
     WindowData* wd = static_cast<WindowData*>(data);
     SDL_SetWindowSize(wd->sdlWindow, static_cast<int>(width), static_cast<int>(height));
     wd->swap.resize(width, height);
+    wd->sizeW = width;
+    wd->sizeH = height;
 }
 
 bool windowIsFullscreen(void* data)
@@ -911,7 +1031,7 @@ void windowSetFullscreen(void* data, bool set)
     wd->swap.resize(w, h);
 }
 
-void windowSetResizeable(void* data, bool set)
+void windowSetResizable(void* data, bool set)
 {
     SDL_SetWindowResizable(static_cast<WindowData*>(data)->sdlWindow, set);
 }
@@ -929,6 +1049,21 @@ bool windowWasClosed(void* data)
 bool windowWasResized(void* data)
 {
     return static_cast<WindowData*>(data)->wasResized;
+}
+
+bool windowWasFocusGained(void* data)
+{
+    return static_cast<WindowData*>(data)->wasFocusGained;
+}
+
+bool windowWasFocusLost(void* data)
+{
+    return static_cast<WindowData*>(data)->wasFocusLost;
+}
+
+bool windowWasMoved(void* data)
+{
+    return static_cast<WindowData*>(data)->wasMoved;
 }
 
 bool windowIsMaximized(void* data)
@@ -956,14 +1091,6 @@ void windowRestore(void* data)
     SDL_RestoreWindow(static_cast<WindowData*>(data)->sdlWindow);
 }
 
-Vec2 windowGlobalMousePos(void* data)
-{
-    (void)data;
-    f32 x, y;
-    SDL_GetGlobalMouseState(&x, &y);
-    return Vec2{x, y};
-}
-
 Vec2 windowMousePos(void* data)
 {
     WindowData* wd = static_cast<WindowData*>(data);
@@ -972,35 +1099,89 @@ Vec2 windowMousePos(void* data)
     return Vec2{0};
 }
 
-Vec2 windowMouseDelta(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (wd != nullptr)
-    {
-        u32 h;
-        wd->swap.size(nullptr, &h);
-        return Vec2{
-            windowState.mouseDX / static_cast<f32>(h),
-            windowState.mouseDY / static_cast<f32>(h),
-        };
-    }
-    return Vec2{0};
-}
-
-Vec2 windowWheelDelta(void* data)
-{
-    (void)data;
-    return Vec2{windowState.wheelDX, windowState.wheelDY};
-}
-
-bool windowIsButtonDown(void* data, Button key)
-{
-    return static_cast<WindowData*>(data)->isKeyDown[key];
-}
-
-Span<WindowEvent> windowEvents(void* data)
+Span<Event> windowEvents(void* data)
 {
     return static_cast<WindowData*>(data)->events;
+}
+
+bool isButtonDown(Button key)
+{
+    bool down = false;
+    windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
+    {
+        if (w->isKeyDown[key])
+            down = true;
+    });
+    return down;
+}
+
+bool wasButtonPressed(Button key)
+{
+    bool pressed = false;
+    windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
+    {
+        if (w->isKeyDown[key] && !w->prevKeyDown[key])
+            pressed = true;
+    });
+    return pressed;
+}
+
+bool wasButtonReleased(Button key)
+{
+    bool released = false;
+    windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
+    {
+        if (!w->isKeyDown[key] && w->prevKeyDown[key])
+            released = true;
+    });
+    return released;
+}
+
+Vec2 globalMousePos()
+{
+    f32 x, y;
+    SDL_GetGlobalMouseState(&x, &y);
+    return Vec2{x, y};
+}
+
+Vec2 mousePos()
+{
+    Vec2 result{0};
+    bool found = false;
+    windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
+    {
+        if (!found && w != nullptr)
+        {
+            result = Vec2{w->mouseX, w->mouseY};
+            found = true;
+        }
+    });
+    return result;
+}
+
+Vec2 mouseDelta()
+{
+    Vec2 result{0};
+    bool found = false;
+    windowState.windowIds.forEach([&](const SDL_WindowID&, WindowData*& w)
+    {
+        if (!found && w != nullptr)
+        {
+            u32 h;
+            w->swap.size(nullptr, &h);
+            if (h > 0)
+            {
+                result = Vec2{windowState.mouseDX / static_cast<f32>(h), windowState.mouseDY / static_cast<f32>(h)};
+                found = true;
+            }
+        }
+    });
+    return result;
+}
+
+Vec2 wheelDelta()
+{
+    return Vec2{windowState.wheelDX, windowState.wheelDY};
 }
 
 } // namespace hg::sdl

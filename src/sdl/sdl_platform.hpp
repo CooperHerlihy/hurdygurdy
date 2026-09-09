@@ -21,6 +21,7 @@ void setClipboardText(StringView text);
 void openURL(StringView url);
 void processEvents();
 bool wasQuit();
+Span<Event> getEvents();
 
 u32 gamepadCount();
 bool isGamepadActive(u32 gamepad);
@@ -29,6 +30,14 @@ Vec2 gamepadLeftStick(u32 gamepad);
 Vec2 gamepadRightStick(u32 gamepad);
 f32 gamepadLeftTrigger(u32 gamepad);
 f32 gamepadRightTrigger(u32 gamepad);
+
+bool isButtonDown(Button key);
+bool wasButtonPressed(Button key);
+bool wasButtonReleased(Button key);
+Vec2 globalMousePos();
+Vec2 mousePos();
+Vec2 mouseDelta();
+Vec2 wheelDelta();
 
 void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig);
 void unsetAudioCallback();
@@ -45,20 +54,19 @@ void windowGetSize(void* data, u32* w, u32* h);
 void windowSetSize(void* data, u32 w, u32 h);
 bool windowIsFullscreen(void* data);
 void windowSetFullscreen(void* data, bool set);
-void windowSetResizeable(void* data, bool set);
+void windowSetResizable(void* data, bool set);
 bool windowIsFocused(void* data);
 bool windowWasClosed(void* data);
 bool windowWasResized(void* data);
+bool windowWasFocusGained(void* data);
+bool windowWasFocusLost(void* data);
+bool windowWasMoved(void* data);
 bool windowIsMaximized(void* data);
 bool windowIsMinimized(void* data);
 void windowMaximize(void* data);
 void windowMinimize(void* data);
 void windowRestore(void* data);
-Vec2 windowGlobalMousePos(void* data);
 Vec2 windowMousePos(void* data);
-Vec2 windowMouseDelta(void* data);
-Vec2 windowWheelDelta(void* data);
-bool windowIsButtonDown(void* data, Button key);
-Span<WindowEvent> windowEvents(void* data);
+Span<Event> windowEvents(void* data);
 
 } // namespace hg::sdl

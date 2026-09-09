@@ -111,31 +111,27 @@ int main()
             window.size(&width, &height);
             camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
 
-            Span<WindowEvent> events = window.events();
-            for (WindowEvent event : events)
-            {
-                if (event.type == WindowEventType_buttonPress && event.button == Button_space)
-                    audio.playSound(sound, 1.0f);
-            }
+            if (wasButtonPressed(Button_m))
+                audio.playSound(sound, 1.0f);
 
-            if (window.isButtonDown(Button_m))
+            if (isButtonDown(Button_m))
                 audio.playMusic(music);
             else
                 audio.pauseMusic(music);
 
-            if (window.isButtonDown(Button_lmouse))
+            if (isButtonDown(Button_lmouse))
             {
-                Vec2 mouseDelta = window.mouseDelta();
+                Vec2 md = mouseDelta();
                 f32 moveSpeed = 1.0f;
-                camera.position.x -= mouseDelta.x * moveSpeed;
-                camera.position.y -= mouseDelta.y * moveSpeed;
+                camera.position.x -= md.x * moveSpeed;
+                camera.position.y -= md.y * moveSpeed;
             }
 
             camera.update();
 
             Vec2 spriteMove = {
-                static_cast<f32>(window.isButtonDown(Button_d) - window.isButtonDown(Button_a)),
-                static_cast<f32>(window.isButtonDown(Button_s) - window.isButtonDown(Button_w)),
+                static_cast<f32>(isButtonDown(Button_d) - isButtonDown(Button_a)),
+                static_cast<f32>(isButtonDown(Button_s) - isButtonDown(Button_w)),
             };
             if (spriteMove != Vec2{0.0f})
             {

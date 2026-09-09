@@ -16,15 +16,24 @@ struct PlatformApi {
     void (*setClipboardText)(StringView text);
     void (*openURL)(StringView url);
     void (*processEvents)();
+    Span<Event> (*getEvents)();
     bool (*wasQuit)();
 
+    bool (*isButtonDown)(Button key);
+    bool (*wasButtonPressed)(Button key);
+    bool (*wasButtonReleased)(Button key);
+    Vec2 (*globalMousePos)();
+    Vec2 (*mousePos)();
+    Vec2 (*mouseDelta)();
+    Vec2 (*wheelDelta)();
+
     u32 (*gamepadCount)();
-    bool (*isGamepadActive)(u32 gamepad);
     bool (*isGamepadButtonDown)(u32 gamepad, Button key);
     Vec2 (*gamepadLeftStick)(u32 gamepad);
     Vec2 (*gamepadRightStick)(u32 gamepad);
     f32 (*gamepadLeftTrigger)(u32 gamepad);
     f32 (*gamepadRightTrigger)(u32 gamepad);
+    bool (*isGamepadActive)(u32 gamepad);
 
     void (*setAudioCallback)(AudioCallback callback, void* userData, const AudioConfig& preferredConfig);
     void (*unsetAudioCallback)();
@@ -41,21 +50,20 @@ struct PlatformApi {
     void (*windowSetSize)(void* data, u32 w, u32 h);
     bool (*windowIsFullscreen)(void* data);
     void (*windowSetFullscreen)(void* data, bool set);
-    void (*windowSetResizeable)(void* data, bool set);
+    void (*windowSetResizable)(void* data, bool set);
     bool (*windowIsFocused)(void* data);
     bool (*windowWasClosed)(void* data);
     bool (*windowWasResized)(void* data);
+    bool (*windowWasFocusGained)(void* data);
+    bool (*windowWasFocusLost)(void* data);
+    bool (*windowWasMoved)(void* data);
     bool (*windowIsMaximized)(void* data);
     bool (*windowIsMinimized)(void* data);
     void (*windowMaximize)(void* data);
     void (*windowMinimize)(void* data);
     void (*windowRestore)(void* data);
-    Vec2 (*windowGlobalMousePos)(void* data);
     Vec2 (*windowMousePos)(void* data);
-    Vec2 (*windowMouseDelta)(void* data);
-    Vec2 (*windowWheelDelta)(void* data);
-    bool (*windowIsButtonDown)(void* data, Button key);
-    Span<WindowEvent> (*windowEvents)(void* data);
+    Span<Event> (*windowEvents)(void* data);
 };
 
 static PlatformApi api{};
@@ -73,15 +81,24 @@ static void fillSdl()
     api.setClipboardText = sdl::setClipboardText;
     api.openURL = sdl::openURL;
     api.processEvents = sdl::processEvents;
+    api.getEvents = sdl::getEvents;
     api.wasQuit = sdl::wasQuit;
 
+    api.isButtonDown = sdl::isButtonDown;
+    api.wasButtonPressed = sdl::wasButtonPressed;
+    api.wasButtonReleased = sdl::wasButtonReleased;
+    api.globalMousePos = sdl::globalMousePos;
+    api.mousePos = sdl::mousePos;
+    api.mouseDelta = sdl::mouseDelta;
+    api.wheelDelta = sdl::wheelDelta;
+
     api.gamepadCount = sdl::gamepadCount;
-    api.isGamepadActive = sdl::isGamepadActive;
     api.isGamepadButtonDown = sdl::isGamepadButtonDown;
     api.gamepadLeftStick = sdl::gamepadLeftStick;
     api.gamepadRightStick = sdl::gamepadRightStick;
     api.gamepadLeftTrigger = sdl::gamepadLeftTrigger;
     api.gamepadRightTrigger = sdl::gamepadRightTrigger;
+    api.isGamepadActive = sdl::isGamepadActive;
 
     api.setAudioCallback = sdl::setAudioCallback;
     api.unsetAudioCallback = sdl::unsetAudioCallback;
@@ -98,20 +115,19 @@ static void fillSdl()
     api.windowSetSize = sdl::windowSetSize;
     api.windowIsFullscreen = sdl::windowIsFullscreen;
     api.windowSetFullscreen = sdl::windowSetFullscreen;
-    api.windowSetResizeable = sdl::windowSetResizeable;
+    api.windowSetResizable = sdl::windowSetResizable;
     api.windowIsFocused = sdl::windowIsFocused;
     api.windowWasClosed = sdl::windowWasClosed;
     api.windowWasResized = sdl::windowWasResized;
+    api.windowWasFocusGained = sdl::windowWasFocusGained;
+    api.windowWasFocusLost = sdl::windowWasFocusLost;
+    api.windowWasMoved = sdl::windowWasMoved;
     api.windowIsMaximized = sdl::windowIsMaximized;
     api.windowIsMinimized = sdl::windowIsMinimized;
     api.windowMaximize = sdl::windowMaximize;
     api.windowMinimize = sdl::windowMinimize;
     api.windowRestore = sdl::windowRestore;
-    api.windowGlobalMousePos = sdl::windowGlobalMousePos;
     api.windowMousePos = sdl::windowMousePos;
-    api.windowMouseDelta = sdl::windowMouseDelta;
-    api.windowWheelDelta = sdl::windowWheelDelta;
-    api.windowIsButtonDown = sdl::windowIsButtonDown;
     api.windowEvents = sdl::windowEvents;
 }
 
@@ -175,19 +191,54 @@ void processEvents()
     api.processEvents();
 }
 
+Span<Event> getEvents()
+{
+    return api.getEvents();
+}
+
 bool wasQuit()
 {
     return api.wasQuit();
 }
 
+bool isButtonDown(Button button)
+{
+    return api.isButtonDown(button);
+}
+
+bool wasButtonPressed(Button button)
+{
+    return api.wasButtonPressed(button);
+}
+
+bool wasButtonReleased(Button button)
+{
+    return api.wasButtonReleased(button);
+}
+
+Vec2 globalMousePos()
+{
+    return api.globalMousePos();
+}
+
+Vec2 mousePos()
+{
+    return api.mousePos();
+}
+
+Vec2 mouseDelta()
+{
+    return api.mouseDelta();
+}
+
+Vec2 wheelDelta()
+{
+    return api.wheelDelta();
+}
+
 u32 gamepadCount()
 {
     return api.gamepadCount();
-}
-
-bool isGamepadActive(u32 gamepad)
-{
-    return api.isGamepadActive(gamepad);
 }
 
 bool isGamepadButtonDown(u32 gamepad, Button key)
@@ -213,6 +264,11 @@ f32 gamepadLeftTrigger(u32 gamepad)
 f32 gamepadRightTrigger(u32 gamepad)
 {
     return api.gamepadRightTrigger(gamepad);
+}
+
+bool isGamepadActive(u32 gamepad)
+{
+    return api.isGamepadActive(gamepad);
 }
 
 void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
@@ -277,6 +333,41 @@ void Window::setTitle(StringView title)
     api.windowSetTitle(data, title);
 }
 
+Span<Event> Window::events() const
+{
+    return api.windowEvents(data);
+}
+
+Vec2 Window::mousePos() const
+{
+    return api.windowMousePos(data);
+}
+
+bool Window::wasClosed() const
+{
+    return api.windowWasClosed(data);
+}
+
+bool Window::isFocused() const
+{
+    return api.windowIsFocused(data);
+}
+
+bool Window::wasFocusGained() const
+{
+    return api.windowWasFocusGained(data);
+}
+
+bool Window::wasFocusLost() const
+{
+    return api.windowWasFocusLost(data);
+}
+
+bool Window::wasMoved() const
+{
+    return api.windowWasMoved(data);
+}
+
 void Window::pos(i32* x, i32* y) const
 {
     api.windowGetPos(data, x, y);
@@ -287,6 +378,16 @@ void Window::setPos(i32 x, i32 y)
     api.windowSetPos(data, x, y);
 }
 
+void Window::setResizable(bool set)
+{
+    api.windowSetResizable(data, set);
+}
+
+bool Window::wasResized() const
+{
+    return api.windowWasResized(data);
+}
+
 void Window::size(u32* width, u32* height) const
 {
     api.windowGetSize(data, width, height);
@@ -295,36 +396,6 @@ void Window::size(u32* width, u32* height) const
 void Window::setSize(u32 width, u32 height)
 {
     api.windowSetSize(data, width, height);
-}
-
-bool Window::isFullscreen() const
-{
-    return api.windowIsFullscreen(data);
-}
-
-void Window::setFullscreen(bool set)
-{
-    api.windowSetFullscreen(data, set);
-}
-
-void Window::setResizeable(bool set)
-{
-    api.windowSetResizeable(data, set);
-}
-
-bool Window::isFocused() const
-{
-    return api.windowIsFocused(data);
-}
-
-bool Window::wasClosed() const
-{
-    return api.windowWasClosed(data);
-}
-
-bool Window::wasResized() const
-{
-    return api.windowWasResized(data);
 }
 
 bool Window::isMaximized() const
@@ -352,34 +423,14 @@ void Window::restore()
     api.windowRestore(data);
 }
 
-Vec2 Window::globalMousePos() const
+bool Window::isFullscreen() const
 {
-    return api.windowGlobalMousePos(data);
+    return api.windowIsFullscreen(data);
 }
 
-Vec2 Window::mousePos() const
+void Window::setFullscreen(bool set)
 {
-    return api.windowMousePos(data);
-}
-
-Vec2 Window::mouseDelta() const
-{
-    return api.windowMouseDelta(data);
-}
-
-Vec2 Window::wheelDelta() const
-{
-    return api.windowWheelDelta(data);
-}
-
-bool Window::isButtonDown(Button key) const
-{
-    return api.windowIsButtonDown(data, key);
-}
-
-Span<WindowEvent> Window::events() const
-{
-    return api.windowEvents(data);
+    api.windowSetFullscreen(data, set);
 }
 
 } // namespace hg

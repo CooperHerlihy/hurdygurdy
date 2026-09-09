@@ -71,36 +71,37 @@ void setClipboardText(StringView text);
 void openURL(StringView url);
 
 /**
- * Processes all events since startup or the last call to process events
+ * The event types
  */
-void processEvents();
+enum EventType : u32 {
+    EventType_none = 0,
+    EventType_quit,
 
-/**
- * Returns whether the application was quit
- */
-bool wasQuit();
+    EventType_text,
 
-/**
- * The types of events
- */
-enum WindowEventType : u32 {
-    WindowEventType_none = 0,
-    WindowEventType_quit,
-    WindowEventType_close,
-    WindowEventType_focusGained,
-    WindowEventType_focusLost,
-    WindowEventType_resize,
-    WindowEventType_maximize,
-    WindowEventType_minimize,
-    WindowEventType_restore,
-    WindowEventType_textInput,
-    WindowEventType_buttonPress,
-    WindowEventType_buttonRelease,
-    WindowEventType_gamepadButtonPress,
-    WindowEventType_gamepadButtonRelease,
-    WindowEventType_gamepadConnected,
-    WindowEventType_gamepadDisconnected,
-    WindowEventType_count,
+    EventType_keyPress,
+    EventType_keyRelease,
+
+    EventType_mouseMoved,
+    EventType_mouseWheel,
+
+    EventType_gamepadPress,
+    EventType_gamepadRelease,
+    EventType_gamepadLeftStick,
+    EventType_gamepadRightStick,
+    EventType_gamepadLeftTrigger,
+    EventType_gamepadRightTrigger,
+    EventType_gamepadConnected,
+    EventType_gamepadDisconnected,
+
+    EventType_windowClosed,
+    EventType_focusGained,
+    EventType_focusLost,
+    EventType_windowMoved,
+    EventType_windowResized,
+    EventType_windowMaximized,
+    EventType_windowMinimized,
+    EventType_windowRestored,
 };
 
 /**
@@ -239,30 +240,208 @@ enum Button : u32 {
 };
 
 /**
- * Input event data
+ * A mouse event
  */
-struct WindowEvent {
+struct MouseEvent {
     /**
-     * The type of event
+     * The current global mouse position
      */
-    WindowEventType type;
+    Vec2 globalPos;
     /**
-     * The button that was pressed or released (button events)
+     * The current mouse position relative to the active window
+     */
+    Vec2 pos;
+    /**
+     * The change in mouse position relative to the active window
+     */
+    Vec2 delta;
+    /**
+     * The change in wheel position
+     */
+    Vec2 wheel;
+};
+
+/**
+ * A gamepad event
+ */
+struct GamepadEvent {
+    /**
+     * The gamepad index (if gamepad event)
+     */
+    u32 idx;
+    /**
+     * The gamepad button pressed or released
      */
     Button button;
     /**
-     * UTF-8 text input (textInput)
+     * The left stick position, each axis in range -1..1
      */
-    char text[32];
+    Vec2 leftStick;
     /**
-     * Gamepad device index, 0-based (gamepad events only)
+     * The right stick position, each axis in range -1..1
      */
-    u32 gamepad;
+    Vec2 rightStick;
     /**
-     * Timestamp in nanoseconds
+     * The left trigger value, in range 0..1
+     */
+    Vec2 leftTrigger;
+    /**
+     * The right trigger value, in range 0..1
+     */
+    Vec2 rightTrigger;
+};
+
+/**
+ * A window event
+ */
+struct WindowEvent {
+    /**
+     * The affected window
+     */
+    Window* window;
+    /**
+     * The window x position
+     */
+    i32 x;
+    /**
+     * The window y position
+     */
+    i32 y;
+    /**
+     * The window width
+     */
+    u32 width;
+    /**
+     * The window height
+     */
+    u32 height;
+};
+
+/**
+ * An event
+ */
+struct Event {
+    /**
+     * The type of event
+     */
+    EventType type;
+    /**
+     * The timestamp in nanoseconds
      */
     u64 timestamp;
+    /**
+     * The particular event data
+     */
+    union {
+        /**
+         * UTF-8 text input
+         */
+        char text[32];
+        /**
+         * The key button pressed or released
+         */
+        Button button;
+        /**
+         * The mouse event
+         */
+        MouseEvent mouse;
+        /**
+         * The gamepad event
+         */
+        GamepadEvent gamepad;
+        /**
+         * The window event
+         */
+        WindowEvent window;
+    };
 };
+
+/**
+ * Processes all events since startup or the last call to process events
+ */
+void processEvents();
+
+/**
+ * Returns the events processed by processEvents
+ */
+Span<Event> getEvents();
+
+/**
+ * Returns whether the application was quit
+ */
+bool wasQuit();
+
+/**
+ * Get whether a button is currently down
+ */
+bool isButtonDown(Button button);
+
+/**
+ * Get whether a button was pressed last frame
+ */
+bool wasButtonPressed(Button button);
+
+/**
+ * Get whether a button was released last frame
+ */
+bool wasButtonReleased(Button button);
+
+/**
+ * Get the current mouse position in screen coordinates
+ */
+Vec2 globalMousePos();
+
+/**
+ * Get the current mouse position relative to the active window's height
+ */
+Vec2 mousePos();
+
+/**
+ * Get the change in mouse position relative to the window height
+ */
+Vec2 mouseDelta();
+
+/**
+ * Get the mouse wheel movement
+ */
+Vec2 wheelDelta();
+
+/**
+ * Returns the number of connected gamepads
+ *
+ * Note, any combination of indices 0-3 may be active
+ */
+u32 gamepadCount();
+
+/**
+ * Get whether a gamepad button is currently down
+ */
+bool isGamepadButtonDown(u32 gamepad, Button key);
+
+/**
+ * Get the left stick position, each axis in range -1..1
+ */
+Vec2 gamepadLeftStick(u32 gamepad);
+
+/**
+ * Get the right stick position, each axis in range -1..1
+ */
+Vec2 gamepadRightStick(u32 gamepad);
+
+/**
+ * Get the left trigger value, in range 0..1
+ */
+f32 gamepadLeftTrigger(u32 gamepad);
+
+/**
+ * Get the right trigger value, in range 0..1
+ */
+f32 gamepadRightTrigger(u32 gamepad);
+
+/**
+ * Returns whether a gamepad index is active
+ */
+bool isGamepadActive(u32 gamepad);
 
 /**
  * Configuration for a window
@@ -325,6 +504,41 @@ struct Window {
     void setTitle(StringView title);
 
     /**
+     * Get events relevant to this window
+     */
+    Span<Event> events() const;
+
+    /**
+     * Get the current mouse position relative to the window height
+     */
+    Vec2 mousePos() const;
+
+    /**
+     * Returns whether the window was closed
+     */
+    bool wasClosed() const;
+
+    /**
+     * Returns whether this is the active window
+     */
+    bool isFocused() const;
+
+    /**
+     * Returns whether the window gained focus last frame
+     */
+    bool wasFocusGained() const;
+
+    /**
+     * Returns whether the window lost focus last frame
+     */
+    bool wasFocusLost() const;
+
+    /**
+     * Returns whether the window was moved this frame
+     */
+    bool wasMoved() const;
+
+    /**
      * Get the position
      */
     void pos(i32* x, i32* y) const;
@@ -335,6 +549,16 @@ struct Window {
     void setPos(i32 x, i32 y);
 
     /**
+     * Set the window to resizable or not
+     */
+    void setResizable(bool set = true);
+
+    /**
+     * Returns whether the window was resized this frame
+     */
+    bool wasResized() const;
+
+    /**
      * Get the width and height
      */
     void size(u32* width, u32* height) const;
@@ -343,36 +567,6 @@ struct Window {
      * Set the width and height
      */
     void setSize(u32 width, u32 height);
-
-    /**
-     * Returns whether this window is fullscreen
-     */
-    bool isFullscreen() const;
-
-    /**
-     * Set to fullscreen or disable fullscreen
-     */
-    void setFullscreen(bool set = true);
-
-    /**
-     * Set the window to resizeable or not
-     */
-    void setResizeable(bool set = true);
-
-    /**
-     * Returns whether the mouse is focused on the window
-     */
-    bool isFocused() const;
-
-    /**
-     * Returns whether the window was closed
-     */
-    bool wasClosed() const;
-
-    /**
-     * Returns whether the window was resized since last processEvents
-     */
-    bool wasResized() const;
 
     /**
      * Returns whether the window is maximized
@@ -395,39 +589,19 @@ struct Window {
     void minimize();
 
     /**
-     * Restore the window from minimized or maximized state
+     * Restore the window from being maximized or minimized
      */
     void restore();
 
     /**
-     * Get the current mouse position in screen coordinates
+     * Returns whether the window is fullscreen
      */
-    Vec2 globalMousePos() const;
+    bool isFullscreen() const;
 
     /**
-     * Get the current mouse position relative to the window height
+     * Set to fullscreen or disable fullscreen
      */
-    Vec2 mousePos() const;
-
-    /**
-     * Get the change in mouse position relative to the window height
-     */
-    Vec2 mouseDelta() const;
-
-    /**
-     * Get the mouse wheel movement
-     */
-    Vec2 wheelDelta() const;
-
-    /**
-     * Get whether the key is currently down
-     */
-    bool isButtonDown(Button key) const;
-
-    /**
-     * Get the key events since last event processing
-     */
-    Span<WindowEvent> events() const;
+    void setFullscreen(bool set = true);
 
     /**
      * Move construct
@@ -442,42 +616,5 @@ struct Window {
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
 };
-
-/**
- * Returns the number of connected gamepads
- *
- * Note, any combination of indices 0-3 may be active
- */
-u32 gamepadCount();
-
-/**
- * Returns whether a gamepad index is active
- */
-bool isGamepadActive(u32 gamepad);
-
-/**
- * Get whether a gamepad button is currently down
- */
-bool isGamepadButtonDown(u32 gamepad, Button key);
-
-/**
- * Get the left stick position, each axis in range -1..1
- */
-Vec2 gamepadLeftStick(u32 gamepad);
-
-/**
- * Get the right stick position, each axis in range -1..1
- */
-Vec2 gamepadRightStick(u32 gamepad);
-
-/**
- * Get the left trigger value, in range 0..1
- */
-f32 gamepadLeftTrigger(u32 gamepad);
-
-/**
- * Get the right trigger value, in range 0..1
- */
-f32 gamepadRightTrigger(u32 gamepad);
 
 } // namespace hg
