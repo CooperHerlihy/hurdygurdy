@@ -12,9 +12,7 @@ struct PlatformApi {
     Span<DisplayInfo> (*displayInfo)();
     void (*setCursor)(CursorType type);
     void (*showCursor)(bool show);
-    String (*getClipboardText)();
-    void (*setClipboardText)(StringView text);
-    void (*openURL)(StringView url);
+
     void (*processEvents)();
     Span<Event> (*getEvents)();
     bool (*wasQuit)();
@@ -22,48 +20,55 @@ struct PlatformApi {
     bool (*isButtonDown)(Button key);
     bool (*wasButtonPressed)(Button key);
     bool (*wasButtonReleased)(Button key);
-    Vec2 (*globalMousePos)();
     Vec2 (*mousePos)();
     Vec2 (*mouseDelta)();
     Vec2 (*wheelDelta)();
 
-    u32 (*gamepadCount)();
+    u32 (*connectedGamepadCount)();
+    bool (*isGamepadConnected)(u32 gamepad);
     bool (*isGamepadButtonDown)(u32 gamepad, Button key);
+    bool (*wasGamepadButtonPressed)(u32 gamepad, GamepadButton key);
+    bool (*wasGamepadButtonReleased)(u32 gamepad, GamepadButton key);
     Vec2 (*gamepadLeftStick)(u32 gamepad);
     Vec2 (*gamepadRightStick)(u32 gamepad);
     f32 (*gamepadLeftTrigger)(u32 gamepad);
     f32 (*gamepadRightTrigger)(u32 gamepad);
-    bool (*isGamepadActive)(u32 gamepad);
 
     void (*setAudioCallback)(AudioCallback callback, void* userData, const AudioConfig& preferredConfig);
     void (*unsetAudioCallback)();
 
-    void* (*windowCreate)(const WindowConfig& config);
+    Window (*windowCreate)(const WindowConfig& config);
     void (*windowDestroy)(void* data);
     GpuSwapchain& (*windowSwapchain)(void* data);
-    GpuView* (*windowImageView)(void* data);
-    Format (*windowImageFormat)(void* data);
     void (*windowSetTitle)(void* data, StringView title);
-    void (*windowGetPos)(void* data, i32* x, i32* y);
-    void (*windowSetPos)(void* data, i32 x, i32 y);
-    void (*windowGetSize)(void* data, u32* w, u32* h);
-    void (*windowSetSize)(void* data, u32 w, u32 h);
-    bool (*windowIsFullscreen)(void* data);
-    void (*windowSetFullscreen)(void* data, bool set);
-    void (*windowSetResizable)(void* data, bool set);
-    bool (*windowIsFocused)(void* data);
+    Span<Event> (*windowEvents)(void* data);
     bool (*windowWasClosed)(void* data);
-    bool (*windowWasResized)(void* data);
+    bool (*windowIsFocused)(void* data);
     bool (*windowWasFocusGained)(void* data);
     bool (*windowWasFocusLost)(void* data);
     bool (*windowWasMoved)(void* data);
+    void (*windowGetPos)(void* data, i32* x, i32* y);
+    void (*windowSetPos)(void* data, i32 x, i32 y);
+    void (*windowSetResizable)(void* data, bool set);
+    bool (*windowWasResized)(void* data);
+    void (*windowGetSize)(void* data, u32* w, u32* h);
+    void (*windowSetSize)(void* data, u32 w, u32 h);
     bool (*windowIsMaximized)(void* data);
-    bool (*windowIsMinimized)(void* data);
+    bool (*windowWasMaximized)(void* data);
     void (*windowMaximize)(void* data);
+    bool (*windowIsMinimized)(void* data);
+    bool (*windowWasMinimized)(void* data);
     void (*windowMinimize)(void* data);
+    void (*windowWasRestored)(void* data);
     void (*windowRestore)(void* data);
+    bool (*windowIsFullscreen)(void* data);
+    void (*windowSetFullscreen)(void* data, bool set);
     Vec2 (*windowMousePos)(void* data);
-    Span<Event> (*windowEvents)(void* data);
+    Vec2 (*windowMouseDelta)(void* data);
+
+    StringView (*getClipboardText)();
+    void (*setClipboardText)(StringView text);
+    void (*openURL)(StringView url);
 };
 
 static PlatformApi api{};
@@ -87,18 +92,17 @@ static void fillSdl()
     api.isButtonDown = sdl::isButtonDown;
     api.wasButtonPressed = sdl::wasButtonPressed;
     api.wasButtonReleased = sdl::wasButtonReleased;
-    api.globalMousePos = sdl::globalMousePos;
     api.mousePos = sdl::mousePos;
     api.mouseDelta = sdl::mouseDelta;
     api.wheelDelta = sdl::wheelDelta;
 
-    api.gamepadCount = sdl::gamepadCount;
+    api.connectedGamepadCount = sdl::connectedGamepadCount;
+    api.isGamepadConnected = sdl::isGamepadConnected;
     api.isGamepadButtonDown = sdl::isGamepadButtonDown;
     api.gamepadLeftStick = sdl::gamepadLeftStick;
     api.gamepadRightStick = sdl::gamepadRightStick;
     api.gamepadLeftTrigger = sdl::gamepadLeftTrigger;
     api.gamepadRightTrigger = sdl::gamepadRightTrigger;
-    api.isGamepadActive = sdl::isGamepadActive;
 
     api.setAudioCallback = sdl::setAudioCallback;
     api.unsetAudioCallback = sdl::unsetAudioCallback;
@@ -106,8 +110,6 @@ static void fillSdl()
     api.windowCreate = sdl::windowCreate;
     api.windowDestroy = sdl::windowDestroy;
     api.windowSwapchain = sdl::windowSwapchain;
-    api.windowImageView = sdl::windowImageView;
-    api.windowImageFormat = sdl::windowImageFormat;
     api.windowSetTitle = sdl::windowSetTitle;
     api.windowGetPos = sdl::windowGetPos;
     api.windowSetPos = sdl::windowSetPos;
@@ -127,8 +129,9 @@ static void fillSdl()
     api.windowMaximize = sdl::windowMaximize;
     api.windowMinimize = sdl::windowMinimize;
     api.windowRestore = sdl::windowRestore;
-    api.windowMousePos = sdl::windowMousePos;
     api.windowEvents = sdl::windowEvents;
+    api.windowMousePos = sdl::windowMousePos;
+    api.windowMouseDelta = sdl::windowMouseDelta;
 }
 
 static void selectBackend()
@@ -171,7 +174,7 @@ void showCursor(bool show)
     api.showCursor(show);
 }
 
-String getClipboardText()
+StringView getClipboardText()
 {
     return api.getClipboardText();
 }
@@ -216,11 +219,6 @@ bool wasButtonReleased(Button button)
     return api.wasButtonReleased(button);
 }
 
-Vec2 globalMousePos()
-{
-    return api.globalMousePos();
-}
-
 Vec2 mousePos()
 {
     return api.mousePos();
@@ -236,9 +234,9 @@ Vec2 wheelDelta()
     return api.wheelDelta();
 }
 
-u32 gamepadCount()
+u32 connectedGamepadCount()
 {
-    return api.gamepadCount();
+    return api.connectedGamepadCount();
 }
 
 bool isGamepadButtonDown(u32 gamepad, Button key)
@@ -266,9 +264,9 @@ f32 gamepadRightTrigger(u32 gamepad)
     return api.gamepadRightTrigger(gamepad);
 }
 
-bool isGamepadActive(u32 gamepad)
+bool isGamepadConnected(u32 gamepad)
 {
-    return api.isGamepadActive(gamepad);
+    return api.isGamepadConnected(gamepad);
 }
 
 void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
@@ -308,24 +306,12 @@ Window& Window::operator=(Window&& other) noexcept
 
 Window Window::create(const WindowConfig& config)
 {
-    Window window{};
-    window.data = api.windowCreate(config);
-    return window;
+    return api.windowCreate(config);
 }
 
 GpuSwapchain& Window::swapchain() const
 {
     return api.windowSwapchain(data);
-}
-
-GpuView* Window::imageView() const
-{
-    return api.windowImageView(data);
-}
-
-Format Window::imageFormat() const
-{
-    return api.windowImageFormat(data);
 }
 
 void Window::setTitle(StringView title)
@@ -336,11 +322,6 @@ void Window::setTitle(StringView title)
 Span<Event> Window::events() const
 {
     return api.windowEvents(data);
-}
-
-Vec2 Window::mousePos() const
-{
-    return api.windowMousePos(data);
 }
 
 bool Window::wasClosed() const
@@ -431,6 +412,16 @@ bool Window::isFullscreen() const
 void Window::setFullscreen(bool set)
 {
     api.windowSetFullscreen(data, set);
+}
+
+Vec2 Window::mousePos() const
+{
+    return api.windowMousePos(data);
+}
+
+Vec2 Window::mouseDelta() const
+{
+    return api.windowMouseDelta(data);
 }
 
 } // namespace hg

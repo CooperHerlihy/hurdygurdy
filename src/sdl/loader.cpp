@@ -28,6 +28,7 @@ struct SdlFuncs {
     HG_MAKE_SDL_FUNC(SDL_GetDisplayUsableBounds);
     HG_MAKE_SDL_FUNC(SDL_GetDisplayContentScale);
     HG_MAKE_SDL_FUNC(SDL_GetGlobalMouseState);
+    HG_MAKE_SDL_FUNC(SDL_GetMouseState);
     HG_MAKE_SDL_FUNC(SDL_GetMouseFocus);
     HG_MAKE_SDL_FUNC(SDL_HasClipboardText);
     HG_MAKE_SDL_FUNC(SDL_GetClipboardText);
@@ -114,6 +115,7 @@ bool loadSDL()
     HG_LOAD_SDL_FUNC(SDL_GetDisplayUsableBounds);
     HG_LOAD_SDL_FUNC(SDL_GetDisplayContentScale);
     HG_LOAD_SDL_FUNC(SDL_GetGlobalMouseState);
+    HG_LOAD_SDL_FUNC(SDL_GetMouseState);
     HG_LOAD_SDL_FUNC(SDL_GetMouseFocus);
     HG_LOAD_SDL_FUNC(SDL_HasClipboardText);
     HG_LOAD_SDL_FUNC(SDL_GetClipboardText);
@@ -253,6 +255,11 @@ extern "C" float SDLCALL SDL_GetDisplayContentScale(SDL_DisplayID displayID)
 extern "C" SDL_MouseButtonFlags SDLCALL SDL_GetGlobalMouseState(float* x, float* y)
 {
     return ::hg::sdl::sdlFuncs.SDL_GetGlobalMouseState(x, y);
+}
+
+extern "C" SDL_MouseButtonFlags SDLCALL SDL_GetMouseState(float* x, float* y)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetMouseState(x, y);
 }
 
 extern "C" SDL_Window* SDLCALL SDL_GetMouseFocus()

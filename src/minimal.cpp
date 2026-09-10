@@ -54,8 +54,8 @@ int main()
     audio.setMusicGain(music, 0.3f);
     audio.pauseMusic(music);
 
-    Renderer2D renderer{window.imageFormat()};
-    DebugRenderer2D debugRenderer{window.imageFormat()};
+    Renderer2D renderer{window.swapchain().format()};
+    DebugRenderer2D debugRenderer{window.swapchain().format()};
 
     u32 width, height;
     window.size(&width, &height);
@@ -89,7 +89,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    initImGui(window, window.imageFormat());
+    initImGui(window, window.swapchain().format());
     HG_DEFER(deinitImGui());
 
     beginImGuiFrame();
@@ -111,7 +111,7 @@ int main()
             window.size(&width, &height);
             camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
 
-            if (wasButtonPressed(Button_m))
+            if (wasButtonPressed(Button_space))
                 audio.playSound(sound, 1.0f);
 
             if (isButtonDown(Button_m))
@@ -163,12 +163,12 @@ int main()
             Window* windows[] = {&window};
             cmd = gpuBeginFrame(windows);
         }
-        if (window.imageView() != nullptr)
+        if (window.swapchain().renderTarget() != nullptr)
         {
             ProfilerScopeTimer timer{"Cpu"};
 
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window.imageView();
+            colorAttachment.image = window.swapchain().renderTarget();
 
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};

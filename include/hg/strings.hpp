@@ -3,6 +3,7 @@
 #include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
 #include "hg/memory.hpp"
+#include "hg/span.hpp"
 
 #include <cstring>
 
@@ -31,6 +32,13 @@ struct StringView {
      */
     constexpr StringView(const char* charsVal, u64 lengthVal)
         : chars{charsVal}, length{lengthVal}
+    {}
+
+    /**
+     * Construct from span
+     */
+    constexpr StringView(Span<const char> span)
+        : chars{span.data}, length{span.count}
     {}
 
     /**

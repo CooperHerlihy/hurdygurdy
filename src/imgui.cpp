@@ -14,7 +14,7 @@ struct ImGuiState {
     Clock clock{};
     CursorType cursors[ImGuiMouseCursor_COUNT]{};
     CursorType lastCursor = CursorType_count;
-    String clipboardText;
+    StringView clipboardText;
 };
 
 static ImGuiState state;
@@ -224,7 +224,7 @@ void beginImGuiFrame()
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    for (Event& event : state.window->events())
+    for (Event& event : getEvents())
     {
         switch (event.type)
         {
@@ -283,8 +283,8 @@ void beginImGuiFrame()
         }
     }
 
-    Vec2 mousePos = state.window->mousePos();
-    io.AddMousePosEvent(mousePos.x, mousePos.y);
+    Vec2 mouse = mousePos();
+    io.AddMousePosEvent(mouse.x, mouse.y);
 
     u32 width, height;
     state.window->size(&width, &height);

@@ -56,21 +56,6 @@ void setCursor(CursorType type);
 void showCursor(bool show = true);
 
 /**
- * Returns the platform clipboard text
- */
-String getClipboardText();
-
-/**
- * Set the platform clipboard text
- */
-void setClipboardText(StringView text);
-
-/**
- * Open a URL in the platform's default handler
- */
-void openURL(StringView url);
-
-/**
  * The event types
  */
 enum EventType : u32 {
@@ -83,25 +68,30 @@ enum EventType : u32 {
     EventType_keyRelease,
 
     EventType_mouseMoved,
-    EventType_mouseWheel,
+    EventType_wheelMoved,
 
+    EventType_gamepadConnected,
+    EventType_gamepadDisconnected,
     EventType_gamepadPress,
     EventType_gamepadRelease,
     EventType_gamepadLeftStick,
     EventType_gamepadRightStick,
     EventType_gamepadLeftTrigger,
     EventType_gamepadRightTrigger,
-    EventType_gamepadConnected,
-    EventType_gamepadDisconnected,
 
     EventType_windowClosed,
-    EventType_focusGained,
-    EventType_focusLost,
+    EventType_windowFocused,
+    EventType_windowUnfocused,
     EventType_windowMoved,
     EventType_windowResized,
     EventType_windowMaximized,
     EventType_windowMinimized,
     EventType_windowRestored,
+    EventType_windowFullscreen,
+
+    EventType_clipboardUpdate,
+
+    EventType_count,
 };
 
 /**
@@ -160,14 +150,6 @@ enum Button : u32 {
     Button_down,
     Button_left,
     Button_right,
-    Button_mouse1,
-    Button_mouse2,
-    Button_mouse3,
-    Button_mouse4,
-    Button_mouse5,
-    Button_lmouse = Button_mouse1,
-    Button_rmouse = Button_mouse2,
-    Button_mmouse = Button_mouse3,
     Button_escape,
     Button_space,
     Button_enter,
@@ -217,26 +199,39 @@ enum Button : u32 {
     Button_ralt,
     Button_lsuper,
     Button_rsuper,
-    Button_gamepadSouth,
-    Button_gamepadEast,
-    Button_gamepadWest,
-    Button_gamepadNorth,
-    Button_gamepadBack,
-    Button_gamepadGuide,
-    Button_gamepadStart,
-    Button_gamepadLeftStick,
-    Button_gamepadRightStick,
-    Button_gamepadLeftShoulder,
-    Button_gamepadRightShoulder,
-    Button_gamepadDpadUp,
-    Button_gamepadDpadDown,
-    Button_gamepadDpadLeft,
-    Button_gamepadDpadRight,
     Button_capslock,
     Button_numlock,
     Button_scrolllock,
     Button_pause,
+    Button_mouse1,
+    Button_mouse2,
+    Button_mouse3,
+    Button_mouse4,
+    Button_mouse5,
+    Button_lmouse = Button_mouse1,
+    Button_rmouse = Button_mouse2,
+    Button_mmouse = Button_mouse3,
     Button_count,
+};
+
+enum GamepadButton {
+    GamepadButton_none = 0,
+    GamepadButton_south,
+    GamepadButton_east,
+    GamepadButton_west,
+    GamepadButton_north,
+    GamepadButton_back,
+    GamepadButton_guide,
+    GamepadButton_start,
+    GamepadButton_leftStick,
+    GamepadButton_rightStick,
+    GamepadButton_leftShoulder,
+    GamepadButton_rightShoulder,
+    GamepadButton_dpadUp,
+    GamepadButton_dpadDown,
+    GamepadButton_dpadLeft,
+    GamepadButton_dpadRight,
+    GamepadButton_count,
 };
 
 /**
@@ -244,21 +239,27 @@ enum Button : u32 {
  */
 struct MouseEvent {
     /**
-     * The current global mouse position
+     * The change in mouse position relative to the active window
      */
-    Vec2 globalPos;
+    Vec2 delta;
     /**
      * The current mouse position relative to the active window
      */
     Vec2 pos;
     /**
-     * The change in mouse position relative to the active window
+     * The current global mouse position
      */
-    Vec2 delta;
+    Vec2 globalPos;
+};
+
+/**
+ * A mouse wheel event
+ */
+struct WheelEvent {
     /**
      * The change in wheel position
      */
-    Vec2 wheel;
+    Vec2 delta;
 };
 
 /**
@@ -266,55 +267,67 @@ struct MouseEvent {
  */
 struct GamepadEvent {
     /**
-     * The gamepad index (if gamepad event)
+     * The gamepad index
      */
     u32 idx;
     /**
-     * The gamepad button pressed or released
+     * The data
      */
-    Button button;
-    /**
-     * The left stick position, each axis in range -1..1
-     */
-    Vec2 leftStick;
-    /**
-     * The right stick position, each axis in range -1..1
-     */
-    Vec2 rightStick;
-    /**
-     * The left trigger value, in range 0..1
-     */
-    Vec2 leftTrigger;
-    /**
-     * The right trigger value, in range 0..1
-     */
-    Vec2 rightTrigger;
+    union {
+        /**
+         * The button pressed or released
+         */
+        GamepadButton button;
+        /**
+         * The stick position, each axis in range -1..1
+         */
+        Vec2 stick;
+        /**
+         * The trigger value, in range 0..1
+         */
+        f32 trigger;
+    };
 };
+
+/**
+ * Forward declaration of Window
+ */
+struct Window;
 
 /**
  * A window event
  */
 struct WindowEvent {
     /**
-     * The affected window
+     * The affected window's data pointer (as a unique identifier)
      */
-    Window* window;
+    void* window;
     /**
-     * The window x position
+     * The x value
      */
-    i32 x;
+    union {
+        /**
+         * The x position
+         */
+        i32 x;
+        /**
+         * The width
+         */
+        u32 width;
+    };
     /**
-     * The window y position
+     * The y value (pos or height)
      */
-    i32 y;
-    /**
-     * The window width
-     */
-    u32 width;
-    /**
-     * The window height
-     */
-    u32 height;
+    union {
+        /**
+         * The y position
+         */
+        i32 y;
+        /**
+         * The height
+         */
+        u32 height;
+    };
 };
 
 /**
@@ -342,15 +355,19 @@ struct Event {
          */
         Button button;
         /**
-         * The mouse event
+         * A mouse event
          */
         MouseEvent mouse;
         /**
-         * The gamepad event
+         * A wheel event
+         */
+        WheelEvent wheel;
+        /**
+         * A gamepad event
          */
         GamepadEvent gamepad;
         /**
-         * The window event
+         * A window event
          */
         WindowEvent window;
     };
@@ -387,17 +404,18 @@ bool wasButtonPressed(Button button);
 bool wasButtonReleased(Button button);
 
 /**
- * Get the current mouse position in screen coordinates
- */
-Vec2 globalMousePos();
-
-/**
- * Get the current mouse position relative to the active window's height
+ * Get the current mouse position
+ *
+ * Note, if there is only one window, it will be scaled to that window,
+ * otherwise it will be in screen coordinates
  */
 Vec2 mousePos();
 
 /**
- * Get the change in mouse position relative to the window height
+ * Get the change in mouse position
+ *
+ * Note, if there is only one window, it will be scaled to that window,
+ * otherwise it will be in screen coordinates
  */
 Vec2 mouseDelta();
 
@@ -411,12 +429,27 @@ Vec2 wheelDelta();
  *
  * Note, any combination of indices 0-3 may be active
  */
-u32 gamepadCount();
+u32 connectedGamepadCount();
+
+/**
+ * Returns whether a gamepad index is active
+ */
+bool isGamepadConnected(u32 gamepad);
 
 /**
  * Get whether a gamepad button is currently down
  */
 bool isGamepadButtonDown(u32 gamepad, Button key);
+
+/**
+ * Get whether a gamepad button was pressed last frame
+ */
+bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key);
+
+/**
+ * Get whether a gamepad button was released last frame
+ */
+bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key);
 
 /**
  * Get the left stick position, each axis in range -1..1
@@ -437,11 +470,6 @@ f32 gamepadLeftTrigger(u32 gamepad);
  * Get the right trigger value, in range 0..1
  */
 f32 gamepadRightTrigger(u32 gamepad);
-
-/**
- * Returns whether a gamepad index is active
- */
-bool isGamepadActive(u32 gamepad);
 
 /**
  * Configuration for a window
@@ -484,19 +512,9 @@ struct Window {
     ~Window() noexcept;
 
     /**
-     * Return the window's swapchain
+     * Return the window's swapchain for rendering
      */
     GpuSwapchain& swapchain() const;
-
-    /**
-     * Returns the window's current image, or nullptr if unavailable this frame
-     */
-    GpuView* imageView() const;
-
-    /**
-     * Returns the window's pixel format
-     */
-    Format imageFormat() const;
 
     /**
      * Set the window title
@@ -509,9 +527,14 @@ struct Window {
     Span<Event> events() const;
 
     /**
-     * Get the current mouse position relative to the window height
+     * Get the mouse position relative to this window
      */
     Vec2 mousePos() const;
+
+    /**
+     * Get the change in mouse position relative to this window
+     */
+    Vec2 mouseDelta() const;
 
     /**
      * Returns whether the window was closed
@@ -574,9 +597,9 @@ struct Window {
     bool isMaximized() const;
 
     /**
-     * Returns whether the window is minimized
+     * Returns whether the window was maximized last frame
      */
-    bool isMinimized() const;
+    bool wasMaximized() const;
 
     /**
      * Maximize the window
@@ -584,9 +607,24 @@ struct Window {
     void maximize();
 
     /**
+     * Returns whether the window is minimized
+     */
+    bool isMinimized() const;
+
+    /**
+     * Returns whether the window was minimized last frame
+     */
+    bool wasMinimized() const;
+
+    /**
      * Minimize the window
      */
     void minimize();
+
+    /**
+     * Returns whether the window was minimized last frame
+     */
+    bool wasRestored() const;
 
     /**
      * Restore the window from being maximized or minimized
@@ -597,6 +635,11 @@ struct Window {
      * Returns whether the window is fullscreen
      */
     bool isFullscreen() const;
+
+    /**
+     * Returns whether the window was made fullscreen last frame
+     */
+    bool wasMadeFullscreen() const;
 
     /**
      * Set to fullscreen or disable fullscreen
@@ -616,5 +659,20 @@ struct Window {
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
 };
+
+/**
+ * Returns the platform clipboard text
+ */
+StringView getClipboardText();
+
+/**
+ * Set the platform clipboard text
+ */
+void setClipboardText(StringView text);
+
+/**
+ * Open a URL in the platform's default handler
+ */
+void openURL(StringView url);
 
 } // namespace hg

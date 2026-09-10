@@ -1043,7 +1043,7 @@ struct GpuSwapchain {
     /**
      * Get the current swapchain image view
      */
-    GpuView* currentView() const;
+    GpuView* renderTarget() const;
 
     /**
      * Get the current swapchain format

@@ -1,7 +1,9 @@
 #include "hg/audio.hpp"
 
+#include "sdl_internal.hpp"
 #include "hg/error.hpp"
 
+#include <SDL3/SDL.h>
 #include <SDL3/SDL_audio.h>
 
 namespace hg::sdl {

@@ -1748,7 +1748,7 @@ u32 GpuSwapchain::imageCount() const
     return data != nullptr ? static_cast<u32>(data->images.count) : 0;
 }
 
-GpuView* GpuSwapchain::currentView() const
+GpuView* GpuSwapchain::renderTarget() const
 {
     return (data != nullptr && data->imageIdx < data->images.count) ? &data->views[data->imageIdx] : nullptr;
 }
