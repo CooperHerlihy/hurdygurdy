@@ -45,6 +45,10 @@ endif()
 set(VulkanHeaders_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/Vulkan-Headers/include)
 set(SDL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
 
+# Linux backend headers (added as SYSTEM includes below to suppress warnings)
+set(LINUX_INCLUDE_DIRS
+)
+
 set(INCLUDE_DIRS
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -122,6 +126,28 @@ set(SDL_SOURCES
     src/sdl/audio.cpp
 )
 
+set(LINUX_SOURCES
+    src/linux/loader.cpp
+    src/linux/linux.cpp
+    src/linux/window.cpp
+    src/linux/audio.cpp
+)
+
+# Platform detection
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(HG_LINUX TRUE)
+endif()
+
+# Platform selection
+option(HG_USE_NATIVE_BACKEND "Use native Linux backend instead of SDL" ON)
+if(HG_LINUX)
+    set(PLATFORM_SOURCES ${LINUX_SOURCES} ${SDL_SOURCES})
+    set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR} ${LINUX_INCLUDE_DIRS})
+else()
+    set(PLATFORM_SOURCES ${SDL_SOURCES})
+    set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR})
+endif()
+
 set(CORE_SOURCES
     src/error.cpp
     src/init.cpp
@@ -142,7 +168,7 @@ set(CORE_SOURCES
     src/dynlib.cpp
     src/render2d.cpp
     src/imgui.cpp
-    ${SDL_SOURCES}
+    ${PLATFORM_SOURCES}
     ${VULKAN_SOURCES}
 )
 
@@ -157,7 +183,24 @@ target_include_directories(hurdygurdy_core
     PUBLIC
         ${INCLUDE_DIRS}
         ${VulkanHeaders_INCLUDE_DIR}
+        ${PLATFORM_INCLUDE_DIRS}
 )
+
+# Add Linux backend compile definition
+if(HG_LINUX)
+    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_NATIVE_BACKEND=1)
+    # Treat vendor headers as SYSTEM to suppress warnings from third-party code
+    target_include_directories(hurdygurdy_core SYSTEM PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/xorgproto/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libX11/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libXrandr/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libXrender/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/pipewire/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/pipewire/spa/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libxkbcommon/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libevdev
+    )
+endif()
 
 target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
 
@@ -222,7 +265,7 @@ target_include_directories(tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_options(tests PRIVATE ${STRICT_FLAGS} ${TESTS_EXCEPTION_FLAG})
 target_compile_definitions(tests PRIVATE HG_LOGGING=1)
 
-foreach(tgt minimal editor)
+foreach(tgt minimal editor platform_test)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
     target_include_directories(${tgt} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
@@ -233,7 +276,7 @@ install(TARGETS hurdygurdy
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS tests minimal editor
+install(TARGETS tests minimal editor platform_test
     RUNTIME DESTINATION bin
 )
 

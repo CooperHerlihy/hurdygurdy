@@ -2,6 +2,10 @@
 
 #include "sdl/sdl_platform.hpp"
 
+#if defined(HG_PLATFORM_LINUX)
+#include "linux/linux_platform.hpp"
+#endif
+
 namespace hg {
 
 struct PlatformApi {
@@ -59,9 +63,10 @@ struct PlatformApi {
     bool (*windowIsMinimized)(void* data);
     bool (*windowWasMinimized)(void* data);
     void (*windowMinimize)(void* data);
-    void (*windowWasRestored)(void* data);
+    bool (*windowWasRestored)(void* data);
     void (*windowRestore)(void* data);
     bool (*windowIsFullscreen)(void* data);
+    bool (*windowWasMadeFullscreen)(void* data);
     void (*windowSetFullscreen)(void* data, bool set);
     Vec2 (*windowMousePos)(void* data);
     Vec2 (*windowMouseDelta)(void* data);
@@ -99,6 +104,8 @@ static void fillSdl()
     api.connectedGamepadCount = sdl::connectedGamepadCount;
     api.isGamepadConnected = sdl::isGamepadConnected;
     api.isGamepadButtonDown = sdl::isGamepadButtonDown;
+    api.wasGamepadButtonPressed = sdl::wasGamepadButtonPressed;
+    api.wasGamepadButtonReleased = sdl::wasGamepadButtonReleased;
     api.gamepadLeftStick = sdl::gamepadLeftStick;
     api.gamepadRightStick = sdl::gamepadRightStick;
     api.gamepadLeftTrigger = sdl::gamepadLeftTrigger;
@@ -125,17 +132,103 @@ static void fillSdl()
     api.windowWasFocusLost = sdl::windowWasFocusLost;
     api.windowWasMoved = sdl::windowWasMoved;
     api.windowIsMaximized = sdl::windowIsMaximized;
+    api.windowWasMaximized = sdl::windowWasMaximized;
     api.windowIsMinimized = sdl::windowIsMinimized;
+    api.windowWasMinimized = sdl::windowWasMinimized;
     api.windowMaximize = sdl::windowMaximize;
     api.windowMinimize = sdl::windowMinimize;
+    api.windowWasRestored = sdl::windowWasRestored;
     api.windowRestore = sdl::windowRestore;
+    api.windowIsFullscreen = sdl::windowIsFullscreen;
+    api.windowWasMadeFullscreen = sdl::windowwasMadeFullscreen;
+    api.windowSetFullscreen = sdl::windowSetFullscreen;
     api.windowEvents = sdl::windowEvents;
     api.windowMousePos = sdl::windowMousePos;
     api.windowMouseDelta = sdl::windowMouseDelta;
 }
 
+#if defined(HG_PLATFORM_LINUX)
+static void fillLinux()
+{
+    api.initPlatform = linux_backend::initPlatform;
+    api.deinitPlatform = linux_backend::deinitPlatform;
+    api.getPlatformVulkanExtensions = linux_backend::getPlatformVulkanExtensions;
+
+    api.displayInfo = linux_backend::displayInfo;
+    api.setCursor = linux_backend::setCursor;
+    api.showCursor = linux_backend::showCursor;
+    api.getClipboardText = linux_backend::getClipboardText;
+    api.setClipboardText = linux_backend::setClipboardText;
+    api.openURL = linux_backend::openURL;
+    api.processEvents = linux_backend::processEvents;
+    api.getEvents = linux_backend::getEvents;
+    api.wasQuit = linux_backend::wasQuit;
+
+    api.isButtonDown = linux_backend::isButtonDown;
+    api.wasButtonPressed = linux_backend::wasButtonPressed;
+    api.wasButtonReleased = linux_backend::wasButtonReleased;
+    api.mousePos = linux_backend::mousePos;
+    api.mouseDelta = linux_backend::mouseDelta;
+    api.wheelDelta = linux_backend::wheelDelta;
+
+    api.connectedGamepadCount = linux_backend::connectedGamepadCount;
+    api.isGamepadConnected = linux_backend::isGamepadConnected;
+    api.isGamepadButtonDown = linux_backend::isGamepadButtonDown;
+    api.wasGamepadButtonPressed = linux_backend::wasGamepadButtonPressed;
+    api.wasGamepadButtonReleased = linux_backend::wasGamepadButtonReleased;
+    api.gamepadLeftStick = linux_backend::gamepadLeftStick;
+    api.gamepadRightStick = linux_backend::gamepadRightStick;
+    api.gamepadLeftTrigger = linux_backend::gamepadLeftTrigger;
+    api.gamepadRightTrigger = linux_backend::gamepadRightTrigger;
+
+    api.setAudioCallback = linux_backend::setAudioCallback;
+    api.unsetAudioCallback = linux_backend::unsetAudioCallback;
+
+    api.windowCreate = linux_backend::windowCreate;
+    api.windowDestroy = linux_backend::windowDestroy;
+    api.windowSwapchain = linux_backend::windowSwapchain;
+    api.windowSetTitle = linux_backend::windowSetTitle;
+    api.windowGetPos = linux_backend::windowGetPos;
+    api.windowSetPos = linux_backend::windowSetPos;
+    api.windowGetSize = linux_backend::windowGetSize;
+    api.windowSetSize = linux_backend::windowSetSize;
+    api.windowIsFullscreen = linux_backend::windowIsFullscreen;
+    api.windowSetFullscreen = linux_backend::windowSetFullscreen;
+    api.windowSetResizable = linux_backend::windowSetResizable;
+    api.windowIsFocused = linux_backend::windowIsFocused;
+    api.windowWasClosed = linux_backend::windowWasClosed;
+    api.windowWasResized = linux_backend::windowWasResized;
+    api.windowWasFocusGained = linux_backend::windowWasFocusGained;
+    api.windowWasFocusLost = linux_backend::windowWasFocusLost;
+    api.windowWasMoved = linux_backend::windowWasMoved;
+    api.windowIsMaximized = linux_backend::windowIsMaximized;
+    api.windowWasMaximized = linux_backend::windowWasMaximized;
+    api.windowIsMinimized = linux_backend::windowIsMinimized;
+    api.windowWasMinimized = linux_backend::windowWasMinimized;
+    api.windowMaximize = linux_backend::windowMaximize;
+    api.windowMinimize = linux_backend::windowMinimize;
+    api.windowWasRestored = linux_backend::windowWasRestored;
+    api.windowRestore = linux_backend::windowRestore;
+    api.windowIsFullscreen = linux_backend::windowIsFullscreen;
+    api.windowWasMadeFullscreen = linux_backend::windowWasMadeFullscreen;
+    api.windowSetFullscreen = linux_backend::windowSetFullscreen;
+    api.windowEvents = linux_backend::windowEvents;
+    api.windowMousePos = linux_backend::windowMousePos;
+    api.windowMouseDelta = linux_backend::windowMouseDelta;
+}
+#endif
+
 static void selectBackend()
 {
+#if defined(HG_PLATFORM_LINUX)
+    // Change this to true for native X11/PipeWire/evdev backend
+    bool useNative = true;
+    if (useNative)
+        fillLinux();
+    else
+        fillSdl();
+    return;
+#endif
     fillSdl();
 }
 
@@ -269,6 +362,16 @@ bool isGamepadConnected(u32 gamepad)
     return api.isGamepadConnected(gamepad);
 }
 
+bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key)
+{
+    return api.wasGamepadButtonPressed(gamepad, key);
+}
+
+bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key)
+{
+    return api.wasGamepadButtonReleased(gamepad, key);
+}
+
 void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
 {
     api.setAudioCallback(callback, userData, preferredConfig);
@@ -384,9 +487,19 @@ bool Window::isMaximized() const
     return api.windowIsMaximized(data);
 }
 
+bool Window::wasMaximized() const
+{
+    return api.windowWasMaximized(data);
+}
+
 bool Window::isMinimized() const
 {
     return api.windowIsMinimized(data);
+}
+
+bool Window::wasMinimized() const
+{
+    return api.windowWasMinimized(data);
 }
 
 void Window::maximize()
@@ -399,6 +512,11 @@ void Window::minimize()
     api.windowMinimize(data);
 }
 
+bool Window::wasRestored() const
+{
+    return api.windowWasRestored(data);
+}
+
 void Window::restore()
 {
     api.windowRestore(data);
@@ -407,6 +525,11 @@ void Window::restore()
 bool Window::isFullscreen() const
 {
     return api.windowIsFullscreen(data);
+}
+
+bool Window::wasMadeFullscreen() const
+{
+    return api.windowWasMadeFullscreen(data);
 }
 
 void Window::setFullscreen(bool set)

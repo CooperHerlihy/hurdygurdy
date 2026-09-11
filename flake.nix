@@ -43,7 +43,12 @@
 
                 LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
                     vulkan-loader
-                    sdl3
+                    sdl3  # fallback
+                    libx11
+                    libxrandr
+                    pipewire
+                    libxkbcommon
+                    libevdev
                 ];
             };
         });
@@ -72,6 +77,53 @@
                 hash = "sha256-6Dph2eLiJUmpQzPWe8EuY5LrWhrFwde2f2dwfgCcWNw=";
             };
 
+            xorgproto-src = pkgs.fetchFromGitLab {
+                domain = "gitlab.freedesktop.org";
+                owner = "xorg";
+                repo = "proto";
+                rev = "xorgproto-2024.1";
+                hash = "sha256-1O9XR2V0lR4Rh8FAVGV4qOYfOXC/n+8sUyM5l4pFRw4=";
+            };
+
+            libX11-src = pkgs.fetchFromGitLab {
+                domain = "gitlab.freedesktop.org";
+                owner = "xorg";
+                repo = "lib";
+                rev = "libX11-1.8.10";
+                hash = "sha256-I0tLlG/gxF+2dV4q1Q9tFJq3a6g8x3J5l5J5l5J5l5=";
+            };
+
+            libXrandr-src = pkgs.fetchFromGitLab {
+                domain = "gitlab.freedesktop.org";
+                owner = "xorg";
+                repo = "lib";
+                rev = "libXrandr-1.5.4";
+                hash = "sha256-PLACEHOLDER";
+            };
+
+            libXrender-src = pkgs.fetchFromGitLab {
+                domain = "gitlab.freedesktop.org";
+                owner = "xorg";
+                repo = "lib";
+                rev = "libXrender-0.9.10";
+                hash = "sha256-PLACEHOLDER";
+            };
+
+            pipewire-src = pkgs.fetchFromGitLab {
+                domain = "gitlab.freedesktop.org";
+                owner = "pipewire";
+                repo = "pipewire";
+                rev = "1.0.7";
+                hash = "sha256-1J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5=";
+            };
+
+            libxkbcommon-src = pkgs.fetchFromGitHub {
+                owner = "xkbcommon";
+                repo = "libxkbcommon";
+                rev = "xkbcommon-1.6.0";
+                hash = "sha256-1K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5=";
+            };
+
         in {
             default = pkgs.clang19Stdenv.mkDerivation {
                 name = "hurdygurdy";
@@ -89,18 +141,37 @@
 
                 preConfigure = ''
                     rm -rf vendor/imgui vendor/Vulkan-Headers vendor/SDL
+                    rm -rf vendor/xorgproto vendor/libX11 vendor/libXrandr vendor/libXrender
+                    rm -rf vendor/pipewire vendor/libxkbcommon
                     cp -r ${vulkan-headers-src} vendor/Vulkan-Headers
                     cp -r ${imgui-src} vendor/imgui
                     cp -r ${sdl3-src} vendor/SDL
+                    cp -r ${xorgproto-src} vendor/xorgproto
+                    cp -r ${libX11-src} vendor/libX11
+                    cp -r ${libXrandr-src} vendor/libXrandr
+                    cp -r ${libXrender-src} vendor/libXrender
+                    cp -r ${pipewire-src} vendor/pipewire
+                    cp -r ${libxkbcommon-src} vendor/libxkbcommon
                     chmod -R u+w vendor/Vulkan-Headers
                     chmod -R u+w vendor/imgui
                     chmod -R u+w vendor/SDL
+                    chmod -R u+w vendor/xorgproto
+                    chmod -R u+w vendor/libX11
+                    chmod -R u+w vendor/libXrandr
+                    chmod -R u+w vendor/libXrender
+                    chmod -R u+w vendor/pipewire
+                    chmod -R u+w vendor/libxkbcommon
                 '';
 
                 postFixup = ''
                     for bin in $out/bin/*; do
                         patchelf --add-rpath ${pkgs.vulkan-loader}/lib $bin
-                        patchelf --add-rpath ${pkgs.sdl3}/lib $bin
+                        patchelf --add-rpath ${pkgs.sdl3}/lib $bin  # fallback
+                        patchelf --add-rpath ${pkgs.libx11}/lib $bin
+                        patchelf --add-rpath ${pkgs.libxrandr}/lib $bin
+                        patchelf --add-rpath ${pkgs.pipewire}/lib $bin
+                        patchelf --add-rpath ${pkgs.libxkbcommon}/lib $bin
+                        patchelf --add-rpath ${pkgs.libevdev}/lib $bin
                     done
                 '';
             };

@@ -1115,6 +1115,11 @@ bool windowWasRestored(void* data)
     return static_cast<WindowData*>(data)->wasRestored;
 }
 
+bool windowwasMadeFullscreen(void* data)
+{
+    return static_cast<WindowData*>(data)->wasFullscreened;
+}
+
 void windowRestore(void* data)
 {
     SDL_RestoreWindow(static_cast<WindowData*>(data)->sdlWindow);

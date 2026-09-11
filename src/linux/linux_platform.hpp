@@ -7,7 +7,9 @@
 #include "hg/strings.hpp"
 #include "hg/memory.hpp"
 
-namespace hg::sdl {
+namespace hg::linux_backend {
+
+bool loadNative();
 
 bool initPlatform();
 void deinitPlatform();
@@ -17,8 +19,8 @@ Span<DisplayInfo> displayInfo();
 void setCursor(CursorType type);
 void showCursor(bool show);
 void processEvents();
-bool wasQuit();
 Span<Event> getEvents();
+bool wasQuit();
 
 u32 connectedGamepadCount();
 bool isGamepadConnected(u32 gamepad);
@@ -65,7 +67,7 @@ void windowMinimize(void* data);
 bool windowWasRestored(void* data);
 void windowRestore(void* data);
 bool windowIsFullscreen(void* data);
-bool windowwasMadeFullscreen(void* data);
+bool windowWasMadeFullscreen(void* data);
 void windowSetFullscreen(void* data, bool set);
 Vec2 windowMousePos(void* data);
 Vec2 windowMouseDelta(void* data);
@@ -74,4 +76,4 @@ StringView getClipboardText();
 void setClipboardText(StringView text);
 void openURL(StringView url);
 
-} // namespace hg::sdl
+} // namespace hg::linux_backend

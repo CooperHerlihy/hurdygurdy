@@ -67,10 +67,13 @@ static void sdlCallback(
     void* buf = scratch.alloc(static_cast<u64>(additionalAmount), alignof(f32));
     memset(buf, 0, static_cast<u64>(additionalAmount));
 
-    audio.callback(
-        audio.callbackData,
-        {static_cast<f32*>(buf), static_cast<u64>(additionalAmount) / sizeof(f32)},
-        audio.callbackConfig);
+    if (audio.callback != nullptr)
+    {
+        audio.callback(
+            audio.callbackData,
+            {static_cast<f32*>(buf), static_cast<u64>(additionalAmount) / sizeof(f32)},
+            audio.callbackConfig);
+    }
 
     if (!SDL_PutAudioStreamData(stream, buf, additionalAmount))
         HG_PANIC("SDL could not push audio stream data: %s\n", SDL_GetError());

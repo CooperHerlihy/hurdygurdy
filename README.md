@@ -4,6 +4,11 @@
 
 Hurdy Gurdy is a game engine written in C++ for fun.
 
+## Supported platforms
+
+- **SDL3** — A backup so Hurdy Gurdy can run on platforms without a dedicated backend
+- **Linux** — uses X11 and Pipewire, headers are vendored in
+
 ## Build
 
 ### Dependencies
@@ -13,7 +18,6 @@ On Nix, `nix develop` provides all dependencies.
 - C++23 compiler — Clang 19+ (preferred), GCC 15+, or MSVC
 - CMake (3.18+)
 - Ninja — build system generator
-- SDL3 — found on system, or downloaded automatically by CMake
 - glslc (SPIR-V compiler) + Vulkan Validation Layers (debug only):
   - Windows: included in LunarG Vulkan SDK
   - Linux: install glslc via `shaderc` package, validation layers via `vulkan-validation-layers` (or `nix develop`)
@@ -47,6 +51,6 @@ target_link_libraries(your_target hurdygurdy)
 Or link manually:
 
 ```bash
-c++ -Ipath/to/hurdygurdy/include -Lpath/to/lib -lhurdygurdy -lSDL3 your_program.cpp
+c++ -Ipath/to/hurdygurdy/include -Lpath/to/lib -lhurdygurdy your_program.cpp
 ```
 

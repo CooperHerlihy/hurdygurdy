@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hg/macros.hpp"
 #include "hg/span.hpp"
 #include "hg/memory.hpp"
 #include "hg/strings.hpp"
@@ -16,6 +17,7 @@ Span<StringView> getPlatformVulkanExtensions(Arena* arena);
 bool initGpu();
 void deinitGpu();
 void* getVulkanInstance();
+void* getVulkanInstanceProcAddr(const char* name);
 
 void initRender2D();
 void deinitRender2D();

@@ -812,6 +812,11 @@ void* getVulkanInstance()
     return vk.instance;
 }
 
+void* getVulkanInstanceProcAddr(const char* name)
+{
+    return reinterpret_cast<void*>(vkGetInstanceProcAddr(static_cast<VkInstance>(vk.instance), name));
+}
+
 void initImGuiGpu(
     const GpuSwapchain& swap,
     Format colorFormat,

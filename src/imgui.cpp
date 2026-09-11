@@ -283,7 +283,7 @@ void beginImGuiFrame()
         }
     }
 
-    Vec2 mouse = mousePos();
+    Vec2 mouse = state.window->mousePos();
     io.AddMousePosEvent(mouse.x, mouse.y);
 
     u32 width, height;

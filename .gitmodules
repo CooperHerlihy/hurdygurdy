@@ -7,3 +7,27 @@
 [submodule "vendor/SDL"]
 	path = vendor/SDL
 	url = https://github.com/libsdl-org/SDL
+[submodule "vendor/pipewire"]
+	path = vendor/pipewire
+	url = https://gitlab.freedesktop.org/pipewire/pipewire
+[submodule "vendor/libxkbcommon"]
+	path = vendor/libxkbcommon
+	url = https://github.com/xkbcommon/libxkbcommon
+[submodule "vendor/libevdev"]
+	path = vendor/libevdev
+	url = https://gitlab.freedesktop.org/libevdev/libevdev
+[submodule "vendor/xorgproto"]
+	path = vendor/xorgproto
+	url = https://gitlab.freedesktop.org/xorg/proto/xorgproto
+[submodule "vendor/libX11"]
+	path = vendor/libX11
+	url = https://gitlab.freedesktop.org/xorg/lib/libX11
+[submodule "vendor/libXrandr"]
+	path = vendor/libXrandr
+	url = https://gitlab.freedesktop.org/xorg/lib/libXrandr
+[submodule "vendor/libXrender"]
+	path = vendor/libXrender
+	url = https://gitlab.freedesktop.org/xorg/lib/libXrender
+[submodule "vendor/libevdev"]
+	path = vendor/libevdev
+	url = https://gitlab.freedesktop.org/libevdev/libevdev
