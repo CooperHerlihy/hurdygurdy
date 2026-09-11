@@ -15,8 +15,6 @@ static const char* deviceExtensions[]{
     "VK_KHR_swapchain",
 };
 
-#ifdef HG_VK_DEBUG_MESSENGER
-
 static VkBool32 debugCallback(
     const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     const VkDebugUtilsMessageTypeFlagsEXT type,
@@ -58,8 +56,6 @@ static const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerInfo{
     debugCallback,
     nullptr,
 };
-
-#endif
 
 namespace vulkan {
 
@@ -219,6 +215,41 @@ u32 formatToSize(Format format)
 
 namespace vulkan {
 
+static bool isDebugMessengerAvailable()
+{
+#ifdef HG_VK_DEBUG_MESSENGER
+    ArenaScope scratch = getScratch();
+
+    u32 layerCount;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    ArrayTemp<VkLayerProperties> layers{scratch, layerCount, layerCount};
+    vkEnumerateInstanceLayerProperties(&layerCount, layers.vals);
+
+    for (VkLayerProperties& layer : layers)
+    {
+        if (strcmp(layer.layerName, "VK_LAYER_KHRONOS_validation") == 0)
+            goto layerFound;
+    }
+    return false;
+layerFound:
+
+    u32 extCount;
+    vkEnumerateInstanceExtensionProperties(nullptr, &extCount, nullptr);
+    ArrayTemp<VkExtensionProperties> exts{scratch, extCount, extCount};
+    vkEnumerateInstanceExtensionProperties(nullptr, &extCount, exts.vals);
+
+    for (VkExtensionProperties& ext : exts)
+    {
+        if (strcmp(ext.extensionName, "VK_EXT_debug_utils") == 0)
+            goto extFound;
+    }
+    return false;
+extFound:
+    return true;
+#endif
+    return false;
+}
+
 static VkInstance createInstance(Span<StringView> extensions)
 {
     if (extensions.count > 0)
@@ -236,27 +267,28 @@ static VkInstance createInstance(Span<StringView> extensions)
 
     VkInstanceCreateInfo instanceInfo{};
     instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-#ifdef HG_VK_DEBUG_MESSENGER
-    instanceInfo.pNext = &debugUtilsMessengerInfo;
-#endif
     instanceInfo.flags = 0;
     instanceInfo.pApplicationInfo = &appInfo;
 
-#ifdef HG_VK_DEBUG_MESSENGER
-    const char* layers[]{
-        "VK_LAYER_KHRONOS_validation",
-    };
-    instanceInfo.enabledLayerCount = static_cast<u32>(size(layers));
-    instanceInfo.ppEnabledLayerNames = layers;
-#endif
+    if (vk.enableDebugMessenger)
+    {
+        instanceInfo.pNext = &debugUtilsMessengerInfo;
+        const char* layers[]{
+            "VK_LAYER_KHRONOS_validation",
+        };
+        instanceInfo.enabledLayerCount = static_cast<u32>(size(layers));
+        instanceInfo.ppEnabledLayerNames = layers;
+    }
 
-    const char** extCStrs = scratch.alloc<const char*>(extensions.count);
+    ArrayTemp<const char*> extCStrs{scratch};
     for (u32 i = 0; i < extensions.count; ++i)
     {
-        extCStrs[i] = cString(scratch, extensions[i]);
+        extCStrs.push(cString(scratch, extensions[i]));
     }
-    instanceInfo.enabledExtensionCount = (u32)extensions.count;
-    instanceInfo.ppEnabledExtensionNames = extCStrs;
+    if (vk.enableDebugMessenger)
+        extCStrs.push("VK_EXT_debug_utils");
+    instanceInfo.enabledExtensionCount = (u32)extCStrs.count;
+    instanceInfo.ppEnabledExtensionNames = extCStrs.vals;
 
     VkInstance instance = nullptr;
     VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
@@ -268,7 +300,6 @@ static VkInstance createInstance(Span<StringView> extensions)
     return instance;
 }
 
-#ifdef HG_VK_DEBUG_MESSENGER
 static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
 {
     HG_ASSERT(vk.instance != nullptr);
@@ -282,7 +313,6 @@ static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
 
     return messenger;
 }
-#endif
 
 static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags)
 {
@@ -657,27 +687,20 @@ bool initGpu()
     if (!loadVulkan())
         goto loadFailed;
 
-    {
-        Span<StringView> exts = getPlatformVulkanExtensions(scratch);
-#ifdef HG_VK_DEBUG_MESSENGER
-        [[maybe_unused]]
-        bool extended = scratch.extend(exts.data, exts.count, exts.count + 1);
-        HG_ASSERT(extended);
-        ++exts.count;
-        exts[exts.count - 1] = "VK_EXT_debug_utils";
-#endif
-        vk.instance = createInstance(exts);
-        if (vk.instance == nullptr)
-            goto instanceFailed;
-    }
+    vk.enableDebugMessenger = isDebugMessengerAvailable();
+
+    vk.instance = createInstance(getPlatformVulkanExtensions(scratch));
+    if (vk.instance == nullptr)
+        goto instanceFailed;
     if (!loadVulkanInstanceFuncs(vk.instance))
         goto loadInstanceFailed;
 
-#ifdef HG_VK_DEBUG_MESSENGER
-    vk.debugMessenger = createDebugUtilsMessenger();
-    if (vk.debugMessenger == nullptr)
-        goto debugMessengerFailed;
-#endif
+    if (vk.enableDebugMessenger)
+    {
+        vk.debugMessenger = createDebugUtilsMessenger();
+        if (vk.debugMessenger == nullptr)
+            goto debugMessengerFailed;
+    }
 
     vk.physicalDevice = findPhysicalDevice();
     if (vk.physicalDevice == nullptr)
@@ -756,10 +779,9 @@ loadDeviceFailed:
 deviceFailed:
 queueFamilyFailed:
 physicalDeviceFailed:
-#ifdef HG_VK_DEBUG_MESSENGER
-    vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
+    if (vk.enableDebugMessenger)
+        vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
 debugMessengerFailed:
-#endif
 loadInstanceFailed:
     vkDestroyInstance(vk.instance, nullptr);
 instanceFailed:
@@ -798,9 +820,8 @@ void deinitGpu()
 
     vkDestroyDevice(vk.device, nullptr);
 
-#ifdef HG_VK_DEBUG_MESSENGER
-    vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
-#endif
+    if (vk.enableDebugMessenger)
+        vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
 
     vkDestroyInstance(vk.instance, nullptr);
 

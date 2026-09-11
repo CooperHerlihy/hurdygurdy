@@ -414,6 +414,13 @@ struct ArrayTemp {
     ArrayTemp() noexcept = default;
 
     /**
+     * Construct empty with arena
+     */
+    ArrayTemp(Arena* arenaVal)
+        : arena{arenaVal}
+    {}
+
+    /**
      * Construct with init size
      */
     ArrayTemp(Arena* arenaVal, u64 countVal, u64 capacityVal)

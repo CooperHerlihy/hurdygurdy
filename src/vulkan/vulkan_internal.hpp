@@ -254,10 +254,9 @@ struct Frame {
 };
 
 struct VulkanState {
-#ifdef HG_VK_DEBUG_MESSENGER
-    VkDebugUtilsMessengerEXT debugMessenger = nullptr;
-#endif
+    bool enableDebugMessenger;
     VkInstance instance = nullptr;
+    VkDebugUtilsMessengerEXT debugMessenger = nullptr;
     VkPhysicalDevice physicalDevice = nullptr;
     VkDevice device = nullptr;
     VmaAllocator vma = nullptr;

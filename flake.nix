@@ -43,7 +43,7 @@
 
                 LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
                     vulkan-loader
-                    sdl3  # fallback
+                    sdl3
                     libx11
                     libxrandr
                     pipewire

@@ -11,6 +11,8 @@ namespace vulkan {
 struct VulkanFuncs {
     HG_MAKE_VULKAN_FUNC(vkGetInstanceProcAddr);
     HG_MAKE_VULKAN_FUNC(vkGetDeviceProcAddr);
+    HG_MAKE_VULKAN_FUNC(vkEnumerateInstanceLayerProperties);
+    HG_MAKE_VULKAN_FUNC(vkEnumerateInstanceExtensionProperties);
     HG_MAKE_VULKAN_FUNC(vkCreateInstance);
     HG_MAKE_VULKAN_FUNC(vkDestroyInstance);
     HG_MAKE_VULKAN_FUNC(vkCreateDebugUtilsMessengerEXT);
@@ -146,13 +148,18 @@ bool loadVulkan()
         return false;
     }
 
-    vulkanFuncs.vkCreateInstance = (PFN_vkCreateInstance)
-        vulkanFuncs.vkGetInstanceProcAddr(nullptr, "vkCreateInstance");
-    if (vulkanFuncs.vkCreateInstance == nullptr)
-    {
-        setError("Could not load vkCreateInstance\n");
-        return false;
+#define HG_LOAD_VK_FUNC(name) \
+    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
+    if (vulkanFuncs. name == nullptr) { \
+        setError("Could not load " #name); \
+        return false; \
     }
+
+    HG_LOAD_VK_FUNC(vkCreateInstance);
+    HG_LOAD_VK_FUNC(vkEnumerateInstanceLayerProperties);
+    HG_LOAD_VK_FUNC(vkEnumerateInstanceExtensionProperties);
+
+#undef HG_LOAD_VK_FUNC
 
     return true;
 }
@@ -175,10 +182,11 @@ bool loadVulkanInstanceFuncs(VkInstance instance)
 
     HG_LOAD_VK_INSTANCE_FUNC(vkGetDeviceProcAddr);
     HG_LOAD_VK_INSTANCE_FUNC(vkDestroyInstance);
-#ifdef HG_VK_DEBUG_MESSENGER
-    HG_LOAD_VK_INSTANCE_FUNC(vkCreateDebugUtilsMessengerEXT);
-    HG_LOAD_VK_INSTANCE_FUNC(vkDestroyDebugUtilsMessengerEXT);
-#endif
+    if (vk.enableDebugMessenger)
+    {
+        HG_LOAD_VK_INSTANCE_FUNC(vkCreateDebugUtilsMessengerEXT);
+        HG_LOAD_VK_INSTANCE_FUNC(vkDestroyDebugUtilsMessengerEXT);
+    }
     HG_LOAD_VK_INSTANCE_FUNC(vkEnumeratePhysicalDevices);
     HG_LOAD_VK_INSTANCE_FUNC(vkEnumerateDeviceExtensionProperties);
     HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceProperties);
@@ -305,445 +313,546 @@ bool loadVulkanDeviceFuncs(VkDevice device)
 } // namespace vulkan
 } // namespace hg
 
-#define VK_WRAPPER(name, ret, params, args) \
-    ret name params \
-    { \
-        return ::hg::vulkan::vulkanFuncs.name args; \
-    }
-
-#define VK_WRAPPER_VOID(name, params, args) \
-    void name params \
-    { \
-        ::hg::vulkan::vulkanFuncs.name args; \
-    }
-
 extern "C" {
 
-VK_WRAPPER(vkGetInstanceProcAddr, PFN_vkVoidFunction,
-    (VkInstance instance, const char* pName),
-    (instance, pName))
-
-VK_WRAPPER(vkGetDeviceProcAddr, PFN_vkVoidFunction,
-    (VkDevice device, const char* pName),
-    (device, pName))
-
-VK_WRAPPER(vkCreateInstance, VkResult,
-    (const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance),
-    (pCreateInfo, pAllocator, pInstance))
-
-VK_WRAPPER_VOID(vkDestroyInstance,
-    (VkInstance instance, const VkAllocationCallbacks* pAllocator),
-    (instance, pAllocator))
-
-VK_WRAPPER(vkCreateDebugUtilsMessengerEXT, VkResult,
-    (VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pMessenger),
-    (instance, pCreateInfo, pAllocator, pMessenger))
-
-VK_WRAPPER_VOID(vkDestroyDebugUtilsMessengerEXT,
-    (VkInstance instance, VkDebugUtilsMessengerEXT messenger, const VkAllocationCallbacks* pAllocator),
-    (instance, messenger, pAllocator))
-
-VK_WRAPPER(vkEnumeratePhysicalDevices, VkResult,
-    (VkInstance instance, uint32_t* pCount, VkPhysicalDevice* pDevices),
-    (instance, pCount, pDevices))
-
-VK_WRAPPER(vkEnumerateDeviceExtensionProperties, VkResult,
-    (VkPhysicalDevice device, const char* pLayerName, uint32_t* pCount, VkExtensionProperties* pProps),
-    (device, pLayerName, pCount, pProps))
-
-VK_WRAPPER_VOID(vkGetPhysicalDeviceProperties,
-    (VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties* pProperties),
-    (physicalDevice, pProperties))
-
-VK_WRAPPER_VOID(vkGetPhysicalDeviceQueueFamilyProperties,
-    (VkPhysicalDevice device, uint32_t* pCount, VkQueueFamilyProperties* pProps),
-    (device, pCount, pProps))
-
-VK_WRAPPER_VOID(vkDestroySurfaceKHR,
-    (VkInstance instance, VkSurfaceKHR surface, const VkAllocationCallbacks* pAllocator),
-    (instance, surface, pAllocator))
-
-VK_WRAPPER(vkCreateDevice, VkResult,
-    (VkPhysicalDevice device, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice),
-    (device, pCreateInfo, pAllocator, pDevice))
-
-VK_WRAPPER_VOID(vkDestroyDevice,
-    (VkDevice device, const VkAllocationCallbacks* pAllocator),
-    (device, pAllocator))
-
-VK_WRAPPER(vkDeviceWaitIdle, VkResult,
-    (VkDevice device),
-    (device))
-
-VK_WRAPPER(vkGetPhysicalDeviceSurfaceSupportKHR, VkResult,
-    (VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex, VkSurfaceKHR surface, VkBool32* pSupported),
-    (physicalDevice, queueFamilyIndex, surface, pSupported))
-
-VK_WRAPPER(vkGetPhysicalDeviceSurfaceFormatsKHR, VkResult,
-    (VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t* pCount, VkSurfaceFormatKHR* pFormats),
-    (device, surface, pCount, pFormats))
-
-VK_WRAPPER(vkGetPhysicalDeviceSurfacePresentModesKHR, VkResult,
-    (VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t* pCount, VkPresentModeKHR* pModes),
-    (device, surface, pCount, pModes))
-
-VK_WRAPPER(vkGetPhysicalDeviceSurfaceCapabilitiesKHR, VkResult,
-    (VkPhysicalDevice device, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR* pCaps),
-    (device, surface, pCaps))
-
-VK_WRAPPER(vkCreateSwapchainKHR, VkResult,
-    (VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSwapchainKHR* pSwapchain),
-    (device, pCreateInfo, pAllocator, pSwapchain))
-
-VK_WRAPPER_VOID(vkDestroySwapchainKHR,
-    (VkDevice device, VkSwapchainKHR swapchain, const VkAllocationCallbacks* pAllocator),
-    (device, swapchain, pAllocator))
-
-VK_WRAPPER(vkGetSwapchainImagesKHR, VkResult,
-    (VkDevice device, VkSwapchainKHR swapchain, uint32_t* pCount, VkImage* pImages),
-    (device, swapchain, pCount, pImages))
-
-VK_WRAPPER(vkAcquireNextImageKHR, VkResult,
-    (VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore sem, VkFence fence, uint32_t* pIndex),
-    (device, swapchain, timeout, sem, fence, pIndex))
-
-VK_WRAPPER(vkCreateSemaphore, VkResult,
-    (VkDevice device, const VkSemaphoreCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSemaphore* pSemaphore),
-    (device, pCreateInfo, pAllocator, pSemaphore))
-
-VK_WRAPPER_VOID(vkDestroySemaphore,
-    (VkDevice device, VkSemaphore sem, const VkAllocationCallbacks* pAllocator),
-    (device, sem, pAllocator))
-
-VK_WRAPPER(vkCreateFence, VkResult,
-    (VkDevice device, const VkFenceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkFence* pFence),
-    (device, pCreateInfo, pAllocator, pFence))
-
-VK_WRAPPER_VOID(vkDestroyFence,
-    (VkDevice device, VkFence fence, const VkAllocationCallbacks* pAllocator),
-    (device, fence, pAllocator))
-
-VK_WRAPPER(vkResetFences, VkResult,
-    (VkDevice device, uint32_t count, const VkFence* pFences),
-    (device, count, pFences))
-
-VK_WRAPPER(vkWaitForFences, VkResult,
-    (VkDevice device, uint32_t count, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout),
-    (device, count, pFences, waitAll, timeout))
-
-VK_WRAPPER_VOID(vkGetDeviceQueue,
-    (VkDevice device, uint32_t family, uint32_t index, VkQueue* pQueue),
-    (device, family, index, pQueue))
-
-VK_WRAPPER(vkQueueWaitIdle, VkResult,
-    (VkQueue queue),
-    (queue))
-
-VK_WRAPPER(vkQueueSubmit, VkResult,
-    (VkQueue queue, uint32_t count, const VkSubmitInfo* pSubmits, VkFence fence),
-    (queue, count, pSubmits, fence))
-
-VK_WRAPPER(vkQueuePresentKHR, VkResult,
-    (VkQueue queue, const VkPresentInfoKHR* pInfo),
-    (queue, pInfo))
-
-VK_WRAPPER(vkCreateCommandPool, VkResult,
-    (VkDevice device, const VkCommandPoolCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkCommandPool* pPool),
-    (device, pCreateInfo, pAllocator, pPool))
-
-VK_WRAPPER_VOID(vkDestroyCommandPool,
-    (VkDevice device, VkCommandPool pool, const VkAllocationCallbacks* pAllocator),
-    (device, pool, pAllocator))
-
-VK_WRAPPER(vkResetCommandPool, VkResult,
-    (VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags),
-    (device, commandPool, flags))
-
-VK_WRAPPER(vkAllocateCommandBuffers, VkResult,
-    (VkDevice device, const VkCommandBufferAllocateInfo* pInfo, VkCommandBuffer* pBufs),
-    (device, pInfo, pBufs))
-
-VK_WRAPPER_VOID(vkFreeCommandBuffers,
-    (VkDevice device, VkCommandPool pool, uint32_t count, const VkCommandBuffer* pBufs),
-    (device, pool, count, pBufs))
-
-VK_WRAPPER(vkCreateDescriptorPool, VkResult,
-    (VkDevice device, const VkDescriptorPoolCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorPool* pPool),
-    (device, pInfo, pAllocator, pPool))
-
-VK_WRAPPER_VOID(vkDestroyDescriptorPool,
-    (VkDevice device, VkDescriptorPool pool, const VkAllocationCallbacks* pAllocator),
-    (device, pool, pAllocator))
-
-VK_WRAPPER(vkResetDescriptorPool, VkResult,
-    (VkDevice device, VkDescriptorPool pool, uint32_t flags),
-    (device, pool, flags))
-
-VK_WRAPPER(vkAllocateDescriptorSets, VkResult,
-    (VkDevice device, const VkDescriptorSetAllocateInfo* pInfo, VkDescriptorSet* pSets),
-    (device, pInfo, pSets))
-
-VK_WRAPPER(vkFreeDescriptorSets, VkResult,
-    (VkDevice device, VkDescriptorPool descriptorPool, uint32_t descriptorSetCount, const VkDescriptorSet* pDescriptorSets),
-    (device, descriptorPool, descriptorSetCount, pDescriptorSets))
-
-VK_WRAPPER_VOID(vkUpdateDescriptorSets,
-    (VkDevice device, uint32_t writeCount, const VkWriteDescriptorSet* pWrites, uint32_t copyCount, const VkCopyDescriptorSet* pCopies),
-    (device, writeCount, pWrites, copyCount, pCopies))
-
-VK_WRAPPER(vkCreateDescriptorSetLayout, VkResult,
-    (VkDevice device, const VkDescriptorSetLayoutCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorSetLayout* pLayout),
-    (device, pInfo, pAllocator, pLayout))
-
-VK_WRAPPER_VOID(vkDestroyDescriptorSetLayout,
-    (VkDevice device, VkDescriptorSetLayout layout, const VkAllocationCallbacks* pAllocator),
-    (device, layout, pAllocator))
-
-VK_WRAPPER(vkCreatePipelineLayout, VkResult,
-    (VkDevice device, const VkPipelineLayoutCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkPipelineLayout* pLayout),
-    (device, pInfo, pAllocator, pLayout))
-
-VK_WRAPPER_VOID(vkDestroyPipelineLayout,
-    (VkDevice device, VkPipelineLayout layout, const VkAllocationCallbacks* pAllocator),
-    (device, layout, pAllocator))
-
-VK_WRAPPER(vkCreateShaderModule, VkResult,
-    (VkDevice device, const VkShaderModuleCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkShaderModule* pModule),
-    (device, pInfo, pAllocator, pModule))
-
-VK_WRAPPER_VOID(vkDestroyShaderModule,
-    (VkDevice device, VkShaderModule module, const VkAllocationCallbacks* pAllocator),
-    (device, module, pAllocator))
-
-VK_WRAPPER(vkCreateGraphicsPipelines, VkResult,
-    (VkDevice device, VkPipelineCache cache, uint32_t count, const VkGraphicsPipelineCreateInfo* pInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines),
-    (device, cache, count, pInfos, pAllocator, pPipelines))
-
-VK_WRAPPER(vkCreateComputePipelines, VkResult,
-    (VkDevice device, VkPipelineCache cache, uint32_t count, const VkComputePipelineCreateInfo* pInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines),
-    (device, cache, count, pInfos, pAllocator, pPipelines))
-
-VK_WRAPPER_VOID(vkDestroyPipeline,
-    (VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks* pAllocator),
-    (device, pipeline, pAllocator))
-
-VK_WRAPPER(vkCreateRenderPass, VkResult,
-    (VkDevice device, const VkRenderPassCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass),
-    (device, pCreateInfo, pAllocator, pRenderPass))
-
-VK_WRAPPER_VOID(vkDestroyRenderPass,
-    (VkDevice device, VkRenderPass renderPass, const VkAllocationCallbacks* pAllocator),
-    (device, renderPass, pAllocator))
-
-VK_WRAPPER(vkCreateFramebuffer, VkResult,
-    (VkDevice device, const VkFramebufferCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkFramebuffer* pFramebuffer),
-    (device, pCreateInfo, pAllocator, pFramebuffer))
-
-VK_WRAPPER_VOID(vkDestroyFramebuffer,
-    (VkDevice device, VkFramebuffer framebuffer, const VkAllocationCallbacks* pAllocator),
-    (device, framebuffer, pAllocator))
-
-VK_WRAPPER(vkCreateBuffer, VkResult,
-    (VkDevice device, const VkBufferCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkBuffer* pBuf),
-    (device, pInfo, pAllocator, pBuf))
-
-VK_WRAPPER_VOID(vkDestroyBuffer,
-    (VkDevice device, VkBuffer buf, const VkAllocationCallbacks* pAllocator),
-    (device, buf, pAllocator))
-
-VK_WRAPPER(vkCreateImage, VkResult,
-    (VkDevice device, const VkImageCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkImage* pImage),
-    (device, pInfo, pAllocator, pImage))
-
-VK_WRAPPER_VOID(vkDestroyImage,
-    (VkDevice device, VkImage img, const VkAllocationCallbacks* pAllocator),
-    (device, img, pAllocator))
-
-VK_WRAPPER(vkCreateImageView, VkResult,
-    (VkDevice device, const VkImageViewCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView),
-    (device, pInfo, pAllocator, pView))
-
-VK_WRAPPER_VOID(vkDestroyImageView,
-    (VkDevice device, VkImageView view, const VkAllocationCallbacks* pAllocator),
-    (device, view, pAllocator))
-
-VK_WRAPPER(vkCreateSampler, VkResult,
-    (VkDevice device, const VkSamplerCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkSampler* pSampler),
-    (device, pInfo, pAllocator, pSampler))
-
-VK_WRAPPER_VOID(vkDestroySampler,
-    (VkDevice device, VkSampler sampler, const VkAllocationCallbacks* pAllocator),
-    (device, sampler, pAllocator))
-
-VK_WRAPPER_VOID(vkGetPhysicalDeviceMemoryProperties,
-    (VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties* pMemoryProperties),
-    (physicalDevice, pMemoryProperties))
-
-VK_WRAPPER_VOID(vkGetPhysicalDeviceMemoryProperties2,
-    (VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties2* pMemoryProperties),
-    (physicalDevice, pMemoryProperties))
-
-VK_WRAPPER_VOID(vkGetBufferMemoryRequirements,
-    (VkDevice device, VkBuffer buffer, VkMemoryRequirements* pMemoryRequirements),
-    (device, buffer, pMemoryRequirements))
-
-VK_WRAPPER_VOID(vkGetBufferMemoryRequirements2,
-    (VkDevice device, const VkBufferMemoryRequirementsInfo2* pInfo, VkMemoryRequirements2* pMemoryRequirements),
-    (device, pInfo, pMemoryRequirements))
-
-VK_WRAPPER_VOID(vkGetImageMemoryRequirements,
-    (VkDevice device, VkImage image, VkMemoryRequirements* pMemoryRequirements),
-    (device, image, pMemoryRequirements))
-
-VK_WRAPPER_VOID(vkGetImageMemoryRequirements2,
-    (VkDevice device, const VkImageMemoryRequirementsInfo2* pInfo, VkMemoryRequirements2* pMemoryRequirements),
-    (device, pInfo, pMemoryRequirements))
-
-VK_WRAPPER_VOID(vkGetDeviceBufferMemoryRequirements,
-    (VkDevice device, const VkDeviceBufferMemoryRequirements* pInfo, VkMemoryRequirements2* pMemoryRequirements),
-    (device, pInfo, pMemoryRequirements))
-
-VK_WRAPPER_VOID(vkGetDeviceImageMemoryRequirements,
-    (VkDevice device, const VkDeviceImageMemoryRequirements* pInfo, VkMemoryRequirements2* pMemoryRequirements),
-    (device, pInfo, pMemoryRequirements))
-
-VK_WRAPPER(vkAllocateMemory, VkResult,
-    (VkDevice device, const VkMemoryAllocateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDeviceMemory* pMemory),
-    (device, pInfo, pAllocator, pMemory))
-
-VK_WRAPPER_VOID(vkFreeMemory,
-    (VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks* pAllocator),
-    (device, mem, pAllocator))
-
-VK_WRAPPER(vkBindBufferMemory, VkResult,
-    (VkDevice device, VkBuffer buf, VkDeviceMemory mem, VkDeviceSize offset),
-    (device, buf, mem, offset))
-
-VK_WRAPPER(vkBindBufferMemory2, VkResult,
-    (VkDevice device, uint32_t bindInfoCount, const VkBindBufferMemoryInfo* pBindInfos),
-    (device, bindInfoCount, pBindInfos))
-
-VK_WRAPPER(vkBindImageMemory, VkResult,
-    (VkDevice device, VkImage img, VkDeviceMemory mem, VkDeviceSize offset),
-    (device, img, mem, offset))
-
-VK_WRAPPER(vkBindImageMemory2, VkResult,
-    (VkDevice device, uint32_t bindInfoCount, const VkBindImageMemoryInfo* pBindInfos),
-    (device, bindInfoCount, pBindInfos))
-
-VK_WRAPPER(vkMapMemory, VkResult,
-    (VkDevice device, VkDeviceMemory mem, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void** ppData),
-    (device, mem, offset, size, flags, ppData))
-
-VK_WRAPPER_VOID(vkUnmapMemory,
-    (VkDevice device, VkDeviceMemory mem),
-    (device, mem))
-
-VK_WRAPPER(vkFlushMappedMemoryRanges, VkResult,
-    (VkDevice device, uint32_t count, const VkMappedMemoryRange* pRanges),
-    (device, count, pRanges))
-
-VK_WRAPPER(vkInvalidateMappedMemoryRanges, VkResult,
-    (VkDevice device, uint32_t count, const VkMappedMemoryRange* pRanges),
-    (device, count, pRanges))
-
-VK_WRAPPER(vkBeginCommandBuffer, VkResult,
-    (VkCommandBuffer cmd, const VkCommandBufferBeginInfo* pInfo),
-    (cmd, pInfo))
-
-VK_WRAPPER(vkEndCommandBuffer, VkResult,
-    (VkCommandBuffer cmd),
-    (cmd))
-
-VK_WRAPPER(vkResetCommandBuffer, VkResult,
-    (VkCommandBuffer cmd, VkCommandBufferResetFlags flags),
-    (cmd, flags))
-
-VK_WRAPPER_VOID(vkCmdCopyBuffer,
-    (VkCommandBuffer cmd, VkBuffer src, VkBuffer dst, uint32_t count, const VkBufferCopy* pRegions),
-    (cmd, src, dst, count, pRegions))
-
-VK_WRAPPER_VOID(vkCmdCopyImage,
-    (VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageCopy* pRegions),
-    (cmd, src, srcLayout, dst, dstLayout, count, pRegions))
-
-VK_WRAPPER_VOID(vkCmdBlitImage,
-    (VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageBlit* pRegions, VkFilter filter),
-    (cmd, src, srcLayout, dst, dstLayout, count, pRegions, filter))
-
-VK_WRAPPER_VOID(vkCmdCopyBufferToImage,
-    (VkCommandBuffer cmd, VkBuffer src, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkBufferImageCopy* pRegions),
-    (cmd, src, dst, dstLayout, count, pRegions))
-
-VK_WRAPPER_VOID(vkCmdCopyImageToBuffer,
-    (VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkBuffer dst, uint32_t count, const VkBufferImageCopy* pRegions),
-    (cmd, src, srcLayout, dst, count, pRegions))
-
-VK_WRAPPER_VOID(vkCmdPipelineBarrier2,
-    (VkCommandBuffer cmd, const VkDependencyInfo* pInfo),
-    (cmd, pInfo))
-
-VK_WRAPPER_VOID(vkCmdPipelineBarrier,
-    (VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags, uint32_t memoryBarrierCount, const VkMemoryBarrier* pMemoryBarriers, uint32_t bufferMemoryBarrierCount, const VkBufferMemoryBarrier* pBufferMemoryBarriers, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier* pImageMemoryBarriers),
-    (commandBuffer, srcStageMask, dstStageMask, dependencyFlags, memoryBarrierCount, pMemoryBarriers, bufferMemoryBarrierCount, pBufferMemoryBarriers, imageMemoryBarrierCount, pImageMemoryBarriers))
-
-VK_WRAPPER_VOID(vkCmdBeginRendering,
-    (VkCommandBuffer cmd, const VkRenderingInfo* pInfo),
-    (cmd, pInfo))
-
-VK_WRAPPER_VOID(vkCmdEndRendering,
-    (VkCommandBuffer cmd),
-    (cmd))
-
-VK_WRAPPER_VOID(vkCmdBeginRenderPass,
-    (VkCommandBuffer cmd, const VkRenderPassBeginInfo* pRenderPassBegin, VkSubpassContents contents),
-    (cmd, pRenderPassBegin, contents))
-
-VK_WRAPPER_VOID(vkCmdEndRenderPass,
-    (VkCommandBuffer cmd),
-    (cmd))
-
-VK_WRAPPER_VOID(vkCmdSetViewport,
-    (VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkViewport* pViewports),
-    (cmd, first, count, pViewports))
-
-VK_WRAPPER_VOID(vkCmdSetScissor,
-    (VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkRect2D* pScissors),
-    (cmd, first, count, pScissors))
-
-VK_WRAPPER_VOID(vkCmdBindPipeline,
-    (VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipeline pipeline),
-    (cmd, bindPoint, pipeline))
-
-VK_WRAPPER_VOID(vkCmdBindDescriptorSets,
-    (VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t count, const VkDescriptorSet* pSets, uint32_t dynCount, const uint32_t* pDyn),
-    (cmd, bindPoint, layout, firstSet, count, pSets, dynCount, pDyn))
-
-VK_WRAPPER_VOID(vkCmdPushConstants,
-    (VkCommandBuffer cmd, VkPipelineLayout layout, VkShaderStageFlags stages, uint32_t offset, uint32_t size, const void* pData),
-    (cmd, layout, stages, offset, size, pData))
-
-VK_WRAPPER_VOID(vkCmdBindVertexBuffers,
-    (VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkBuffer* pBufs, const VkDeviceSize* pOffsets),
-    (cmd, first, count, pBufs, pOffsets))
-
-VK_WRAPPER_VOID(vkCmdBindIndexBuffer,
-    (VkCommandBuffer cmd, VkBuffer buf, VkDeviceSize offset, VkIndexType type),
-    (cmd, buf, offset, type))
-
-VK_WRAPPER_VOID(vkCmdDraw,
-    (VkCommandBuffer cmd, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance),
-    (cmd, vertexCount, instanceCount, firstVertex, firstInstance))
-
-VK_WRAPPER_VOID(vkCmdDrawIndexed,
-    (VkCommandBuffer cmd, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance),
-    (cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance))
-
-VK_WRAPPER_VOID(vkCmdDispatch,
-    (VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z),
-    (cmd, x, y, z))
-
-#undef VK_WRAPPER
-#undef VK_WRAPPER_VOID
+PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char* pName)
+{
+    return ::hg::vulkan::vulkanFuncs.vkGetInstanceProcAddr(instance, pName);
+}
+
+PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char* pName)
+{
+    return ::hg::vulkan::vulkanFuncs.vkGetDeviceProcAddr(device, pName);
+}
+
+VkResult vkCreateInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateInstance(pCreateInfo, pAllocator, pInstance);
+}
+
+VkResult vkEnumerateInstanceLayerProperties(uint32_t* pPropertyCount, VkLayerProperties* pProperties)
+{
+    return ::hg::vulkan::vulkanFuncs.vkEnumerateInstanceLayerProperties(pPropertyCount, pProperties);
+}
+
+VkResult vkEnumerateInstanceExtensionProperties(const char* pLayerName, uint32_t* pPropertyCount, VkExtensionProperties* pProperties)
+{
+    return ::hg::vulkan::vulkanFuncs.vkEnumerateInstanceExtensionProperties(pLayerName, pPropertyCount, pProperties);
+}
+
+void vkDestroyInstance(VkInstance instance, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyInstance(instance, pAllocator);
+}
+
+VkResult vkCreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pMessenger)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+}
+
+void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+}
+
+VkResult vkEnumeratePhysicalDevices(VkInstance instance, uint32_t* pCount, VkPhysicalDevice* pDevices)
+{
+    return ::hg::vulkan::vulkanFuncs.vkEnumeratePhysicalDevices(instance, pCount, pDevices);
+}
+
+VkResult vkEnumerateDeviceExtensionProperties(VkPhysicalDevice device, const char* pLayerName, uint32_t* pCount, VkExtensionProperties* pProps)
+{
+    return ::hg::vulkan::vulkanFuncs.vkEnumerateDeviceExtensionProperties(device, pLayerName, pCount, pProps);
+}
+
+void vkGetPhysicalDeviceProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties* pProperties)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceProperties(physicalDevice, pProperties);
+}
+
+void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice device, uint32_t* pCount, VkQueueFamilyProperties* pProps)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceQueueFamilyProperties(device, pCount, pProps);
+}
+
+void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroySurfaceKHR(instance, surface, pAllocator);
+}
+
+VkResult vkCreateDevice(VkPhysicalDevice device, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateDevice(device, pCreateInfo, pAllocator, pDevice);
+}
+
+void vkDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyDevice(device, pAllocator);
+}
+
+VkResult vkDeviceWaitIdle(VkDevice device)
+{
+    return ::hg::vulkan::vulkanFuncs.vkDeviceWaitIdle(device);
+}
+
+VkResult vkGetPhysicalDeviceSurfaceSupportKHR(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex, VkSurfaceKHR surface, VkBool32* pSupported)
+{
+    return ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamilyIndex, surface, pSupported);
+}
+
+VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t* pCount, VkSurfaceFormatKHR* pFormats)
+{
+    return ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, pCount, pFormats);
+}
+
+VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t* pCount, VkPresentModeKHR* pModes)
+{
+    return ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, pCount, pModes);
+}
+
+VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR* pCaps)
+{
+    return ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, pCaps);
+}
+
+VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSwapchainKHR* pSwapchain)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
+}
+
+void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroySwapchainKHR(device, swapchain, pAllocator);
+}
+
+VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, uint32_t* pCount, VkImage* pImages)
+{
+    return ::hg::vulkan::vulkanFuncs.vkGetSwapchainImagesKHR(device, swapchain, pCount, pImages);
+}
+
+VkResult vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore sem, VkFence fence, uint32_t* pIndex)
+{
+    return ::hg::vulkan::vulkanFuncs.vkAcquireNextImageKHR(device, swapchain, timeout, sem, fence, pIndex);
+}
+
+VkResult vkCreateSemaphore(VkDevice device, const VkSemaphoreCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSemaphore* pSemaphore)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
+}
+
+void vkDestroySemaphore(VkDevice device, VkSemaphore sem, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroySemaphore(device, sem, pAllocator);
+}
+
+VkResult vkCreateFence(VkDevice device, const VkFenceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkFence* pFence)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateFence(device, pCreateInfo, pAllocator, pFence);
+}
+
+void vkDestroyFence(VkDevice device, VkFence fence, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyFence(device, fence, pAllocator);
+}
+
+VkResult vkResetFences(VkDevice device, uint32_t count, const VkFence* pFences)
+{
+    return ::hg::vulkan::vulkanFuncs.vkResetFences(device, count, pFences);
+}
+
+VkResult vkWaitForFences(VkDevice device, uint32_t count, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout)
+{
+    return ::hg::vulkan::vulkanFuncs.vkWaitForFences(device, count, pFences, waitAll, timeout);
+}
+
+void vkGetDeviceQueue(VkDevice device, uint32_t family, uint32_t index, VkQueue* pQueue)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetDeviceQueue(device, family, index, pQueue);
+}
+
+VkResult vkQueueWaitIdle(VkQueue queue)
+{
+    return ::hg::vulkan::vulkanFuncs.vkQueueWaitIdle(queue);
+}
+
+VkResult vkQueueSubmit(VkQueue queue, uint32_t count, const VkSubmitInfo* pSubmits, VkFence fence)
+{
+    return ::hg::vulkan::vulkanFuncs.vkQueueSubmit(queue, count, pSubmits, fence);
+}
+
+VkResult vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pInfo)
+{
+    return ::hg::vulkan::vulkanFuncs.vkQueuePresentKHR(queue, pInfo);
+}
+
+VkResult vkCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkCommandPool* pPool)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateCommandPool(device, pCreateInfo, pAllocator, pPool);
+}
+
+void vkDestroyCommandPool(VkDevice device, VkCommandPool pool, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyCommandPool(device, pool, pAllocator);
+}
+
+VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags)
+{
+    return ::hg::vulkan::vulkanFuncs.vkResetCommandPool(device, commandPool, flags);
+}
+
+VkResult vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* pInfo, VkCommandBuffer* pBufs)
+{
+    return ::hg::vulkan::vulkanFuncs.vkAllocateCommandBuffers(device, pInfo, pBufs);
+}
+
+void vkFreeCommandBuffers(VkDevice device, VkCommandPool pool, uint32_t count, const VkCommandBuffer* pBufs)
+{
+    ::hg::vulkan::vulkanFuncs.vkFreeCommandBuffers(device, pool, count, pBufs);
+}
+
+VkResult vkCreateDescriptorPool(VkDevice device, const VkDescriptorPoolCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorPool* pPool)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateDescriptorPool(device, pInfo, pAllocator, pPool);
+}
+
+void vkDestroyDescriptorPool(VkDevice device, VkDescriptorPool pool, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyDescriptorPool(device, pool, pAllocator);
+}
+
+VkResult vkResetDescriptorPool(VkDevice device, VkDescriptorPool pool, uint32_t flags)
+{
+    return ::hg::vulkan::vulkanFuncs.vkResetDescriptorPool(device, pool, flags);
+}
+
+VkResult vkAllocateDescriptorSets(VkDevice device, const VkDescriptorSetAllocateInfo* pInfo, VkDescriptorSet* pSets)
+{
+    return ::hg::vulkan::vulkanFuncs.vkAllocateDescriptorSets(device, pInfo, pSets);
+}
+
+VkResult vkFreeDescriptorSets(VkDevice device, VkDescriptorPool descriptorPool, uint32_t descriptorSetCount, const VkDescriptorSet* pDescriptorSets)
+{
+    return ::hg::vulkan::vulkanFuncs.vkFreeDescriptorSets(device, descriptorPool, descriptorSetCount, pDescriptorSets);
+}
+
+void vkUpdateDescriptorSets(VkDevice device, uint32_t writeCount, const VkWriteDescriptorSet* pWrites, uint32_t copyCount, const VkCopyDescriptorSet* pCopies)
+{
+    ::hg::vulkan::vulkanFuncs.vkUpdateDescriptorSets(device, writeCount, pWrites, copyCount, pCopies);
+}
+
+VkResult vkCreateDescriptorSetLayout(VkDevice device, const VkDescriptorSetLayoutCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorSetLayout* pLayout)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateDescriptorSetLayout(device, pInfo, pAllocator, pLayout);
+}
+
+void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout layout, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyDescriptorSetLayout(device, layout, pAllocator);
+}
+
+VkResult vkCreatePipelineLayout(VkDevice device, const VkPipelineLayoutCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkPipelineLayout* pLayout)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreatePipelineLayout(device, pInfo, pAllocator, pLayout);
+}
+
+void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout layout, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyPipelineLayout(device, layout, pAllocator);
+}
+
+VkResult vkCreateShaderModule(VkDevice device, const VkShaderModuleCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkShaderModule* pModule)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateShaderModule(device, pInfo, pAllocator, pModule);
+}
+
+void vkDestroyShaderModule(VkDevice device, VkShaderModule module, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyShaderModule(device, module, pAllocator);
+}
+
+VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkGraphicsPipelineCreateInfo* pInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateGraphicsPipelines(device, cache, count, pInfos, pAllocator, pPipelines);
+}
+
+VkResult vkCreateComputePipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkComputePipelineCreateInfo* pInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateComputePipelines(device, cache, count, pInfos, pAllocator, pPipelines);
+}
+
+void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyPipeline(device, pipeline, pAllocator);
+}
+
+VkResult vkCreateRenderPass(VkDevice device, const VkRenderPassCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateRenderPass(device, pCreateInfo, pAllocator, pRenderPass);
+}
+
+void vkDestroyRenderPass(VkDevice device, VkRenderPass renderPass, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyRenderPass(device, renderPass, pAllocator);
+}
+
+VkResult vkCreateFramebuffer(VkDevice device, const VkFramebufferCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkFramebuffer* pFramebuffer)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateFramebuffer(device, pCreateInfo, pAllocator, pFramebuffer);
+}
+
+void vkDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyFramebuffer(device, framebuffer, pAllocator);
+}
+
+VkResult vkCreateBuffer(VkDevice device, const VkBufferCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkBuffer* pBuf)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateBuffer(device, pInfo, pAllocator, pBuf);
+}
+
+void vkDestroyBuffer(VkDevice device, VkBuffer buf, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyBuffer(device, buf, pAllocator);
+}
+
+VkResult vkCreateImage(VkDevice device, const VkImageCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkImage* pImage)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateImage(device, pInfo, pAllocator, pImage);
+}
+
+void vkDestroyImage(VkDevice device, VkImage img, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyImage(device, img, pAllocator);
+}
+
+VkResult vkCreateImageView(VkDevice device, const VkImageViewCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateImageView(device, pInfo, pAllocator, pView);
+}
+
+void vkDestroyImageView(VkDevice device, VkImageView view, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroyImageView(device, view, pAllocator);
+}
+
+VkResult vkCreateSampler(VkDevice device, const VkSamplerCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkSampler* pSampler)
+{
+    return ::hg::vulkan::vulkanFuncs.vkCreateSampler(device, pInfo, pAllocator, pSampler);
+}
+
+void vkDestroySampler(VkDevice device, VkSampler sampler, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkDestroySampler(device, sampler, pAllocator);
+}
+
+void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties* pMemoryProperties)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceMemoryProperties(physicalDevice, pMemoryProperties);
+}
+
+void vkGetPhysicalDeviceMemoryProperties2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties2* pMemoryProperties)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceMemoryProperties2(physicalDevice, pMemoryProperties);
+}
+
+void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements* pMemoryRequirements)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetBufferMemoryRequirements(device, buffer, pMemoryRequirements);
+}
+
+void vkGetBufferMemoryRequirements2(VkDevice device, const VkBufferMemoryRequirementsInfo2* pInfo, VkMemoryRequirements2* pMemoryRequirements)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetBufferMemoryRequirements2(device, pInfo, pMemoryRequirements);
+}
+
+void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements* pMemoryRequirements)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetImageMemoryRequirements(device, image, pMemoryRequirements);
+}
+
+void vkGetImageMemoryRequirements2(VkDevice device, const VkImageMemoryRequirementsInfo2* pInfo, VkMemoryRequirements2* pMemoryRequirements)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetImageMemoryRequirements2(device, pInfo, pMemoryRequirements);
+}
+
+void vkGetDeviceBufferMemoryRequirements(VkDevice device, const VkDeviceBufferMemoryRequirements* pInfo, VkMemoryRequirements2* pMemoryRequirements)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetDeviceBufferMemoryRequirements(device, pInfo, pMemoryRequirements);
+}
+
+void vkGetDeviceImageMemoryRequirements(VkDevice device, const VkDeviceImageMemoryRequirements* pInfo, VkMemoryRequirements2* pMemoryRequirements)
+{
+    ::hg::vulkan::vulkanFuncs.vkGetDeviceImageMemoryRequirements(device, pInfo, pMemoryRequirements);
+}
+
+VkResult vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDeviceMemory* pMemory)
+{
+    return ::hg::vulkan::vulkanFuncs.vkAllocateMemory(device, pInfo, pAllocator, pMemory);
+}
+
+void vkFreeMemory(VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks* pAllocator)
+{
+    ::hg::vulkan::vulkanFuncs.vkFreeMemory(device, mem, pAllocator);
+}
+
+VkResult vkBindBufferMemory(VkDevice device, VkBuffer buf, VkDeviceMemory mem, VkDeviceSize offset)
+{
+    return ::hg::vulkan::vulkanFuncs.vkBindBufferMemory(device, buf, mem, offset);
+}
+
+VkResult vkBindBufferMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindBufferMemoryInfo* pBindInfos)
+{
+    return ::hg::vulkan::vulkanFuncs.vkBindBufferMemory2(device, bindInfoCount, pBindInfos);
+}
+
+VkResult vkBindImageMemory(VkDevice device, VkImage img, VkDeviceMemory mem, VkDeviceSize offset)
+{
+    return ::hg::vulkan::vulkanFuncs.vkBindImageMemory(device, img, mem, offset);
+}
+
+VkResult vkBindImageMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindImageMemoryInfo* pBindInfos)
+{
+    return ::hg::vulkan::vulkanFuncs.vkBindImageMemory2(device, bindInfoCount, pBindInfos);
+}
+
+VkResult vkMapMemory(VkDevice device, VkDeviceMemory mem, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void** ppData)
+{
+    return ::hg::vulkan::vulkanFuncs.vkMapMemory(device, mem, offset, size, flags, ppData);
+}
+
+void vkUnmapMemory(VkDevice device, VkDeviceMemory mem)
+{
+    ::hg::vulkan::vulkanFuncs.vkUnmapMemory(device, mem);
+}
+
+VkResult vkFlushMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange* pRanges)
+{
+    return ::hg::vulkan::vulkanFuncs.vkFlushMappedMemoryRanges(device, count, pRanges);
+}
+
+VkResult vkInvalidateMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange* pRanges)
+{
+    return ::hg::vulkan::vulkanFuncs.vkInvalidateMappedMemoryRanges(device, count, pRanges);
+}
+
+VkResult vkBeginCommandBuffer(VkCommandBuffer cmd, const VkCommandBufferBeginInfo* pInfo)
+{
+    return ::hg::vulkan::vulkanFuncs.vkBeginCommandBuffer(cmd, pInfo);
+}
+
+VkResult vkEndCommandBuffer(VkCommandBuffer cmd)
+{
+    return ::hg::vulkan::vulkanFuncs.vkEndCommandBuffer(cmd);
+}
+
+VkResult vkResetCommandBuffer(VkCommandBuffer cmd, VkCommandBufferResetFlags flags)
+{
+    return ::hg::vulkan::vulkanFuncs.vkResetCommandBuffer(cmd, flags);
+}
+
+void vkCmdCopyBuffer(VkCommandBuffer cmd, VkBuffer src, VkBuffer dst, uint32_t count, const VkBufferCopy* pRegions)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdCopyBuffer(cmd, src, dst, count, pRegions);
+}
+
+void vkCmdCopyImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageCopy* pRegions)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdCopyImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions);
+}
+
+void vkCmdBlitImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageBlit* pRegions, VkFilter filter)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdBlitImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions, filter);
+}
+
+void vkCmdCopyBufferToImage(VkCommandBuffer cmd, VkBuffer src, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkBufferImageCopy* pRegions)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdCopyBufferToImage(cmd, src, dst, dstLayout, count, pRegions);
+}
+
+void vkCmdCopyImageToBuffer(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkBuffer dst, uint32_t count, const VkBufferImageCopy* pRegions)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdCopyImageToBuffer(cmd, src, srcLayout, dst, count, pRegions);
+}
+
+void vkCmdPipelineBarrier2(VkCommandBuffer cmd, const VkDependencyInfo* pInfo)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdPipelineBarrier2(cmd, pInfo);
+}
+
+void vkCmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags, uint32_t memoryBarrierCount, const VkMemoryBarrier* pMemoryBarriers, uint32_t bufferMemoryBarrierCount, const VkBufferMemoryBarrier* pBufferMemoryBarriers, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier* pImageMemoryBarriers)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, dependencyFlags, memoryBarrierCount, pMemoryBarriers, bufferMemoryBarrierCount, pBufferMemoryBarriers, imageMemoryBarrierCount, pImageMemoryBarriers);
+}
+
+void vkCmdBeginRendering(VkCommandBuffer cmd, const VkRenderingInfo* pInfo)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdBeginRendering(cmd, pInfo);
+}
+
+void vkCmdEndRendering(VkCommandBuffer cmd)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdEndRendering(cmd);
+}
+
+void vkCmdBeginRenderPass(VkCommandBuffer cmd, const VkRenderPassBeginInfo* pRenderPassBegin, VkSubpassContents contents)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdBeginRenderPass(cmd, pRenderPassBegin, contents);
+}
+
+void vkCmdEndRenderPass(VkCommandBuffer cmd)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdEndRenderPass(cmd);
+}
+
+void vkCmdSetViewport(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkViewport* pViewports)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdSetViewport(cmd, first, count, pViewports);
+}
+
+void vkCmdSetScissor(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkRect2D* pScissors)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdSetScissor(cmd, first, count, pScissors);
+}
+
+void vkCmdBindPipeline(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipeline pipeline)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdBindPipeline(cmd, bindPoint, pipeline);
+}
+
+void vkCmdBindDescriptorSets(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t count, const VkDescriptorSet* pSets, uint32_t dynCount, const uint32_t* pDyn)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdBindDescriptorSets(cmd, bindPoint, layout, firstSet, count, pSets, dynCount, pDyn);
+}
+
+void vkCmdPushConstants(VkCommandBuffer cmd, VkPipelineLayout layout, VkShaderStageFlags stages, uint32_t offset, uint32_t size, const void* pData)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdPushConstants(cmd, layout, stages, offset, size, pData);
+}
+
+void vkCmdBindVertexBuffers(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkBuffer* pBufs, const VkDeviceSize* pOffsets)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdBindVertexBuffers(cmd, first, count, pBufs, pOffsets);
+}
+
+void vkCmdBindIndexBuffer(VkCommandBuffer cmd, VkBuffer buf, VkDeviceSize offset, VkIndexType type)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdBindIndexBuffer(cmd, buf, offset, type);
+}
+
+void vkCmdDraw(VkCommandBuffer cmd, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdDraw(cmd, vertexCount, instanceCount, firstVertex, firstInstance);
+}
+
+void vkCmdDrawIndexed(VkCommandBuffer cmd, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
+void vkCmdDispatch(VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z)
+{
+    ::hg::vulkan::vulkanFuncs.vkCmdDispatch(cmd, x, y, z);
+}
 
 } // extern "C"
