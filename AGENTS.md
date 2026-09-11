@@ -14,10 +14,34 @@ C++20 game engine. Vulkan 1.3, SDL3, Dear ImGui.
 ### Linux / macOS
 
 ```
-debug: cmake --workflow --preset debug && ./build/tests
-san: cmake --workflow --preset san && LSAN_OPTIONS=detect_leaks=0 ./build/san/tests
-tsan: cmake --workflow --preset tsan && TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/tests
-valgrind: valgrind --leak-check=full ./build/tests
+debug:
+  cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug
+  cmake --build build
+  ./build/tests
+
+release:
+  cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release
+  cmake --build build/release
+  ./build/release/tests
+
+san:
+  cmake -G Ninja -B build/san -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+    -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+  cmake --build build/san
+  LSAN_OPTIONS=detect_leaks=0 ./build/san/tests
+
+tsan:
+  cmake -G Ninja -B build/tsan -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+    -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+  cmake --build build/tsan
+  TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/tests
+
+valgrind:
+  valgrind --leak-check=full ./build/tests
 ```
 
 Driver library leaks suppressed via LSAN_OPTIONS.
@@ -57,8 +81,8 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/geometry2d.hpp` - Circle, Rect, Ray2D, Line2D
 - `hg/geometry3d.hpp` - Sphere, Box, Tri, Plane, Ray3D, Line3D
 - `hg/noise.hpp` - Rng, noise functions
-- `hg/strings.hpp` - StringView, StringBuiler, String
-- `hg/binary.hpp` - BinaryView, BinaryBuiler, Binary
+- `hg/strings.hpp` - StringView, StringBuilder, String
+- `hg/binary.hpp` - BinaryView, BinaryBuilder, Binary
 - `hg/smart_ptr.hpp` - UniquePtr, makeUnique, SharedPtr, makeShared
 - `hg/array.hpp` - Array, ArrayTemp
 - `hg/queue.hpp` - Queue, QueueTemp
@@ -79,26 +103,32 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 
 `src/` - implementation:
 - `internal.hpp` - internal header (platform/gpu/audio init)
+- `platform.cpp` - platform abstraction
+- `platform_test.cpp` - platform test harness
 - `error.cpp`
 - `init.cpp`
 - `memory.cpp`
 - `concurrency.cpp`
 - `math.cpp`
-- `geometry_2d.cpp`
-- `geometry_3d.cpp`
+- `geometry2d.cpp`
+- `geometry3d.cpp`
 - `noise.cpp`
 - `strings.cpp`
 - `binary.cpp`
 - `pool.cpp`
-- `asset.cpp`
+- `assets.cpp`
 - `serialization.cpp`
-- `timing.cpp`
+- `time.cpp`
 - `audio.cpp`
 - `render2d.cpp`
 - `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
 - `dynlib.cpp`
 - `editor.cpp` - example editor app
 - `minimal.cpp` - minimal example app
+- `embed.c` - embedded resources
+- `stb.c` - stb library impl
+- `vk_mem_alloc.cpp` - Vulkan Memory Allocator impl
+- `pixel_font.h` - embedded pixel font data
 
 `src/vulkan/` - Vulkan implementation:
 - `vulkan_internal.hpp` - internal header, data structs, VulkanFuncs, inline helpers
@@ -110,11 +140,28 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `sdl_internal.hpp` - internal header, SdlFuncs struct, extern libsdl/sdlFuncs
 - `sdl.cpp` - init/deinit
 - `loader.cpp` - dynamic SDL library loading, function pointer population
+- `sdl_platform.hpp` - SDL platform abstractions
 - `window.cpp` - Window create, processEvents, swapchain, gpuFrameBegin/End
 - `audio.cpp` - AudioStream/AudioPlayer impl
 
-`src/test` - tests:
+`src/linux/` - Linux platform implementation:
+- `linux_internal.hpp` - internal header
+- `linux_platform.hpp` - Linux platform abstractions
+- `linux.cpp` - Linux platform init/deinit
+- `loader.cpp` - Linux dynamic library loading
+- `window.cpp` - Linux window management
+- `audio.cpp` - Linux audio (PipeWire)
+
+`src/shaders/` - GLSL shaders:
+- `render2d.vert`/`render2d.frag` - 2D rendering
+- `sprite.vert`/`sprite.frag` - sprite rendering
+- `model.vert`/`model.frag` - 3D model rendering
+- `skybox.vert`/`skybox.frag` - skybox rendering
+- `debug2d.frag` - 2D debug drawing
+
+`src/test/` - tests:
 - `tests.hpp` - internal header
 - `tests.cpp` - runs all tests
 - `*.cpp` - tests, named like headers
+- `*.vert`/`*.frag`/`*.comp` - test shaders
 

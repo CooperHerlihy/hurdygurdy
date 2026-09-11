@@ -93,8 +93,11 @@ foreach(shader ${SHADERS})
     set(spv ${CMAKE_CURRENT_BINARY_DIR}/${shader}.spv)
     set(spv_h ${CMAKE_CURRENT_BINARY_DIR}/${shader}.spv.h)
 
+    get_filename_component(spv_dir ${spv} DIRECTORY)
+
     add_custom_command(
         OUTPUT ${spv_h}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${spv_dir}
         COMMAND glslc -o ${spv} ${CMAKE_CURRENT_SOURCE_DIR}/src/${shader} -I${CMAKE_CURRENT_SOURCE_DIR}/include
         COMMAND embed ${spv} ${shader}.spv ${spv_h}
         DEPENDS embed
