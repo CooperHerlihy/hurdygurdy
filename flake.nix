@@ -66,8 +66,8 @@
             imgui-src = pkgs.fetchFromGitHub {
                 owner = "ocornut";
                 repo = "imgui";
-                rev = "2af6dd9694288e6befe1edb7ce25510911693c22";
-                hash = "sha256-ocCgBM2uHDhdur81VKuKJNoa0TEvhfjhjfJlycC5YpI=";
+                rev = "934c6a5f5ef2355d6df25395d555cb71f790c4e9";
+                hash = "sha256-7lxmvUQvEDjYlSRsTxk99QTscO4EhS3aDGoIRrFeHyI=";
             };
 
             sdl3-src = pkgs.fetchFromGitHub {
@@ -79,49 +79,57 @@
 
             xorgproto-src = pkgs.fetchFromGitLab {
                 domain = "gitlab.freedesktop.org";
-                owner = "xorg";
-                repo = "proto";
-                rev = "xorgproto-2024.1";
-                hash = "sha256-1O9XR2V0lR4Rh8FAVGV4qOYfOXC/n+8sUyM5l4pFRw4=";
+                owner = "xorg/proto";
+                repo = "xorgproto";
+                rev = "fcb7e9a1a0b593a44740d83b0babddd331fea830";
+                hash = "sha256-MLgV7v2ATgsbS7gVlF7R5I1r0bQ/AvUWU7/u/4BfF5c=";
             };
 
             libX11-src = pkgs.fetchFromGitLab {
                 domain = "gitlab.freedesktop.org";
-                owner = "xorg";
-                repo = "lib";
-                rev = "libX11-1.8.10";
-                hash = "sha256-I0tLlG/gxF+2dV4q1Q9tFJq3a6g8x3J5l5J5l5J5l5=";
+                owner = "xorg/lib";
+                repo = "libX11";
+                rev = "13f9b8de400335f4b86bb0672da02f8166c0e796";
+                hash = "sha256-BkRNDXykZ+4bIzi1HJ5kz5E5ufCq4Jq+k2/6JvDaiHY=";
             };
 
             libXrandr-src = pkgs.fetchFromGitLab {
                 domain = "gitlab.freedesktop.org";
-                owner = "xorg";
-                repo = "lib";
-                rev = "libXrandr-1.5.4";
-                hash = "sha256-PLACEHOLDER";
+                owner = "xorg/lib";
+                repo = "libXrandr";
+                rev = "8a4ba1974bcf07057cf891128d86ae1ab5303574";
+                hash = "sha256-lyofwRfpWrAvlvWwV+uzRs3g9ZepicGQi9sdCCI75pk=";
             };
 
             libXrender-src = pkgs.fetchFromGitLab {
                 domain = "gitlab.freedesktop.org";
-                owner = "xorg";
-                repo = "lib";
-                rev = "libXrender-0.9.10";
-                hash = "sha256-PLACEHOLDER";
+                owner = "xorg/lib";
+                repo = "libXrender";
+                rev = "f32afe9f877ae032c6bc9c27b17b7978b1b4c856";
+                hash = "sha256-rm8Y0osVIXnVpNg826VezDFHuXjKUKjYwEbCUHqfTNI=";
             };
 
             pipewire-src = pkgs.fetchFromGitLab {
                 domain = "gitlab.freedesktop.org";
                 owner = "pipewire";
                 repo = "pipewire";
-                rev = "1.0.7";
-                hash = "sha256-1J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5J5=";
+                rev = "fff1bcf7e5399f3945c8ed5558870696dc23597a";
+                hash = "sha256-GEoSUBYHBfEoav0gb1Jov6ti4o32XPpjunmoq+sKMKU=";
             };
 
             libxkbcommon-src = pkgs.fetchFromGitHub {
                 owner = "xkbcommon";
                 repo = "libxkbcommon";
-                rev = "xkbcommon-1.6.0";
-                hash = "sha256-1K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5K5=";
+                rev = "49c8d08f7bf3e602fde221bc1680aeb27338e523";
+                hash = "sha256-R4Qw+lLLDdt7I0a7A+sgTDqKaG0bfYfEcCvNBHBxRIY=";
+            };
+
+            libevdev-src = pkgs.fetchFromGitLab {
+                domain = "gitlab.freedesktop.org";
+                owner = "libevdev";
+                repo = "libevdev";
+                rev = "294f6bc00675915c3186138e84dd35614d2a20f8";
+                hash = "sha256-TMPyrJdcr6TLfQYrmT+RA1uveZXJfNxyliVEdUXBRfI=";
             };
 
         in {
@@ -142,7 +150,7 @@
                 preConfigure = ''
                     rm -rf vendor/imgui vendor/Vulkan-Headers vendor/SDL
                     rm -rf vendor/xorgproto vendor/libX11 vendor/libXrandr vendor/libXrender
-                    rm -rf vendor/pipewire vendor/libxkbcommon
+                    rm -rf vendor/pipewire vendor/libxkbcommon vendor/libevdev
                     cp -r ${vulkan-headers-src} vendor/Vulkan-Headers
                     cp -r ${imgui-src} vendor/imgui
                     cp -r ${sdl3-src} vendor/SDL
@@ -152,6 +160,7 @@
                     cp -r ${libXrender-src} vendor/libXrender
                     cp -r ${pipewire-src} vendor/pipewire
                     cp -r ${libxkbcommon-src} vendor/libxkbcommon
+                    cp -r ${libevdev-src} vendor/libevdev
                     chmod -R u+w vendor/Vulkan-Headers
                     chmod -R u+w vendor/imgui
                     chmod -R u+w vendor/SDL
@@ -161,6 +170,7 @@
                     chmod -R u+w vendor/libXrender
                     chmod -R u+w vendor/pipewire
                     chmod -R u+w vendor/libxkbcommon
+                    chmod -R u+w vendor/libevdev
                 '';
 
                 postFixup = ''

@@ -1630,7 +1630,7 @@ void openURL(StringView url)
 
     char fullCmd[1024];
     snprintf(fullCmd, sizeof(fullCmd), "xdg-open '%s' &", cmd);
-    system(fullCmd);
+    (void)system(fullCmd);
 }
 
 } // namespace hg::linux_backend
