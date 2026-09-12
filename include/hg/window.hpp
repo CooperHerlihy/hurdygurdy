@@ -82,12 +82,7 @@ enum EventType : u32 {
     EventType_windowClosed,
     EventType_windowFocused,
     EventType_windowUnfocused,
-    EventType_windowMoved,
     EventType_windowResized,
-    EventType_windowMaximized,
-    EventType_windowMinimized,
-    EventType_windowRestored,
-    EventType_windowFullscreen,
 
     EventType_clipboardUpdate,
 
@@ -303,31 +298,13 @@ struct WindowEvent {
      */
     void* window;
     /**
-     * The x value
+     * The width (windowResized)
      */
-    union {
-        /**
-         * The x position
-         */
-        i32 x;
-        /**
-         * The width
-         */
-        u32 width;
-    };
+    u32 width;
     /**
-     * The y value (pos or height)
+     * The height (windowResized)
      */
-    union {
-        /**
-         * The y position
-         */
-        i32 y;
-        /**
-         * The height
-         */
-        u32 height;
-    };
+    u32 height;
 };
 
 /**
@@ -404,18 +381,14 @@ bool wasButtonPressed(Button button);
 bool wasButtonReleased(Button button);
 
 /**
- * Get the current mouse position
- *
- * Note, if there is only one window, it will be scaled to that window,
- * otherwise it will be in screen coordinates
+ * Get the current mouse position relative to the active window
  */
 Vec2 mousePos();
 
 /**
  * Get the change in mouse position
  *
- * Note, if there is only one window, it will be scaled to that window,
- * otherwise it will be in screen coordinates
+ * Note, if there is only one window, it will be scaled to that window
  */
 Vec2 mouseDelta();
 
@@ -557,26 +530,6 @@ struct Window {
     bool wasFocusLost() const;
 
     /**
-     * Returns whether the window was moved this frame
-     */
-    bool wasMoved() const;
-
-    /**
-     * Get the position
-     */
-    void pos(i32* x, i32* y) const;
-
-    /**
-     * Set the position
-     */
-    void setPos(i32 x, i32 y);
-
-    /**
-     * Set the window to resizable or not
-     */
-    void setResizable(bool set = true);
-
-    /**
      * Returns whether the window was resized this frame
      */
     bool wasResized() const;
@@ -587,34 +540,9 @@ struct Window {
     void size(u32* width, u32* height) const;
 
     /**
-     * Set the width and height
-     */
-    void setSize(u32 width, u32 height);
-
-    /**
-     * Returns whether the window is maximized
-     */
-    bool isMaximized() const;
-
-    /**
-     * Returns whether the window was maximized last frame
-     */
-    bool wasMaximized() const;
-
-    /**
      * Maximize the window
      */
     void maximize();
-
-    /**
-     * Returns whether the window is minimized
-     */
-    bool isMinimized() const;
-
-    /**
-     * Returns whether the window was minimized last frame
-     */
-    bool wasMinimized() const;
 
     /**
      * Minimize the window
@@ -622,24 +550,9 @@ struct Window {
     void minimize();
 
     /**
-     * Returns whether the window was minimized last frame
-     */
-    bool wasRestored() const;
-
-    /**
      * Restore the window from being maximized or minimized
      */
     void restore();
-
-    /**
-     * Returns whether the window is fullscreen
-     */
-    bool isFullscreen() const;
-
-    /**
-     * Returns whether the window was made fullscreen last frame
-     */
-    bool wasMadeFullscreen() const;
 
     /**
      * Set to fullscreen or disable fullscreen

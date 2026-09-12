@@ -17,20 +17,13 @@ struct WindowData {
 
     Array<Event> events{};
     Vec2 mouse{};
-    i32 x = 0;
-    i32 y = 0;
     u32 width = 0;
     u32 height = 0;
     bool wasClosed = false;
     bool isFocused = false;
     bool wasFocusGained = false;
     bool wasFocusLost = false;
-    bool wasMoved = false;
     bool wasResized = false;
-    bool wasMaximized = false;
-    bool wasMinimized = false;
-    bool wasRestored = false;
-    bool wasFullscreened = false;
 
     WindowData() noexcept = default;
     ~WindowData() noexcept;
@@ -64,6 +57,7 @@ struct WindowState {
     i16 gamepadAxes[maxGamepads][6]{};
 
     Map<SDL_WindowID, WindowData*> windows{};
+    WindowData* activeWindow = nullptr;
 
     Array<char> clipboard{};
 };
@@ -152,19 +146,13 @@ WindowData::WindowData(WindowData&& other) noexcept
     , sdlWindow{std::exchange(other.sdlWindow, nullptr)}
     , events{std::move(other.events)}
     , mouse{std::exchange(other.mouse, {})}
-    , x{std::exchange(other.x, 0)}
-    , y{std::exchange(other.y, 0)}
     , width{std::exchange(other.width, 0)}
     , height{std::exchange(other.height, 0)}
     , wasClosed{std::exchange(other.wasClosed, false)}
     , isFocused{std::exchange(other.isFocused, false)}
     , wasFocusGained{std::exchange(other.wasFocusGained, false)}
     , wasFocusLost{std::exchange(other.wasFocusLost, false)}
-    , wasMoved{std::exchange(other.wasMoved, false)}
     , wasResized{std::exchange(other.wasResized, false)}
-    , wasMaximized{std::exchange(other.wasMaximized, false)}
-    , wasMinimized{std::exchange(other.wasMinimized, false)}
-    , wasFullscreened{std::exchange(other.wasFullscreened, false)}
 {}
 
 WindowData& WindowData::operator=(WindowData&& other) noexcept
@@ -434,12 +422,7 @@ void processEvents()
         data->events.reset();
         data->wasFocusGained = false;
         data->wasFocusLost = false;
-        data->wasMoved = false;
         data->wasResized = false;
-        data->wasMaximized = false;
-        data->wasMinimized = false;
-        data->wasRestored = false;
-        data->wasFullscreened = false;
     });
 
     SDL_Event sdlEvent;
@@ -561,6 +544,7 @@ void processEvents()
                 {
                     w->isFocused = true;
                     w->wasFocusGained = true;
+                    windowState.activeWindow = w;
                     w->events.push(event);
                 }
             } break;
@@ -575,29 +559,8 @@ void processEvents()
                 {
                     w->isFocused = false;
                     w->wasFocusLost = true;
-                    w->events.push(event);
-                }
-            } break;
-            case SDL_EVENT_WINDOW_MOVED:
-            {
-                i32 x = sdlEvent.window.data1;
-                i32 y = sdlEvent.window.data2;
-
-                Event event{};
-                event.type = EventType_windowMoved;
-                event.timestamp = sdlEvent.common.timestamp;
-
-                WindowData* w = getWindow(sdlEvent.window.windowID);
-                event.window.window = w;
-                event.window.x = x;
-                event.window.y = y;
-                windowState.events.push(event);
-
-                if (w != nullptr)
-                {
-                    w->x = x;
-                    w->y = y;
-                    w->wasMoved = true;
+                    if (windowState.activeWindow == w)
+                        windowState.activeWindow = nullptr;
                     w->events.push(event);
                 }
             } break;
@@ -622,54 +585,6 @@ void processEvents()
                     w->width = width;
                     w->height = height;
                     w->wasResized = true;
-                    w->events.push(event);
-                }
-            } break;
-            case SDL_EVENT_WINDOW_MAXIMIZED:
-            {
-                Event event{};
-                event.type = EventType_windowMaximized;
-                event.timestamp = sdlEvent.common.timestamp;
-
-                WindowData* w = getWindow(sdlEvent.window.windowID);
-                event.window.window = w;
-                windowState.events.push(event);
-
-                if (w != nullptr)
-                {
-                    w->wasMaximized = true;
-                    w->events.push(event);
-                }
-            } break;
-            case SDL_EVENT_WINDOW_MINIMIZED:
-            {
-                Event event{};
-                event.type = EventType_windowMinimized;
-                event.timestamp = sdlEvent.common.timestamp;
-
-                WindowData* w = getWindow(sdlEvent.window.windowID);
-                event.window.window = w;
-                windowState.events.push(event);
-
-                if (w != nullptr)
-                {
-                    w->wasMinimized = true;
-                    w->events.push(event);
-                }
-            } break;
-            case SDL_EVENT_WINDOW_RESTORED:
-            {
-                Event event{};
-                event.type = EventType_windowRestored;
-                event.timestamp = sdlEvent.common.timestamp;
-
-                WindowData* w = getWindow(sdlEvent.window.windowID);
-                event.window.window = w;
-                windowState.events.push(event);
-
-                if (w != nullptr)
-                {
-                    w->wasRestored = true;
                     w->events.push(event);
                 }
             } break;
@@ -817,6 +732,9 @@ bool wasButtonReleased(Button key)
 
 Vec2 mousePos()
 {
+    if (windowState.activeWindow != nullptr)
+        return windowState.activeWindow->mouse;
+
     if (windowState.windows.count == 1)
     {
         Vec2 ret;
@@ -826,13 +744,14 @@ Vec2 mousePos()
         });
         return ret;
     }
-    Vec2 pos;
-    sdlFuncs.SDL_GetGlobalMouseState(&pos.x, &pos.y);
-    return pos;
+    return {};
 }
 
 Vec2 mouseDelta()
 {
+    if (windowState.activeWindow != nullptr)
+        return windowState.mouseDelta / static_cast<f32>(windowState.activeWindow->height);
+
     if (windowState.windows.count == 1)
     {
         Vec2 ret = windowState.mouseDelta;
@@ -963,11 +882,6 @@ Window windowCreate(const WindowConfig& config)
 
     windowState.windows.add(sdlFuncs.SDL_GetWindowID(wd->sdlWindow), wd);
 
-    i32 px, py;
-    sdlFuncs.SDL_GetWindowPosition(wd->sdlWindow, &px, &py);
-    wd->x = px;
-    wd->y = py;
-
     u32 w, h;
     sdlFuncs.SDL_GetWindowSize(wd->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
     wd->width = w;
@@ -1028,32 +942,9 @@ bool windowWasFocusLost(void* data)
     return static_cast<WindowData*>(data)->wasFocusLost;
 }
 
-bool windowWasMoved(void* data)
-{
-    return static_cast<WindowData*>(data)->wasMoved;
-}
 
-void windowGetPos(void* data, i32* x, i32* y)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (x != nullptr)
-        *x = wd != nullptr ? wd->x : 0;
-    if (y != nullptr)
-        *y = wd != nullptr ? wd->y : 0;
-}
 
-void windowSetPos(void* data, i32 x, i32 y)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    sdlFuncs.SDL_SetWindowPosition(wd->sdlWindow, x, y);
-    wd->x = x;
-    wd->y = y;
-}
 
-void windowSetResizable(void* data, bool set)
-{
-    sdlFuncs.SDL_SetWindowResizable(static_cast<WindowData*>(data)->sdlWindow, set);
-}
 
 bool windowWasResized(void* data)
 {
@@ -1069,64 +960,28 @@ void windowGetSize(void* data, u32* w, u32* h)
         *h = wd != nullptr ? wd->height : 0;
 }
 
-void windowSetSize(void* data, u32 width, u32 height)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    sdlFuncs.SDL_SetWindowSize(wd->sdlWindow, static_cast<int>(width), static_cast<int>(height));
-    wd->swap.resize(width, height);
-    wd->width = width;
-    wd->height = height;
-}
 
-bool windowIsMaximized(void* data)
-{
-    return (sdlFuncs.SDL_GetWindowFlags(static_cast<WindowData*>(data)->sdlWindow) & SDL_WINDOW_MAXIMIZED) != 0;
-}
 
-bool windowWasMaximized(void* data)
-{
-    return static_cast<WindowData*>(data)->wasMaximized;
-}
 
 void windowMaximize(void* data)
 {
     sdlFuncs.SDL_MaximizeWindow(static_cast<WindowData*>(data)->sdlWindow);
 }
 
-bool windowIsMinimized(void* data)
-{
-    return (sdlFuncs.SDL_GetWindowFlags(static_cast<WindowData*>(data)->sdlWindow) & SDL_WINDOW_MINIMIZED) != 0;
-}
 
-bool windowWasMinimized(void* data)
-{
-    return static_cast<WindowData*>(data)->wasMinimized;
-}
 
 void windowMinimize(void* data)
 {
     sdlFuncs.SDL_MinimizeWindow(static_cast<WindowData*>(data)->sdlWindow);
 }
 
-bool windowWasRestored(void* data)
-{
-    return static_cast<WindowData*>(data)->wasRestored;
-}
 
-bool windowwasMadeFullscreen(void* data)
-{
-    return static_cast<WindowData*>(data)->wasFullscreened;
-}
 
 void windowRestore(void* data)
 {
     sdlFuncs.SDL_RestoreWindow(static_cast<WindowData*>(data)->sdlWindow);
 }
 
-bool windowIsFullscreen(void* data)
-{
-    return (sdlFuncs.SDL_GetWindowFlags(static_cast<WindowData*>(data)->sdlWindow) & SDL_WINDOW_FULLSCREEN) != 0;
-}
 
 void windowSetFullscreen(void* data, bool set)
 {

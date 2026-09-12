@@ -33,12 +33,7 @@ static const char* eventName(EventType type)
         case EventType_windowClosed: return "windowClosed";
         case EventType_windowFocused: return "windowFocused";
         case EventType_windowUnfocused: return "windowUnfocused";
-        case EventType_windowMoved: return "windowMoved";
         case EventType_windowResized: return "windowResized";
-        case EventType_windowMaximized: return "windowMaximized";
-        case EventType_windowMinimized: return "windowMinimized";
-        case EventType_windowRestored: return "windowRestored";
-        case EventType_windowFullscreen: return "windowFullscreen";
         case EventType_clipboardUpdate: return "clipboardUpdate";
         case EventType_count: return "count";
     }
@@ -263,8 +258,6 @@ int main()
     bool showClipboard = true;
     bool showTimers = true;
 
-    i32 nextWindowX = 100;
-    i32 nextWindowY = 100;
     Window secondWindow{};
 
     Clock gameClock{};
@@ -478,33 +471,22 @@ int main()
                     ImGui::Text("isFocused: %d", window.isFocused());
                     ImGui::Text("wasFocusGained: %d", window.wasFocusGained());
                     ImGui::Text("wasFocusLost: %d", window.wasFocusLost());
-                    ImGui::Text("wasMoved: %d", window.wasMoved());
                     ImGui::Text("wasResized: %d", window.wasResized());
-                    ImGui::Text("wasMaximized: %d", window.wasMaximized());
-                    ImGui::Text("wasMinimized: %d", window.wasMinimized());
-                    ImGui::Text("wasRestored: %d", window.wasRestored());
-                    ImGui::Text("wasMadeFullscreen: %d", window.wasMadeFullscreen());
                     ImGui::Text("wasClosed: %d", window.wasClosed());
 
-                    i32 wx, wy;
-                    window.pos(&wx, &wy);
                     u32 ww, wh;
                     window.size(&ww, &wh);
-                    ImGui::Text("pos: %d, %d  size: %u, %u", wx, wy, ww, wh);
-                    ImGui::Text("isMaximized: %d  isMinimized: %d  isFullscreen: %d",
-                        window.isMaximized(), window.isMinimized(), window.isFullscreen());
+                    ImGui::Text("size: %u, %u", ww, wh);
 
                     if (secondWindow.data != nullptr)
                     {
                         ImGui::Text("Second Window");
-                        ImGui::Text("focused=%d moved=%d resized=%d closed=%d",
-                            secondWindow.isFocused(), secondWindow.wasMoved(),
+                        ImGui::Text("focused=%d resized=%d closed=%d",
+                            secondWindow.isFocused(),
                             secondWindow.wasResized(), secondWindow.wasClosed());
-                        i32 sx, sy;
-                        secondWindow.pos(&sx, &sy);
                         u32 sw, sh;
                         secondWindow.size(&sw, &sh);
-                        ImGui::Text("pos: %d, %d  size: %u, %u", sx, sy, sw, sh);
+                        ImGui::Text("size: %u, %u", sw, sh);
                     }
 
                     ImGui::Text("Actions");
@@ -518,10 +500,6 @@ int main()
                     ImGui::SameLine();
                     if (ImGui::Button("Fullscreen Off")) window.setFullscreen(false);
 
-                    if (ImGui::Button("Pos (200, 200)")) window.setPos(200, 200);
-                    ImGui::SameLine();
-                    if (ImGui::Button("Size 640x480")) window.setSize(640, 480);
-
                     ImGui::Text("Second Window");
                     if (secondWindow.data == nullptr)
                     {
@@ -529,9 +507,6 @@ int main()
                         {
                             secondWindow = Window::create();
                             secondWindow.setTitle("Second Window");
-                            secondWindow.setPos(nextWindowX, nextWindowY);
-                            nextWindowX += 50;
-                            nextWindowY += 50;
                         }
                     }
                     else

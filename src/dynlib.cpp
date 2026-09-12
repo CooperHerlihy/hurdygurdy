@@ -31,7 +31,7 @@ Library::~Library() noexcept
         dlclose(lib);
 }
 
-Maybe<void*> Library::findFunction(StringView name)
+Maybe<void*> Library::loadSymbol(StringView name)
 {
     ArenaScope scratch = getScratch();
     char* cstr = cString(scratch, name);
@@ -73,7 +73,7 @@ Library::~Library() noexcept
         FreeLibrary(static_cast<HMODULE>(lib));
 }
 
-Maybe<void*> Library::findFunction(StringView name)
+Maybe<void*> Library::loadSymbol(StringView name)
 {
     ArenaScope scratch = getScratch();
     char* cstr = cString(scratch, name);

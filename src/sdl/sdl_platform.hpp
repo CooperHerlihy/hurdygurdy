@@ -50,23 +50,18 @@ bool windowWasClosed(void* data);
 bool windowIsFocused(void* data);
 bool windowWasFocusGained(void* data);
 bool windowWasFocusLost(void* data);
-bool windowWasMoved(void* data);
-void windowGetPos(void* data, i32* x, i32* y);
-void windowSetPos(void* data, i32 x, i32 y);
-void windowSetResizable(void* data, bool set);
+
+
+
+
 bool windowWasResized(void* data);
 void windowGetSize(void* data, u32* w, u32* h);
-void windowSetSize(void* data, u32 w, u32 h);
-bool windowIsMaximized(void* data);
-bool windowWasMaximized(void* data);
+
 void windowMaximize(void* data);
-bool windowIsMinimized(void* data);
-bool windowWasMinimized(void* data);
+
+
 void windowMinimize(void* data);
-bool windowWasRestored(void* data);
 void windowRestore(void* data);
-bool windowIsFullscreen(void* data);
-bool windowwasMadeFullscreen(void* data);
 void windowSetFullscreen(void* data, bool set);
 Vec2 windowMousePos(void* data);
 Vec2 windowMouseDelta(void* data);

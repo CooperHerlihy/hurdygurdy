@@ -53,6 +53,7 @@ set(INCLUDE_DIRS
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/wayland
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends
@@ -128,6 +129,12 @@ set(SDL_SOURCES
     src/sdl/audio.cpp
 )
 
+set(WAYLAND_SOURCES
+    src/wayland/wayland.cpp
+    src/wayland/wayland-client-protocol.c
+    src/wayland/xdg-shell-protocol.c
+)
+
 set(X11_SOURCES
     src/x11/x11.cpp
 )
@@ -144,7 +151,7 @@ endif()
 # Platform selection
 option(HG_USE_NATIVE_BACKEND "Use native Linux backend instead of SDL" ON)
 if(HG_LINUX)
-    set(PLATFORM_SOURCES ${X11_SOURCES} ${PIPEWIRE_SOURCES} ${SDL_SOURCES})
+    set(PLATFORM_SOURCES ${WAYLAND_SOURCES} ${X11_SOURCES} ${PIPEWIRE_SOURCES} ${SDL_SOURCES})
     set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR} ${LINUX_INCLUDE_DIRS})
 else()
     set(PLATFORM_SOURCES ${SDL_SOURCES})
@@ -190,7 +197,7 @@ target_include_directories(hurdygurdy_core
 
 # Add Linux backend compile definition
 if(HG_LINUX)
-    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_NATIVE_BACKEND=1)
+    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_NATIVE_BACKEND=1 HG_USE_WAYLAND=1)
     # Treat vendor headers as SYSTEM to suppress warnings from third-party code
     target_include_directories(hurdygurdy_core SYSTEM PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/xorgproto/include
@@ -201,6 +208,8 @@ if(HG_LINUX)
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/pipewire/spa/include
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libxkbcommon/include
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libevdev
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/wayland/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/wayland/egl
     )
 endif()
 

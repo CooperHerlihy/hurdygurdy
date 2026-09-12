@@ -29,7 +29,7 @@ bool loadSdl()
 
 #define HG_LOAD_SDL_FUNC(name) \
     *(void**)&sdlFuncs.name = \
-        libsdl.findFunction(#name).orElse(nullptr); \
+        libsdl.loadSymbol(#name).orElse(nullptr); \
     if (sdlFuncs.name == nullptr) { \
         setError("Could not load " #name); \
         return false; \

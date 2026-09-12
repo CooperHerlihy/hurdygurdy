@@ -6,11 +6,11 @@
 #include "hg/strings.hpp"
 #include "hg/memory.hpp"
 
-namespace hg::x11 {
+namespace hg::wayland {
 
-bool loadX11();
-bool initX11();
-void deinitX11();
+bool loadWayland();
+bool initWayland();
+void deinitWayland();
 Span<StringView> getPlatformVulkanExtensions(Arena* arena);
 
 Span<DisplayInfo> displayInfo();
@@ -66,4 +66,4 @@ StringView getClipboardText();
 void setClipboardText(StringView text);
 void openURL(StringView url);
 
-} // namespace hg::x11
+} // namespace hg::wayland

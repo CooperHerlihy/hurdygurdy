@@ -123,7 +123,7 @@ static bool loadXlib()
     libX11 = std::move(*lib);
 
 #define HG_LOAD_XLIB(name) \
-    *(void**)&xlibFuncs.name = libX11.findFunction(#name).orElse(nullptr); \
+    *(void**)&xlibFuncs.name = libX11.loadSymbol(#name).orElse(nullptr); \
     if (xlibFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_XLIB(XOpenDisplay);
@@ -177,7 +177,7 @@ static bool loadXrandr()
     libXrandr = std::move(*lib);
 
 #define HG_LOAD_XRANDR(name) \
-    *(void**)&xrandrFuncs.name = libXrandr.findFunction(#name).orElse(nullptr); \
+    *(void**)&xrandrFuncs.name = libXrandr.loadSymbol(#name).orElse(nullptr); \
     if (xrandrFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_XRANDR(XRRGetScreenResourcesCurrent);
@@ -201,7 +201,7 @@ static bool loadXkb()
     libxkb = std::move(*lib);
 
 #define HG_LOAD_XKB(name) \
-    *(void**)&xkbFuncs.name = libxkb.findFunction(#name).orElse(nullptr); \
+    *(void**)&xkbFuncs.name = libxkb.loadSymbol(#name).orElse(nullptr); \
     if (xkbFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_XKB(xkb_context_new);
@@ -230,7 +230,7 @@ static bool loadEvdev()
     libevdevLib = std::move(*lib);
 
 #define HG_LOAD_EVDEV(name) \
-    *(void**)&evdevFuncs.name = libevdevLib.findFunction(#name).orElse(nullptr); \
+    *(void**)&evdevFuncs.name = libevdevLib.loadSymbol(#name).orElse(nullptr); \
     if (evdevFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_EVDEV(libevdev_new_from_fd);
@@ -276,20 +276,13 @@ struct WindowData {
 
     Array<Event> events{};
     Vec2 mouse{};
-    i32 x = 0;
-    i32 y = 0;
     u32 width = 0;
     u32 height = 0;
     bool wasClosed = false;
     bool isFocused = false;
     bool wasFocusGained = false;
     bool wasFocusLost = false;
-    bool wasMoved = false;
     bool wasResized = false;
-    bool wasMaximized = false;
-    bool wasMinimized = false;
-    bool wasRestored = false;
-    bool wasFullscreened = false;
 
     WindowData() noexcept = default;
     ~WindowData() noexcept;
@@ -341,6 +334,7 @@ struct WindowState {
     Vec2 wheelDelta{};
 
     Map<::Window, WindowData*> windows{};
+    WindowData* activeWindow = nullptr;
 
     Array<char> clipboard{};
     ::Window clipboardRequestor = 0;
@@ -816,20 +810,13 @@ WindowData::WindowData(WindowData&& other) noexcept
     , x11Window{std::exchange(other.x11Window, 0)}
     , events{std::exchange(other.events, Array<Event>{})}
     , mouse{other.mouse}
-    , x{other.x}
-    , y{other.y}
     , width{other.width}
     , height{other.height}
     , wasClosed{other.wasClosed}
     , isFocused{other.isFocused}
     , wasFocusGained{other.wasFocusGained}
     , wasFocusLost{other.wasFocusLost}
-    , wasMoved{other.wasMoved}
     , wasResized{other.wasResized}
-    , wasMaximized{other.wasMaximized}
-    , wasMinimized{other.wasMinimized}
-    , wasRestored{other.wasRestored}
-    , wasFullscreened{other.wasFullscreened}
 {}
 
 WindowData& WindowData::operator=(WindowData&& other) noexcept
@@ -846,20 +833,13 @@ WindowData& WindowData::operator=(WindowData&& other) noexcept
         x11Window = std::exchange(other.x11Window, 0);
         events = std::exchange(other.events, Array<Event>{});
         mouse = other.mouse;
-        x = other.x;
-        y = other.y;
         width = other.width;
         height = other.height;
         wasClosed = other.wasClosed;
         isFocused = other.isFocused;
         wasFocusGained = other.wasFocusGained;
         wasFocusLost = other.wasFocusLost;
-        wasMoved = other.wasMoved;
         wasResized = other.wasResized;
-        wasMaximized = other.wasMaximized;
-        wasMinimized = other.wasMinimized;
-        wasRestored = other.wasRestored;
-        wasFullscreened = other.wasFullscreened;
     }
     return *this;
 }
@@ -944,8 +924,6 @@ Window windowCreate(const WindowConfig& config)
 
     // Get initial window attributes
     xlibFuncs.XGetWindowAttributes(windowState.display,window->x11Window, &attrs);
-    window->x = attrs.x;
-    window->y = attrs.y;
     window->width = static_cast<u32>(attrs.width);
     window->height = static_cast<u32>(attrs.height);
     window->isFocused = (attrs.map_state == IsViewable);
@@ -1013,32 +991,9 @@ bool windowWasFocusLost(void* data)
     return window->wasFocusLost;
 }
 
-bool windowWasMoved(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasMoved;
-}
 
-void windowGetPos(void* data, i32* x, i32* y)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    *x = window->x;
-    *y = window->y;
-}
 
-void windowSetPos(void* data, i32 x, i32 y)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    xlibFuncs.XMoveWindow(windowState.display,window->x11Window, x, y);
-}
 
-void windowSetResizable(void* data, bool set)
-{
-    (void)data;
-    (void)set;
-    // X11 doesn't have a direct way to toggle resizability
-    // We would need to modify the WM hints
-}
 
 bool windowWasResized(void* data)
 {
@@ -1053,23 +1008,8 @@ void windowGetSize(void* data, u32* w, u32* h)
     *h = window->height;
 }
 
-void windowSetSize(void* data, u32 w, u32 h)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    xlibFuncs.XResizeWindow(windowState.display,window->x11Window, w, h);
-}
 
-bool windowIsMaximized(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasMaximized;
-}
 
-bool windowWasMaximized(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasMaximized;
-}
 
 void windowMaximize(void* data)
 {
@@ -1088,17 +1028,7 @@ void windowMaximize(void* data)
     xlibFuncs.XSendEvent(windowState.display,windowState.root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
 }
 
-bool windowIsMinimized(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasMinimized;
-}
 
-bool windowWasMinimized(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasMinimized;
-}
 
 void windowMinimize(void* data)
 {
@@ -1106,11 +1036,6 @@ void windowMinimize(void* data)
     xlibFuncs.XWithdrawWindow(windowState.display, window->x11Window, windowState.screen);
 }
 
-bool windowWasRestored(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasRestored;
-}
 
 void windowRestore(void* data)
 {
@@ -1118,38 +1043,7 @@ void windowRestore(void* data)
     xlibFuncs.XMapWindow(windowState.display,window->x11Window);
 }
 
-bool windowIsFullscreen(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    Atom actualType;
-    int actualFormat;
-    u64 itemCount;
-    u64 bytesAfter;
-    u8* prop = nullptr;
-    xlibFuncs.XGetWindowProperty(windowState.display,
-        window->x11Window, windowState.wmStateAtom, 0, 1024, False,
-        XA_ATOM, &actualType, &actualFormat, &itemCount, &bytesAfter, &prop
-    );
-    if (prop == nullptr)
-        return false;
-    bool fullscreen = false;
-    for (u64 i = 0; i < itemCount; ++i)
-    {
-        if (reinterpret_cast<Atom*>(prop)[i] == windowState.wmStateFullscreen)
-        {
-            fullscreen = true;
-            break;
-        }
-    }
-    xlibFuncs.XFree(prop);
-    return fullscreen;
-}
 
-bool windowWasMadeFullscreen(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasFullscreened;
-}
 
 void windowSetFullscreen(void* data, bool set)
 {
@@ -1241,12 +1135,7 @@ void processEvents()
     {
         window->wasFocusGained = false;
         window->wasFocusLost = false;
-        window->wasMoved = false;
         window->wasResized = false;
-        window->wasMaximized = false;
-        window->wasMinimized = false;
-        window->wasRestored = false;
-        window->wasFullscreened = false;
         window->events.resize(0);
     });
 
@@ -1381,9 +1270,16 @@ void processEvents()
                     {
                         window->isFocused = focused;
                         if (focused)
+                        {
                             window->wasFocusGained = true;
+                            windowState.activeWindow = window;
+                        }
                         else
+                        {
                             window->wasFocusLost = true;
+                            if (windowState.activeWindow == window)
+                                windowState.activeWindow = nullptr;
+                        }
 
                         Event e{};
                         e.type = focused ? EventType_windowFocused : EventType_windowUnfocused;
@@ -1399,29 +1295,14 @@ void processEvents()
                 if (found != nullptr)
                 {
                     WindowData* window = *found;
-                    i32 newX = event.xconfigure.x;
-                    i32 newY = event.xconfigure.y;
                     u32 newW = static_cast<u32>(event.xconfigure.width);
                     u32 newH = static_cast<u32>(event.xconfigure.height);
-
-                    if (newX != window->x || newY != window->y)
-                    {
-                        window->wasMoved = true;
-                        window->x = newX;
-                        window->y = newY;
-                    }
 
                     if (newW != window->width || newH != window->height)
                     {
                         window->wasResized = true;
                         window->width = newW;
                         window->height = newH;
-                    }
-
-                    // Update Vulkan swapchain
-                    if (window->wasResized)
-                    {
-                        // TODO: Recreate swapchain
                     }
                 }
                 break;
@@ -1538,53 +1419,6 @@ void processEvents()
                 }
                 break;
             }
-
-            case MapNotify:
-            {
-                WindowData** found = windowState.windows.get(event.xmap.window);
-                if (found != nullptr)
-                {
-                    (*found)->wasRestored = true;
-                }
-                break;
-            }
-
-            case PropertyNotify:
-            {
-                if (event.xproperty.atom == windowState.wmStateAtom)
-                {
-                    WindowData** found = windowState.windows.get(event.xproperty.window);
-                    if (found != nullptr)
-                    {
-                        // Query current fullscreen state
-                        Atom actualType;
-                        int actualFormat;
-                        u64 itemCount;
-                        u64 bytesAfter;
-                        u8* prop = nullptr;
-                        xlibFuncs.XGetWindowProperty(windowState.display,
-                            event.xproperty.window, windowState.wmStateAtom, 0, 1024, False,
-                            XA_ATOM, &actualType, &actualFormat, &itemCount, &bytesAfter, &prop
-                        );
-                        if (prop != nullptr)
-                        {
-                            bool fullscreen = false;
-                            for (u64 i = 0; i < itemCount; ++i)
-                            {
-                                if (reinterpret_cast<Atom*>(prop)[i] == windowState.wmStateFullscreen)
-                                {
-                                    fullscreen = true;
-                                    break;
-                                }
-                            }
-                            if (fullscreen)
-                                (*found)->wasFullscreened = true;
-                            xlibFuncs.XFree(prop);
-                        }
-                    }
-                }
-                break;
-            }
         }
     }
 
@@ -1624,6 +1458,9 @@ bool wasButtonReleased(Button key)
 
 Vec2 mousePos()
 {
+    if (windowState.activeWindow != nullptr)
+        return windowState.activeWindow->mouse;
+
     if (windowState.windows.count == 1)
     {
         Vec2 ret{};
@@ -1633,15 +1470,14 @@ Vec2 mousePos()
         });
         return ret;
     }
-    int rootX, rootY, winX, winY;
-    ::Window root_ret, child_ret;
-    unsigned int mask;
-    xlibFuncs.XQueryPointer(windowState.display, windowState.root, &root_ret, &child_ret, &rootX, &rootY, &winX, &winY, &mask);
-    return Vec2{static_cast<f32>(rootX), static_cast<f32>(rootY)};
+    return {};
 }
 
 Vec2 mouseDelta()
 {
+    if (windowState.activeWindow != nullptr)
+        return windowState.mouseDelta / static_cast<f32>(windowState.activeWindow->height);
+
     if (windowState.windows.count == 1)
     {
         Vec2 ret = windowState.mouseDelta;

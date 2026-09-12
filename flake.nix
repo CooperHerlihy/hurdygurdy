@@ -11,30 +11,30 @@
             pkgs = nixpkgs.legacyPackages.${system};
 
             debug = pkgs.writeShellScriptBin "debug" ''
-                cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug
-                cmake --build build
-                ./build/tests
+                cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug \
+                && cmake --build build \
+                && ./build/tests
             '';
             release = pkgs.writeShellScriptBin "release" ''
-                cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release
-                cmake --build build/release
-                ./build/release/tests
+                cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release \
+                && cmake --build build/release \
+                && ./build/release/tests
             '';
             san = pkgs.writeShellScriptBin "san" ''
                 cmake -G Ninja -B build/san -DCMAKE_BUILD_TYPE=Debug \
                     -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
                     -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-                    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
-                cmake --build build/san
-                LSAN_OPTIONS=detect_leaks=0 ./build/san/tests
+                    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+                && cmake --build build/san \
+                && LSAN_OPTIONS=detect_leaks=0 ./build/san/tests
             '';
             tsan = pkgs.writeShellScriptBin "tsan" ''
                 cmake -G Ninja -B build/tsan -DCMAKE_BUILD_TYPE=Debug \
                     -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
                     -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
-                    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
-                cmake --build build/tsan
-                TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/tests
+                    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+                && cmake --build build/tsan \
+                && TSAN_OPTIONS=suppressions=/dev/null ./build/tsan/tests
             '';
         in {
             default = pkgs.mkShell.override {
@@ -71,6 +71,7 @@
                     pipewire
                     libxkbcommon
                     libevdev
+                    wayland
                 ];
             };
         });
@@ -154,6 +155,22 @@
                 hash = "sha256-TMPyrJdcr6TLfQYrmT+RA1uveZXJfNxyliVEdUXBRfI=";
             };
 
+            wayland-src = pkgs.fetchFromGitLab {
+                domain = "gitlab.freedesktop.org";
+                owner = "wayland";
+                repo = "wayland";
+                rev = "381af21cf84f13be0ca24aed756a9cded3290d49";
+                hash = "sha256-HGZx4f3HM+6APICDorqUyYO8YW6x97J2yO9HlH540Lg=";
+            };
+
+            wayland-protocols-src = pkgs.fetchFromGitLab {
+                domain = "gitlab.freedesktop.org";
+                owner = "wayland";
+                repo = "wayland-protocols";
+                rev = "819004adb3ab7e46f3fa3caef05b96e20434b244";
+                hash = "sha256-Fal+LAXzxouWmm+u8Dfi+G69eKsbTeMN+yMkv7/C9BQ=";
+            };
+
         in {
             default = pkgs.clang19Stdenv.mkDerivation {
                 name = "hurdygurdy";
@@ -173,6 +190,7 @@
                     rm -rf vendor/imgui vendor/Vulkan-Headers vendor/SDL
                     rm -rf vendor/xorgproto vendor/libX11 vendor/libXrandr vendor/libXrender
                     rm -rf vendor/pipewire vendor/libxkbcommon vendor/libevdev
+                    rm -rf vendor/wayland vendor/wayland-protocols
                     cp -r ${vulkan-headers-src} vendor/Vulkan-Headers
                     cp -r ${imgui-src} vendor/imgui
                     cp -r ${sdl3-src} vendor/SDL
@@ -183,6 +201,8 @@
                     cp -r ${pipewire-src} vendor/pipewire
                     cp -r ${libxkbcommon-src} vendor/libxkbcommon
                     cp -r ${libevdev-src} vendor/libevdev
+                    cp -r ${wayland-src} vendor/wayland
+                    cp -r ${wayland-protocols-src} vendor/wayland-protocols
                     chmod -R u+w vendor/Vulkan-Headers
                     chmod -R u+w vendor/imgui
                     chmod -R u+w vendor/SDL
@@ -193,6 +213,8 @@
                     chmod -R u+w vendor/pipewire
                     chmod -R u+w vendor/libxkbcommon
                     chmod -R u+w vendor/libevdev
+                    chmod -R u+w vendor/wayland
+                    chmod -R u+w vendor/wayland-protocols
                 '';
 
                 postFixup = ''
@@ -204,6 +226,7 @@
                         patchelf --add-rpath ${pkgs.pipewire}/lib $bin
                         patchelf --add-rpath ${pkgs.libxkbcommon}/lib $bin
                         patchelf --add-rpath ${pkgs.libevdev}/lib $bin
+                        patchelf --add-rpath ${pkgs.wayland}/lib $bin
                     done
                 '';
             };

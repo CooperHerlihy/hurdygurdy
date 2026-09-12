@@ -32,7 +32,7 @@ struct Library {
     /**
      * Find a function pointer in the library
      */
-    Maybe<void*> findFunction(StringView name);
+    Maybe<void*> loadSymbol(StringView name);
 
     /**
      * Move construct

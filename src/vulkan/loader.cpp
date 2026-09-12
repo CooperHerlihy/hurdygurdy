@@ -141,7 +141,7 @@ bool loadVulkan()
     libvulkan = std::move(*lib);
 
     *(void**)&vulkanFuncs.vkGetInstanceProcAddr =
-        libvulkan.findFunction("vkGetInstanceProcAddr").orElse(nullptr);
+        libvulkan.loadSymbol("vkGetInstanceProcAddr").orElse(nullptr);
     if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
     {
         setError("Could not load vkGetInstanceProcAddr\n");

@@ -31,3 +31,9 @@
 [submodule "vendor/libevdev"]
 	path = vendor/libevdev
 	url = https://gitlab.freedesktop.org/libevdev/libevdev
+[submodule "vendor/wayland"]
+	path = vendor/wayland
+	url = https://gitlab.freedesktop.org/wayland/wayland
+[submodule "vendor/wayland-protocols"]
+	path = vendor/wayland-protocols
+	url = https://gitlab.freedesktop.org/wayland/wayland-protocols

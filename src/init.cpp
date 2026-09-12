@@ -5,6 +5,7 @@
 #include "hg/macros.hpp"
 
 #if defined(HG_PLATFORM_LINUX)
+#include "wayland/wayland_platform.hpp"
 #include "x11/x11_platform.hpp"
 #include "pipewire/pipewire_platform.hpp"
 #endif
@@ -53,23 +54,11 @@ struct PlatformApi {
     bool (*windowIsFocused)(void* data);
     bool (*windowWasFocusGained)(void* data);
     bool (*windowWasFocusLost)(void* data);
-    bool (*windowWasMoved)(void* data);
-    void (*windowGetPos)(void* data, i32* x, i32* y);
-    void (*windowSetPos)(void* data, i32 x, i32 y);
-    void (*windowSetResizable)(void* data, bool set);
     bool (*windowWasResized)(void* data);
     void (*windowGetSize)(void* data, u32* w, u32* h);
-    void (*windowSetSize)(void* data, u32 w, u32 h);
-    bool (*windowIsMaximized)(void* data);
-    bool (*windowWasMaximized)(void* data);
     void (*windowMaximize)(void* data);
-    bool (*windowIsMinimized)(void* data);
-    bool (*windowWasMinimized)(void* data);
     void (*windowMinimize)(void* data);
-    bool (*windowWasRestored)(void* data);
     void (*windowRestore)(void* data);
-    bool (*windowIsFullscreen)(void* data);
-    bool (*windowWasMadeFullscreen)(void* data);
     void (*windowSetFullscreen)(void* data, bool set);
     Vec2 (*windowMousePos)(void* data);
     Vec2 (*windowMouseDelta)(void* data);
@@ -119,29 +108,16 @@ static void fillSdl()
     api.windowDestroy = sdl::windowDestroy;
     api.windowSwapchain = sdl::windowSwapchain;
     api.windowSetTitle = sdl::windowSetTitle;
-    api.windowGetPos = sdl::windowGetPos;
-    api.windowSetPos = sdl::windowSetPos;
     api.windowGetSize = sdl::windowGetSize;
-    api.windowSetSize = sdl::windowSetSize;
-    api.windowIsFullscreen = sdl::windowIsFullscreen;
     api.windowSetFullscreen = sdl::windowSetFullscreen;
-    api.windowSetResizable = sdl::windowSetResizable;
     api.windowIsFocused = sdl::windowIsFocused;
     api.windowWasClosed = sdl::windowWasClosed;
     api.windowWasResized = sdl::windowWasResized;
     api.windowWasFocusGained = sdl::windowWasFocusGained;
     api.windowWasFocusLost = sdl::windowWasFocusLost;
-    api.windowWasMoved = sdl::windowWasMoved;
-    api.windowIsMaximized = sdl::windowIsMaximized;
-    api.windowWasMaximized = sdl::windowWasMaximized;
-    api.windowIsMinimized = sdl::windowIsMinimized;
-    api.windowWasMinimized = sdl::windowWasMinimized;
     api.windowMaximize = sdl::windowMaximize;
     api.windowMinimize = sdl::windowMinimize;
-    api.windowWasRestored = sdl::windowWasRestored;
     api.windowRestore = sdl::windowRestore;
-    api.windowIsFullscreen = sdl::windowIsFullscreen;
-    api.windowWasMadeFullscreen = sdl::windowwasMadeFullscreen;
     api.windowSetFullscreen = sdl::windowSetFullscreen;
     api.windowEvents = sdl::windowEvents;
     api.windowMousePos = sdl::windowMousePos;
@@ -185,29 +161,16 @@ static void fillX11()
     api.windowDestroy = x11::windowDestroy;
     api.windowSwapchain = x11::windowSwapchain;
     api.windowSetTitle = x11::windowSetTitle;
-    api.windowGetPos = x11::windowGetPos;
-    api.windowSetPos = x11::windowSetPos;
     api.windowGetSize = x11::windowGetSize;
-    api.windowSetSize = x11::windowSetSize;
-    api.windowIsFullscreen = x11::windowIsFullscreen;
     api.windowSetFullscreen = x11::windowSetFullscreen;
-    api.windowSetResizable = x11::windowSetResizable;
     api.windowIsFocused = x11::windowIsFocused;
     api.windowWasClosed = x11::windowWasClosed;
     api.windowWasResized = x11::windowWasResized;
     api.windowWasFocusGained = x11::windowWasFocusGained;
     api.windowWasFocusLost = x11::windowWasFocusLost;
-    api.windowWasMoved = x11::windowWasMoved;
-    api.windowIsMaximized = x11::windowIsMaximized;
-    api.windowWasMaximized = x11::windowWasMaximized;
-    api.windowIsMinimized = x11::windowIsMinimized;
-    api.windowWasMinimized = x11::windowWasMinimized;
     api.windowMaximize = x11::windowMaximize;
     api.windowMinimize = x11::windowMinimize;
-    api.windowWasRestored = x11::windowWasRestored;
     api.windowRestore = x11::windowRestore;
-    api.windowIsFullscreen = x11::windowIsFullscreen;
-    api.windowWasMadeFullscreen = x11::windowWasMadeFullscreen;
     api.windowSetFullscreen = x11::windowSetFullscreen;
     api.windowEvents = x11::windowEvents;
     api.windowMousePos = x11::windowMousePos;
@@ -220,12 +183,63 @@ static void fillPipeWire()
     api.unsetAudioCallback = pipewire::unsetAudioCallback;
 }
 
+static void fillWayland()
+{
+    api.getPlatformVulkanExtensions = wayland::getPlatformVulkanExtensions;
+
+    api.displayInfo = wayland::displayInfo;
+    api.setCursor = wayland::setCursor;
+    api.showCursor = wayland::showCursor;
+    api.getClipboardText = wayland::getClipboardText;
+    api.setClipboardText = wayland::setClipboardText;
+    api.openURL = wayland::openURL;
+    api.processEvents = wayland::processEvents;
+    api.getEvents = wayland::getEvents;
+    api.wasQuit = wayland::wasQuit;
+
+    api.isButtonDown = wayland::isButtonDown;
+    api.wasButtonPressed = wayland::wasButtonPressed;
+    api.wasButtonReleased = wayland::wasButtonReleased;
+    api.mousePos = wayland::mousePos;
+    api.mouseDelta = wayland::mouseDelta;
+    api.wheelDelta = wayland::wheelDelta;
+
+    api.connectedGamepadCount = wayland::connectedGamepadCount;
+    api.isGamepadConnected = wayland::isGamepadConnected;
+    api.isGamepadButtonDown = wayland::isGamepadButtonDown;
+    api.wasGamepadButtonPressed = wayland::wasGamepadButtonPressed;
+    api.wasGamepadButtonReleased = wayland::wasGamepadButtonReleased;
+    api.gamepadLeftStick = wayland::gamepadLeftStick;
+    api.gamepadRightStick = wayland::gamepadRightStick;
+    api.gamepadLeftTrigger = wayland::gamepadLeftTrigger;
+    api.gamepadRightTrigger = wayland::gamepadRightTrigger;
+
+    api.windowCreate = wayland::windowCreate;
+    api.windowDestroy = wayland::windowDestroy;
+    api.windowSwapchain = wayland::windowSwapchain;
+    api.windowSetTitle = wayland::windowSetTitle;
+    api.windowGetSize = wayland::windowGetSize;
+    api.windowSetFullscreen = wayland::windowSetFullscreen;
+    api.windowIsFocused = wayland::windowIsFocused;
+    api.windowWasClosed = wayland::windowWasClosed;
+    api.windowWasResized = wayland::windowWasResized;
+    api.windowWasFocusGained = wayland::windowWasFocusGained;
+    api.windowWasFocusLost = wayland::windowWasFocusLost;
+    api.windowMaximize = wayland::windowMaximize;
+    api.windowMinimize = wayland::windowMinimize;
+    api.windowRestore = wayland::windowRestore;
+    api.windowEvents = wayland::windowEvents;
+    api.windowMousePos = wayland::windowMousePos;
+    api.windowMouseDelta = wayland::windowMouseDelta;
+}
+
 #endif
 
 enum WindowBackend {
     WindowBackend_none = 0,
     WindowBackend_sdl,
     WindowBackend_x11,
+    WindowBackend_wayland,
 };
 
 enum AudioBackend {
@@ -240,39 +254,43 @@ static AudioBackend audioBackend{};
 static bool initPlatform()
 {
 #if defined(HG_PLATFORM_LINUX)
-    if (x11::loadX11())
-        windowBackend = WindowBackend_x11;
-
     if (pipewire::loadPipeWire())
         audioBackend = AudioBackend_pipewire;
 
-    if (windowBackend == WindowBackend_x11)
+    // Try Wayland first
+    if (wayland::loadWayland())
     {
-        fillX11();
-        if (!x11::initX11())
-            return false;
+        fillWayland();
+        fillPipeWire();
+        if (wayland::initWayland())
+        {
+            windowBackend = WindowBackend_wayland;
+            if (audioBackend == AudioBackend_pipewire && pipewire::initPipewire())
+            {
+                return true;
+            }
+            wayland::deinitWayland();
+            windowBackend = WindowBackend_none;
+        }
     }
 
-    if (audioBackend == AudioBackend_pipewire)
-    {
-        fillPipeWire();
-        if (!pipewire::initPipewire())
-            return false;
-    }
-
-    if (x11::loadX11() && pipewire::loadPipeWire())
+    // Fall back to X11
+    if (x11::loadX11())
     {
         fillX11();
         fillPipeWire();
-        if (x11::initX11() && pipewire::initPipewire())
+        if (x11::initX11())
         {
             windowBackend = WindowBackend_x11;
-            audioBackend = AudioBackend_pipewire;
-            return true;
+            if (audioBackend == AudioBackend_pipewire && pipewire::initPipewire())
+            {
+                return true;
+            }
+            x11::deinitX11();
+            windowBackend = WindowBackend_none;
         }
-        pipewire::deinitPipewire();
-        x11::deinitX11();
     }
+
     setError("");
 #endif
 
@@ -297,6 +315,12 @@ static bool initPlatform()
 static void deinitPlatform()
 {
 #if defined(HG_PLATFORM_LINUX)
+    if (windowBackend == WindowBackend_wayland)
+    {
+        wayland::deinitWayland();
+        windowBackend = WindowBackend_none;
+    }
+
     if (windowBackend == WindowBackend_x11)
     {
         x11::deinitX11();
@@ -584,26 +608,6 @@ bool Window::wasFocusLost() const
     return api.windowWasFocusLost(data);
 }
 
-bool Window::wasMoved() const
-{
-    return api.windowWasMoved(data);
-}
-
-void Window::pos(i32* x, i32* y) const
-{
-    api.windowGetPos(data, x, y);
-}
-
-void Window::setPos(i32 x, i32 y)
-{
-    api.windowSetPos(data, x, y);
-}
-
-void Window::setResizable(bool set)
-{
-    api.windowSetResizable(data, set);
-}
-
 bool Window::wasResized() const
 {
     return api.windowWasResized(data);
@@ -612,31 +616,6 @@ bool Window::wasResized() const
 void Window::size(u32* width, u32* height) const
 {
     api.windowGetSize(data, width, height);
-}
-
-void Window::setSize(u32 width, u32 height)
-{
-    api.windowSetSize(data, width, height);
-}
-
-bool Window::isMaximized() const
-{
-    return api.windowIsMaximized(data);
-}
-
-bool Window::wasMaximized() const
-{
-    return api.windowWasMaximized(data);
-}
-
-bool Window::isMinimized() const
-{
-    return api.windowIsMinimized(data);
-}
-
-bool Window::wasMinimized() const
-{
-    return api.windowWasMinimized(data);
 }
 
 void Window::maximize()
@@ -649,24 +628,9 @@ void Window::minimize()
     api.windowMinimize(data);
 }
 
-bool Window::wasRestored() const
-{
-    return api.windowWasRestored(data);
-}
-
 void Window::restore()
 {
     api.windowRestore(data);
-}
-
-bool Window::isFullscreen() const
-{
-    return api.windowIsFullscreen(data);
-}
-
-bool Window::wasMadeFullscreen() const
-{
-    return api.windowWasMadeFullscreen(data);
 }
 
 void Window::setFullscreen(bool set)

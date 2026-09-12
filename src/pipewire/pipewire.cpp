@@ -60,7 +60,7 @@ bool loadPipeWire()
     libpipewire = std::move(*lib);
 
 #define HG_LOAD_PW(name) \
-    *(void**)&pwFuncs.name = libpipewire.findFunction(#name).orElse(nullptr); \
+    *(void**)&pwFuncs.name = libpipewire.loadSymbol(#name).orElse(nullptr); \
     if (pwFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_PW(pw_init);
