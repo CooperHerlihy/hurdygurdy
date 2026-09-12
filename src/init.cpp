@@ -1,8 +1,6 @@
 #include "hg/init.hpp"
 
 #include "internal.hpp"
-
-#include "sdl/sdl_platform.hpp"
 #include "hg/error.hpp"
 #include "hg/macros.hpp"
 
@@ -11,70 +9,9 @@
 #include "pipewire/pipewire_platform.hpp"
 #endif
 
+#include "sdl/sdl_platform.hpp"
+
 namespace hg {
-
-static bool initialized = false;
-static u32 initCount = 0;
-
-Maybe<HurdyGurdy> init()
-{
-    if (initialized)
-        return some<HurdyGurdy>();
-
-    if (!internal::initPlatform())
-        return {};
-
-    if (!internal::initGpu())
-    {
-        internal::deinitPlatform();
-        return {};
-    }
-
-    internal::initRender2D();
-
-    initialized = true;
-    return some<HurdyGurdy>();
-}
-
-HurdyGurdy::HurdyGurdy() noexcept
-{
-    ++initCount;
-}
-
-HurdyGurdy::HurdyGurdy(const HurdyGurdy&)
-{
-    ++initCount;
-}
-
-HurdyGurdy& HurdyGurdy::operator=(const HurdyGurdy&)
-{
-    ++initCount;
-    return *this;
-}
-
-HurdyGurdy::HurdyGurdy(HurdyGurdy&&) noexcept
-{
-    ++initCount;
-}
-
-HurdyGurdy& HurdyGurdy::operator=(HurdyGurdy&&) noexcept
-{
-    ++initCount;
-    return *this;
-}
-
-HurdyGurdy::~HurdyGurdy() noexcept
-{
-    if (--initCount == 0 && initialized)
-    {
-        internal::deinitRender2D();
-
-        internal::deinitGpu();
-        internal::deinitPlatform();
-
-        initialized = false;
-    }
-}
 
 struct PlatformApi {
     Span<StringView> (*getPlatformVulkanExtensions)(Arena* arena);
@@ -300,9 +237,7 @@ enum AudioBackend {
 static WindowBackend windowBackend{};
 static AudioBackend audioBackend{};
 
-namespace internal {
-
-bool initPlatform()
+static bool initPlatform()
 {
 #if defined(HG_PLATFORM_LINUX)
     if (x11::loadX11())
@@ -359,7 +294,7 @@ bool initPlatform()
     return true;
 }
 
-void deinitPlatform()
+static void deinitPlatform()
 {
 #if defined(HG_PLATFORM_LINUX)
     if (windowBackend == WindowBackend_x11)
@@ -383,12 +318,76 @@ void deinitPlatform()
     }
 }
 
-Span<StringView> getPlatformVulkanExtensions(Arena* arena)
+static bool initialized = false;
+static u32 initCount = 0;
+
+Maybe<HurdyGurdy> init()
+{
+    if (initialized)
+        return some<HurdyGurdy>();
+
+    if (!initPlatform())
+        goto platformFailed;
+
+    if (!internal::initGpu())
+        goto gpuFailed;
+
+    internal::initRender2D();
+
+    initialized = true;
+    return some<HurdyGurdy>();
+
+gpuFailed:
+    deinitPlatform();
+platformFailed:
+    return {};
+}
+
+HurdyGurdy::HurdyGurdy() noexcept
+{
+    ++initCount;
+}
+
+HurdyGurdy::HurdyGurdy(const HurdyGurdy&)
+{
+    ++initCount;
+}
+
+HurdyGurdy& HurdyGurdy::operator=(const HurdyGurdy&)
+{
+    ++initCount;
+    return *this;
+}
+
+HurdyGurdy::HurdyGurdy(HurdyGurdy&&) noexcept
+{
+    ++initCount;
+}
+
+HurdyGurdy& HurdyGurdy::operator=(HurdyGurdy&&) noexcept
+{
+    ++initCount;
+    return *this;
+}
+
+HurdyGurdy::~HurdyGurdy() noexcept
+{
+    if (--initCount == 0 && initialized)
+    {
+        internal::deinitRender2D();
+
+        internal::deinitGpu();
+
+        deinitPlatform();
+
+        initialized = false;
+    }
+}
+
+Span<StringView> internal::getPlatformVulkanExtensions(Arena* arena)
 {
     return api.getPlatformVulkanExtensions(arena);
 }
-
-} // namespace internal
 
 Span<DisplayInfo> displayInfo()
 {

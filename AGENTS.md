@@ -122,7 +122,6 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `render2d.cpp`
 - `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
 - `dynlib.cpp`
-- `editor.cpp` - example editor app
 - `minimal.cpp` - minimal example app
 - `embed.c` - embedded resources
 - `stb.c` - stb library impl
@@ -138,18 +137,17 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 `src/sdl/` - SDL implementation:
 - `sdl_internal.hpp` - internal header, SdlFuncs struct, extern libsdl/sdlFuncs
 - `sdl.cpp` - init/deinit
-- `loader.cpp` - dynamic SDL library loading, function pointer population
 - `sdl_platform.hpp` - SDL platform abstractions
 - `window.cpp` - Window create, processEvents, swapchain, gpuFrameBegin/End
 - `audio.cpp` - AudioStream/AudioPlayer impl
 
-`src/linux/` - Linux platform implementation:
-- `linux_internal.hpp` - internal header
-- `linux_platform.hpp` - Linux platform abstractions
-- `linux.cpp` - Linux platform init/deinit
-- `loader.cpp` - Linux dynamic library loading
-- `window.cpp` - Linux window management
-- `audio.cpp` - Linux audio (PipeWire)
+`src/pipewire/` - PipeWire audio implementation:
+- `pipewire_platform.hpp` - internal header, audio callback interface
+- `pipewire.cpp` - PipeWire audio init/deinit, stream management
+
+`src/x11/` - X11 window implementation:
+- `x11_platform.hpp` - internal header, window/Vulkan extension interface
+- `x11.cpp` - X11 window management, input handling
 
 `src/shaders/` - GLSL shaders:
 - `render2d.vert`/`render2d.frag` - 2D rendering

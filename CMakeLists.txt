@@ -123,21 +123,17 @@ set(VULKAN_SOURCES
 )
 
 set(SDL_SOURCES
-    src/sdl/loader.cpp
     src/sdl/sdl.cpp
     src/sdl/window.cpp
     src/sdl/audio.cpp
 )
 
 set(X11_SOURCES
-    src/x11/loader.cpp
     src/x11/x11.cpp
-    src/x11/window.cpp
 )
 
 set(PIPEWIRE_SOURCES
-    src/pipewire/loader.cpp
-    src/pipewire/audio.cpp
+    src/pipewire/pipewire.cpp
 )
 
 # Platform detection
@@ -271,7 +267,7 @@ target_include_directories(tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_options(tests PRIVATE ${STRICT_FLAGS} ${TESTS_EXCEPTION_FLAG})
 target_compile_definitions(tests PRIVATE HG_LOGGING=1)
 
-foreach(tgt minimal editor platform_test)
+foreach(tgt minimal platform_test)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
     target_include_directories(${tgt} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
@@ -282,7 +278,7 @@ install(TARGETS hurdygurdy
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS tests minimal editor platform_test
+install(TARGETS tests minimal platform_test
     RUNTIME DESTINATION bin
 )
 

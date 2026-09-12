@@ -3,9 +3,6 @@
 #include "sdl_internal.hpp"
 #include "hg/error.hpp"
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_audio.h>
-
 namespace hg::sdl {
 
 struct AudioState {
@@ -21,26 +18,26 @@ static AudioState audio{};
 
 bool initAudio()
 {
-    audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+    audio.device = sdlFuncs.SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
     if (audio.device == 0)
     {
-        setError("SDL could not open audio device: %s", SDL_GetError());
+        setError("SDL could not open audio device: %s", sdlFuncs.SDL_GetError());
         return false;
     }
 
-    audio.stream = SDL_CreateAudioStream(nullptr, nullptr);
+    audio.stream = sdlFuncs.SDL_CreateAudioStream(nullptr, nullptr);
     if (audio.stream == nullptr)
     {
-        setError("SDL could not open audio stream: %s", SDL_GetError());
-        SDL_CloseAudioDevice(audio.device);
+        setError("SDL could not open audio stream: %s", sdlFuncs.SDL_GetError());
+        sdlFuncs.SDL_CloseAudioDevice(audio.device);
         return false;
     }
 
-    if (!SDL_BindAudioStream(audio.device, audio.stream))
+    if (!sdlFuncs.SDL_BindAudioStream(audio.device, audio.stream))
     {
-        setError("SDL could not bind audio stream to device: %s", SDL_GetError());
-        SDL_DestroyAudioStream(audio.stream);
-        SDL_CloseAudioDevice(audio.device);
+        setError("SDL could not bind audio stream to device: %s", sdlFuncs.SDL_GetError());
+        sdlFuncs.SDL_DestroyAudioStream(audio.stream);
+        sdlFuncs.SDL_CloseAudioDevice(audio.device);
         return false;
     }
 
@@ -49,8 +46,8 @@ bool initAudio()
 
 void deinitAudio()
 {
-    SDL_DestroyAudioStream(audio.stream);
-    SDL_CloseAudioDevice(audio.device);
+    sdlFuncs.SDL_DestroyAudioStream(audio.stream);
+    sdlFuncs.SDL_CloseAudioDevice(audio.device);
 }
 
 static void sdlCallback(
@@ -75,8 +72,8 @@ static void sdlCallback(
             audio.callbackConfig);
     }
 
-    if (!SDL_PutAudioStreamData(stream, buf, additionalAmount))
-        HG_PANIC("SDL could not push audio stream data: %s\n", SDL_GetError());
+    if (!sdlFuncs.SDL_PutAudioStreamData(stream, buf, additionalAmount))
+        HG_PANIC("SDL could not push audio stream data: %s\n", sdlFuncs.SDL_GetError());
 }
 
 void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
@@ -86,15 +83,15 @@ void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig&
     audioSpec.freq = static_cast<int>(preferredConfig.sampleRate);
     audioSpec.channels = static_cast<int>(preferredConfig.channels);
 
-    if (!SDL_SetAudioStreamFormat(audio.stream, &audioSpec, nullptr))
-        HG_PANIC("SDL could not set audio stream format: %s\n", SDL_GetError());
+    if (!sdlFuncs.SDL_SetAudioStreamFormat(audio.stream, &audioSpec, nullptr))
+        HG_PANIC("SDL could not set audio stream format: %s\n", sdlFuncs.SDL_GetError());
 
     audio.callback = callback;
     audio.callbackData = userData;
     audio.callbackConfig = preferredConfig;
 
-    if (!SDL_SetAudioStreamGetCallback(audio.stream, sdlCallback, nullptr))
-        HG_PANIC("SDL could not set audio stream callback: %s\n", SDL_GetError());
+    if (!sdlFuncs.SDL_SetAudioStreamGetCallback(audio.stream, sdlCallback, nullptr))
+        HG_PANIC("SDL could not set audio stream callback: %s\n", sdlFuncs.SDL_GetError());
 }
 
 void unsetAudioCallback()

@@ -9,8 +9,6 @@ namespace hg {
 
 namespace internal {
 
-bool initPlatform();
-void deinitPlatform();
 Span<StringView> getPlatformVulkanExtensions(Arena* arena);
 
 bool initGpu();
