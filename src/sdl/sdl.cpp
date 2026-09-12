@@ -4,11 +4,8 @@
 
 namespace hg::sdl {
 
-bool initPlatform()
+bool initSdl()
 {
-    if (!loadSDL())
-        return false;
-
     if (!SDL_Init(
         SDL_INIT_AUDIO |
         SDL_INIT_VIDEO |
@@ -36,7 +33,7 @@ sdlFailed:
     return false;
 }
 
-void deinitPlatform()
+void deinitSdl()
 {
     deinitAudio();
     windowDeinit();

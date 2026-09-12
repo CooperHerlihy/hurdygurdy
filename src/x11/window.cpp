@@ -1,7 +1,7 @@
 #include "hg/window.hpp"
 
-#include "linux_internal.hpp"
-#include "linux_platform.hpp"
+#include "x11_internal.hpp"
+#include "x11_platform.hpp"
 #include "internal.hpp"
 #include "hg/error.hpp"
 #include "hg/array.hpp"
@@ -21,7 +21,7 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_xlib.h>
 
-namespace hg::linux_backend {
+namespace hg::x11 {
 
 struct WindowData {
     GpuSwapchain swap{};
@@ -553,7 +553,7 @@ static void pollGamepadDevices()
     }
 }
 
-bool windowInit()
+bool initX11()
 {
     windowState = WindowState{};
 
@@ -634,7 +634,7 @@ bool windowInit()
     return true;
 }
 
-void windowDeinit()
+void deinitX11()
 {
     closeGamepads();
 

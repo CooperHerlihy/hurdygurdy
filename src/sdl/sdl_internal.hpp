@@ -5,7 +5,7 @@
 
 namespace hg::sdl {
 
-bool loadSDL();
+bool loadSdl();
 
 bool windowInit();
 void windowDeinit();

@@ -129,11 +129,15 @@ set(SDL_SOURCES
     src/sdl/audio.cpp
 )
 
-set(LINUX_SOURCES
-    src/linux/loader.cpp
-    src/linux/linux.cpp
-    src/linux/window.cpp
-    src/linux/audio.cpp
+set(X11_SOURCES
+    src/x11/loader.cpp
+    src/x11/x11.cpp
+    src/x11/window.cpp
+)
+
+set(PIPEWIRE_SOURCES
+    src/pipewire/loader.cpp
+    src/pipewire/audio.cpp
 )
 
 # Platform detection
@@ -144,7 +148,7 @@ endif()
 # Platform selection
 option(HG_USE_NATIVE_BACKEND "Use native Linux backend instead of SDL" ON)
 if(HG_LINUX)
-    set(PLATFORM_SOURCES ${LINUX_SOURCES} ${SDL_SOURCES})
+    set(PLATFORM_SOURCES ${X11_SOURCES} ${PIPEWIRE_SOURCES} ${SDL_SOURCES})
     set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR} ${LINUX_INCLUDE_DIRS})
 else()
     set(PLATFORM_SOURCES ${SDL_SOURCES})
@@ -154,7 +158,6 @@ endif()
 set(CORE_SOURCES
     src/error.cpp
     src/init.cpp
-    src/platform.cpp
     src/memory.cpp
     src/concurrency.cpp
     src/math.cpp

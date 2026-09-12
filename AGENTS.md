@@ -103,7 +103,6 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 
 `src/` - implementation:
 - `internal.hpp` - internal header (platform/gpu/audio init)
-- `platform.cpp` - platform abstraction
 - `platform_test.cpp` - platform test harness
 - `error.cpp`
 - `init.cpp`

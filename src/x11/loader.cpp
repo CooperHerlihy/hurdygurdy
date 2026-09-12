@@ -1,4 +1,4 @@
-#include "linux_internal.hpp"
+#include "x11_internal.hpp"
 
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"
@@ -10,28 +10,18 @@
 #include <X11/cursorfont.h>
 #include <X11/keysym.h>
 
-#include <pipewire/stream.h>
-#include <pipewire/thread-loop.h>
-#include <pipewire/context.h>
-#include <pipewire/core.h>
-#include <spa/param/audio/format-utils.h>
-#include <spa/param/audio/raw.h>
-
 #include <xkbcommon/xkbcommon.h>
 
 #include <linux/input.h>
 #include <libevdev/libevdev.h>
 
-namespace hg::linux_backend {
+namespace hg::x11 {
 
 static Library libX11{};
 XlibFuncs xlibFuncs{};
 
 static Library libXrandr{};
 XrandrFuncs xrandrFuncs{};
-
-static Library libpipewire{};
-PipeWireFuncs pwFuncs{};
 
 static Library libxkb{};
 XkbFuncs xkbFuncs{};
@@ -119,47 +109,6 @@ static bool loadXrandr()
     return true;
 }
 
-static bool loadPipeWire()
-{
-    Maybe<Library> lib = Library::load("libpipewire-0.3.so.0");
-    if (!lib.has)
-    {
-        setError("Could not load libpipewire");
-        return false;
-    }
-    libpipewire = std::move(*lib);
-
-#define HG_LOAD_PW(name) \
-    *(void**)&pwFuncs.name = libpipewire.findFunction(#name).orElse(nullptr); \
-    if (pwFuncs.name == nullptr) { setError("Could not load " #name); return false; }
-
-    HG_LOAD_PW(pw_init);
-    HG_LOAD_PW(pw_deinit);
-    HG_LOAD_PW(pw_thread_loop_new);
-    HG_LOAD_PW(pw_thread_loop_destroy);
-    HG_LOAD_PW(pw_thread_loop_start);
-    HG_LOAD_PW(pw_thread_loop_stop);
-    HG_LOAD_PW(pw_thread_loop_lock);
-    HG_LOAD_PW(pw_thread_loop_unlock);
-    HG_LOAD_PW(pw_thread_loop_get_loop);
-    HG_LOAD_PW(pw_context_new);
-    HG_LOAD_PW(pw_context_connect);
-    HG_LOAD_PW(pw_context_destroy);
-    HG_LOAD_PW(pw_core_disconnect);
-    HG_LOAD_PW(pw_stream_new);
-    HG_LOAD_PW(pw_stream_destroy);
-    HG_LOAD_PW(pw_stream_connect);
-    HG_LOAD_PW(pw_stream_disconnect);
-    HG_LOAD_PW(pw_stream_dequeue_buffer);
-    HG_LOAD_PW(pw_stream_queue_buffer);
-    HG_LOAD_PW(pw_stream_add_listener);
-    HG_LOAD_PW(pw_stream_update_params);
-
-#undef HG_LOAD_PW
-
-    return true;
-}
-
 static bool loadXkb()
 {
     Maybe<Library> lib = Library::load("libxkbcommon.so.0");
@@ -216,13 +165,11 @@ static bool loadEvdev()
     return true;
 }
 
-bool loadNative()
+bool loadX11()
 {
     if (!loadXlib())
         return false;
     if (!loadXrandr())
-        return false;
-    if (!loadPipeWire())
         return false;
     if (!loadXkb())
         return false;
@@ -232,4 +179,4 @@ bool loadNative()
     return true;
 }
 
-} // namespace hg::linux_backend
+} // namespace hg::x11

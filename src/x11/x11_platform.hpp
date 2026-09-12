@@ -1,18 +1,16 @@
 #pragma once
 
 #include "hg/window.hpp"
-#include "hg/audio.hpp"
 #include "hg/gpu.hpp"
 #include "hg/span.hpp"
 #include "hg/strings.hpp"
 #include "hg/memory.hpp"
 
-namespace hg::linux_backend {
+namespace hg::x11 {
 
-bool loadNative();
-
-bool initPlatform();
-void deinitPlatform();
+bool loadX11();
+bool initX11();
+void deinitX11();
 Span<StringView> getPlatformVulkanExtensions(Arena* arena);
 
 Span<DisplayInfo> displayInfo();
@@ -38,9 +36,6 @@ bool wasButtonReleased(Button key);
 Vec2 mousePos();
 Vec2 mouseDelta();
 Vec2 wheelDelta();
-
-void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig);
-void unsetAudioCallback();
 
 Window windowCreate(const WindowConfig& config);
 void windowDestroy(void* data);
@@ -76,4 +71,4 @@ StringView getClipboardText();
 void setClipboardText(StringView text);
 void openURL(StringView url);
 
-} // namespace hg::linux_backend
+} // namespace hg::x11

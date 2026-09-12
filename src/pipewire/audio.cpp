@@ -1,6 +1,6 @@
 #include "hg/audio.hpp"
 
-#include "linux_internal.hpp"
+#include "pipewire_internal.hpp"
 #include "hg/error.hpp"
 
 #include <pipewire/stream.h>
@@ -10,7 +10,7 @@
 #include <spa/param/audio/format-utils.h>
 #include <spa/param/audio/raw.h>
 
-namespace hg::linux_backend {
+namespace hg::pipewire {
 
 struct AudioState {
     struct pw_thread_loop* threadLoop = nullptr;
@@ -108,7 +108,7 @@ static struct pw_stream_events streamEvents = {
     .trigger_done = nullptr,
 };
 
-bool initAudio()
+bool initPipewire()
 {
     pwFuncs.pw_init(nullptr, nullptr);
 
@@ -140,7 +140,7 @@ bool initAudio()
     return true;
 }
 
-void deinitAudio()
+void deinitPipewire()
 {
     if (audio.threadLoop != nullptr)
     {

@@ -69,7 +69,7 @@ struct SdlFuncs {
 Library libsdl{};
 SdlFuncs sdlFuncs{};
 
-bool loadSDL()
+bool loadSdl()
 {
     Maybe<Library> lib = Library::load(
 #if defined(HG_PLATFORM_LINUX)

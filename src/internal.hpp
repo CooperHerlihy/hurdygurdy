@@ -1,6 +1,5 @@
 #pragma once
 
-#include "hg/macros.hpp"
 #include "hg/span.hpp"
 #include "hg/memory.hpp"
 #include "hg/strings.hpp"
