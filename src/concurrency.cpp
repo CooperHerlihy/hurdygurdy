@@ -71,6 +71,7 @@ struct ThreadWork {
     void (*fn)(void*) = nullptr;
 };
 
+namespace {
 struct ThreadPoolState {
     Array<ThreadWork> work{};
     Array<std::atomic_bool> hasWork{};
@@ -156,6 +157,7 @@ struct ThreadPoolState {
         return true;
     }
 };
+} // namespace
 
 static ThreadPoolState& threadPool()
 {
@@ -214,8 +216,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
     Fence fence{};
     for (u64 i = begin; i < end; i += chunkSize)
     {
-        struct Capture
-        {
+        struct Capture {
             void* data = nullptr;
             void (*fn)(void* data, u64 idx) = nullptr;
             u64 begin = 0;

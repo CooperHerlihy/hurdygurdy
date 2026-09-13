@@ -7,7 +7,7 @@ layout (HgUniformBuffer) uniform ViewProjection {
     mat4 view;
 } uVP[];
 
-struct Vertex {
+struct Instance {
     vec4 color;
     vec2 pos;
     vec2 size;
@@ -19,7 +19,7 @@ struct Vertex {
 };
 
 layout (HgStorageBuffer) readonly buffer Vertices {
-    Vertex verts[];
+    Instance verts[];
 } vertBufs[];
 
 layout (HgStorageBuffer) readonly buffer Indices {
@@ -52,7 +52,7 @@ void main()
         vec2(1.0, 1.0)
     );
 
-    Vertex vert = vertBufs[push.inst].verts[gl_InstanceIndex];
+    Instance vert = vertBufs[push.inst].verts[gl_InstanceIndex];
 
     vOut.color = vert.color;
     vOut.texUV = positions[gl_VertexIndex] * vert.uvSize + vert.uvPos;
