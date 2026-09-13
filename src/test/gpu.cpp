@@ -37,7 +37,7 @@ static GpuAttachment makeColorAtt(GpuView* view, f32 r, f32 g, f32 b, f32 a,
     att.image = view;
     att.loadOp = loadOp;
     att.storeOp = storeOp;
-    att.clearValue.color = Vec4{r, g, b, a};
+    att.clearColor = Vec4{r, g, b, a};
     return att;
 }
 
@@ -47,7 +47,7 @@ static GpuAttachment makeDepthAtt(GpuView* view, f32 clearDepth = 1.0f)
     att.image = view;
     att.loadOp = GpuLoadOp_clear;
     att.storeOp = GpuStoreOp_store;
-    att.clearValue.depthStencil.depth = clearDepth;
+    att.clearDepthStencil.depth = clearDepth;
     return att;
 }
 
@@ -374,7 +374,7 @@ TEST(testGpuViewExtendedConfigSampler)
     colorAtt.image = &outView;
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    colorAtt.clearColor = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
 
     GpuPass pass{};
     pass.colorAttachments = {&colorAtt, 1};
@@ -945,7 +945,7 @@ TEST(testMultiDrawInstancing)
     colorAtt.image = &colorView;
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 0.0f};
+    colorAtt.clearColor = Vec4{0.0f, 0.0f, 0.0f, 0.0f};
 
     GpuPass pass{};
     GpuBuffer* uniformBufs[] = {&instBuf};
@@ -1001,7 +1001,7 @@ TEST(testMultiViewportScissor)
     colorAtt.image = &colorView;
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    colorAtt.clearColor = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
 
     GpuPass pass{};
     pass.colorAttachments = {&colorAtt, 1};
@@ -1144,7 +1144,7 @@ TEST(testRenderToTextureSample)
         colorAtt.image = &firstView;
         colorAtt.loadOp = GpuLoadOp_clear;
         colorAtt.storeOp = GpuStoreOp_store;
-        colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
+        colorAtt.clearColor = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
 
         GpuPass pass{};
         pass.colorAttachments = {&colorAtt, 1};
@@ -1168,7 +1168,7 @@ TEST(testRenderToTextureSample)
         colorAtt.image = &resultView;
         colorAtt.loadOp = GpuLoadOp_clear;
         colorAtt.storeOp = GpuStoreOp_store;
-        colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
+        colorAtt.clearColor = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
 
         GpuPass pass{};
         pass.colorAttachments = {&colorAtt, 1};
@@ -1346,7 +1346,7 @@ TEST(testImageArrayRendering)
     GpuAttachment colorAtt{};
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    colorAtt.clearColor = Vec4{0.0f, 0.0f, 0.0f, 1.0f};
     GpuPass pass{};
     pass.colorAttachments = {&colorAtt, 1};
 
@@ -1457,7 +1457,7 @@ TEST(testUniformBufferVertexShader)
     colorAtt.image = &colorView;
     colorAtt.loadOp = GpuLoadOp_clear;
     colorAtt.storeOp = GpuStoreOp_store;
-    colorAtt.clearValue.color = Vec4{0.0f, 0.0f, 0.0f, 0.0f};
+    colorAtt.clearColor = Vec4{0.0f, 0.0f, 0.0f, 0.0f};
 
     GpuPass pass{};
     GpuBuffer* uniformBufs[] = {&uniformBuf};
