@@ -876,14 +876,6 @@ struct GpuClearValueDepthStencil {
 };
 
 /**
- * The value to clear a render attachment to
- */
-union GpuClearValue {
-    Vec4 color;
-    GpuClearValueDepthStencil depthStencil;
-};
-
-/**
  * A rendering attachment
  */
 struct GpuAttachment {
@@ -902,7 +894,16 @@ struct GpuAttachment {
     /**
      * What to clear the image to if cleared
      */
-    GpuClearValue clearValue = {};
+    union {
+        /**
+         * The color to clear to
+         */
+        Vec4 clearColor;
+        /**
+         * The depth stencil values to clear to
+         */
+        GpuClearValueDepthStencil clearDepthStencil;
+    };
 };
 
 /**

@@ -24,6 +24,8 @@ struct AudioConfig {
 /**
  * The callback used by the audio thread
  *
+ * Note, the audio buffer is interleaved
+ *
  * Parameters
  * - userData The custom user data
  * - audioBuffer The buffer that needs to be filled by the implementation
@@ -41,6 +43,8 @@ void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig&
  * Remove the callback and stop the device
  */
 void unsetAudioCallback();
+
+// audio input : TODO
 
 /**
  * Audio data asset

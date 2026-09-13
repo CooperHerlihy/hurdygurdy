@@ -1401,7 +1401,7 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachment.loadOp = gpuLoadOpToVk(pass.colorAttachments[i].loadOp);
         attachment.storeOp = gpuStoreOpToVk(pass.colorAttachments[i].storeOp);
-        memcpy(&attachment.clearValue, &pass.colorAttachments[i].clearValue, sizeof(VkClearValue));
+        memcpy(&attachment.clearValue, &pass.colorAttachments[i].clearColor, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo depthAttachment{};
@@ -1412,7 +1412,7 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = gpuLoadOpToVk(pass.depthAttachment->loadOp);
         depthAttachment.storeOp = gpuStoreOpToVk(pass.depthAttachment->storeOp);
-        memcpy(&depthAttachment.clearValue, &pass.depthAttachment->clearValue, sizeof(VkClearValue));
+        memcpy(&depthAttachment.clearValue, &pass.depthAttachment->clearColor, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo stencilAttachment{};
@@ -1423,7 +1423,7 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         stencilAttachment.loadOp = gpuLoadOpToVk(pass.stencilAttachment->loadOp);
         stencilAttachment.storeOp = gpuStoreOpToVk(pass.stencilAttachment->storeOp);
-        memcpy(&stencilAttachment.clearValue, &pass.stencilAttachment->clearValue, sizeof(VkClearValue));
+        memcpy(&stencilAttachment.clearValue, &pass.stencilAttachment->clearColor, sizeof(VkClearValue));
     }
 
     u32 width, height;
