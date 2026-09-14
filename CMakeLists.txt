@@ -48,6 +48,9 @@ set(VulkanHeaders_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/Vulkan-Headers/
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(HG_LINUX TRUE)
 endif()
+if(WIN32)
+    set(HG_WINDOWS TRUE)
+endif()
 
 # Find or build SDL
 find_package(SDL3 QUIET)
@@ -173,11 +176,20 @@ set(PIPEWIRE_SOURCES
     src/pipewire/pipewire.cpp
 )
 
+set(WIN32_SOURCES
+    src/win32/win32.cpp
+    src/win32/window.cpp
+    src/win32/audio.cpp
+)
+
 # Platform selection
 option(HG_USE_NATIVE_BACKEND "Use native Linux backend instead of SDL" ON)
 if(HG_LINUX)
     set(PLATFORM_SOURCES ${WAYLAND_SOURCES} ${X11_SOURCES} ${PIPEWIRE_SOURCES} ${SDL_SOURCES})
     set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR} ${LINUX_INCLUDE_DIRS})
+elseif(HG_WINDOWS)
+    set(PLATFORM_SOURCES ${WIN32_SOURCES} ${SDL_SOURCES})
+    set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR})
 else()
     set(PLATFORM_SOURCES ${SDL_SOURCES})
     set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR})
@@ -236,6 +248,8 @@ if(HG_LINUX)
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/wayland/src
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/wayland/egl
     )
+elseif(HG_WINDOWS)
+    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_WIN32_BACKEND=1)
 endif()
 
 target_compile_options(hurdygurdy_core PRIVATE /EHs-c- ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
@@ -261,6 +275,9 @@ target_compile_options(hurdygurdy_misc PRIVATE /EHs-c- ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy STATIC)
 target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_misc)
+if(HG_WINDOWS)
+    target_link_libraries(hurdygurdy PRIVATE ole32 xinput dwmapi)
+endif()
 
 add_executable(tests
     src/test/tests.cpp

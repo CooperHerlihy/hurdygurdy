@@ -10,6 +10,10 @@
 #include "pipewire/pipewire_platform.hpp"
 #endif
 
+#if defined(HG_PLATFORM_WINDOWS)
+#include "win32/win32_platform.hpp"
+#endif
+
 #include "sdl/sdl_platform.hpp"
 
 namespace hg {
@@ -235,17 +239,77 @@ static void fillWayland()
 
 #endif
 
+#if defined(HG_PLATFORM_WINDOWS)
+
+static void fillWin32()
+{
+    api.getPlatformVulkanExtensions = win32::getPlatformVulkanExtensions;
+
+    api.displayInfo = win32::displayInfo;
+    api.setCursor = win32::setCursor;
+    api.showCursor = win32::showCursor;
+    api.getClipboardText = win32::getClipboardText;
+    api.setClipboardText = win32::setClipboardText;
+    api.openURL = win32::openURL;
+    api.processEvents = win32::processEvents;
+    api.getEvents = win32::getEvents;
+    api.wasQuit = win32::wasQuit;
+
+    api.isButtonDown = win32::isButtonDown;
+    api.wasButtonPressed = win32::wasButtonPressed;
+    api.wasButtonReleased = win32::wasButtonReleased;
+    api.mousePos = win32::mousePos;
+    api.mouseDelta = win32::mouseDelta;
+    api.wheelDelta = win32::wheelDelta;
+
+    api.connectedGamepadCount = win32::connectedGamepadCount;
+    api.isGamepadConnected = win32::isGamepadConnected;
+    api.isGamepadButtonDown = win32::isGamepadButtonDown;
+    api.wasGamepadButtonPressed = win32::wasGamepadButtonPressed;
+    api.wasGamepadButtonReleased = win32::wasGamepadButtonReleased;
+    api.gamepadLeftStick = win32::gamepadLeftStick;
+    api.gamepadRightStick = win32::gamepadRightStick;
+    api.gamepadLeftTrigger = win32::gamepadLeftTrigger;
+    api.gamepadRightTrigger = win32::gamepadRightTrigger;
+
+    api.setAudioCallback = win32::setAudioCallback;
+    api.unsetAudioCallback = win32::unsetAudioCallback;
+
+    api.windowCreate = win32::windowCreate;
+    api.windowDestroy = win32::windowDestroy;
+    api.windowSwapchain = win32::windowSwapchain;
+    api.windowSetTitle = win32::windowSetTitle;
+    api.windowGetSize = win32::windowGetSize;
+    api.windowSetFullscreen = win32::windowSetFullscreen;
+    api.windowIsFocused = win32::windowIsFocused;
+    api.windowWasClosed = win32::windowWasClosed;
+    api.windowWasResized = win32::windowWasResized;
+    api.windowWasFocusGained = win32::windowWasFocusGained;
+    api.windowWasFocusLost = win32::windowWasFocusLost;
+    api.windowMaximize = win32::windowMaximize;
+    api.windowMinimize = win32::windowMinimize;
+    api.windowRestore = win32::windowRestore;
+    api.windowSetFullscreen = win32::windowSetFullscreen;
+    api.windowEvents = win32::windowEvents;
+    api.windowMousePos = win32::windowMousePos;
+    api.windowMouseDelta = win32::windowMouseDelta;
+}
+
+#endif
+
 enum WindowBackend {
     WindowBackend_none = 0,
     WindowBackend_sdl,
     WindowBackend_x11,
     WindowBackend_wayland,
+    WindowBackend_win32,
 };
 
 enum AudioBackend {
     AudioBackend_none = 0,
     AudioBackend_sdl,
     AudioBackend_pipewire,
+    AudioBackend_win32,
 };
 
 static WindowBackend windowBackend{};
@@ -253,60 +317,52 @@ static AudioBackend audioBackend{};
 
 static bool initPlatform()
 {
-#if defined(HG_PLATFORM_LINUX)
-    if (pipewire::loadPipeWire())
-        audioBackend = AudioBackend_pipewire;
-
-    // Try Wayland first
-    if (wayland::loadWayland())
+#if defined(HG_PLATFORM_WINDOWS)
+    if (win32::loadWin32())
+    {
+        fillWin32();
+        if (win32::initWin32())
+        {
+            windowBackend = WindowBackend_win32;
+            audioBackend = AudioBackend_win32;
+        }
+    }
+#elif defined(HG_PLATFORM_LINUX)
+    if (windowBackend == WindowBackend_none && wayland::loadWayland())
     {
         fillWayland();
-        fillPipeWire();
         if (wayland::initWayland())
-        {
             windowBackend = WindowBackend_wayland;
-            if (audioBackend == AudioBackend_pipewire && pipewire::initPipewire())
-            {
-                return true;
-            }
-            wayland::deinitWayland();
-            windowBackend = WindowBackend_none;
-        }
     }
 
-    // Fall back to X11
-    if (x11::loadX11())
+    if (windowBackend == WindowBackend_none && x11::loadX11())
     {
         fillX11();
-        fillPipeWire();
         if (x11::initX11())
-        {
             windowBackend = WindowBackend_x11;
-            if (audioBackend == AudioBackend_pipewire && pipewire::initPipewire())
-            {
-                return true;
-            }
-            x11::deinitX11();
-            windowBackend = WindowBackend_none;
-        }
     }
 
-    setError("");
+    if (audioBackend == AudioBackend_none && pipewire::loadPipeWire())
+    {
+        fillPipeWire();
+        if (pipewire::initPipewire())
+            audioBackend = AudioBackend_pipewire;
+    }
 #endif
+    if ((windowBackend == WindowBackend_none || audioBackend == AudioBackend_none) && sdl::loadSdl())
+    {
+        fillSdl();
+        if (sdl::initSdl())
+        {
+            windowBackend = WindowBackend_sdl;
+            audioBackend = AudioBackend_sdl;
+        }
+    }
 
     if (windowBackend == WindowBackend_none || audioBackend == AudioBackend_none)
     {
-        if (!sdl::loadSdl())
-        {
-            setError("Could not load any platform library");
-            return false;
-        }
-        fillSdl();
-        if (!sdl::initSdl())
-        {
-            setError("Could not load any platform library");
-            return false;
-        }
+        setError("Could not load any platform library");
+        return false;
     }
 
     return true;
@@ -334,12 +390,23 @@ static void deinitPlatform()
     }
 #endif
 
+#if defined(HG_PLATFORM_WINDOWS)
+    if (windowBackend == WindowBackend_win32 || audioBackend == AudioBackend_win32)
+    {
+        win32::deinitWin32();
+        windowBackend = WindowBackend_none;
+        audioBackend = AudioBackend_none;
+    }
+#endif
+
+#if !defined(HG_PLATFORM_WINDOWS)
     if (windowBackend == WindowBackend_sdl || audioBackend == AudioBackend_sdl)
     {
         sdl::deinitSdl();
         windowBackend = WindowBackend_none;
         audioBackend = AudioBackend_none;
     }
+#endif
 }
 
 static bool initialized = false;
