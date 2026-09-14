@@ -340,20 +340,14 @@ static bool initPlatform()
     {
         fillWayland();
         if (wayland::initWayland())
-        {
             windowBackend = WindowBackend_wayland;
-            HG_LOG("Using Wayland\n");
-        }
     }
 
     if (windowBackend == WindowBackend_none && x11::loadX11())
     {
         fillX11();
         if (x11::initX11())
-        {
             windowBackend = WindowBackend_x11;
-            HG_LOG("Using X11\n");
-        }
     }
 
     if (audioBackend == AudioBackend_none && pipewire::loadPipeWire())
