@@ -703,7 +703,7 @@ bool initX11()
         return false;
     }
 
-    windowState.screen = windowState.screen;
+    windowState.screen = xlibFuncs.XDefaultScreen(windowState.display);
     windowState.root = xlibFuncs.XRootWindow(windowState.display, windowState.screen);
 
     // Create atoms

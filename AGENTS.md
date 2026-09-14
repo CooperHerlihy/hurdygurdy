@@ -152,14 +152,12 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 `src/wayland/` - Wayland window implementation:
 - `wayland_platform.hpp` - internal header, window/Vulkan extension interface
 - `wayland.cpp` - Wayland window management, input handling
-- `wayland-client-protocol.h` - generated core Wayland protocol client header (committed, do not regenerate)
-- `wayland-client-protocol.c` - generated core Wayland protocol interface tables (committed, do not regenerate)
-- `xdg-shell-client-protocol.h` - generated xdg-shell protocol client header (committed, do not regenerate)
-- `xdg-shell-protocol.c` - generated xdg-shell protocol interface tables (committed, do not regenerate)
+- `wayland-protocol.h` - hand-written Wayland protocol types, listener structs, interface externs
+- `wayland-protocol.c` - hand-written Wayland protocol interface data tables
 - `wayland-version.h` - generated version header (committed, do not regenerate)
 
-Note: the generated protocol headers call through the `wlFuncs` function pointer struct (see top of
-`wayland.cpp`). The `wl_*_interface` data globals come from `wayland-client-protocol.c`.
+Note: the protocol functions in `wayland.cpp` call through the `wlFuncs` function pointer struct
+(see top of `wayland.cpp`). The `wl_*_interface` data globals come from `wayland-protocol.c`.
 
 `src/shaders/` - GLSL shaders:
 - `render2d.vert`/`render2d.frag` - 2D rendering

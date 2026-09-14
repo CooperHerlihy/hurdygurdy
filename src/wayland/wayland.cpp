@@ -19,7 +19,6 @@
 #include <poll.h>
 
 #include <wayland-client-core.h>
-#include <wayland-egl-core.h>
 
 #include <xkbcommon/xkbcommon.h>
 
@@ -55,8 +54,351 @@ struct WaylandFuncs {
 
 static WaylandFuncs wlFuncs{};
 
-#include "wayland-client-protocol.h"
-#include "xdg-shell-client-protocol.h"
+#include "wayland-protocol.h"
+
+extern "C" {
+
+static struct wl_registry*
+wl_display_get_registry(struct wl_display* display)
+{
+    return (struct wl_registry*)wlFuncs.wl_proxy_marshal_flags(
+        (struct wl_proxy*)display, WL_DISPLAY_GET_REGISTRY,
+        &wl_registry_interface, 1, 0);
+}
+
+static int
+wl_keyboard_add_listener(struct wl_keyboard* keyboard,
+    const struct wl_keyboard_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)keyboard,
+        (void(**)(void))listener, data);
+}
+
+static void
+wl_keyboard_destroy(struct wl_keyboard* keyboard)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)keyboard);
+}
+
+static int
+wl_pointer_add_listener(struct wl_pointer* pointer,
+    const struct wl_pointer_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)pointer,
+        (void(**)(void))listener, data);
+}
+
+static void
+wl_pointer_destroy(struct wl_pointer* pointer)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)pointer);
+}
+
+static int
+wl_seat_add_listener(struct wl_seat* seat,
+    const struct wl_seat_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)seat,
+        (void(**)(void))listener, data);
+}
+
+static struct wl_keyboard*
+wl_seat_get_keyboard(struct wl_seat* seat)
+{
+    return (struct wl_keyboard*)wlFuncs.wl_proxy_marshal_flags(
+        (struct wl_proxy*)seat, WL_SEAT_GET_KEYBOARD,
+        &wl_keyboard_interface,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)seat), 0, NULL);
+}
+
+static struct wl_pointer*
+wl_seat_get_pointer(struct wl_seat* seat)
+{
+    return (struct wl_pointer*)wlFuncs.wl_proxy_marshal_flags(
+        (struct wl_proxy*)seat, WL_SEAT_GET_POINTER,
+        &wl_pointer_interface,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)seat), 0, NULL);
+}
+
+static void
+wl_seat_destroy(struct wl_seat* seat)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)seat);
+}
+
+static int
+wl_output_add_listener(struct wl_output* output,
+    const struct wl_output_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)output,
+        (void(**)(void))listener, data);
+}
+
+static void
+wl_output_destroy(struct wl_output* output)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)output);
+}
+
+static struct wl_surface*
+wl_compositor_create_surface(struct wl_compositor* compositor)
+{
+    return (struct wl_surface*)wlFuncs.wl_proxy_marshal_flags(
+        (struct wl_proxy*)compositor, WL_COMPOSITOR_CREATE_SURFACE,
+        &wl_surface_interface,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)compositor), 0, NULL);
+}
+
+static void
+wl_compositor_destroy(struct wl_compositor* compositor)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)compositor);
+}
+
+static void
+wl_shm_destroy(struct wl_shm* shm)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)shm);
+}
+
+static void
+wl_surface_commit(struct wl_surface* surface)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)surface, WL_SURFACE_COMMIT, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)surface), 0);
+}
+
+static void
+wl_surface_destroy(struct wl_surface* surface)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)surface);
+}
+
+static struct wl_data_device*
+wl_data_device_manager_get_data_device(struct wl_data_device_manager* manager,
+    struct wl_seat* seat)
+{
+    return (struct wl_data_device*)wlFuncs.wl_proxy_marshal_flags(
+        (struct wl_proxy*)manager, WL_DATA_DEVICE_MANAGER_GET_DATA_DEVICE,
+        &wl_data_device_interface,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)manager), 0,
+        NULL, (struct wl_proxy*)seat);
+}
+
+static struct wl_data_source*
+wl_data_device_manager_create_data_source(struct wl_data_device_manager* manager)
+{
+    return (struct wl_data_source*)wlFuncs.wl_proxy_marshal_flags(
+        (struct wl_proxy*)manager, WL_DATA_DEVICE_MANAGER_CREATE_DATA_SOURCE,
+        &wl_data_source_interface,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)manager), 0, NULL);
+}
+
+static void
+wl_data_device_manager_destroy(struct wl_data_device_manager* manager)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)manager);
+}
+
+static int
+wl_data_device_add_listener(struct wl_data_device* device,
+    const struct wl_data_device_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)device,
+        (void(**)(void))listener, data);
+}
+
+static void
+wl_data_device_destroy(struct wl_data_device* device)
+{
+    wlFuncs.wl_proxy_destroy((struct wl_proxy*)device);
+}
+
+static void
+wl_data_device_set_selection(struct wl_data_device* device,
+    struct wl_data_source* source, uint32_t serial)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)device, WL_DATA_DEVICE_SET_SELECTION, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)device), 0,
+        (struct wl_proxy*)source, serial);
+}
+
+static int
+wl_data_offer_add_listener(struct wl_data_offer* offer,
+    const struct wl_data_offer_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)offer,
+        (void(**)(void))listener, data);
+}
+
+static void
+wl_data_offer_accept(struct wl_data_offer* offer, uint32_t serial,
+    const char* mimeType)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)offer, WL_DATA_OFFER_ACCEPT, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)offer), 0, serial, mimeType);
+}
+
+static void
+wl_data_offer_receive(struct wl_data_offer* offer, const char* mimeType, int32_t fd)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)offer, WL_DATA_OFFER_RECEIVE, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)offer), 0, mimeType, fd);
+}
+
+static void
+wl_data_offer_destroy(struct wl_data_offer* offer)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)offer, WL_DATA_OFFER_DESTROY, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)offer), 0);
+}
+
+static void
+wl_data_source_offer(struct wl_data_source* source, const char* mimeType)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)source, WL_DATA_SOURCE_OFFER, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)source), 0, mimeType);
+}
+
+static int
+wl_data_source_add_listener(struct wl_data_source* source,
+    const struct wl_data_source_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)source,
+        (void(**)(void))listener, data);
+}
+
+static void
+wl_data_source_destroy(struct wl_data_source* source)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)source, WL_DATA_SOURCE_DESTROY, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)source), 0);
+}
+
+static int
+xdg_wm_base_add_listener(struct xdg_wm_base* xdgWmBase,
+    const struct xdg_wm_base_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)xdgWmBase,
+        (void(**)(void))listener, data);
+}
+
+static struct xdg_surface*
+xdg_wm_base_get_xdg_surface(struct xdg_wm_base* xdgWmBase,
+    struct wl_surface* surface)
+{
+    return (struct xdg_surface*)wlFuncs.wl_proxy_marshal_flags(
+        (struct wl_proxy*)xdgWmBase, XDG_WM_BASE_GET_XDG_SURFACE,
+        &xdg_surface_interface,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgWmBase), 0,
+        NULL, (struct wl_proxy*)surface);
+}
+
+static void
+xdg_wm_base_pong(struct xdg_wm_base* xdgWmBase, uint32_t serial)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)xdgWmBase, XDG_WM_BASE_PONG, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgWmBase), 0, serial);
+}
+
+static void
+xdg_wm_base_destroy(struct xdg_wm_base* xdgWmBase)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)xdgWmBase, XDG_WM_BASE_DESTROY, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgWmBase), 0);
+}
+
+static int
+xdg_surface_add_listener(struct xdg_surface* xdgSurface,
+    const struct xdg_surface_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)xdgSurface,
+        (void(**)(void))listener, data);
+}
+
+static struct xdg_toplevel*
+xdg_surface_get_toplevel(struct xdg_surface* xdgSurface)
+{
+    return (struct xdg_toplevel*)wlFuncs.wl_proxy_marshal_flags(
+        (struct wl_proxy*)xdgSurface, XDG_SURFACE_GET_TOPLEVEL,
+        &xdg_toplevel_interface,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgSurface), 0, NULL);
+}
+
+static void
+xdg_surface_ack_configure(struct xdg_surface* xdgSurface, uint32_t serial)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)xdgSurface, XDG_SURFACE_ACK_CONFIGURE, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgSurface), 0, serial);
+}
+
+static void
+xdg_surface_destroy(struct xdg_surface* xdgSurface)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)xdgSurface, XDG_SURFACE_DESTROY, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgSurface), 0);
+}
+
+static int
+xdg_toplevel_add_listener(struct xdg_toplevel* toplevel,
+    const struct xdg_toplevel_listener* listener, void* data)
+{
+    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)toplevel,
+        (void(**)(void))listener, data);
+}
+
+static void
+xdg_toplevel_set_title(struct xdg_toplevel* toplevel, const char* title)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_SET_TITLE, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0, title);
+}
+
+static void
+xdg_toplevel_set_maximized(struct xdg_toplevel* toplevel)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_SET_MAXIMIZED, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
+}
+
+static void
+xdg_toplevel_unset_maximized(struct xdg_toplevel* toplevel)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_UNSET_MAXIMIZED, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
+}
+
+static void
+xdg_toplevel_set_fullscreen(struct xdg_toplevel* toplevel,
+    struct wl_output* output)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_SET_FULLSCREEN, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0,
+        (struct wl_proxy*)output);
+}
+
+static void
+xdg_toplevel_unset_fullscreen(struct xdg_toplevel* toplevel)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_UNSET_FULLSCREEN, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
+}
+
+static void
+xdg_toplevel_set_minimized(struct xdg_toplevel* toplevel)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_SET_MINIMIZED, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
+}
+
+static void
+xdg_toplevel_destroy(struct xdg_toplevel* toplevel)
+{
+    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_DESTROY, NULL,
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
+}
+
+} // extern "C"
 
 namespace hg::wayland {
 
@@ -66,12 +408,6 @@ static u64 surfaceKey(struct wl_surface* surface)
 }
 
 #define HG_WL_FUNC(name) decltype(&::name) name = nullptr
-
-struct WaylandEglFuncs {
-    HG_WL_FUNC(wl_egl_window_create);
-    HG_WL_FUNC(wl_egl_window_destroy);
-    HG_WL_FUNC(wl_egl_window_resize);
-};
 
 struct XkbFuncs {
     HG_WL_FUNC(xkb_context_new);
@@ -100,9 +436,6 @@ struct EvdevFuncs {
 #undef HG_WL_FUNC
 
 static Library libWayland{};
-
-static Library libWaylandEgl{};
-static WaylandEglFuncs wlEglFuncs{};
 
 static Library libxkb{};
 static XkbFuncs xkbFuncs{};
@@ -143,29 +476,6 @@ static bool loadLibwayland()
     HG_LOAD_WL(wl_proxy_get_version);
 
 #undef HG_LOAD_WL
-
-    return true;
-}
-
-static bool loadLibwaylandEgl()
-{
-    Maybe<Library> lib = Library::load("libwayland-egl.so.1");
-    if (!lib.has)
-    {
-        setError("Could not load libwayland-egl");
-        return false;
-    }
-    libWaylandEgl = std::move(*lib);
-
-#define HG_LOAD_WL_EGL(name) \
-    *(void**)&wlEglFuncs.name = libWaylandEgl.loadSymbol(#name).orElse(nullptr); \
-    if (wlEglFuncs.name == nullptr) { setError("Could not load " #name); return false; }
-
-    HG_LOAD_WL_EGL(wl_egl_window_create);
-    HG_LOAD_WL_EGL(wl_egl_window_destroy);
-    HG_LOAD_WL_EGL(wl_egl_window_resize);
-
-#undef HG_LOAD_WL_EGL
 
     return true;
 }
@@ -232,8 +542,6 @@ bool loadWayland()
 {
     if (!loadLibwayland())
         return false;
-    if (!loadLibwaylandEgl())
-        return false;
     if (!loadXkb())
         return false;
     if (!loadEvdev())
@@ -256,7 +564,6 @@ struct WindowData {
     struct wl_surface* wlSurface = nullptr;
     struct xdg_surface* xdgSurface = nullptr;
     struct xdg_toplevel* xdgToplevel = nullptr;
-    struct wl_egl_window* eglWindow = nullptr;
 
     Array<Event> events{};
     Vec2 mouse{};
@@ -945,7 +1252,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &wl_compositor_interface, version, 0,
-                name, wl_compositor_interface.name, version, 0));
+                name, wl_compositor_interface.name, version, NULL));
     }
     else if (strcmp(interface, wl_shm_interface.name) == 0)
     {
@@ -953,7 +1260,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &wl_shm_interface, version, 0,
-                name, wl_shm_interface.name, version, 0));
+                name, wl_shm_interface.name, version, NULL));
     }
     else if (strcmp(interface, xdg_wm_base_interface.name) == 0)
     {
@@ -961,7 +1268,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &xdg_wm_base_interface, version, 0,
-                name, xdg_wm_base_interface.name, version, 0));
+                name, xdg_wm_base_interface.name, version, NULL));
     }
     else if (strcmp(interface, wl_seat_interface.name) == 0)
     {
@@ -969,7 +1276,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &wl_seat_interface, version, 0,
-                name, wl_seat_interface.name, version, 0));
+                name, wl_seat_interface.name, version, NULL));
         wl_seat_add_listener(windowState.seat, &seatListener, nullptr);
     }
     else if (strcmp(interface, wl_output_interface.name) == 0)
@@ -980,7 +1287,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
                 wlFuncs.wl_proxy_marshal_flags(
                     reinterpret_cast<struct wl_proxy*>(registry),
                     WL_REGISTRY_BIND, &wl_output_interface, version, 0,
-                    name, wl_output_interface.name, version, 0));
+                    name, wl_output_interface.name, version, NULL));
             windowState.outputs[windowState.outputCount++] = output;
             wl_output_add_listener(output, &outputListener, nullptr);
         }
@@ -991,7 +1298,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &wl_data_device_manager_interface, version, 0,
-                name, wl_data_device_manager_interface.name, version, 0));
+                name, wl_data_device_manager_interface.name, version, NULL));
     }
 }
 
@@ -1047,9 +1354,6 @@ static void xdgToplevelConfigure(void* data, struct xdg_toplevel* toplevel,
             window->wasResized = true;
             window->width = newW;
             window->height = newH;
-
-            if (window->eglWindow != nullptr)
-                wlEglFuncs.wl_egl_window_resize(window->eglWindow, width, height, 0, 0);
 
             if (window->swap.data != nullptr)
                 window->swap.resize(newW, newH);
@@ -1531,8 +1835,6 @@ WindowData::~WindowData() noexcept
             xdg_toplevel_destroy(xdgToplevel);
         if (xdgSurface != nullptr)
             xdg_surface_destroy(xdgSurface);
-        if (eglWindow != nullptr)
-            wlEglFuncs.wl_egl_window_destroy(eglWindow);
         if (wlSurface != nullptr)
             wl_surface_destroy(wlSurface);
     }
@@ -1543,7 +1845,6 @@ WindowData::WindowData(WindowData&& other) noexcept
     , wlSurface{std::exchange(other.wlSurface, nullptr)}
     , xdgSurface{std::exchange(other.xdgSurface, nullptr)}
     , xdgToplevel{std::exchange(other.xdgToplevel, nullptr)}
-    , eglWindow{std::exchange(other.eglWindow, nullptr)}
     , events{std::exchange(other.events, Array<Event>{})}
     , mouse{other.mouse}
     , width{other.width}
@@ -1615,7 +1916,6 @@ static void readClipboard()
 
         if (windowState.pendingOffer != nullptr)
         {
-            wl_data_offer_finish(windowState.pendingOffer);
             wl_data_offer_destroy(windowState.pendingOffer);
             windowState.pendingOffer = nullptr;
         }
@@ -1876,8 +2176,6 @@ Window windowCreate(const WindowConfig& config)
     wd->width = 800;
     wd->height = 600;
 
-    wd->eglWindow = wlEglFuncs.wl_egl_window_create(wd->wlSurface, 800, 600);
-
     windowState.windows.add(surfaceKey(wd->wlSurface), wd);
 
     wl_surface_commit(wd->wlSurface);
@@ -1906,8 +2204,6 @@ Window windowCreate(const WindowConfig& config)
         windowState.windows.remove(surfaceKey(wd->wlSurface));
         xdg_toplevel_destroy(wd->xdgToplevel);
         xdg_surface_destroy(wd->xdgSurface);
-        if (wd->eglWindow != nullptr)
-            wlEglFuncs.wl_egl_window_destroy(wd->eglWindow);
         wl_surface_destroy(wd->wlSurface);
         wd->wlSurface = nullptr;
         wd->~WindowData();

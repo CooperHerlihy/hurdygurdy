@@ -65,7 +65,6 @@
 
                 LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
                     vulkan-loader
-                    sdl3
                     libx11
                     libxrandr
                     pipewire
@@ -91,13 +90,6 @@
                 repo = "imgui";
                 rev = "934c6a5f5ef2355d6df25395d555cb71f790c4e9";
                 hash = "sha256-7lxmvUQvEDjYlSRsTxk99QTscO4EhS3aDGoIRrFeHyI=";
-            };
-
-            sdl3-src = pkgs.fetchFromGitHub {
-                owner = "libsdl-org";
-                repo = "SDL";
-                rev = "release-3.4.10";
-                hash = "sha256-6Dph2eLiJUmpQzPWe8EuY5LrWhrFwde2f2dwfgCcWNw=";
             };
 
             xorgproto-src = pkgs.fetchFromGitLab {
@@ -187,13 +179,12 @@
                 cmakeBuildType = "Release";
 
                 preConfigure = ''
-                    rm -rf vendor/imgui vendor/Vulkan-Headers vendor/SDL
+                    rm -rf vendor/imgui vendor/Vulkan-Headers
                     rm -rf vendor/xorgproto vendor/libX11 vendor/libXrandr vendor/libXrender
                     rm -rf vendor/pipewire vendor/libxkbcommon vendor/libevdev
                     rm -rf vendor/wayland vendor/wayland-protocols
                     cp -r ${vulkan-headers-src} vendor/Vulkan-Headers
                     cp -r ${imgui-src} vendor/imgui
-                    cp -r ${sdl3-src} vendor/SDL
                     cp -r ${xorgproto-src} vendor/xorgproto
                     cp -r ${libX11-src} vendor/libX11
                     cp -r ${libXrandr-src} vendor/libXrandr
@@ -205,7 +196,6 @@
                     cp -r ${wayland-protocols-src} vendor/wayland-protocols
                     chmod -R u+w vendor/Vulkan-Headers
                     chmod -R u+w vendor/imgui
-                    chmod -R u+w vendor/SDL
                     chmod -R u+w vendor/xorgproto
                     chmod -R u+w vendor/libX11
                     chmod -R u+w vendor/libXrandr
@@ -220,7 +210,6 @@
                 postFixup = ''
                     for bin in $out/bin/*; do
                         patchelf --add-rpath ${pkgs.vulkan-loader}/lib $bin
-                        patchelf --add-rpath ${pkgs.sdl3}/lib $bin  # fallback
                         patchelf --add-rpath ${pkgs.libx11}/lib $bin
                         patchelf --add-rpath ${pkgs.libxrandr}/lib $bin
                         patchelf --add-rpath ${pkgs.pipewire}/lib $bin

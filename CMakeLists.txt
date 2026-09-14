@@ -16,10 +16,6 @@ endif()
 
 if(MSVC)
     add_compile_options(/permissive- /GR- /D_CRT_SECURE_NO_WARNINGS)
-    # C4702 fires spuriously in the Asset<T>::Asset constructor initializer on
-    # optimized builds (MSVC proves pool.alloc() never returns null, then warns
-    # about the "unreachable" else-branch that doesn't exist)
-    # C4127 flags conditionals which could be compile time, but are at runtime
     add_compile_options(/wd4702 /wd4127)
     set(STRICT_FLAGS /W4 /WX)
     set(TESTS_EXCEPTION_FLAG /EHsc)
@@ -52,35 +48,32 @@ if(WIN32)
     set(HG_WINDOWS TRUE)
 endif()
 
-# Find or build SDL
-find_package(SDL3 QUIET)
-if(SDL3_FOUND)
-    message(STATUS "Using system SDL3")
-    set(SDL_INCLUDE_DIR "")  # system SDL provides its own include dirs via target
-else()
-    set(SDL_SHARED ON CACHE BOOL "" FORCE)
-    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
-    set(SDL_TEST OFF CACHE BOOL "" FORCE)
-    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/CMakeLists.txt")
-        message(STATUS "Using vendored SDL3")
-        add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
+option(HG_USE_SDL "Use SDL backend" OFF)
+if(HG_USE_SDL)
+    find_package(SDL3 QUIET)
+    if(SDL3_FOUND)
+        message(STATUS "Using system SDL3")
+        set(SDL_INCLUDE_DIR "")
     else()
-        message(STATUS "SDL3 not found, fetching from GitHub")
-        include(FetchContent)
-        FetchContent_Declare(
-            SDL
-            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-            GIT_TAG release-3.4.10
-        )
-        FetchContent_MakeAvailable(SDL)
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+        set(SDL_TEST OFF CACHE BOOL "" FORCE)
+        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/CMakeLists.txt")
+            message(STATUS "Using vendored SDL3")
+            add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
+        else()
+            message(STATUS "SDL3 not found, fetching from GitHub")
+            include(FetchContent)
+            FetchContent_Declare(SDL
+                GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+                GIT_TAG release-3.4.10
+            )
+            FetchContent_MakeAvailable(SDL)
+        endif()
+        set(SDL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
     endif()
-    set(SDL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
 endif()
-
-# Linux backend headers (added as SYSTEM includes below to suppress warnings)
-set(LINUX_INCLUDE_DIRS
-)
 
 set(INCLUDE_DIRS
     ${CMAKE_CURRENT_BINARY_DIR}
@@ -92,6 +85,8 @@ set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends
     ${SDL_INCLUDE_DIR}
 )
+
+# Shaders
 
 add_executable(embed src/embed.c)
 
@@ -126,9 +121,7 @@ set(SHADER_HEADERS)
 foreach(shader ${SHADERS})
     set(spv ${CMAKE_CURRENT_BINARY_DIR}/${shader}.spv)
     set(spv_h ${CMAKE_CURRENT_BINARY_DIR}/${shader}.spv.h)
-
     get_filename_component(spv_dir ${spv} DIRECTORY)
-
     add_custom_command(
         OUTPUT ${spv_h}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${spv_dir}
@@ -139,16 +132,14 @@ foreach(shader ${SHADERS})
             ${CMAKE_CURRENT_SOURCE_DIR}/include/hurdygurdy.glsl
         COMMENT "Compiling ${shader}"
     )
-
     list(APPEND SHADER_HEADERS ${spv_h})
 endforeach()
 
 add_custom_target(shaders DEPENDS ${SHADER_HEADERS})
 
+# Sources
+
 file(GLOB IMGUI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/*.cpp)
-set(IMGUI_BACKEND_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_vulkan.cpp
-)
 
 set(VULKAN_SOURCES
     src/vulkan/loader.cpp
@@ -156,43 +147,28 @@ set(VULKAN_SOURCES
     src/vulkan/gpu.cpp
 )
 
-set(SDL_SOURCES
-    src/sdl/sdl.cpp
-    src/sdl/window.cpp
-    src/sdl/audio.cpp
-)
-
-set(WAYLAND_SOURCES
-    src/wayland/wayland.cpp
-    src/wayland/wayland-client-protocol.c
-    src/wayland/xdg-shell-protocol.c
-)
-
-set(X11_SOURCES
-    src/x11/x11.cpp
-)
-
-set(PIPEWIRE_SOURCES
-    src/pipewire/pipewire.cpp
-)
-
-set(WIN32_SOURCES
-    src/win32/win32.cpp
-    src/win32/window.cpp
-    src/win32/audio.cpp
-)
-
-# Platform selection
-option(HG_USE_NATIVE_BACKEND "Use native Linux backend instead of SDL" ON)
+set(PLATFORM_SOURCES)
 if(HG_LINUX)
-    set(PLATFORM_SOURCES ${WAYLAND_SOURCES} ${X11_SOURCES} ${PIPEWIRE_SOURCES} ${SDL_SOURCES})
-    set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR} ${LINUX_INCLUDE_DIRS})
+    set(PLATFORM_SOURCES
+        src/wayland/wayland.cpp
+        src/wayland/wayland-protocol.c
+        src/x11/x11.cpp
+        src/pipewire/pipewire.cpp
+    )
 elseif(HG_WINDOWS)
-    set(PLATFORM_SOURCES ${WIN32_SOURCES} ${SDL_SOURCES})
-    set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR})
-else()
-    set(PLATFORM_SOURCES ${SDL_SOURCES})
-    set(PLATFORM_INCLUDE_DIRS ${SDL_INCLUDE_DIR})
+    set(PLATFORM_SOURCES
+        src/win32/win32.cpp
+        src/win32/window.cpp
+        src/win32/audio.cpp
+    )
+endif()
+
+if(HG_USE_SDL)
+    set(SDL_SOURCES
+        src/sdl/sdl.cpp
+        src/sdl/window.cpp
+        src/sdl/audio.cpp
+    )
 endif()
 
 set(CORE_SOURCES
@@ -216,12 +192,33 @@ set(CORE_SOURCES
     src/imgui.cpp
     ${PLATFORM_SOURCES}
     ${VULKAN_SOURCES}
+    ${SDL_SOURCES}
 )
 
-set(MISC_VENDOR_SOURCES
+# Object libraries
+
+add_library(hurdygurdy_imgui OBJECT
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_vulkan.cpp
+    ${IMGUI_SOURCES}
+)
+target_include_directories(hurdygurdy_imgui
+    PUBLIC
+        ${INCLUDE_DIRS}
+        ${VulkanHeaders_INCLUDE_DIR}
+)
+target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
+target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
+
+add_library(hurdygurdy_misc OBJECT
     src/vk_mem_alloc.cpp
     src/stb.c
 )
+target_include_directories(hurdygurdy_misc
+    PUBLIC
+        ${INCLUDE_DIRS}
+        ${VulkanHeaders_INCLUDE_DIR}
+)
+target_compile_options(hurdygurdy_misc PRIVATE ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_core OBJECT ${CORE_SOURCES})
 add_dependencies(hurdygurdy_core shaders)
@@ -229,13 +226,10 @@ target_include_directories(hurdygurdy_core
     PUBLIC
         ${INCLUDE_DIRS}
         ${VulkanHeaders_INCLUDE_DIR}
-        ${PLATFORM_INCLUDE_DIRS}
 )
 
-# Add Linux backend compile definition
 if(HG_LINUX)
-    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_NATIVE_BACKEND=1 HG_USE_WAYLAND=1)
-    # Treat vendor headers as SYSTEM to suppress warnings from third-party code
+    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_WAYLAND=1)
     target_include_directories(hurdygurdy_core SYSTEM PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/xorgproto/include
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libX11/include
@@ -252,32 +246,28 @@ elseif(HG_WINDOWS)
     target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_WIN32_BACKEND=1)
 endif()
 
-target_compile_options(hurdygurdy_core PRIVATE /EHs-c- ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
+if(HG_USE_SDL)
+    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_SDL=1)
+endif()
 
-add_library(hurdygurdy_imgui OBJECT ${IMGUI_SOURCES} ${IMGUI_BACKEND_SOURCES})
-target_include_directories(hurdygurdy_imgui
-    PUBLIC
-        ${INCLUDE_DIRS}
-        ${VulkanHeaders_INCLUDE_DIR}
-)
+if(MSVC)
+    target_compile_options(hurdygurdy_core PRIVATE /EHs-c-)
+endif()
+target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
+target_compile_definitions(hurdygurdy_core PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 
-target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
-target_compile_options(hurdygurdy_imgui PRIVATE /EHs-c- ${CLANG_VENDOR_FLAGS})
-
-add_library(hurdygurdy_misc OBJECT ${MISC_VENDOR_SOURCES})
-target_include_directories(hurdygurdy_misc
-    PUBLIC
-        ${INCLUDE_DIRS}
-        ${VulkanHeaders_INCLUDE_DIR}
-)
-
-target_compile_options(hurdygurdy_misc PRIVATE /EHs-c- ${CLANG_VENDOR_FLAGS})
+# Static library
 
 add_library(hurdygurdy STATIC)
 target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_misc)
+if(HG_USE_SDL)
+    target_link_libraries(hurdygurdy PRIVATE SDL3::SDL3)
+endif()
 if(HG_WINDOWS)
     target_link_libraries(hurdygurdy PRIVATE ole32 xinput dwmapi)
 endif()
+
+# Executables
 
 add_executable(tests
     src/test/tests.cpp
@@ -311,43 +301,26 @@ add_executable(tests
     src/test/ecs_serialize.cpp
 )
 target_link_libraries(tests hurdygurdy)
-target_precompile_headers(tests PRIVATE
-    <hurdygurdy.hpp>
-)
-target_include_directories(tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_precompile_headers(tests PRIVATE <hurdygurdy.hpp>)
 target_compile_options(tests PRIVATE ${STRICT_FLAGS} ${TESTS_EXCEPTION_FLAG})
 target_compile_definitions(tests PRIVATE HG_LOGGING=1)
 
 foreach(tgt minimal platform_test)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
-    target_include_directories(${tgt} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-    target_compile_options(${tgt} PRIVATE /EHs-c- ${STRICT_FLAGS})
+    if(MSVC)
+        target_compile_options(${tgt} PRIVATE /EHs-c-)
+    endif()
+    target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
 endforeach()
 
-if(SDL_SHARED AND TARGET SDL3-shared)
-    foreach(tgt tests minimal platform_test)
-        add_custom_command(TARGET ${tgt} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL3-shared>
-                $<TARGET_FILE_DIR:${tgt}>
-            COMMENT "Copying SDL3.dll to ${tgt} directory"
-        )
-    endforeach()
-endif()
+# Install
 
-install(TARGETS hurdygurdy
-    ARCHIVE DESTINATION lib
-)
-
-install(TARGETS tests minimal platform_test
-    RUNTIME DESTINATION bin
-)
-
+install(TARGETS hurdygurdy ARCHIVE DESTINATION lib)
+install(TARGETS tests minimal platform_test RUNTIME DESTINATION bin)
 install(DIRECTORY include/
     DESTINATION include
     FILES_MATCHING
         PATTERN "*.hpp"
         PATTERN "*.glsl"
 )
-

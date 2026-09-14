@@ -14,7 +14,9 @@
 #include "win32/win32_platform.hpp"
 #endif
 
+#if defined(HG_USE_SDL)
 #include "sdl/sdl_platform.hpp"
+#endif
 
 namespace hg {
 
@@ -74,6 +76,8 @@ struct PlatformApi {
 
 static PlatformApi api{};
 
+#if defined(HG_USE_SDL)
+
 static void fillSdl()
 {
     api.getPlatformVulkanExtensions = sdl::getPlatformVulkanExtensions;
@@ -127,6 +131,8 @@ static void fillSdl()
     api.windowMousePos = sdl::windowMousePos;
     api.windowMouseDelta = sdl::windowMouseDelta;
 }
+
+#endif
 
 #if defined(HG_PLATFORM_LINUX)
 
@@ -317,6 +323,47 @@ static AudioBackend audioBackend{};
 
 static bool initPlatform()
 {
+#if defined(HG_USE_SDL)
+    if (windowBackend == WindowBackend_none || audioBackend == AudioBackend_none)
+    {
+        fillSdl();
+        if (sdl::initSdl())
+        {
+            windowBackend = WindowBackend_sdl;
+            audioBackend = AudioBackend_sdl;
+        }
+    }
+#endif
+
+#if defined(HG_PLATFORM_LINUX)
+    if (windowBackend == WindowBackend_none && wayland::loadWayland())
+    {
+        fillWayland();
+        if (wayland::initWayland())
+        {
+            windowBackend = WindowBackend_wayland;
+            HG_LOG("Using Wayland\n");
+        }
+    }
+
+    if (windowBackend == WindowBackend_none && x11::loadX11())
+    {
+        fillX11();
+        if (x11::initX11())
+        {
+            windowBackend = WindowBackend_x11;
+            HG_LOG("Using X11\n");
+        }
+    }
+
+    if (audioBackend == AudioBackend_none && pipewire::loadPipeWire())
+    {
+        fillPipeWire();
+        if (pipewire::initPipewire())
+            audioBackend = AudioBackend_pipewire;
+    }
+#endif
+
 #if defined(HG_PLATFORM_WINDOWS)
     if (win32::loadWin32())
     {
@@ -327,37 +374,7 @@ static bool initPlatform()
             audioBackend = AudioBackend_win32;
         }
     }
-#elif defined(HG_PLATFORM_LINUX)
-    if (windowBackend == WindowBackend_none && wayland::loadWayland())
-    {
-        fillWayland();
-        if (wayland::initWayland())
-            windowBackend = WindowBackend_wayland;
-    }
-
-    if (windowBackend == WindowBackend_none && x11::loadX11())
-    {
-        fillX11();
-        if (x11::initX11())
-            windowBackend = WindowBackend_x11;
-    }
-
-    if (audioBackend == AudioBackend_none && pipewire::loadPipeWire())
-    {
-        fillPipeWire();
-        if (pipewire::initPipewire())
-            audioBackend = AudioBackend_pipewire;
-    }
 #endif
-    if ((windowBackend == WindowBackend_none || audioBackend == AudioBackend_none) && sdl::loadSdl())
-    {
-        fillSdl();
-        if (sdl::initSdl())
-        {
-            windowBackend = WindowBackend_sdl;
-            audioBackend = AudioBackend_sdl;
-        }
-    }
 
     if (windowBackend == WindowBackend_none || audioBackend == AudioBackend_none)
     {
@@ -399,7 +416,7 @@ static void deinitPlatform()
     }
 #endif
 
-#if !defined(HG_PLATFORM_WINDOWS)
+#if defined(HG_USE_SDL)
     if (windowBackend == WindowBackend_sdl || audioBackend == AudioBackend_sdl)
     {
         sdl::deinitSdl();

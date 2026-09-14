@@ -69,13 +69,13 @@ bool windowInit()
     windowState = WindowState{};
 
     int count = 0;
-    SDL_DisplayID* ids = sdlFuncs.SDL_GetDisplays(&count);
+    SDL_DisplayID* ids = SDL_GetDisplays(&count);
     if (ids == nullptr)
     {
-        setError(sdlFuncs.SDL_GetError());
+        setError(SDL_GetError());
         return false;
     }
-    HG_DEFER(sdlFuncs.SDL_free(ids));
+    HG_DEFER(SDL_free(ids));
 
     windowState.displays.resize(static_cast<u64>(count));
     for (u32 i = 0; i < windowState.displays.count; i++)
@@ -84,13 +84,13 @@ bool windowInit()
 
         SDL_DisplayID displayId = ids[i];
         SDL_Rect r;
-        sdlFuncs.SDL_GetDisplayBounds(displayId, &r);
+        SDL_GetDisplayBounds(displayId, &r);
         info.posX = static_cast<i32>(r.x);
         info.posY = static_cast<i32>(r.y);
         info.sizeW = static_cast<u32>(r.w);
         info.sizeH = static_cast<u32>(r.h);
 
-        if (sdlFuncs.SDL_GetDisplayUsableBounds(displayId, &r) && r.w > 0 && r.h > 0)
+        if (SDL_GetDisplayUsableBounds(displayId, &r) && r.w > 0 && r.h > 0)
         {
             info.workPosX = static_cast<i32>(r.x);
             info.workPosY = static_cast<i32>(r.y);
@@ -105,7 +105,7 @@ bool windowInit()
             info.workSizeH = info.sizeH;
         }
 
-        info.dpiScale = sdlFuncs.SDL_GetDisplayContentScale(displayId);
+        info.dpiScale = SDL_GetDisplayContentScale(displayId);
     }
 
     return true;
@@ -121,13 +121,13 @@ void windowDeinit()
     for (SDL_Gamepad* gamepad : windowState.gamepads)
     {
         if (gamepad != nullptr)
-            sdlFuncs.SDL_CloseGamepad(gamepad);
+            SDL_CloseGamepad(gamepad);
     }
 
     for (u32 i = 0; i < CursorType_count; i++)
     {
         if (windowState.cursors[i] != nullptr)
-            sdlFuncs.SDL_DestroyCursor(windowState.cursors[i]);
+            SDL_DestroyCursor(windowState.cursors[i]);
     }
     windowState.currentCursor = nullptr;
 }
@@ -136,8 +136,8 @@ WindowData::~WindowData() noexcept
 {
     if (sdlWindow != nullptr)
     {
-        windowState.windows.remove(sdlFuncs.SDL_GetWindowID(sdlWindow));
-        sdlFuncs.SDL_DestroyWindow(sdlWindow);
+        windowState.windows.remove(SDL_GetWindowID(sdlWindow));
+        SDL_DestroyWindow(sdlWindow);
     }
 }
 
@@ -390,11 +390,11 @@ void setCursor(CursorType type)
 {
     SDL_Cursor*& cursor = windowState.cursors[static_cast<u32>(type)];
     if (cursor == nullptr)
-        cursor = sdlFuncs.SDL_CreateSystemCursor(cursorToSdl(type));
+        cursor = SDL_CreateSystemCursor(cursorToSdl(type));
 
     if (windowState.currentCursor != cursor)
     {
-        sdlFuncs.SDL_SetCursor(cursor);
+        SDL_SetCursor(cursor);
         windowState.currentCursor = cursor;
     }
 }
@@ -402,9 +402,9 @@ void setCursor(CursorType type)
 void showCursor(bool show)
 {
     if (show)
-        sdlFuncs.SDL_ShowCursor();
+        SDL_ShowCursor();
     else
-        sdlFuncs.SDL_HideCursor();
+        SDL_HideCursor();
 }
 
 void processEvents()
@@ -426,7 +426,7 @@ void processEvents()
     });
 
     SDL_Event sdlEvent;
-    while (sdlFuncs.SDL_PollEvent(&sdlEvent))
+    while (SDL_PollEvent(&sdlEvent))
     {
         switch (sdlEvent.type)
         {
@@ -491,7 +491,7 @@ void processEvents()
             case SDL_EVENT_MOUSE_MOTION:
             {
                 f32 gmx, gmy;
-                sdlFuncs.SDL_GetGlobalMouseState(&gmx, &gmy);
+                SDL_GetGlobalMouseState(&gmx, &gmy);
 
                 Event event{};
                 event.type = EventType_mouseMoved;
@@ -604,7 +604,7 @@ void processEvents()
                 {
                     if (windowState.gamepads[i] == nullptr)
                     {
-                        SDL_Gamepad* gp = sdlFuncs.SDL_OpenGamepad(sdlEvent.gdevice.which);
+                        SDL_Gamepad* gp = SDL_OpenGamepad(sdlEvent.gdevice.which);
                         if (gp != nullptr)
                         {
                             windowState.gamepads[i] = gp;
@@ -624,7 +624,7 @@ void processEvents()
                 event.gamepad.idx = idx;
                 windowState.events.push(event);
 
-                sdlFuncs.SDL_CloseGamepad(windowState.gamepads[idx]);
+                SDL_CloseGamepad(windowState.gamepads[idx]);
                 windowState.gamepads[idx] = nullptr;
                 windowState.gamepadIds.remove(sdlEvent.gdevice.which);
             } break;
@@ -771,7 +771,7 @@ Vec2 windowMousePos(void* data)
         return wd->mouse;
 
     Vec2 pos;
-    sdlFuncs.SDL_GetGlobalMouseState(&pos.x, &pos.y);
+    SDL_GetGlobalMouseState(&pos.x, &pos.y);
     return pos;
 }
 
@@ -873,27 +873,27 @@ Window windowCreate(const WindowConfig& config)
 
     ArenaScope scratch = getScratch();
 
-    wd->sdlWindow = sdlFuncs.SDL_CreateWindow(
+    wd->sdlWindow = SDL_CreateWindow(
         "Hurdy Gurdy",
         800, 600,
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     if (wd->sdlWindow == nullptr)
-        HG_PANIC("SDL could not create window: %s\n", sdlFuncs.SDL_GetError());
+        HG_PANIC("SDL could not create window: %s\n", SDL_GetError());
 
-    windowState.windows.add(sdlFuncs.SDL_GetWindowID(wd->sdlWindow), wd);
+    windowState.windows.add(SDL_GetWindowID(wd->sdlWindow), wd);
 
     u32 w, h;
-    sdlFuncs.SDL_GetWindowSize(wd->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
+    SDL_GetWindowSize(wd->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
     wd->width = w;
     wd->height = h;
 
     VkSurfaceKHR surface;
-    if (!sdlFuncs.SDL_Vulkan_CreateSurface(
+    if (!SDL_Vulkan_CreateSurface(
         wd->sdlWindow,
         static_cast<VkInstance>(internal::getVulkanInstance()),
         nullptr,
         &surface))
-        HG_PANIC("SDL could not create Vulkan surface: %s\n", sdlFuncs.SDL_GetError());
+        HG_PANIC("SDL could not create Vulkan surface: %s\n", SDL_GetError());
 
     wd->swap = GpuSwapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
 
@@ -914,7 +914,7 @@ GpuSwapchain& windowSwapchain(void* data)
 
 void windowSetTitle(void* data, StringView title)
 {
-    sdlFuncs.SDL_SetWindowTitle(static_cast<WindowData*>(data)->sdlWindow, cString(getScratch(), title));
+    SDL_SetWindowTitle(static_cast<WindowData*>(data)->sdlWindow, cString(getScratch(), title));
 }
 
 Span<Event> windowEvents(void* data)
@@ -929,7 +929,7 @@ bool windowWasClosed(void* data)
 
 bool windowIsFocused(void* data)
 {
-    return sdlFuncs.SDL_GetMouseFocus() == static_cast<WindowData*>(data)->sdlWindow;
+    return SDL_GetMouseFocus() == static_cast<WindowData*>(data)->sdlWindow;
 }
 
 bool windowWasFocusGained(void* data)
@@ -965,28 +965,28 @@ void windowGetSize(void* data, u32* w, u32* h)
 
 void windowMaximize(void* data)
 {
-    sdlFuncs.SDL_MaximizeWindow(static_cast<WindowData*>(data)->sdlWindow);
+    SDL_MaximizeWindow(static_cast<WindowData*>(data)->sdlWindow);
 }
 
 
 
 void windowMinimize(void* data)
 {
-    sdlFuncs.SDL_MinimizeWindow(static_cast<WindowData*>(data)->sdlWindow);
+    SDL_MinimizeWindow(static_cast<WindowData*>(data)->sdlWindow);
 }
 
 
 
 void windowRestore(void* data)
 {
-    sdlFuncs.SDL_RestoreWindow(static_cast<WindowData*>(data)->sdlWindow);
+    SDL_RestoreWindow(static_cast<WindowData*>(data)->sdlWindow);
 }
 
 
 void windowSetFullscreen(void* data, bool set)
 {
     WindowData* wd = static_cast<WindowData*>(data);
-    sdlFuncs.SDL_SetWindowFullscreen(wd->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
+    SDL_SetWindowFullscreen(wd->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
 
     u32 w, h;
     wd->swap.size(&w, &h);
@@ -1000,14 +1000,14 @@ StringView getClipboardText()
 
 void setClipboardText(StringView text)
 {
-    sdlFuncs.SDL_SetClipboardText(cString(getScratch(), text));
+    SDL_SetClipboardText(cString(getScratch(), text));
     windowState.clipboard.resize(text.length);
     memcpy(windowState.clipboard.vals, text.chars, text.length);
 }
 
 void openURL(StringView url)
 {
-    sdlFuncs.SDL_OpenURL(cString(getScratch(), url));
+    SDL_OpenURL(cString(getScratch(), url));
 }
 
 } // namespace hg::sdl

@@ -9,7 +9,6 @@
 
 namespace hg::sdl {
 
-bool loadSdl();
 bool initSdl();
 void deinitSdl();
 Span<StringView> getPlatformVulkanExtensions(Arena* arena);
