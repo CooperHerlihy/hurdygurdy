@@ -19,6 +19,8 @@ int main()
     window.size(&width, &height);
 
     Camera camera{};
+    window.size(&width, &height);
+    camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
 
     Layer2D layer{};
 

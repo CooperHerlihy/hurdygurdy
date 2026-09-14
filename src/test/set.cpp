@@ -25,10 +25,10 @@ TEST(testSetAddHas)
     set.add(20);
     set.add(30);
     ASSERT(set.count == 3);
-    ASSERT(set.has(10));
-    ASSERT(set.has(20));
-    ASSERT(set.has(30));
-    ASSERT(!set.has(40));
+    ASSERT(set.has(10u));
+    ASSERT(set.has(20u));
+    ASSERT(set.has(30u));
+    ASSERT(!set.has(40u));
 }
 
 TEST(testSetDuplicateAdd)
@@ -45,40 +45,40 @@ TEST(testSetRemove)
     set.add(1);
     set.add(2);
     set.add(3);
-    set.remove(2);
+    set.remove(2u);
     ASSERT(set.count == 2);
-    ASSERT(!set.has(2));
-    ASSERT(set.has(1));
-    ASSERT(set.has(3));
+    ASSERT(!set.has(2u));
+    ASSERT(set.has(1u));
+    ASSERT(set.has(3u));
 }
 
 TEST(testSetRemoveNonExistent)
 {
     Set<u32> set;
-    set.add(5);
-    set.remove(99);
+    set.add(5u);
+    set.remove(99u);
     ASSERT(set.count == 1);
 }
 
 TEST(testSetCollision)
 {
     Set<u32> set{8};
-    set.add(0);
-    set.add(8);
-    set.add(16);
+    set.add(0u);
+    set.add(8u);
+    set.add(16u);
     ASSERT(set.count == 3);
-    ASSERT(set.has(0));
-    ASSERT(set.has(8));
-    ASSERT(set.has(16));
+    ASSERT(set.has(0u));
+    ASSERT(set.has(8u));
+    ASSERT(set.has(16u));
 
-    set.remove(8);
-    ASSERT(!set.has(8));
-    ASSERT(set.has(0));
-    ASSERT(set.has(16));
+    set.remove(8u);
+    ASSERT(!set.has(8u));
+    ASSERT(set.has(0u));
+    ASSERT(set.has(16u));
 
-    set.remove(0);
-    ASSERT(!set.has(0));
-    ASSERT(set.has(16));
+    set.remove(0u);
+    ASSERT(!set.has(0u));
+    ASSERT(set.has(16u));
 }
 
 TEST(testSetReset)
@@ -101,8 +101,8 @@ TEST(testSetResize)
     set.resize(32);
     ASSERT(set.capacity == 32);
     ASSERT(set.count == 2);
-    ASSERT(set.has(1));
-    ASSERT(set.has(2));
+    ASSERT(set.has(1u));
+    ASSERT(set.has(2u));
 }
 
 TEST(testSetForEach)
@@ -126,8 +126,8 @@ TEST(testSetMoveConstruct)
     ASSERT(a.hasVal == nullptr);
     ASSERT(b.hasVal == oldHasVal);
     ASSERT(b.count == 2);
-    ASSERT(b.has(1));
-    ASSERT(b.has(2));
+    ASSERT(b.has(1u));
+    ASSERT(b.has(2u));
 }
 
 TEST(testSetMoveAssign)
@@ -136,7 +136,7 @@ TEST(testSetMoveAssign)
     a.add(99);
     Set<u32> b;
     b = std::move(a);
-    ASSERT(b.has(99));
+    ASSERT(b.has(99u));
 }
 
 TEST(testSetTempDefault)
@@ -163,11 +163,11 @@ TEST(testSetTempAddHasRemove)
     set.add(10);
     set.add(20);
     ASSERT(set.count == 2);
-    ASSERT(set.has(10));
-    ASSERT(set.has(20));
-    set.remove(10);
-    ASSERT(!set.has(10));
-    ASSERT(set.has(20));
+    ASSERT(set.has(10u));
+    ASSERT(set.has(20u));
+    set.remove(10u);
+    ASSERT(!set.has(10u));
+    ASSERT(set.has(20u));
 }
 
 TEST(testSetTempForEach)
@@ -326,8 +326,8 @@ TEST(testSetResizeSmaller)
     set.resize(4);
     ASSERT(set.capacity == 4);
     ASSERT(set.count == 2);
-    ASSERT(set.has(1));
-    ASSERT(set.has(2));
+    ASSERT(set.has(1u));
+    ASSERT(set.has(2u));
 }
 
 TEST(testSetResizeSame)
@@ -338,8 +338,8 @@ TEST(testSetResizeSame)
     set.resize(8);
     ASSERT(set.capacity == 8);
     ASSERT(set.count == 2);
-    ASSERT(set.has(1));
-    ASSERT(set.has(2));
+    ASSERT(set.has(1u));
+    ASSERT(set.has(2u));
 }
 
 TEST(testSetResetEmpty)
@@ -347,7 +347,7 @@ TEST(testSetResetEmpty)
     Set<u32> set{8};
     set.reset();
     ASSERT(set.count == 0);
-    ASSERT(!set.has(0));
+    ASSERT(!set.has(0u));
 }
 
 TEST(testSetAddManyThenRemoveAll)
@@ -370,7 +370,7 @@ TEST(testSetTempDuplicateAdd)
     set.add(42);
     set.add(42);
     ASSERT(set.count == 1);
-    ASSERT(set.has(42));
+    ASSERT(set.has(42u));
 }
 
 TEST(testSetTempRemoveNonExistent)
@@ -378,10 +378,10 @@ TEST(testSetTempRemoveNonExistent)
     ArenaScope arena = getScratch();
     SetTemp<u32> set{arena, 0};
     set.add(5);
-    set.remove(99);
+    set.remove(99u);
     ASSERT(set.count == 1);
-    ASSERT(set.has(5));
-    ASSERT(!set.has(99));
+    ASSERT(set.has(5u));
+    ASSERT(!set.has(99u));
 }
 
 TEST(testSetTempReset)
@@ -393,9 +393,9 @@ TEST(testSetTempReset)
     set.add(3);
     set.reset();
     ASSERT(set.count == 0);
-    ASSERT(!set.has(1));
-    ASSERT(!set.has(2));
-    ASSERT(!set.has(3));
+    ASSERT(!set.has(1u));
+    ASSERT(!set.has(2u));
+    ASSERT(!set.has(3u));
 }
 
 TEST(testSetStringViewComparison)

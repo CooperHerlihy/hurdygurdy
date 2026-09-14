@@ -15,7 +15,7 @@ if(CCACHE_PROGRAM)
 endif()
 
 if(MSVC)
-    add_compile_options(/permissive- /GR- /EHs-c- /D_CRT_SECURE_NO_WARNINGS)
+    add_compile_options(/permissive- /GR- /D_CRT_SECURE_NO_WARNINGS)
     # C4702 fires spuriously in the Asset<T>::Asset constructor initializer on
     # optimized builds (MSVC proves pool.alloc() never returns null, then warns
     # about the "unreachable" else-branch that doesn't exist)
@@ -43,7 +43,37 @@ else()
 endif()
 
 set(VulkanHeaders_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/Vulkan-Headers/include)
-set(SDL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
+
+# Platform detection
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(HG_LINUX TRUE)
+endif()
+
+# Find or build SDL
+find_package(SDL3 QUIET)
+if(SDL3_FOUND)
+    message(STATUS "Using system SDL3")
+    set(SDL_INCLUDE_DIR "")  # system SDL provides its own include dirs via target
+else()
+    set(SDL_SHARED ON CACHE BOOL "" FORCE)
+    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/CMakeLists.txt")
+        message(STATUS "Using vendored SDL3")
+        add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
+    else()
+        message(STATUS "SDL3 not found, fetching from GitHub")
+        include(FetchContent)
+        FetchContent_Declare(
+            SDL
+            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+            GIT_TAG release-3.4.10
+        )
+        FetchContent_MakeAvailable(SDL)
+    endif()
+    set(SDL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
+endif()
 
 # Linux backend headers (added as SYSTEM includes below to suppress warnings)
 set(LINUX_INCLUDE_DIRS
@@ -143,11 +173,6 @@ set(PIPEWIRE_SOURCES
     src/pipewire/pipewire.cpp
 )
 
-# Platform detection
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(HG_LINUX TRUE)
-endif()
-
 # Platform selection
 option(HG_USE_NATIVE_BACKEND "Use native Linux backend instead of SDL" ON)
 if(HG_LINUX)
@@ -213,7 +238,7 @@ if(HG_LINUX)
     )
 endif()
 
-target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
+target_compile_options(hurdygurdy_core PRIVATE /EHs-c- ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_imgui OBJECT ${IMGUI_SOURCES} ${IMGUI_BACKEND_SOURCES})
 target_include_directories(hurdygurdy_imgui
@@ -223,7 +248,7 @@ target_include_directories(hurdygurdy_imgui
 )
 
 target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
-target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
+target_compile_options(hurdygurdy_imgui PRIVATE /EHs-c- ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_misc OBJECT ${MISC_VENDOR_SOURCES})
 target_include_directories(hurdygurdy_misc
@@ -232,7 +257,7 @@ target_include_directories(hurdygurdy_misc
         ${VulkanHeaders_INCLUDE_DIR}
 )
 
-target_compile_options(hurdygurdy_misc PRIVATE ${CLANG_VENDOR_FLAGS})
+target_compile_options(hurdygurdy_misc PRIVATE /EHs-c- ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy STATIC)
 target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_misc)
@@ -280,8 +305,19 @@ foreach(tgt minimal platform_test)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
     target_include_directories(${tgt} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-    target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
+    target_compile_options(${tgt} PRIVATE /EHs-c- ${STRICT_FLAGS})
 endforeach()
+
+if(SDL_SHARED AND TARGET SDL3-shared)
+    foreach(tgt tests minimal platform_test)
+        add_custom_command(TARGET ${tgt} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL3-shared>
+                $<TARGET_FILE_DIR:${tgt}>
+            COMMENT "Copying SDL3.dll to ${tgt} directory"
+        )
+    endforeach()
+endif()
 
 install(TARGETS hurdygurdy
     ARCHIVE DESTINATION lib

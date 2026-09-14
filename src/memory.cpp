@@ -5,11 +5,19 @@
 
 #include <cstddef>
 
+#ifdef HG_PLATFORM_WINDOWS
+#include <malloc.h>
+#endif
+
 namespace hg {
 
 void* heapAlloc(u64 size, u64 align)
 {
+#ifdef HG_PLATFORM_WINDOWS
+    void* alloc = _aligned_malloc(size, align);
+#else
     void* alloc = align <= 16 ? malloc(size) : aligned_alloc(align, size);
+#endif
     if (alloc == nullptr)
         HG_PANIC("malloc out of memory");
     return alloc;
@@ -18,7 +26,11 @@ void* heapAlloc(u64 size, u64 align)
 void heapFree(void* allocation, u64 size)
 {
     static_cast<void>(size);
+#ifdef HG_PLATFORM_WINDOWS
+    _aligned_free(allocation);
+#else
     free(allocation);
+#endif
 }
 
 Arena::Arena(u64 capacityVal)

@@ -2,9 +2,14 @@
 
 #include <cstdio>
 #include <ctime>
+#include <cmath>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <thread>
 #include <chrono>
-#include <cmath>
+#endif
 
 namespace hg {
 
@@ -19,7 +24,11 @@ f64 Clock::tick()
 
 void sleep(f64 time)
 {
+#ifdef _WIN32
+    Sleep(static_cast<DWORD>(time * 1000.0));
+#else
     std::this_thread::sleep_for(std::chrono::duration<f64>(time));
+#endif
 }
 
 Perf perfCreate(Arena* arena, u32 count)

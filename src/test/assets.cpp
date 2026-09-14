@@ -2,19 +2,50 @@
 #include "hg/assets.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#include <windows.h>
+#define mkdir(path, mode) _mkdir(path)
+#else
+#define mkdir(path, mode) mkdir(path, mode)
+#endif
 
 using namespace hg;
 
+static char testDir[256];
+
 static void ensureTestDir()
 {
-    mkdir("/tmp/hg_asset_test", 0755);
+    if (testDir[0])
+        return;
+
+#ifdef _WIN32
+    char tmpDir[256];
+    DWORD len = GetTempPathA(sizeof(tmpDir), tmpDir);
+    if (len == 0)
+        std::snprintf(testDir, sizeof(testDir), "C:/tmp");
+    else
+        std::snprintf(testDir, sizeof(testDir), "%shg_asset_test", tmpDir);
+#else
+    std::snprintf(testDir, sizeof(testDir), "/tmp/hg_asset_test");
+#endif
+
+    mkdir(testDir, 0755);
+}
+
+static char* testPath(char* buf, u64 bufSize, const char* name)
+{
+    std::snprintf(buf, bufSize, "%s/%s", testDir, name);
+    return buf;
 }
 
 static void writeFile(const char* name, const void* data, u64 size)
 {
     char path[256];
-    std::snprintf(path, sizeof(path), "/tmp/hg_asset_test/%s", name);
+    testPath(path, sizeof(path), name);
     BinaryView bv{data, size};
     ASSERT(binaryStore(bv, path));
 }
@@ -87,7 +118,8 @@ TEST(testAssetLoad)
     const char data[] = "hello binary world";
     writeFile("load_test", data, sizeof(data));
 
-    Asset<Binary> a = load<Binary>(StringView{"/tmp/hg_asset_test/load_test"});
+    char path[256];
+    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "load_test"));
     ASSERT(a.data != nullptr);
     ASSERT(a->size == sizeof(data));
     ASSERT(memcmp(a->data, data, a->size) == 0);
@@ -98,8 +130,9 @@ TEST(testAssetLoadCached)
     ensureTestDir();
     writeFile("cached", "cached", 7);
 
-    Asset<Binary> a = load<Binary>("/tmp/hg_asset_test/cached");
-    Asset<Binary> b = load<Binary>("/tmp/hg_asset_test/cached");
+    char path[256];
+    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "cached"));
+    Asset<Binary> b = load<Binary>(path);
     ASSERT(b.data == a.data);
     ASSERT(a.data->refCount == 2);
 }
@@ -110,8 +143,9 @@ TEST(testAssetLoadSeparate)
     writeFile("sep_a", "aaaa", 5);
     writeFile("sep_b", "bbbb", 5);
 
-    Asset<Binary> a = load<Binary>("/tmp/hg_asset_test/sep_a");
-    Asset<Binary> b = load<Binary>("/tmp/hg_asset_test/sep_b");
+    char pathA[256], pathB[256];
+    Asset<Binary> a = load<Binary>(testPath(pathA, sizeof(pathA), "sep_a"));
+    Asset<Binary> b = load<Binary>(testPath(pathB, sizeof(pathB), "sep_b"));
     ASSERT(a.data != b.data);
 }
 
@@ -121,7 +155,8 @@ TEST(testAssetReload)
     const char data1[] = "version one";
     writeFile("reload", data1, sizeof(data1));
 
-    Asset<Binary> a = load<Binary>("/tmp/hg_asset_test/reload");
+    char path[256];
+    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "reload"));
     ASSERT(a->size == sizeof(data1));
     ASSERT(memcmp(a->data, data1, a->size) == 0);
 
@@ -144,10 +179,12 @@ TEST(testAssetCacheRemoval)
     ensureTestDir();
     writeFile("drop", "drop", 5);
     {
-        Asset<Binary> a = load<Binary>("/tmp/hg_asset_test/drop");
+        char path[256];
+        Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "drop"));
         ASSERT(AssetManager<Binary>::map.has(a.data->path));
     }
-    ASSERT(!AssetManager<Binary>::map.has("/tmp/hg_asset_test/drop"));
+    char path[256];
+    ASSERT(!AssetManager<Binary>::map.has(StringView{testPath(path, sizeof(path), "drop")}));
 }
 
 TEST(testAssetBinaryRoundTrip)
@@ -156,7 +193,8 @@ TEST(testAssetBinaryRoundTrip)
     const char data[] = "round trip data";
     writeFile("roundtrip", data, sizeof(data));
 
-    Asset<Binary> a = load<Binary>("/tmp/hg_asset_test/roundtrip");
+    char path[256];
+    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "roundtrip"));
     ASSERT(a->size == sizeof(data));
     ASSERT(memcmp(a->data, data, a->size) == 0);
 }
@@ -165,11 +203,12 @@ TEST(testAssetRaii)
 {
     ensureTestDir();
     writeFile("raii", "raii", 5);
-    Asset<Binary> a = load<Binary>("/tmp/hg_asset_test/raii");
+    char path[256];
+    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "raii"));
     void* heapPtr = a->data;
     ASSERT(heapPtr != nullptr);
     {
-        Asset<Binary> b = load<Binary>("/tmp/hg_asset_test/raii");
+        Asset<Binary> b = load<Binary>(path);
         ASSERT(b.data == a.data);
     }
     ASSERT(a->data == heapPtr);
@@ -184,8 +223,9 @@ TEST(testAssetMultipleLoads)
     writeFile("multi_a", dataA, sizeof(dataA));
     writeFile("multi_b", dataB, sizeof(dataB));
 
-    Asset<Binary> a = load<Binary>("/tmp/hg_asset_test/multi_a");
-    Asset<Binary> b = load<Binary>("/tmp/hg_asset_test/multi_b");
+    char pathA[256], pathB[256];
+    Asset<Binary> a = load<Binary>(testPath(pathA, sizeof(pathA), "multi_a"));
+    Asset<Binary> b = load<Binary>(testPath(pathB, sizeof(pathB), "multi_b"));
 
     ASSERT(a->size == sizeof(dataA));
     ASSERT(b->size == sizeof(dataB));

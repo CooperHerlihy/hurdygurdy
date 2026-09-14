@@ -303,9 +303,9 @@ TEST(testSerializeSet)
     Serializer r = serialReader(arena, w.current);
     serialize(&r, &copy);
     ASSERT(copy.count == val.count);
-    ASSERT(copy.has(10));
-    ASSERT(copy.has(20));
-    ASSERT(copy.has(30));
+    ASSERT(copy.has(10u));
+    ASSERT(copy.has(20u));
+    ASSERT(copy.has(30u));
 }
 
 TEST(testSerializeMap)
@@ -322,9 +322,9 @@ TEST(testSerializeMap)
     Serializer r = serialReader(arena, w.current);
     serialize(&r, &copy);
     ASSERT(copy.count == val.count);
-    ASSERT(*copy.get(1) == 1.5f);
-    ASSERT(*copy.get(2) == 2.5f);
-    ASSERT(*copy.get(3) == 3.5f);
+    ASSERT(*copy.get(1u) == 1.5f);
+    ASSERT(*copy.get(2u) == 2.5f);
+    ASSERT(*copy.get(3u) == 3.5f);
 }
 
 TEST(testBinaryRoundTripPrimitive)

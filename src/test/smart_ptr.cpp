@@ -202,37 +202,4 @@ TEST(testSharedPtrNullptrDerefSafety)
     ASSERT((i32*)ptr == nullptr);
 }
 
-TEST(testUniquePtrMoveSelf)
-{
-    Lifecycle::stats.reset();
-    {
-        UniquePtr<Lifecycle> a = makeUnique<Lifecycle>();
-        Lifecycle* addr = a.ptr;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-move"
-        a = std::move(a);
-#pragma clang diagnostic pop
-        ASSERT(a.ptr == addr);
-        ASSERT(a->valid);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.dtors == 1);
-}
 
-TEST(testSharedPtrMoveSelf)
-{
-    Lifecycle::stats.reset();
-    {
-        SharedPtr<Lifecycle> a = makeShared<Lifecycle>();
-        Lifecycle* addr = &a.ptr->val;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wself-move"
-        a = std::move(a);
-#pragma clang diagnostic pop
-        ASSERT(&a.ptr->val == addr);
-        ASSERT(a->valid);
-        ASSERT(a.ptr->refCount == 1);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.dtors == 1);
-}

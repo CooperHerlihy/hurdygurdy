@@ -80,7 +80,7 @@ void assetLoadImpl(AssetData<TextureData>* data)
 
 TextureData::~TextureData() noexcept
 {
-    std::free(pixels);
+    heapFree(pixels, 0);
 }
 
 bool textureStorePng(TextureData* texture, StringView path)

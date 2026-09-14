@@ -25,14 +25,14 @@ TEST(testMapAddGetHas)
     map.add(2, 2.5f);
     map.add(3, 3.5f);
     ASSERT(map.count == 3);
-    ASSERT(map.has(1));
-    ASSERT(map.has(2));
-    ASSERT(map.has(3));
-    ASSERT(!map.has(4));
-    f32* v = map.get(1);
+    ASSERT(map.has(1u));
+    ASSERT(map.has(2u));
+    ASSERT(map.has(3u));
+    ASSERT(!map.has(4u));
+    f32* v = map.get(1u);
     ASSERT(v != nullptr);
     ASSERT(*v == 1.5f);
-    ASSERT(map.get(4) == nullptr);
+    ASSERT(map.get(4u) == nullptr);
 }
 
 TEST(testMapDuplicateOverwrite)
@@ -41,7 +41,7 @@ TEST(testMapDuplicateOverwrite)
     map.add(1, 1.0f);
     map.add(1, 2.0f);
     ASSERT(map.count == 1);
-    ASSERT(*map.get(1) == 2.0f);
+    ASSERT(*map.get(1u) == 2.0f);
 }
 
 TEST(testMapRemove)
@@ -49,10 +49,10 @@ TEST(testMapRemove)
     Map<u32, f32> map;
     map.add(1, 1.0f);
     map.add(2, 2.0f);
-    ASSERT(map.remove(1));
-    ASSERT(!map.has(1));
-    ASSERT(map.has(2));
-    ASSERT(!map.remove(99));
+    ASSERT(map.remove(1u));
+    ASSERT(!map.has(1u));
+    ASSERT(map.has(2u));
+    ASSERT(!map.remove(99u));
 }
 
 TEST(testMapRemoveWithValue)
@@ -60,7 +60,7 @@ TEST(testMapRemoveWithValue)
     Map<u32, f32> map;
     map.add(42, 3.14f);
     f32 out = 0;
-    ASSERT(map.remove(42, &out));
+    ASSERT(map.remove(42u, &out));
     ASSERT(out == 3.14f);
 }
 
@@ -71,14 +71,14 @@ TEST(testMapCollision)
     map.add(8, 8.0f);
     map.add(16, 16.0f);
     ASSERT(map.count == 3);
-    ASSERT(*map.get(0) == 0.0f);
-    ASSERT(*map.get(8) == 8.0f);
-    ASSERT(*map.get(16) == 16.0f);
+    ASSERT(*map.get(0u) == 0.0f);
+    ASSERT(*map.get(8u) == 8.0f);
+    ASSERT(*map.get(16u) == 16.0f);
 
-    map.remove(8);
-    ASSERT(!map.has(8));
-    ASSERT(*map.get(0) == 0.0f);
-    ASSERT(*map.get(16) == 16.0f);
+    map.remove(8u);
+    ASSERT(!map.has(8u));
+    ASSERT(*map.get(0u) == 0.0f);
+    ASSERT(*map.get(16u) == 16.0f);
 }
 
 TEST(testMapReset)
@@ -101,8 +101,8 @@ TEST(testMapResize)
     map.resize(32);
     ASSERT(map.capacity == 32);
     ASSERT(map.count == 2);
-    ASSERT(*map.get(1) == 1.0f);
-    ASSERT(*map.get(2) == 2.0f);
+    ASSERT(*map.get(1u) == 1.0f);
+    ASSERT(*map.get(2u) == 2.0f);
 }
 
 TEST(testMapForEach)
@@ -124,7 +124,7 @@ TEST(testMapMoveConstruct)
     ASSERT(a.hasVal == nullptr);
     ASSERT(b.hasVal == oldHasVal);
     ASSERT(b.count == 1);
-    ASSERT(*b.get(1) == 1.0f);
+    ASSERT(*b.get(1u) == 1.0f);
 }
 
 TEST(testMapMoveAssign)
@@ -133,7 +133,7 @@ TEST(testMapMoveAssign)
     a.add(5, 5.0f);
     Map<u32, f32> b;
     b = std::move(a);
-    ASSERT(*b.get(5) == 5.0f);
+    ASSERT(*b.get(5u) == 5.0f);
 }
 
 TEST(testMapTempDefault)
@@ -160,11 +160,11 @@ TEST(testMapTempAddGetHasRemove)
     map.add(1, 1.5f);
     map.add(2, 2.5f);
     ASSERT(map.count == 2);
-    ASSERT(map.has(1));
-    ASSERT(*map.get(1) == 1.5f);
-    map.remove(1);
-    ASSERT(!map.has(1));
-    ASSERT(map.has(2));
+    ASSERT(map.has(1u));
+    ASSERT(*map.get(1u) == 1.5f);
+    map.remove(1u);
+    ASSERT(!map.has(1u));
+    ASSERT(map.has(2u));
 }
 
 TEST(testMapTempForEach)
@@ -365,9 +365,9 @@ TEST(testMapForEachModify)
     map.add(2, 20.0f);
     map.add(3, 30.0f);
     map.forEach([](const u32& k, f32& v) { v += static_cast<f32>(k); });
-    ASSERT(*map.get(1) == 11.0f);
-    ASSERT(*map.get(2) == 22.0f);
-    ASSERT(*map.get(3) == 33.0f);
+    ASSERT(*map.get(1u) == 11.0f);
+    ASSERT(*map.get(2u) == 22.0f);
+    ASSERT(*map.get(3u) == 33.0f);
 }
 
 TEST(testMapResizeSmaller)
@@ -379,9 +379,9 @@ TEST(testMapResizeSmaller)
     map.resize(8);
     ASSERT(map.capacity == 8);
     ASSERT(map.count == 3);
-    ASSERT(*map.get(1) == 1.0f);
-    ASSERT(*map.get(2) == 2.0f);
-    ASSERT(*map.get(3) == 3.0f);
+    ASSERT(*map.get(1u) == 1.0f);
+    ASSERT(*map.get(2u) == 2.0f);
+    ASSERT(*map.get(3u) == 3.0f);
 }
 
 TEST(testMapResizeSame)
@@ -393,8 +393,8 @@ TEST(testMapResizeSame)
     map.resize(16);
     ASSERT(map.capacity == oldCapacity);
     ASSERT(map.count == 2);
-    ASSERT(*map.get(1) == 1.0f);
-    ASSERT(*map.get(2) == 2.0f);
+    ASSERT(*map.get(1u) == 1.0f);
+    ASSERT(*map.get(2u) == 2.0f);
 }
 
 TEST(testMapResetEmpty)
@@ -426,19 +426,19 @@ TEST(testMapGetExistingKey)
 {
     Map<u32, f32> map;
     map.add(42, 3.14f);
-    f32* ptr = map.get(42);
+    f32* ptr = map.get(42u);
     ASSERT(ptr != nullptr);
     ASSERT(*ptr == 3.14f);
     *ptr = 6.28f;
-    ASSERT(*map.get(42) == 6.28f);
+    ASSERT(*map.get(42u) == 6.28f);
 }
 
 TEST(testMapRemoveNonExistentKey)
 {
     Map<u32, f32> map{16};
     map.add(1, 1.0f);
-    ASSERT(!map.remove(99));
-    ASSERT(!map.remove(0));
+    ASSERT(!map.remove(99u));
+    ASSERT(!map.remove(0u));
     ASSERT(map.count == 1);
 }
 
@@ -449,7 +449,7 @@ TEST(testMapTempDuplicateAdd)
     map.add(1, 1.0f);
     map.add(1, 2.0f);
     ASSERT(map.count == 1);
-    ASSERT(*map.get(1) == 2.0f);
+    ASSERT(*map.get(1u) == 2.0f);
 }
 
 TEST(testMapTempRemoveNonExistent)
@@ -457,8 +457,8 @@ TEST(testMapTempRemoveNonExistent)
     ArenaScope arena = getScratch();
     MapTemp<u32, f32> map{arena, 16};
     map.add(1, 1.0f);
-    ASSERT(!map.remove(99));
-    ASSERT(!map.remove(0));
+    ASSERT(!map.remove(99u));
+    ASSERT(!map.remove(0u));
     ASSERT(map.count == 1);
 }
 
@@ -471,8 +471,8 @@ TEST(testMapTempReset)
     map.reset();
     ASSERT(map.count == 0);
     ASSERT(map.capacity == 16);
-    ASSERT(!map.has(1));
-    ASSERT(!map.has(2));
+    ASSERT(!map.has(1u));
+    ASSERT(!map.has(2u));
 }
 
 TEST(testMapStringViewComparison)
