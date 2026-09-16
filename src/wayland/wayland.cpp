@@ -250,7 +250,7 @@ static void
 wl_data_offer_destroy(struct wl_data_offer* offer)
 {
     wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)offer, WL_DATA_OFFER_DESTROY, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)offer), 0);
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)offer), WL_MARSHAL_FLAG_DESTROY);
 }
 
 static void
@@ -272,7 +272,7 @@ static void
 wl_data_source_destroy(struct wl_data_source* source)
 {
     wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)source, WL_DATA_SOURCE_DESTROY, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)source), 0);
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)source), WL_MARSHAL_FLAG_DESTROY);
 }
 
 static int
@@ -305,7 +305,7 @@ static void
 xdg_wm_base_destroy(struct xdg_wm_base* xdgWmBase)
 {
     wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)xdgWmBase, XDG_WM_BASE_DESTROY, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgWmBase), 0);
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgWmBase), WL_MARSHAL_FLAG_DESTROY);
 }
 
 static int
@@ -336,7 +336,7 @@ static void
 xdg_surface_destroy(struct xdg_surface* xdgSurface)
 {
     wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)xdgSurface, XDG_SURFACE_DESTROY, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgSurface), 0);
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)xdgSurface), WL_MARSHAL_FLAG_DESTROY);
 }
 
 static int
@@ -395,7 +395,7 @@ static void
 xdg_toplevel_destroy(struct xdg_toplevel* toplevel)
 {
     wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_DESTROY, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
+        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), WL_MARSHAL_FLAG_DESTROY);
 }
 
 } // extern "C"

@@ -189,7 +189,7 @@ set(CORE_SOURCES
     src/audio.cpp
     src/assets.cpp
     src/dynlib.cpp
-    src/render2d.cpp
+    src/render.cpp
     src/imgui.cpp
     ${PLATFORM_SOURCES}
     ${VULKAN_SOURCES}
@@ -297,7 +297,7 @@ add_executable(tests
     src/test/assets.cpp
     src/test/serialization.cpp
     src/test/gpu.cpp
-    src/test/render2d.cpp
+    src/test/render.cpp
     src/test/ecs.cpp
     src/test/ecs_foreach.cpp
     src/test/ecs_serialize.cpp

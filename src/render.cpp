@@ -1,4 +1,4 @@
-#include "hg/render2d.hpp"
+#include "hg/render.hpp"
 
 #include "hg/error.hpp"
 
@@ -83,7 +83,7 @@ TextureData::~TextureData() noexcept
     heapFree(pixels, 0);
 }
 
-bool textureStorePng(TextureData* texture, StringView path)
+bool storeTexturePng(TextureData* texture, StringView path)
 {
     ArenaScope scratch = getScratch();
 

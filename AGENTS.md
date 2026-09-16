@@ -94,10 +94,11 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/serialization.hpp` - Serializer, binary format
 - `hg/time.hpp` - Clock, Perf
 - `hg/dynlib.hpp` - Library dynamic loading
+- `hg/filesystem.hpp` - FilePath builder and filesystem ops
 - `hg/gpu.hpp` - Format, GpuBuffer, GpuImage, GpuPipeline, GpuCmd
 - `hg/window.hpp` - Button, Window, input/event types
 - `hg/audio.hpp` - AudioStream, Sound, AudioPlayer
-- `hg/render2d.hpp` - Texture, Mesh, Camera, Sprite2D, Atlas2D, Layer2D
+- `hg/render.hpp` - Texture, Mesh, Camera, Sprite2D, Atlas2D, Layer2D
 - `hg/imgui.hpp` - ImGui impl for HurdyGurdy
 - `hg/ecs.hpp` - Entity component system
 
@@ -122,6 +123,7 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `render2d.cpp`
 - `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
 - `dynlib.cpp`
+- `filesystem.cpp`
 - `minimal.cpp` - minimal example app
 - `embed.c` - embedded resources
 - `stb.c` - stb library impl

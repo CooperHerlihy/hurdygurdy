@@ -2,7 +2,6 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/strings.hpp"
-#include "hg/sum.hpp"
 #include "hg/math.hpp"
 #include "hg/geometry2d.hpp"
 #include "hg/array.hpp"
@@ -13,6 +12,102 @@
 #include <cmath>
 
 namespace hg {
+
+/**
+ * A perspective camera
+ */
+struct CameraPerspective {
+    /**
+     * The aspect ratio
+     */
+    f32 aspect = 0.0f;
+    /**
+     * The field of view
+     */
+    f32 fov = 0.0f;
+    /**
+     * The near clipping plane
+     */
+    f32 near = 0.0f;
+    /**
+     * The far clipping plane
+     */
+    f32 far = 0.0f;
+};
+
+/**
+ * An orthographic camera
+ */
+struct CameraOrthographic {
+    /**
+     * The clipping planes in each direction
+     */
+    f32 left = 0, right = 0, top = 0, bottom = 0, near = 0, far = 0;
+};
+
+/**
+ * A camera component
+ */
+struct Camera {
+    /**
+     * The gpu view projection data
+     */
+    GpuBuffer vpBuffer{};
+    /**
+     * The current rotation
+     */
+    Quat rotation{1.0f};
+    /**
+     * The current position
+     */
+    Vec3 position{};
+    /**
+     * The projection
+     */
+    Sum<CameraOrthographic, CameraPerspective> projection = {};
+
+    /**
+     * The the camera to a perspective projection
+     */
+    void setPerspective(
+        f32 aspect,
+        f32 fov = pif / 2.0f,
+        f32 near = 0.01f,
+        f32 far = 1000.0f);
+
+    /**
+     * The the camera to an orthographic projection
+     *
+     * Parameters
+     * - width The desired width of the render space
+     * - height The desired height of the render space
+     * - actualAspect The actual aspect, so margins can be added, or 0 to ignore
+     */
+    void setOrthographic(f32 width, f32 height, f32 actualAspect = 0.0f);
+
+    /**
+     * Update the camera's gpu side data
+     */
+    void update();
+};
+
+/**
+ * CameraPerspective serialization
+ */
+template<>
+void serialize(Serializer* s, CameraPerspective* camera);
+
+/**
+ * CameraOrthographic serialization
+ */
+template<>
+void serialize(Serializer* s, CameraOrthographic* camera);
+
+/**
+ * Camera serialization
+ */
+template<>
+void serialize(Serializer* s, Camera* camera);
 
 /**
  * A texture asset
@@ -86,7 +181,7 @@ void assetLoadImpl(AssetData<TextureData>* data);
  * Returns
  * - Whether the write succeeded
  */
-bool textureStorePng(TextureData* texture, StringView path);
+bool storeTexturePng(TextureData* texture, StringView path);
 
 /**
  * A texture asset stored on the gpu
@@ -205,102 +300,6 @@ struct Mesh {
  */
 template<>
 void assetLoadImpl(AssetData<Mesh>* data);
-
-/**
- * A perspective camera
- */
-struct CameraPerspective {
-    /**
-     * The aspect ratio
-     */
-    f32 aspect = 0.0f;
-    /**
-     * The field of view
-     */
-    f32 fov = 0.0f;
-    /**
-     * The near clipping plane
-     */
-    f32 near = 0.0f;
-    /**
-     * The far clipping plane
-     */
-    f32 far = 0.0f;
-};
-
-/**
- * An orthographic camera
- */
-struct CameraOrthographic {
-    /**
-     * The clipping planes in each direction
-     */
-    f32 left = 0, right = 0, top = 0, bottom = 0, near = 0, far = 0;
-};
-
-/**
- * A camera component
- */
-struct Camera {
-    /**
-     * The gpu view projection data
-     */
-    GpuBuffer vpBuffer{};
-    /**
-     * The current rotation
-     */
-    Quat rotation{1.0f};
-    /**
-     * The current position
-     */
-    Vec3 position{};
-    /**
-     * The projection
-     */
-    Sum<CameraOrthographic, CameraPerspective> projection = {};
-
-    /**
-     * The the camera to a perspective projection
-     */
-    void setPerspective(
-        f32 aspect,
-        f32 fov = pif / 2.0f,
-        f32 near = 0.01f,
-        f32 far = 1000.0f);
-
-    /**
-     * The the camera to an orthographic projection
-     *
-     * Parameters
-     * - width The desired width of the render space
-     * - height The desired height of the render space
-     * - actualAspect The actual aspect, so margins can be added, or 0 to ignore
-     */
-    void setOrthographic(f32 width, f32 height, f32 actualAspect = 0.0f);
-
-    /**
-     * Update the camera's gpu side data
-     */
-    void update();
-};
-
-/**
- * CameraPerspective serialization
- */
-template<>
-void serialize(Serializer* s, CameraPerspective* camera);
-
-/**
- * CameraOrthographic serialization
- */
-template<>
-void serialize(Serializer* s, CameraOrthographic* camera);
-
-/**
- * Camera serialization
- */
-template<>
-void serialize(Serializer* s, Camera* camera);
 
 /**
  * A 2D sprite which can be drawn
@@ -470,6 +469,9 @@ struct Render2DInstance {
 
 } // namespace internal
 
+/**
+ * A builder for text positioning
+ */
 struct TextBuilder {
     /**
      * The font to use

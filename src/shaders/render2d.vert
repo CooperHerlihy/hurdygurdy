@@ -58,7 +58,8 @@ void main()
     vOut.texUV = positions[gl_VertexIndex] * vert.uvSize + vert.uvPos;
     vOut.texIdx = vert.texIdx;
 
-    vec2 pos = vert.pos + vert.size * positions[gl_VertexIndex];
+    mat2 rot = mat2(cos(vert.rotation), sin(vert.rotation), -sin(vert.rotation), cos(vert.rotation));
+    vec2 pos = vert.pos + vert.size * (vert.origin + rot * (positions[gl_VertexIndex] - vert.origin));
     gl_Position = proj * view * push.model * vec4(pos, 0.0, 1.0);
 }
 

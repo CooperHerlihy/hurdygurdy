@@ -27,6 +27,7 @@ int main()
     Sprite2D sprite = {nullptr, {Vec2{0}, Vec2{1}}};
     Vec2 spriteSize{0.1f, 0.1f};
     Vec2 spritePos = (Vec2{static_cast<f32>(width) / static_cast<f32>(height), 1} - spriteSize) / 2.0f;
+    f32 spriteRot = 0.0f;
 
     Clock gameClock{};
     for (;;)
@@ -62,9 +63,11 @@ int main()
             spritePos += vecNorm2(spriteMove) * moveSpeed * static_cast<f32>(delta);
         }
 
+        spriteRot += (isButtonDown(Button_e) - isButtonDown(Button_q)) * static_cast<f32>(delta);
+
         layer.clear();
         layer.drawRect({0.008f, 0.0f, 0.04f, 1}, {Vec2{0.25f}, Vec2{0.75f}});
-        layer.drawSprite(sprite, {spritePos, spritePos + spriteSize});
+        layer.drawSpriteRot(sprite, {spritePos, spritePos + spriteSize}, {0.5f, 0.5f}, spriteRot);
 
         renderer.queueLayer(layer);
 

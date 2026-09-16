@@ -64,7 +64,7 @@
 #include <hg/gpu.hpp>
 #include <hg/window.hpp>
 #include <hg/audio.hpp>
-#include <hg/render2d.hpp>
+#include <hg/render.hpp>
 #include <hg/imgui.hpp>
 #include <hg/ecs.hpp>
 
