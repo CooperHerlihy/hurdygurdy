@@ -1,53 +1,23 @@
 #include "tests.hpp"
 #include "hg/assets.hpp"
-
-#include <cstdio>
-#include <cstdlib>
-#include <sys/stat.h>
-
-#ifdef _WIN32
-#include <direct.h>
-#include <windows.h>
-#define mkdir(path, mode) _mkdir(path)
-#else
-#define mkdir(path, mode) mkdir(path, mode)
-#endif
+#include "hg/filesystem.hpp"
 
 using namespace hg;
 
-static char testDir[256];
+static constexpr const char* testDir = "/tmp/hg_asset_test";
 
 static void ensureTestDir()
 {
-    if (testDir[0])
-        return;
-
-#ifdef _WIN32
-    char tmpDir[256];
-    DWORD len = GetTempPathA(sizeof(tmpDir), tmpDir);
-    if (len == 0)
-        std::snprintf(testDir, sizeof(testDir), "C:/tmp");
-    else
-        std::snprintf(testDir, sizeof(testDir), "%shg_asset_test", tmpDir);
-#else
-    std::snprintf(testDir, sizeof(testDir), "/tmp/hg_asset_test");
-#endif
-
-    mkdir(testDir, 0755);
-}
-
-static char* testPath(char* buf, u64 bufSize, const char* name)
-{
-    std::snprintf(buf, bufSize, "%s/%s", testDir, name);
-    return buf;
+    makeDirectoryRecursive(testDir);
 }
 
 static void writeFile(const char* name, const void* data, u64 size)
 {
-    char path[256];
-    testPath(path, sizeof(path), name);
-    BinaryView bv{data, size};
-    ASSERT(binaryStore(bv, path));
+    Arena arena{512};
+    FilePath path{&arena};
+    path.appendPath(testDir);
+    path.appendPath(name);
+    ASSERT(storeFile(BinaryView{data, size}, path));
 }
 
 TEST(testAssetDefault)
@@ -118,8 +88,11 @@ TEST(testAssetLoad)
     const char data[] = "hello binary world";
     writeFile("load_test", data, sizeof(data));
 
-    char path[256];
-    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "load_test"));
+    Arena arena{512};
+    FilePath path{&arena};
+    path.appendPath(testDir);
+    path.appendPath("load_test");
+    Asset<Binary> a = load<Binary>(path);
     ASSERT(a.data != nullptr);
     ASSERT(a->size == sizeof(data));
     ASSERT(memcmp(a->data, data, a->size) == 0);
@@ -130,8 +103,11 @@ TEST(testAssetLoadCached)
     ensureTestDir();
     writeFile("cached", "cached", 7);
 
-    char path[256];
-    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "cached"));
+    Arena arena{512};
+    FilePath path{&arena};
+    path.appendPath(testDir);
+    path.appendPath("cached");
+    Asset<Binary> a = load<Binary>(path);
     Asset<Binary> b = load<Binary>(path);
     ASSERT(b.data == a.data);
     ASSERT(a.data->refCount == 2);
@@ -143,9 +119,15 @@ TEST(testAssetLoadSeparate)
     writeFile("sep_a", "aaaa", 5);
     writeFile("sep_b", "bbbb", 5);
 
-    char pathA[256], pathB[256];
-    Asset<Binary> a = load<Binary>(testPath(pathA, sizeof(pathA), "sep_a"));
-    Asset<Binary> b = load<Binary>(testPath(pathB, sizeof(pathB), "sep_b"));
+    Arena arenaA{512}, arenaB{512};
+    FilePath pathA{&arenaA};
+    pathA.appendPath(testDir);
+    pathA.appendPath("sep_a");
+    FilePath pathB{&arenaB};
+    pathB.appendPath(testDir);
+    pathB.appendPath("sep_b");
+    Asset<Binary> a = load<Binary>(pathA);
+    Asset<Binary> b = load<Binary>(pathB);
     ASSERT(a.data != b.data);
 }
 
@@ -155,8 +137,11 @@ TEST(testAssetReload)
     const char data1[] = "version one";
     writeFile("reload", data1, sizeof(data1));
 
-    char path[256];
-    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "reload"));
+    Arena arena{512};
+    FilePath path{&arena};
+    path.appendPath(testDir);
+    path.appendPath("reload");
+    Asset<Binary> a = load<Binary>(path);
     ASSERT(a->size == sizeof(data1));
     ASSERT(memcmp(a->data, data1, a->size) == 0);
 
@@ -179,12 +164,18 @@ TEST(testAssetCacheRemoval)
     ensureTestDir();
     writeFile("drop", "drop", 5);
     {
-        char path[256];
-        Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "drop"));
+        Arena arena{512};
+        FilePath path{&arena};
+        path.appendPath(testDir);
+        path.appendPath("drop");
+        Asset<Binary> a = load<Binary>(path);
         ASSERT(AssetManager<Binary>::map.has(a.data->path));
     }
-    char path[256];
-    ASSERT(!AssetManager<Binary>::map.has(StringView{testPath(path, sizeof(path), "drop")}));
+    Arena arena{512};
+    FilePath path{&arena};
+    path.appendPath(testDir);
+    path.appendPath("drop");
+    ASSERT(!AssetManager<Binary>::map.has(StringView{path}));
 }
 
 TEST(testAssetBinaryRoundTrip)
@@ -193,8 +184,11 @@ TEST(testAssetBinaryRoundTrip)
     const char data[] = "round trip data";
     writeFile("roundtrip", data, sizeof(data));
 
-    char path[256];
-    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "roundtrip"));
+    Arena arena{512};
+    FilePath path{&arena};
+    path.appendPath(testDir);
+    path.appendPath("roundtrip");
+    Asset<Binary> a = load<Binary>(path);
     ASSERT(a->size == sizeof(data));
     ASSERT(memcmp(a->data, data, a->size) == 0);
 }
@@ -203,8 +197,12 @@ TEST(testAssetRaii)
 {
     ensureTestDir();
     writeFile("raii", "raii", 5);
-    char path[256];
-    Asset<Binary> a = load<Binary>(testPath(path, sizeof(path), "raii"));
+
+    Arena arena{1024};
+    FilePath path{&arena};
+    path.appendPath(testDir);
+    path.appendPath("raii");
+    Asset<Binary> a = load<Binary>(path);
     void* heapPtr = a->data;
     ASSERT(heapPtr != nullptr);
     {
@@ -223,9 +221,15 @@ TEST(testAssetMultipleLoads)
     writeFile("multi_a", dataA, sizeof(dataA));
     writeFile("multi_b", dataB, sizeof(dataB));
 
-    char pathA[256], pathB[256];
-    Asset<Binary> a = load<Binary>(testPath(pathA, sizeof(pathA), "multi_a"));
-    Asset<Binary> b = load<Binary>(testPath(pathB, sizeof(pathB), "multi_b"));
+    Arena arenaA{512}, arenaB{512};
+    FilePath pathA{&arenaA};
+    pathA.appendPath(testDir);
+    pathA.appendPath("multi_a");
+    FilePath pathB{&arenaB};
+    pathB.appendPath(testDir);
+    pathB.appendPath("multi_b");
+    Asset<Binary> a = load<Binary>(pathA);
+    Asset<Binary> b = load<Binary>(pathB);
 
     ASSERT(a->size == sizeof(dataA));
     ASSERT(b->size == sizeof(dataB));

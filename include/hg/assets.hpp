@@ -222,13 +222,5 @@ void reload(const Asset<T>& asset)
 template<>
 void assetLoadImpl(AssetData<Binary>* data);
 
-/**
- * Store a binary file to disc
- *
- * Returns
- * - Whether the write succeeded
- */
-bool binaryStore(BinaryView bin, StringView path);
-
 } // namespace hg
 

@@ -182,6 +182,7 @@ set(CORE_SOURCES
     src/noise.cpp
     src/strings.cpp
     src/binary.cpp
+    src/filesystem.cpp
     src/pool.cpp
     src/serialization.cpp
     src/time.cpp
@@ -284,6 +285,7 @@ add_executable(tests
     src/test/noise.cpp
     src/test/strings.cpp
     src/test/binary.cpp
+    src/test/filesystem.cpp
     src/test/smart_ptr.cpp
     src/test/array.cpp
     src/test/array_temp.cpp
