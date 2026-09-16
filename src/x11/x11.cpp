@@ -317,6 +317,8 @@ struct WindowState {
     Atom wmDeleteMessage = 0;
     Atom wmStateAtom = 0;
     Atom wmStateFullscreen = 0;
+    Atom wmStateMaximizedHorz = 0;
+    Atom wmStateMaximizedVert = 0;
     Atom clipboardAtom = 0;
     Atom targetsAtom = 0;
     Atom utf8StringAtom = 0;
@@ -711,6 +713,8 @@ bool initX11()
     windowState.wmDeleteMessage = xlibFuncs.XInternAtom(windowState.display,"WM_DELETE_WINDOW", False);
     windowState.wmStateAtom = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE", False);
     windowState.wmStateFullscreen = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE_FULLSCREEN", False);
+    windowState.wmStateMaximizedHorz = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE_MAXIMIZED_HORZ", False);
+    windowState.wmStateMaximizedVert = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE_MAXIMIZED_VERT", False);
     windowState.clipboardAtom = xlibFuncs.XInternAtom(windowState.display,"CLIPBOARD", False);
     windowState.targetsAtom = xlibFuncs.XInternAtom(windowState.display,"TARGETS", False);
     windowState.utf8StringAtom = xlibFuncs.XInternAtom(windowState.display,"UTF8_STRING", False);
@@ -991,10 +995,6 @@ bool windowWasFocusLost(void* data)
     return window->wasFocusLost;
 }
 
-
-
-
-
 bool windowWasResized(void* data)
 {
     WindowData* window = static_cast<WindowData*>(data);
@@ -1008,9 +1008,6 @@ void windowGetSize(void* data, u32* w, u32* h)
     *h = window->height;
 }
 
-
-
-
 void windowMaximize(void* data)
 {
     WindowData* window = static_cast<WindowData*>(data);
@@ -1018,17 +1015,15 @@ void windowMaximize(void* data)
     XEvent event{};
     event.xclient.type = ClientMessage;
     event.xclient.window = window->x11Window;
-    event.xclient.message_type = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE", False);
+    event.xclient.message_type = windowState.wmStateAtom;
     event.xclient.format = 32;
     event.xclient.data.l[0] = 1; // _NET_WM_STATE_ADD
-    event.xclient.data.l[1] = static_cast<long>(windowState.wmStateFullscreen);
-    event.xclient.data.l[2] = 0;
+    event.xclient.data.l[1] = static_cast<long>(windowState.wmStateMaximizedHorz);
+    event.xclient.data.l[2] = static_cast<long>(windowState.wmStateMaximizedVert);
     event.xclient.data.l[3] = 1;
 
     xlibFuncs.XSendEvent(windowState.display,windowState.root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
 }
-
-
 
 void windowMinimize(void* data)
 {
@@ -1036,14 +1031,24 @@ void windowMinimize(void* data)
     xlibFuncs.XWithdrawWindow(windowState.display, window->x11Window, windowState.screen);
 }
 
-
 void windowRestore(void* data)
 {
     WindowData* window = static_cast<WindowData*>(data);
-    xlibFuncs.XMapWindow(windowState.display,window->x11Window);
+
+    XEvent event{};
+    event.xclient.type = ClientMessage;
+    event.xclient.window = window->x11Window;
+    event.xclient.message_type = windowState.wmStateAtom;
+    event.xclient.format = 32;
+    event.xclient.data.l[0] = 0; // _NET_WM_STATE_REMOVE
+    event.xclient.data.l[1] = static_cast<long>(windowState.wmStateMaximizedHorz);
+    event.xclient.data.l[2] = static_cast<long>(windowState.wmStateFullscreen);
+    event.xclient.data.l[3] = 1;
+
+    xlibFuncs.XSendEvent(windowState.display,windowState.root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
+
+    xlibFuncs.XMapWindow(windowState.display, window->x11Window);
 }
-
-
 
 void windowSetFullscreen(void* data, bool set)
 {

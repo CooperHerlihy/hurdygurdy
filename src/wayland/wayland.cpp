@@ -817,7 +817,6 @@ static void keyboardKeymap(void* data, struct wl_keyboard* keyboard,
     (void)keyboard;
     (void)format;
 
-
     if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1)
     {
         close(fd);
@@ -858,7 +857,6 @@ static void keyboardEnter(void* data, struct wl_keyboard* keyboard,
     (void)keyboard;
     (void)keys;
 
-
     windowState.lastSerial = serial;
 
     if (surface == nullptr)
@@ -883,7 +881,6 @@ static void keyboardLeave(void* data, struct wl_keyboard* keyboard,
 {
     (void)data;
     (void)keyboard;
-
 
     windowState.lastSerial = serial;
 
@@ -911,7 +908,6 @@ static void keyboardKey(void* data, struct wl_keyboard* keyboard,
     (void)data;
     (void)keyboard;
     (void)time;
-
 
     windowState.lastSerial = serial;
 
@@ -1100,6 +1096,7 @@ static const struct wl_pointer_listener pointerListener = {
     .axis_relative_direction = [](void*, struct wl_pointer*, uint32_t, uint32_t) {},
     .warp = [](void*, struct wl_pointer*, wl_fixed_t, wl_fixed_t) {},
 };
+
 static void seatCapabilities(void* data, struct wl_seat* seat, uint32_t capabilities)
 {
     (void)data;
@@ -1138,11 +1135,6 @@ static const struct wl_seat_listener seatListener = {
     .capabilities = seatCapabilities,
     .name = seatName,
 };
-
-// wl_keyboard
-
-
-// wl_pointer
 
 static void outputGeometry(void* data, struct wl_output* output,
     int32_t x, int32_t y, int32_t physicalWidth, int32_t physicalHeight,
@@ -1241,6 +1233,7 @@ static const struct wl_output_listener outputListener = {
     .name = outputName,
     .description = outputDescription,
 };
+
 static void registryGlobal(void* data, struct wl_registry* registry,
     uint32_t name, const char* interface, uint32_t version)
 {
@@ -1314,8 +1307,6 @@ static struct wl_registry_listener registryListener = {
     .global_remove = registryGlobalRemove,
 };
 
-// xdg_wm_base
-
 static void xdgWmBasePing(void* data, struct xdg_wm_base* xdgWmBase, uint32_t serial)
 {
     (void)data;
@@ -1325,14 +1316,6 @@ static void xdgWmBasePing(void* data, struct xdg_wm_base* xdgWmBase, uint32_t se
 static const struct xdg_wm_base_listener xdgWmBaseListener = {
     .ping = xdgWmBasePing,
 };
-
-// wl_seat
-
-
-// wl_output
-
-
-// xdg_toplevel
 
 static void xdgToplevelConfigure(void* data, struct xdg_toplevel* toplevel,
     int32_t width, int32_t height, struct wl_array* states)
@@ -1409,8 +1392,6 @@ static const struct xdg_toplevel_listener xdgToplevelListener = {
     .wm_capabilities = xdgToplevelWmCapabilities,
 };
 
-// xdg_surface
-
 static void xdgSurfaceConfigure(void* data, struct xdg_surface* xdgSurface, uint32_t serial)
 {
     (void)data;
@@ -1420,8 +1401,6 @@ static void xdgSurfaceConfigure(void* data, struct xdg_surface* xdgSurface, uint
 static const struct xdg_surface_listener xdgSurfaceListener = {
     .configure = xdgSurfaceConfigure,
 };
-
-// wl_data_device
 
 static void dataOfferOffer(void* data, struct wl_data_offer* offer, const char* mimeType)
 {
@@ -1530,8 +1509,6 @@ static const struct wl_data_device_listener dataDeviceListener = {
     .drop = dataDeviceDrop,
     .selection = dataDeviceSelection,
 };
-
-// wl_data_source (our clipboard, served to other apps)
 
 static void dataSourceSend(void* data, struct wl_data_source* source,
     const char* mimeType, int32_t fd)
@@ -1793,7 +1770,7 @@ void deinitWayland()
 
     windowState.windows.forEach([](u64, WindowData* window)
     {
-        window->~WindowData();
+        *window = {};
     });
 
     if (windowState.dataDevice != nullptr)
@@ -2015,6 +1992,7 @@ Vec2 mousePos()
         });
         return ret;
     }
+
     return {};
 }
 
@@ -2032,6 +2010,7 @@ Vec2 mouseDelta()
         });
         return ret;
     }
+
     return windowState.mouseDelta;
 }
 
@@ -2264,10 +2243,6 @@ bool windowWasFocusLost(void* data)
     return static_cast<WindowData*>(data)->wasFocusLost;
 }
 
-
-
-
-
 bool windowWasResized(void* data)
 {
     return static_cast<WindowData*>(data)->wasResized;
@@ -2282,16 +2257,11 @@ void windowGetSize(void* data, u32* w, u32* h)
         *h = wd->height;
 }
 
-
-
-
 void windowMaximize(void* data)
 {
     WindowData* wd = static_cast<WindowData*>(data);
     xdg_toplevel_set_maximized(wd->xdgToplevel);
 }
-
-
 
 void windowMinimize(void* data)
 {
@@ -2299,15 +2269,12 @@ void windowMinimize(void* data)
     xdg_toplevel_set_minimized(wd->xdgToplevel);
 }
 
-
 void windowRestore(void* data)
 {
     WindowData* wd = static_cast<WindowData*>(data);
     xdg_toplevel_unset_maximized(wd->xdgToplevel);
     xdg_toplevel_unset_fullscreen(wd->xdgToplevel);
 }
-
-
 
 void windowSetFullscreen(void* data, bool set)
 {

@@ -46,16 +46,9 @@ bool windowWasClosed(void* data);
 bool windowIsFocused(void* data);
 bool windowWasFocusGained(void* data);
 bool windowWasFocusLost(void* data);
-
-
-
-
 bool windowWasResized(void* data);
 void windowGetSize(void* data, u32* w, u32* h);
-
 void windowMaximize(void* data);
-
-
 void windowMinimize(void* data);
 void windowRestore(void* data);
 void windowSetFullscreen(void* data, bool set);
