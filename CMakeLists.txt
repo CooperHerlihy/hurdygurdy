@@ -307,7 +307,7 @@ target_precompile_headers(tests PRIVATE <hurdygurdy.hpp>)
 target_compile_options(tests PRIVATE ${STRICT_FLAGS} ${TESTS_EXCEPTION_FLAG})
 target_compile_definitions(tests PRIVATE HG_LOGGING=1)
 
-foreach(tgt minimal platform_test)
+foreach(tgt example2d platform_test)
     add_executable(${tgt} src/${tgt}.cpp)
     target_link_libraries(${tgt} hurdygurdy)
     if(MSVC)
@@ -319,7 +319,7 @@ endforeach()
 # Install
 
 install(TARGETS hurdygurdy ARCHIVE DESTINATION lib)
-install(TARGETS tests minimal platform_test RUNTIME DESTINATION bin)
+install(TARGETS tests example2d platform_test RUNTIME DESTINATION bin)
 install(DIRECTORY include/
     DESTINATION include
     FILES_MATCHING
