@@ -93,7 +93,6 @@ add_executable(embed src/embed.c)
 set(SHADERS
     shaders/render2d.vert
     shaders/render2d.frag
-    shaders/debug2d.frag
     shaders/skybox.vert
     shaders/skybox.frag
     shaders/sprite.vert
@@ -189,7 +188,8 @@ set(CORE_SOURCES
     src/audio.cpp
     src/assets.cpp
     src/dynlib.cpp
-    src/render.cpp
+    src/render2d.cpp
+    src/render3d.cpp
     src/imgui.cpp
     ${PLATFORM_SOURCES}
     ${VULKAN_SOURCES}

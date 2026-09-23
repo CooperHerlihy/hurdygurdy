@@ -244,8 +244,7 @@ int main()
 
     u32 width, height;
     window.size(&width, &height);
-    Camera camera{};
-    camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
+    Camera camera{Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}}};
 
     bool showEvents = true;
     bool showKeyboard = true;
@@ -271,7 +270,7 @@ int main()
                     goto quit;
 
                 window.size(&width, &height);
-                camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
+                camera.projection = Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}};
                 camera.update();
 
                 beginImGuiFrame();

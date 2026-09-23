@@ -14,9 +14,50 @@
 namespace hg {
 
 /**
+ * The standard view-projection uniform buffer
+ */
+struct VPBuffer {
+    /**
+     * The projection
+     */
+    Mat4 proj{};
+    /**
+     * The view
+     */
+    Mat4 view{};
+};
+
+/**
+ * An orthographic camera
+ */
+struct Orthographic {
+    /**
+     * The clipping planes in each direction
+     */
+    f32 left = 0, right = 0, top = 0, bottom = 0, near = 0, far = 0;
+
+    /**
+     * Initialize to zero
+     */
+    Orthographic() noexcept = default;
+
+    /**
+     * Initialize with rect and clips or sensible defaults
+     */
+    Orthographic(Rect rect, f32 nearVal = 0.0f, f32 farVal = 1.0f)
+        : left{rect.begin.x}
+        , right{rect.end.x}
+        , top{rect.begin.y}
+        , bottom{rect.end.y}
+        , near{nearVal}
+        , far{farVal}
+    {}
+};
+
+/**
  * A perspective camera
  */
-struct CameraPerspective {
+struct Perspective {
     /**
      * The aspect ratio
      */
@@ -33,20 +74,29 @@ struct CameraPerspective {
      * The far clipping plane
      */
     f32 far = 0.0f;
-};
 
-/**
- * An orthographic camera
- */
-struct CameraOrthographic {
     /**
-     * The clipping planes in each direction
+     * Initialize to zero
      */
-    f32 left = 0, right = 0, top = 0, bottom = 0, near = 0, far = 0;
+    Perspective() noexcept = default;
+
+    /**
+     * Initialize with aspect and others or sensible defaults
+     */
+    Perspective(
+        f32 aspectVal,
+        f32 fovVal = pif / 2.0f,
+        f32 nearVal = 0.01f,
+        f32 farVal = 1000.0f)
+        : aspect{aspectVal}
+        , fov{fovVal}
+        , near{nearVal}
+        , far{farVal}
+    {}
 };
 
 /**
- * A camera component
+ * A 2d or 3d camera
  */
 struct Camera {
     /**
@@ -54,54 +104,37 @@ struct Camera {
      */
     GpuBuffer vpBuffer{};
     /**
-     * The current rotation
+     * The projection
      */
-    Quat rotation{1.0f};
+    Sum<Orthographic, Perspective> projection{};
     /**
      * The current position
      */
     Vec3 position{};
     /**
-     * The projection
+     * The current rotation
      */
-    Sum<CameraOrthographic, CameraPerspective> projection = {};
+    Quat rotation{1.0f};
 
     /**
-     * The the camera to a perspective projection
+     * Initialize empty (projection should be set)
      */
-    void setPerspective(
-        f32 aspect,
-        f32 fov = pif / 2.0f,
-        f32 near = 0.01f,
-        f32 far = 1000.0f);
+    Camera() noexcept = default;
 
     /**
-     * The the camera to an orthographic projection
-     *
-     * Parameters
-     * - width The desired width of the render space
-     * - height The desired height of the render space
-     * - actualAspect The actual aspect, so margins can be added, or 0 to ignore
+     * Initialize with projection and others or defaults
      */
-    void setOrthographic(f32 width, f32 height, f32 actualAspect = 0.0f);
+    Camera(Sum<Orthographic, Perspective> projectionVal, Vec3 positionVal = Vec3{0.0f}, Quat rotationVal = Quat{1.0f})
+        : projection{projectionVal}
+        , position{positionVal}
+        , rotation{rotationVal}
+    {}
 
     /**
      * Update the camera's gpu side data
      */
     void update();
 };
-
-/**
- * CameraPerspective serialization
- */
-template<>
-void serialize(Serializer* s, CameraPerspective* camera);
-
-/**
- * CameraOrthographic serialization
- */
-template<>
-void serialize(Serializer* s, CameraOrthographic* camera);
 
 /**
  * Camera serialization
@@ -167,13 +200,10 @@ struct TextureData {
         }
         return *this;
     }
-};
 
-/**
- * Texture asset load implementation
- */
-template<>
-void assetLoadImpl(AssetData<TextureData>* data);
+    TextureData(const TextureData&) = delete;
+    TextureData& operator=(const TextureData&) = delete;
+};
 
 /**
  * Store an image to disc in the png format
@@ -181,7 +211,13 @@ void assetLoadImpl(AssetData<TextureData>* data);
  * Returns
  * - Whether the write succeeded
  */
-bool storeTexturePng(TextureData* texture, StringView path);
+bool storeTexturePng(const TextureData& texture, StringView path);
+
+/**
+ * Texture asset load implementation
+ */
+template<>
+void assetLoadImpl(AssetData<TextureData>* data);
 
 /**
  * A texture asset stored on the gpu
@@ -195,12 +231,12 @@ struct Texture {
      * The image view
      */
     GpuView view{};
-};
 
-/**
- * Create a gpu texture from cpu data
- */
-Texture createTextureFromData(const TextureData& data);
+    /**
+     * Create a gpu texture from cpu data
+     */
+    static Texture fromData(const TextureData& data);
+};
 
 /**
  * GpuTexture asset load implementation
@@ -209,116 +245,9 @@ template<>
 void assetLoadImpl(AssetData<Texture>* data);
 
 /**
- * A vertex in a mesh
- */
-struct MeshVertex {
-    /**
-     * The vertex position
-     */
-    Vec3 pos;
-    /**
-     * The u part of the vertex uv coordinate
-     */
-    f32 uvU;
-    /**
-     * The vertex normal
-     */
-    Vec3 norm;
-    /**
-     * The v part of the vertex uv coordinate
-     */
-    f32 uvV;
-    /**
-     * The vertex tangent
-     */
-    Vec4 tan;
-
-    /**
-     * Construct the vertex
-     */
-    MeshVertex(Vec3 pos, Vec3 norm, Vec4 tan, Vec2 uv)
-        : pos{pos}, uvU{uv.x}, norm{norm}, uvV{uv.y}, tan{tan} {}
-};
-
-/**
- * A 3d mesh asset
- */
-struct MeshData {
-    /**
-     * The file index of the first vertex
-     */
-    Array<MeshVertex> vertices{};
-    /**
-     * The file index of the first geometry index
-     */
-    Array<u32> indices;
-    /**
-     * How the vertices should be interpreted in sequence
-     */
-    GpuTopology topology = {};
-};
-
-/**
- * Mesh asset load implementation
- */
-template<>
-void assetLoadImpl(AssetData<MeshData>* data);
-
-/**
- * Store the model data to disc in gltf format : TODO
- */
-void meshStoreGltf(MeshData* data, StringView path);
-
-/**
- * A 3d mesh asset stored on the gpu
- */
-struct Mesh {
-    /**
-     * The vertex buffer
-     */
-    GpuBuffer vertexBuffer{};
-    /**
-     * The index buffer
-     **/
-    GpuBuffer indexBuffer{};
-    /**
-     * The number of vertices
-     */
-    u32 vertexCount = 0;
-    /**
-     * The size of each vertex in bytes
-     */
-    u32 vertexWidth = 0;
-    /**
-     * The number of indices (4 bytes each)
-     */
-    u32 indexCount = 0;
-};
-
-/**
- * GpuMesh asset load implementation
- */
-template<>
-void assetLoadImpl(AssetData<Mesh>* data);
-
-/**
- * A 2D sprite which can be drawn
- */
-struct Sprite2D {
-    /**
-     * The sprite's texture
-     */
-    Asset<Texture> texture = nullptr;
-    /**
-     * The uv coords in the texture
-     */
-    Rect uv = {};
-};
-
-/**
  * A texture atlas
  */
-struct Atlas2D {
+struct TextureAtlas {
     /**
      * The texture
      */
@@ -331,7 +260,7 @@ struct Atlas2D {
     /**
      * Create a new texture atlas
      */
-    static Atlas2D create(const Asset<Texture>& texture);
+    static TextureAtlas create(const Asset<Texture>& texture);
 
     /**
      * Add empty sprites, to control indices
@@ -364,119 +293,34 @@ struct Atlas2D {
     /**
      * Get a sprite from the atlas
      */
-    Sprite2D get(u32 idx) const;
+    Rect get(u32 idx) const;
 };
 
 /**
- * Atlas2D serialization
+ * TextureAtlas serialization
  */
 template<>
-void serialize(Serializer* s, Atlas2D* atlas);
+void serialize(Serializer* s, TextureAtlas* atlas);
 
 /**
- * Atlas2D asset loading
+ * TextureAtlas asset loading
  */
 template<>
-void assetLoadImpl(AssetData<Atlas2D>* data);
+void assetLoadImpl(AssetData<TextureAtlas>* data);
 
 /**
  * Get an atlas for a default pixel font
  */
-const Atlas2D& getDefaultFont();
-
-/**
- * A world map of tiles
- */
-struct Tilemap2D {
-    /**
-     * The texture atlas
-     */
-    Asset<Atlas2D> atlas = nullptr;
-    /**
-     * The tilemap data
-     */
-    Array<u32> tiles{};
-    /**
-     * The width of the tilemap in tiles
-     */
-    u32 width = 0;
-    /**
-     * The height of the tilemap in tiles
-     */
-    u32 height = 0;
-
-    /**
-     * Create an empty tilemap
-     */
-    static Tilemap2D create(u32 width, u32 height, const Asset<Atlas2D>& atlas);
-
-    /**
-     * Get the value of a tile in a tilemap
-     */
-    u32 get(u32 x, u32 y) const;
-
-    /**
-     * Set the value of a tile in a tilemap
-     */
-    u32 set(u32 x, u32 y, u32 tile);
-};
-
-/**
- * Tilemap2D serialization
- */
-template<>
-void serialize(Serializer* s, Tilemap2D* tilemap);
-
-namespace internal {
-
-/**
- * Instance data for the 2D renderer
- */
-struct Render2DInstance {
-    /**
-     * The color, or tint
-     */
-    Vec4 color{};
-    /**
-     * The quad top left position
-     */
-    Vec2 pos{};
-    /**
-     * The quad size
-     */
-    Vec2 size{};
-    /**
-     * The texture coordinate beginning
-     */
-    Vec2 uvPos{};
-    /**
-     * The texture coordinate extent
-     */
-    Vec2 uvSize{};
-    /**
-     * The origin position for rotation
-     */
-    Vec2 origin{};
-    /**
-     * The angle of rotation about origin
-     */
-    f32 rotation = 0;
-    /**
-     * The texture descriptor index, or -1 to draw a plain rect
-     */
-    u32 texIdx = (u32)-1;
-};
-
-} // namespace internal
+const TextureAtlas& getDefaultFont();
 
 /**
  * A builder for text positioning
  */
-struct TextBuilder {
+struct TextBuilder2D {
     /**
      * The font to use
      */
-    const Atlas2D* font = nullptr;
+    const TextureAtlas* font = nullptr;
     /**
      * Where to start drawing from in relation to the text
      */
@@ -505,14 +349,14 @@ struct TextBuilder {
     /**
      * Begin building
      */
-    TextBuilder(const Atlas2D& fontVal)
+    TextBuilder2D(const TextureAtlas& fontVal)
         : font{&fontVal}
     {}
 
     /**
      * Break the text at a spece, instead of where the end falls
      */
-    TextBuilder& breakAtSpace(bool val = true)
+    TextBuilder2D& breakAtSpace(bool val = true)
     {
         shouldBreakAtSpace = val;
         return *this;
@@ -521,7 +365,7 @@ struct TextBuilder {
     /**
      * Set the max height, defaults to 1
      */
-    TextBuilder& setHeight(f32 val)
+    TextBuilder2D& setHeight(f32 val)
     {
         height = val;
         return *this;
@@ -530,7 +374,7 @@ struct TextBuilder {
     /**
      * Set the max width, defaults to infinity
      */
-    TextBuilder& setWidth(f32 val)
+    TextBuilder2D& setWidth(f32 val)
     {
         width = val;
         return *this;
@@ -539,7 +383,7 @@ struct TextBuilder {
     /**
      * Set the max width and height
      */
-    TextBuilder& setBounds(f32 widthVal, f32 heightVal)
+    TextBuilder2D& setBounds(f32 widthVal, f32 heightVal)
     {
         width = widthVal;
         height = heightVal;
@@ -549,7 +393,7 @@ struct TextBuilder {
     /**
      * Set the cutoff width, defaults to infinity
      */
-    TextBuilder& setCutoff(f32 val)
+    TextBuilder2D& setCutoff(f32 val)
     {
         cutoff = val;
         return *this;
@@ -558,7 +402,7 @@ struct TextBuilder {
     /**
      * Orient the position from the center of the text box
      */
-    TextBuilder& setCenter(Vec2 val)
+    TextBuilder2D& setCenter(Vec2 val)
     {
         beginDir = {0, 0};
         pos = val;
@@ -568,7 +412,7 @@ struct TextBuilder {
     /**
      * Orient the position from the center left of the text box
      */
-    TextBuilder& setCenterLeft(Vec2 val)
+    TextBuilder2D& setCenterLeft(Vec2 val)
     {
         beginDir = {1, 0};
         pos = val;
@@ -578,7 +422,7 @@ struct TextBuilder {
     /**
      * Orient the position from the center right of the text box
      */
-    TextBuilder& setCenterRight(Vec2 val)
+    TextBuilder2D& setCenterRight(Vec2 val)
     {
         beginDir = {-1, 0};
         pos = val;
@@ -588,7 +432,7 @@ struct TextBuilder {
     /**
      * Orient the position from the top left of the text box
      */
-    TextBuilder& setTopLeft(Vec2 val)
+    TextBuilder2D& setTopLeft(Vec2 val)
     {
         beginDir = {1, 1};
         pos = val;
@@ -598,7 +442,7 @@ struct TextBuilder {
     /**
      * Orient the position from the top center of the text box
      */
-    TextBuilder& setTopCenter(Vec2 val)
+    TextBuilder2D& setTopCenter(Vec2 val)
     {
         beginDir = {0, 1};
         pos = val;
@@ -608,7 +452,7 @@ struct TextBuilder {
     /**
      * Orient the position from the top right of the text box
      */
-    TextBuilder& setTopRight(Vec2 val)
+    TextBuilder2D& setTopRight(Vec2 val)
     {
         beginDir = {-1, 1};
         pos = val;
@@ -618,7 +462,7 @@ struct TextBuilder {
     /**
      * Orient the position from the bottom left of the text box
      */
-    TextBuilder& setBottomLeft(Vec2 val)
+    TextBuilder2D& setBottomLeft(Vec2 val)
     {
         beginDir = {1, -1};
         pos = val;
@@ -628,7 +472,7 @@ struct TextBuilder {
     /**
      * Orient the position from the bottom center of the text box
      */
-    TextBuilder& setBottomCenter(Vec2 val)
+    TextBuilder2D& setBottomCenter(Vec2 val)
     {
         beginDir = {0, -1};
         pos = val;
@@ -638,7 +482,7 @@ struct TextBuilder {
     /**
      * Orient the position from the bottom right of the text box
      */
-    TextBuilder& setBottomRight(Vec2 val)
+    TextBuilder2D& setBottomRight(Vec2 val)
     {
         beginDir = {-1, -1};
         pos = val;
@@ -651,13 +495,51 @@ struct TextBuilder {
  */
 struct Layer2D {
     /**
+     * Instance data for the 2D renderer
+     */
+    struct Instance {
+        /**
+         * The color, or tint
+         */
+        Vec4 color{};
+        /**
+         * The quad top left position
+         */
+        Vec2 pos{};
+        /**
+         * The quad size
+         */
+        Vec2 size{};
+        /**
+         * The texture coordinate beginning
+         */
+        Vec2 uvPos{};
+        /**
+         * The texture coordinate extent
+         */
+        Vec2 uvSize{};
+        /**
+         * The origin position for rotation
+         */
+        Vec2 origin{};
+        /**
+         * The angle of rotation about origin
+         */
+        f32 rotation = 0;
+        /**
+         * The texture descriptor index, or -1 to draw a plain rect
+         */
+        u32 texIdx = (u32)-1;
+    };
+
+    /**
      * The transform, does not affect changed
      */
     Mat4 transform{1.0};
     /**
      * The instance data
      */
-    Array<internal::Render2DInstance> instances{};
+    Array<Instance> instances{};
     /**
      * The gpu side instance buffer
      */
@@ -678,23 +560,47 @@ struct Layer2D {
 
     /**
      * Draw a rectangle on the layer
+     *
+     *  Parameters
+     *  - color The color to draw
+     *  - dst The rect in world space to draw to
      */
     void drawRect(Vec4 color, Rect dst);
 
     /**
-     *  Draw the sprite on the layer
+     * Draw a rotated rectangle on the layer
+     *
+     *  Parameters
+     *  - color The color to draw
+     *  - dst The rect in world space to draw to
+     *  - origin The point to rotate about
+     *  - rotation The angle (in radians) to rotate by
      */
-    void drawSprite(const Sprite2D& sprite, Rect dst, Vec4 tint = Vec4{1});
+    void drawRectRot(Vec4 color, Rect dst, Vec2 origin, f32 rotation);
 
     /**
-     *  Draw the sprite on the layer
+     *  Draw a sprite on the layer
+     *
+     *  Parameters
+     *  - texture The texture to draw from
+     *  - src The rect in the texture to draw from
+     *  - dst The rect in world space to draw to
+     *  - tint The color to multiply the texture by
      */
-    void drawSpriteRot(const Sprite2D& sprite, Rect dst, Vec2 origin, f32 rotation, Vec4 tint = Vec4{1});
+    void drawSprite(const Texture& texture, Rect src, Rect dst, Vec4 tint = Vec4{1});
 
     /**
-     * Draw a tilemap to the layer
+     *  Draw a rotated sprite on the layer
+     *
+     *  Parameters
+     *  - texture The texture to draw from
+     *  - src The rect in the texture to draw from
+     *  - dst The rect in world space to draw to
+     *  - origin The point to rotate about
+     *  - rotation The angle (in radians) to rotate by
+     *  - tint The color to multiply the texture by
      */
-    void drawTilemap(const Tilemap2D& tilemap, Rect dst);
+    void drawSpriteRot(const Texture& texture, Rect src, Rect dst, Vec2 origin, f32 rotation, Vec4 tint = Vec4{1});
 
     /**
      * Draw text to the layer
@@ -707,7 +613,7 @@ struct Layer2D {
      * Returns
      * - The characters that could not fit
      */
-    StringView drawText(StringView text, Vec4 color, const TextBuilder& box);
+    StringView drawText(StringView text, Vec4 color, const TextBuilder2D& box);
 };
 
 /**
@@ -736,27 +642,12 @@ struct Renderer2D {
     /**
      * Queue a layer to draw this frame
      */
-    void queueLayer(Layer2D& layer);
+    void drawLayer(Layer2D& layer);
 
     /**
      * Issue draw commands
      */
     void render(GpuCmd* cmd, const Camera& camera);
-};
-
-/**
- * A layer based 2D debug renderer
- */
-struct DebugRenderer2D : public Renderer2D {
-    /**
-     * Construct without init
-     */
-    DebugRenderer2D() noexcept = default;
-
-    /**
-     * Initialize the renderer
-     */
-    DebugRenderer2D(Format colorFormat);
 };
 
 } // namespace hg

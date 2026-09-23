@@ -17,16 +17,28 @@ int main()
     window.size(&winW, &winH);
     f32 aspect = static_cast<f32>(winW) / static_cast<f32>(winH);
 
-    Camera camera{};
-    camera.setOrthographic(aspect, 1.0f);
+    Camera camera{Orthographic{{{0, 0}, {aspect, 1.0f}}}};
 
     Layer2D layer{};
 
-    Sprite2D sprite = {nullptr, {Vec2{0}, Vec2{1}}};
+    struct Color {
+        u8 r, g, b, a;
+    };
+    Color defaultColors[]{
+        {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
+        {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
+    };
+
+    Texture spriteTex{};
+    spriteTex.image = GpuImage::create(2, 2, Format_rgba8_srgb,
+        GpuImageUsage_sampled | GpuImageUsage_transferDst);
+    spriteTex.view = GpuView::create(spriteTex.image, GpuAspect_color, GpuFilter_nearest);
+    spriteTex.view.write(defaultColors);
+
     Vec2 spritePos{0.5f, 0.5f};
     f32 spriteRot = 0.0f;
 
-    const Atlas2D& font = getDefaultFont();
+    const TextureAtlas& font = getDefaultFont();
 
     Clock gameClock{};
     for (;;)
@@ -41,7 +53,7 @@ int main()
         {
             window.size(&winW, &winH);
             aspect = static_cast<f32>(winW) / static_cast<f32>(winH);
-            camera.setOrthographic(aspect, 1.0f);
+            camera.projection = Orthographic{{{0, 0}, {aspect, 1.0f}}};
         }
 
         if (isButtonDown(Button_lmouse))
@@ -104,19 +116,24 @@ int main()
 
         Vec2 spriteSize{sq * 0.08f, sq * 0.08f};
         Vec2 halfSprite = spriteSize / 2.0f;
-        layer.drawSpriteRot(sprite, {spritePos - halfSprite, spritePos + halfSprite}, {0.5f, 0.5f}, spriteRot);
+        layer.drawSpriteRot(
+            spriteTex,
+            {Vec2{0}, Vec2{1}},
+            {spritePos - halfSprite, spritePos + halfSprite},
+            {0.5f, 0.5f},
+            spriteRot);
 
         f32 textX = ox + sq / 2.0f;
         f32 titleY = oy + pad;
-        TextBuilder titleBox(font);
+        TextBuilder2D titleBox(font);
         titleBox.setTopCenter({textX, titleY}).setHeight(titleH);
         layer.drawText("Hurdy Gurdy 2D", {1.0f, 1.0f, 1.0f, 1.0f}, titleBox);
 
-        TextBuilder helpBox(font);
+        TextBuilder2D helpBox(font);
         helpBox.setTopCenter({textX, titleY + titleH + pad}).setHeight(helpH).breakAtSpace();
         layer.drawText("WASD move   QE rotate   Left mouse pan", {0.6f, 0.6f, 0.6f, 1.0f}, helpBox);
 
-        renderer.queueLayer(layer);
+        renderer.drawLayer(layer);
 
         Window* windows[] = {&window};
         GpuCmd* cmd = gpuBeginFrame(windows);

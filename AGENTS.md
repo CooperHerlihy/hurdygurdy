@@ -98,7 +98,8 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/gpu.hpp` - Format, GpuBuffer, GpuImage, GpuPipeline, GpuCmd
 - `hg/window.hpp` - Button, Window, input/event types
 - `hg/audio.hpp` - AudioStream, Sound, AudioPlayer
-- `hg/render.hpp` - Texture, Mesh, Camera, Sprite2D, Atlas2D, Layer2D
+- `hg/render2d.hpp` - Camera, Texture, Renderer2D
+- `hg/render3d.hpp` - Mesh, Renderer3D
 - `hg/imgui.hpp` - ImGui impl for HurdyGurdy
 - `hg/ecs.hpp` - Entity component system
 
@@ -121,6 +122,7 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `time.cpp`
 - `audio.cpp`
 - `render2d.cpp`
+- `render3d.cpp`
 - `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
 - `dynlib.cpp`
 - `filesystem.cpp`
