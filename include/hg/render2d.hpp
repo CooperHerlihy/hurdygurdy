@@ -83,7 +83,7 @@ struct Perspective {
     /**
      * Initialize with aspect and others or sensible defaults
      */
-    Perspective(
+    explicit Perspective(
         f32 aspectVal,
         f32 fovVal = pif / 2.0f,
         f32 nearVal = 0.01f,
@@ -288,7 +288,7 @@ struct TextureAtlas {
      * Returns
      * - The first sprite index
      */
-    u32 addGrid(Rect grid, u32 width, u32 height, u32 count = (u32)-1, f32 marginX = 0.0f, f32 marginY = 0.0f);
+    u32 addGrid(Rect grid, u32 width, u32 height, u32 count = static_cast<u32>(-1), f32 marginX = 0.0f, f32 marginY = 0.0f);
 
     /**
      * Get a sprite from the atlas
@@ -529,7 +529,7 @@ struct Layer2D {
         /**
          * The texture descriptor index, or -1 to draw a plain rect
          */
-        u32 texIdx = (u32)-1;
+        u32 texIdx = static_cast<u32>(-1);
     };
 
     /**

@@ -45,7 +45,7 @@ struct Map {
      */
     ~Map() noexcept
     {
-        for (u32 i = 0; i < capacity; ++i)
+        for (u64 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
             {
@@ -61,7 +61,7 @@ struct Map {
     /**
      * Construct with capacity
      */
-    Map(u64 initCapacity)
+    explicit Map(u64 initCapacity)
         : hasVal{heapAlloc<bool>(initCapacity)}
         , keys{heapAlloc<K>(initCapacity)}
         , vals{heapAlloc<V>(initCapacity)}
@@ -243,7 +243,7 @@ struct Map {
      * Returns whether the key is contained in the map
      */
     template<typename T>
-    bool has(const T& key)
+    bool has(const T& key) const
     {
         if (capacity == 0)
             return false;
@@ -354,7 +354,7 @@ struct MapTemp {
      */
     ~MapTemp() noexcept
     {
-        for (u32 i = 0; i < capacity; ++i)
+        for (u64 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
             {
@@ -551,7 +551,7 @@ struct MapTemp {
      * Returns whether the key is contained in the map
      */
     template<typename T>
-    bool has(const T& key)
+    bool has(const T& key) const
     {
         if (capacity == 0)
             return false;

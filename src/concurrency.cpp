@@ -162,7 +162,7 @@ struct ThreadPoolState {
 static ThreadPoolState& threadPool()
 {
     static ThreadPoolState pool{4096, std::max(
-        (u32)1, std::thread::hardware_concurrency() - 1)};
+        static_cast<u32>(1), std::thread::hardware_concurrency() - 1)};
     return pool;
 }
 

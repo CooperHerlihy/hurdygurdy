@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <utility>
 
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
@@ -78,8 +79,8 @@ template<typename F>
 struct Defer {
     F fn;
 
-    Defer(F fnVal)
-        : fn(fnVal)
+    Defer(F&& fnVal)
+        : fn(std::forward<F>(fnVal))
     {}
 
     ~Defer()

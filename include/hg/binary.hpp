@@ -81,7 +81,7 @@ struct BinaryBuilder {
     /**
      * Implicitly convert to Binary
      */
-    constexpr operator BinaryView()
+    constexpr operator BinaryView() const
     {
         return {data, size};
     }
@@ -216,7 +216,7 @@ struct Binary {
     /**
      * Implicitly convert to Binary
      */
-    constexpr operator BinaryView()
+    constexpr operator BinaryView() const
     {
         return {data, size};
     }

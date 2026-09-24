@@ -21,7 +21,7 @@ static constexpr f32 pif = static_cast<f32>(pi);
 static constexpr f64 euler = 2.7182818284590452;
 
 /**
- * The value of Pi
+ * The value of Euler's number
  */
 static constexpr f32 eulerf = static_cast<f32>(euler);
 
@@ -31,7 +31,7 @@ static constexpr f32 eulerf = static_cast<f32>(euler);
 static constexpr f64 root2 = 1.4142135623730951;
 
 /**
- * The value of Pi
+ * The value of square root 2
  */
 static constexpr f32 root2f = static_cast<f32>(root2);
 
@@ -41,7 +41,7 @@ static constexpr f32 root2f = static_cast<f32>(root2);
 static constexpr f64 root3 = 1.7320508075688772;
 
 /**
- * The value of Pi
+ * The value of square root 3
  */
 static constexpr f32 root3f = static_cast<f32>(root3);
 
@@ -148,6 +148,12 @@ struct Vec2 {
         HG_ASSERT(idx < 2);
         return *(&x + idx);
     }
+
+    constexpr const f32& operator[](u32 idx) const
+    {
+        HG_ASSERT(idx < 2);
+        return *(&x + idx);
+    }
 };
 
 /**
@@ -211,6 +217,12 @@ struct Vec3 {
      * Access by index
      */
     constexpr f32& operator[](u32 idx)
+    {
+        HG_ASSERT(idx < 3);
+        return *(&x + idx);
+    }
+
+    constexpr const f32& operator[](u32 idx) const
     {
         HG_ASSERT(idx < 3);
         return *(&x + idx);
@@ -295,6 +307,12 @@ struct Vec4 {
         HG_ASSERT(idx < 4);
         return *(&x + idx);
     }
+
+    constexpr const f32& operator[](u32 idx) const
+    {
+        HG_ASSERT(idx < 4);
+        return *(&x + idx);
+    }
 };
 
 /**
@@ -340,6 +358,12 @@ struct Mat2 {
      * Access by index
      */
     constexpr Vec2& operator[](u32 idx)
+    {
+        HG_ASSERT(idx < 2);
+        return *(&x + idx);
+    }
+
+    constexpr const Vec2& operator[](u32 idx) const
     {
         HG_ASSERT(idx < 2);
         return *(&x + idx);
@@ -400,6 +424,12 @@ struct Mat3 {
      * Access by index
      */
     constexpr Vec3& operator[](u32 idx)
+    {
+        HG_ASSERT(idx < 3);
+        return *(&x + idx);
+    }
+
+    constexpr const Vec3& operator[](u32 idx) const
     {
         HG_ASSERT(idx < 3);
         return *(&x + idx);
@@ -474,6 +504,12 @@ struct Mat4 {
      * Access by index
      */
     constexpr Vec4& operator[](u32 idx)
+    {
+        HG_ASSERT(idx < 4);
+        return *(&x + idx);
+    }
+
+    constexpr const Vec4& operator[](u32 idx) const
     {
         HG_ASSERT(idx < 4);
         return *(&x + idx);

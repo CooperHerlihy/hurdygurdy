@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
+#include "hg/span.hpp"
 
 #include <utility>
 #include <new>
@@ -289,16 +290,35 @@ struct ArenaScope {
 };
 
 /**
+ * Get a scratch arena for temporary allocations
+ *
+ * Returns
+ * - A scratch arena, never nullptr
+ */
+ArenaScope getScratch();
+
+/**
+ * Get a scratch arena for temporary allocations, avoiding a single conflict
+ *
+ * Parameters
+ * - conflict The arena to avoid
+ *
+ * Returns
+ * - A scratch arena, never nullptr
+ */
+ArenaScope getScratch(const Arena* conflict);
+
+/**
  * Get a scratch arena for temporary allocations, accounting for conflicts
  *
  * Parameters
- * - conflict If arenas are being used, the returned arena will be different
+ * - conflicts Array of arenas to avoid
  * - count The number of conflicts
  *
  * Returns
  * - A scratch arena, never nullptr
  */
-ArenaScope getScratch(Arena const* const* conflicts = nullptr, u32 count = 0);
+ArenaScope getScratch(Span<const Arena*> conflicts);
 
 } // namespace hg
 

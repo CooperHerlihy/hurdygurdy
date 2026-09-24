@@ -148,7 +148,7 @@ Maybe<FileInfo> getFileInfo(StringView path)
 Span<DirectoryEntry> getFileInfoInDirectory(Arena* arena, StringView path)
 {
     HG_ASSERT(arena != nullptr);
-    ArenaScope scratch = getScratch(&arena, 1);
+    ArenaScope scratch = getScratch(arena);
 
     char* cPath = cString(scratch, path);
 

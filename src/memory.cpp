@@ -75,14 +75,21 @@ bool Arena::extend(void* allocation, u64 oldSize, u64 newSize)
 
 static thread_local Array<Arena> scratchArenas{};
 
-ArenaScope getScratch(Arena const* const* conflicts, u32 count)
+ArenaScope getScratch()
 {
-    if (count > 0)
-        HG_ASSERT(conflicts != nullptr);
+    return getScratch({});
+}
 
+ArenaScope getScratch(const Arena* conflict)
+{
+    return getScratch({&conflict, 1});
+}
+
+ArenaScope getScratch(Span<const Arena*> conflicts)
+{
     for (u32 i = 0; i < scratchArenas.count; ++i)
     {
-        for (u32 j = 0; j < count; ++j)
+        for (u32 j = 0; j < conflicts.count; ++j)
         {
             if (&scratchArenas[i] == conflicts[j])
                 goto next;
@@ -92,7 +99,7 @@ next:
         continue;
     }
 
-    return &scratchArenas.push(Arena{((u64)1 << 28) - 1});
+    return &scratchArenas.push(Arena{(static_cast<u64>(1) << 28) - 1});
 }
 
 } // namespace hg

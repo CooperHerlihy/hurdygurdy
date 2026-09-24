@@ -42,7 +42,7 @@ struct Queue {
     /**
      * Construct with init size
      */
-    Queue(u64 capacityVal)
+    explicit Queue(u64 capacityVal)
         : vals{heapAlloc<T>(capacityVal)}
         , front{0}
         , back{0}

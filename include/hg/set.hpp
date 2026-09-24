@@ -41,7 +41,7 @@ struct Set {
      */
     ~Set() noexcept
     {
-        for (u32 i = 0; i < capacity; ++i)
+        for (u64 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
                 vals[i].~V();
@@ -53,7 +53,7 @@ struct Set {
     /**
      * Construct with capacity
      */
-    Set(u64 initCapacity)
+    explicit Set(u64 initCapacity)
         : hasVal{heapAlloc<bool>(initCapacity)}
         , vals{heapAlloc<V>(initCapacity)}
         , capacity{initCapacity}
@@ -199,7 +199,7 @@ struct Set {
      * Returns whether a value is contained in the set
      */
     template<typename T>
-    bool has(const T& val)
+    bool has(const T& val) const
     {
         for (u64 idx = static_cast<u64>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {
@@ -285,7 +285,7 @@ struct SetTemp {
      */
     ~SetTemp() noexcept
     {
-        for (u32 i = 0; i < capacity; ++i)
+        for (u64 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
                 vals[i].~V();
@@ -442,7 +442,7 @@ struct SetTemp {
      * Returns whether a value is contained in the set
      */
     template<typename T>
-    bool has(const T& val)
+    bool has(const T& val) const
     {
         for (u64 idx = static_cast<u64>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {

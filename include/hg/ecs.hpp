@@ -86,12 +86,12 @@ struct EcsComponent {
             indices.resize(e.handle.idx() + 1);
             for (u64 i = oldCount; i < indices.count; ++i)
             {
-                indices[i] = (u32)-1;
+                indices[i] = static_cast<u32>(-1);
             }
         }
 
         u64 idx = entities.count;
-        indices[e.handle.idx()] = (u32)idx;
+        indices[e.handle.idx()] = static_cast<u32>(idx);
         entities.push(e);
         return components.push();
     }
@@ -111,12 +111,12 @@ struct EcsComponent {
             indices.resize(e.handle.idx() + 1);
             for (u64 i = oldCount; i < indices.count; ++i)
             {
-                indices[i] = (u32)-1;
+                indices[i] = static_cast<u32>(-1);
             }
         }
 
         u64 idx = entities.count;
-        indices[e.handle.idx()] = (u32)idx;
+        indices[e.handle.idx()] = static_cast<u32>(idx);
         entities.push(e);
         return components.push(val);
     }
@@ -136,12 +136,12 @@ struct EcsComponent {
             indices.resize(e.handle.idx() + 1);
             for (u64 i = oldCount; i < indices.count; ++i)
             {
-                indices[i] = (u32)-1;
+                indices[i] = static_cast<u32>(-1);
             }
         }
 
         u64 idx = entities.count;
-        indices[e.handle.idx()] = (u32)idx;
+        indices[e.handle.idx()] = static_cast<u32>(idx);
         entities.push(e);
         return components.push(std::move(val));
     }
@@ -154,7 +154,7 @@ struct EcsComponent {
     void remove(Entity e)
     {
         u32 idx = indices[e.handle.idx()];
-        indices[e.handle.idx()] = (u32)-1;
+        indices[e.handle.idx()] = static_cast<u32>(-1);
         entities.removeSwap(idx);
         components.removeSwap(idx);
 
@@ -170,7 +170,7 @@ struct EcsComponent {
      */
     bool has(Entity e) const
     {
-        return e.handle.idx() < indices.count && indices[e.handle.idx()] != (u32)-1;
+        return e.handle.idx() < indices.count && indices[e.handle.idx()] != static_cast<u32>(-1);
     }
 
     /**
@@ -493,12 +493,9 @@ struct Ecs {
         }
         else if constexpr (std::is_invocable_r_v<void, F, Entity, T&>)
         {
-            Entity* e = s.entities.vals;
-            T* c = s.components.vals;
-            T* end = c + s.components.count;
-            for (; c != end; ++c, ++e)
+            for (u64 i = 0; i < s.components.count; ++i)
             {
-                fn(*e, *c);
+                fn(s.entities[i], s.components[i]);
             }
         }
         else
@@ -518,20 +515,23 @@ struct Ecs {
         if constexpr (std::is_invocable_r_v<void, F, Entity>)
         {
             for (const Entity& e : s.entities)
+            {
                 fn(e);
+            }
         }
         else if constexpr (std::is_invocable_r_v<void, F, const T&>)
         {
             for (const T& c : s.components)
+            {
                 fn(c);
+            }
         }
         else if constexpr (std::is_invocable_r_v<void, F, Entity, const T&>)
         {
-            const Entity* e = s.entities.vals;
-            const T* c = s.components.vals;
-            const T* end = c + s.components.count;
-            for (; c != end; ++c, ++e)
-                fn(*e, *c);
+            for (u64 i = 0; i < s.components.count; ++i)
+            {
+                fn(s.entities[i], s.components[i]);
+            }
         }
         else
         {
@@ -549,27 +549,23 @@ struct Ecs {
 
         if constexpr (std::is_invocable_r_v<void, F, Entity>)
         {
-            Entity* e = s.entities.vals;
             forPar(0, s.components.count, [&](u64 idx)
             {
-                fn(e[idx]);
+                fn(s.entities[idx]);
             });
         }
         else if constexpr (std::is_invocable_r_v<void, F, T&>)
         {
-            T* c = s.components.vals;
             forPar(0, s.components.count, [&](u64 idx)
             {
-                fn(c[idx]);
+                fn(s.components[idx]);
             });
         }
         else if constexpr (std::is_invocable_r_v<void, F, Entity, T&>)
         {
-            Entity* e = s.entities.vals;
-            T* c = s.components.vals;
             forPar(0, s.components.count, [&](u64 idx)
             {
-                fn(e[idx], c[idx]);
+                fn(s.entities[idx], s.components[idx]);
             });
         }
     }
@@ -738,7 +734,7 @@ void serialize(Serializer* s, Ecs<Ts...>* ecs)
 {
     serializeBegin(s);
 
-    ArenaScope scratch = getScratch(&s->arena, 1);
+    ArenaScope scratch = getScratch(s->arena);
 
     if (s->writing)
     {
@@ -751,13 +747,13 @@ void serialize(Serializer* s, Ecs<Ts...>* ecs)
             if (ecs->entities.handles[i].idx() < ecs->entities.handles.count)
                 es.entityToIdx[i] = eCount++;
             else
-                es.entityToIdx[i] = (u32)-1;
+                es.entityToIdx[i] = static_cast<u32>(-1);
         }
         serialize(s, &eCount);
 
         ecs->systems.forEach([&](auto& sys)
         {
-            u32 cCount = (u32)sys.components.count;
+            u32 cCount = static_cast<u32>(sys.components.count);
             serialize(s, &cCount);
 
             Entity* e = sys.entities.vals;

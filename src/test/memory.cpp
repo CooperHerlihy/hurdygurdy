@@ -277,8 +277,8 @@ TEST(testGetScratchConflict)
     ArenaScope a = getScratch();
     u32* p = a.alloc<u32>(1);
     ASSERT(p != nullptr);
-    Arena const* conflicts[] = {a.arena};
-    ArenaScope b = getScratch(conflicts, 1);
+    const Arena* conflicts[] = {a.arena};
+    ArenaScope b = getScratch(conflicts);
     ASSERT(b.arena != a.arena);
     u32* q = b.alloc<u32>(1);
     ASSERT(q != nullptr);

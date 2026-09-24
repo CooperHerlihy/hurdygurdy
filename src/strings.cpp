@@ -252,7 +252,7 @@ StringBuilder integerToString(Arena* arena, i64 num)
 {
     HG_ASSERT(arena != nullptr);
 
-    ArenaScope scratch = getScratch(&arena, 1);
+    ArenaScope scratch = getScratch(arena);
 
     if (num == 0)
         return {arena, "0"};
@@ -282,7 +282,7 @@ StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
 {
     HG_ASSERT(arena != nullptr);
 
-    ArenaScope scratch = getScratch(&arena, 1);
+    ArenaScope scratch = getScratch(arena);
 
     if (num == 0.0)
         return {arena, "0.0"};

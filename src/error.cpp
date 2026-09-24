@@ -21,7 +21,7 @@ void setError(StringView error)
 
 void logError()
 {
-    std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", (int)errorLength, errorData);
+    std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", static_cast<int>(errorLength), errorData);
 }
 
 } // namespace hg

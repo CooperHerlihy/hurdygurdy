@@ -83,7 +83,7 @@ struct Rng {
     /**
      * Construct with seed
      */
-    Rng(u32 seedVal) noexcept
+    explicit Rng(u32 seedVal) noexcept
         : seed{seedVal}
     {}
 
