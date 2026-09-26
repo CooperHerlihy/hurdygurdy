@@ -202,7 +202,7 @@ struct Sum<T, Ts...> {
         using RawF = std::remove_reference_t<F>;
         using Func = R (*)(Sum*, RawF*);
 
-        return [&]<u64... Is>(std::index_sequence<Is...>)
+        return [&]<u64... Is>(std::integer_sequence<u64, Is...>)
         {
             static constexpr Func table[count + 1] = {
                 +[](Sum* self, RawF* fn) -> R
@@ -216,7 +216,7 @@ struct Sum<T, Ts...> {
                 }
             };
             return table[tag < count ? tag : count](this, &f);
-        }(std::make_index_sequence<count>{});
+        }(std::make_integer_sequence<u64, count>{});
     }
 
     /**

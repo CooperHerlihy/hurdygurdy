@@ -248,10 +248,10 @@ void serialize(Serializer* s, Product<Ts...>* product)
 {
     if constexpr (sizeof...(Ts) > 0)
     {
-        [&]<u64... Is>(std::index_sequence<Is...>)
+        [&]<u64... Is>(std::integer_sequence<u64, Is...>)
         {
             serializeObject(s, &product->template get<Is>()...);
-        }(std::index_sequence_for<Ts...>{});
+        }(std::make_integer_sequence<u64, sizeof...(Ts)>{});
     }
 }
 

@@ -1,6 +1,8 @@
 #include "hg/init.hpp"
 
 #include "internal.hpp"
+#include "hg/window.hpp"
+#include "hg/audio.hpp"
 #include "hg/error.hpp"
 #include "hg/macros.hpp"
 

@@ -5,7 +5,7 @@
 
 namespace hg {
 
-#if defined(HG_PLATFORM_LINUX)
+#if defined(HG_PLATFORM_LINUX) || defined(HG_PLATFORM_APPLE)
 
 #include <dlfcn.h>
 

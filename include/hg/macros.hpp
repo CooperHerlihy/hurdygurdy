@@ -24,7 +24,11 @@
 #define HG_PLATFORM_WINDOWS 1
 #endif
 
-#if !defined(HG_PLATFORM_LINUX) && !defined(HG_PLATFORM_WINDOWS)
+#ifdef __APPLE__
+#define HG_PLATFORM_APPLE 1
+#endif
+
+#if !defined(HG_PLATFORM_LINUX) && !defined(HG_PLATFORM_WINDOWS) && !defined(HG_PLATFORM_APPLE)
 #error "Unsupported platfom"
 #endif
 

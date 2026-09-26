@@ -4,6 +4,7 @@
 #include "hg/inttypes.hpp"
 
 #include <concepts>
+#include <algorithm>
 
 namespace hg {
 

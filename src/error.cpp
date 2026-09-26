@@ -14,7 +14,7 @@ StringView getError()
 
 void setError(StringView error)
 {
-    u64 newLength = std::min(error.length, sizeof(errorData));
+    u64 newLength = std::min(error.length, static_cast<u64>(sizeof(errorData)));
     memcpy(errorData, error.chars, newLength);
     errorLength = newLength;
 }

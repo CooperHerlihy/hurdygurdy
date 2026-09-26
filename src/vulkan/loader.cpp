@@ -131,6 +131,9 @@ bool loadVulkan()
         "libvulkan.so.1"
 #elif defined(HG_PLATFORM_WINDOWS)
         "vulkan-1.dll"
+#elif defined(HG_PLATFORM_APPLE)
+	// "libvulkan.1.dylib"
+	"libMoltenVK.dylib"
 #endif
     );
     if (!lib.has)

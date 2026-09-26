@@ -5,7 +5,6 @@
 #include <cmath>
 #include <condition_variable>
 #include <mutex>
-#include <emmintrin.h>
 
 namespace hg {
 
@@ -14,7 +13,7 @@ void SpinLock::acquire()
     bool acquiredLocal = false;
     while (!acquired.compare_exchange_weak(acquiredLocal, true))
     {
-        _mm_pause();
+        std::this_thread::yield(); // _mm_pause();
         acquiredLocal = false;
     }
 }
@@ -52,7 +51,7 @@ bool Fence::wait(f64 timeout)
     Clock c{};
     while (!isComplete() && (timeout -= c.tick()) > 0)
     {
-        _mm_pause();
+        std::this_thread::yield(); // _mm_pause();
     }
     return isComplete();
 }
@@ -61,7 +60,7 @@ void Fence::waitIndefinite()
 {
     while (!isComplete())
     {
-        _mm_pause();
+        std::this_thread::yield(); // _mm_pause();
     }
 }
 
@@ -108,7 +107,7 @@ struct ThreadPoolState {
                 for (u32 j = 0; j < spinCount; ++j)
                 {
                     if (!execute())
-                        _mm_pause();
+                        std::this_thread::yield(); // _mm_pause();
                 }
 
                 std::unique_lock lock{mtx};
@@ -172,7 +171,7 @@ bool helpThreads(Fence* fence, f64 timeout)
     while (!fence->isComplete() && (timeout -= c.tick()) > 0)
     {
         if (!threadPool().execute())
-            _mm_pause();
+            std::this_thread::yield(); // _mm_pause();
     }
     return fence->isComplete();
 }
