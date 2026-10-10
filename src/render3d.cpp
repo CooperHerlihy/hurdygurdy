@@ -35,4 +35,19 @@ void assetLoadImpl(AssetData<Mesh>* data)
     data->asset.indexBuffer.write(mesh->indices.vals, 0, data->asset.indexCount * sizeof(u32));
 }
 
+template<>
+void serialize<>(Serializer* s, Material3D* material)
+{
+    serializeObject(s,
+        &material->mesh,
+        &material->colorMap,
+        &material->normalMap,
+        &material->diffuse,
+        &material->shininess);
+}
+
+Renderer3D::Renderer3D(Format colorFormat, Format depthFormat)
+{
+}
+
 } // namespace hg

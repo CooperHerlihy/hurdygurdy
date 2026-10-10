@@ -93,12 +93,8 @@ add_executable(embed src/embed.c)
 set(SHADERS
     shaders/render2d.vert
     shaders/render2d.frag
-    shaders/skybox.vert
-    shaders/skybox.frag
-    shaders/sprite.vert
-    shaders/sprite.frag
-    shaders/model.vert
-    shaders/model.frag
+    shaders/render3d.vert
+    shaders/render3d.frag
     test/compute.comp
     test/tri.vert
     test/tri.frag

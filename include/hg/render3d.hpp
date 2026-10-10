@@ -125,6 +125,12 @@ struct Material3D {
 };
 
 /**
+ * Serialization for Material3D
+ */
+template<>
+void serialize<>(Serializer* s, Material3D* material);
+
+/**
  * A basic 3D renderer
  */
 struct Renderer3D {
@@ -198,6 +204,16 @@ struct Renderer3D {
     Array<ModelData> models{};
 
     /**
+     * Create uninitialized
+     */
+    Renderer3D() noexcept = default;
+
+    /**
+     * Create pipeline
+     */
+    Renderer3D(Format colorFormat, Format depthFormat);
+
+    /**
      * Add a directional light to the scene
      */
     void drawDirectionalLight(Vec3 color, Vec3 dir);
@@ -213,7 +229,7 @@ struct Renderer3D {
     void drawModel(const Mesh& mesh, const Material3D& material, const Mat4& transform);
 
     /**
-     * Issue gpu commands to render the scene
+     * Issue gpu commands to render the scene then clear the scene
      */
     void renderScene(GpuCmd* cmd, Camera& camera);
 };
