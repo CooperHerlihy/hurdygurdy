@@ -74,7 +74,7 @@ Renderer3D::Renderer3D(Format colorFormat, Format depthFormat)
     Format colorFormats[] = {colorFormat};
     conf.colorAttachmentFormats = colorFormats;
     conf.depthAttachmentFormat = depthFormat;
-    conf.cullMode = GpuCull_back;
+    conf.cullMode = GpuCull_none;
     conf.enableDepthRead = true;
     conf.enableDepthWrite = true;
 
@@ -83,12 +83,12 @@ Renderer3D::Renderer3D(Format colorFormat, Format depthFormat)
 
 void Renderer3D::drawDirectionalLight(Vec3 color, Vec3 dir)
 {
-    dirLights.push({color, dir});
+    dirLights.push(LightData{{dir.x, dir.y, dir.z}, {color.x, color.y, color.z}});
 }
 
 void Renderer3D::drawPointLight(Vec3 color, Vec3 pos)
 {
-    pointLights.push({color, pos});
+    pointLights.push(LightData{{pos.x, pos.y, pos.z}, {color.x, color.y, color.z}});
 }
 
 void Renderer3D::drawModel(
@@ -140,16 +140,53 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
                 GpuMemoryUsage_frequentUpdate);
     }
 
+    struct Light {
+        Vec4 pos;
+        Vec4 color;
+    };
+
+    if (dirLights.count > 0)
+    {
+        ArenaScope scratch = getScratch();
+        ArrayTemp<Light> dirBuf{scratch, 0, dirLights.count};
+
+        for (LightData& light : dirLights)
+        {
+            dirBuf.push({Vec4{light.pos, 0}, Vec4{light.color, 1}});
+        }
+        dirLightBuffer.write(dirBuf.vals, 0, dirBuf.count * sizeof(Light));
+    }
+
+    if (pointLights.count > 0)
+    {
+        ArenaScope scratch = getScratch();
+        ArrayTemp<Light> pointBuf{scratch, 0, pointLights.count};
+
+        Mat4 view = matView(camera.position, Vec3{1.0f}, camera.rotation);
+        for (LightData& light : pointLights)
+        {
+            pointBuf.push({view * Vec4{light.pos, 1}, Vec4{light.color, 1}});
+        }
+
+        pointLightBuffer.write(pointBuf.vals, 0, pointBuf.count * sizeof(Light));
+    }
+
     gpuBindPipeline(cmd, pipeline);
 
     for (ModelData& model : models)
     {
         Push push{};
         push.model = model.transform;
-        push.dirLights = dirLightBuffer.uniformDescriptor();
-        push.dirLightCount = static_cast<u32>(dirLights.count);
-        push.pointLights = pointLightBuffer.uniformDescriptor();
-        push.pointLightCount = static_cast<u32>(pointLights.count);
+        if (dirLights.count > 0)
+        {
+            push.dirLights = dirLightBuffer.storageDescriptor();
+            push.dirLightCount = static_cast<u32>(dirLights.count);
+        }
+        if (pointLights.count > 0)
+        {
+            push.pointLights = pointLightBuffer.storageDescriptor();
+            push.pointLightCount = static_cast<u32>(pointLights.count);
+        }
         push.colorMap = model.colorMap->view.samplerDescriptor();
         push.normalMap = model.normalMap->view.samplerDescriptor();
         push.diffuse = model.diffuse;
@@ -159,7 +196,7 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
         push.vp = camera.vpBuffer.uniformDescriptor();
 
         gpuPushConstants(cmd, pipeline, &push, sizeof(push));
-        gpuDraw(cmd, 0, model.mesh->vertexCount, 0, 1);
+        gpuDraw(cmd, 0, model.mesh->indexCount, 0, 1);
     }
 
     dirLights.reset();

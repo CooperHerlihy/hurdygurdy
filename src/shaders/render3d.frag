@@ -54,14 +54,13 @@ void main()
         lighting +=
             light.color.xyz *
             light.color.w *
-            hgBlinnPhong(
+            (0.03 + hgBlinnPhong(
                 normal,
                 -normalize(light.pos.xyz),
                 viewDir,
                 16.0,
                 0.7,
-                0.3,
-                0.03);
+                0.3));
     }
 
     for (uint i = 0; i < push.pointLightCount; ++i)
@@ -72,15 +71,14 @@ void main()
         lighting +=
             light.color.xyz *
             light.color.w *
-            hgBlinnPhong(
+            (hgBlinnPhong(
                 normal,
                 normalize(lightPosRel),
                 viewDir,
                 16.0,
                 0.7,
-                0.3,
-                0.03)
-            / dot(lightPosRel, lightPosRel);
+                0.3)
+            / dot(lightPosRel, lightPosRel));
     }
 
     vec3 color = lighting * texture(

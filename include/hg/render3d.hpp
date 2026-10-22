@@ -139,13 +139,13 @@ struct Renderer3D {
      */
     struct LightData {
         /**
-         * The color of the light (brightness is implicit)
-         */
-        Vec3 color;
-        /**
          * The position of the point light, or direction of the directional light
          */
         Vec3 pos;
+        /**
+         * The color of the light
+         */
+        Vec3 color;
     };
 
     /**

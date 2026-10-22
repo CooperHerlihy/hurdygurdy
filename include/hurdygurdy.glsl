@@ -616,7 +616,7 @@ vec3 hgTransformNormalMap(vec3 mapNormal, vec3 vertexNormal, vec4 vertexTangent)
     mat3 texToModel = mat3(
         vertexTangent.xyz,
         cross(vertexTangent.xyz, vertexNormal) * vertexTangent.w,
-        -vertexNormal
+        vertexNormal
     );
     return normalize(texToModel * mapNormal);
 }
@@ -757,14 +757,13 @@ float hgBlinnPhong(
     vec3 viewDir,
     float shininess,
     float kdiffuse,
-    float kspecular,
-    float ambient)
+    float kspecular)
 {
     float diffuse = hgLambertianDiffuse(normal, lightDir);
     float specular = diffuse > 0.0
         ? hgBlinnPhongSpecular(normal, lightDir, viewDir, shininess)
         : 0.0;
-    return ambient + diffuse * kdiffuse + specular * kspecular;
+    return diffuse * kdiffuse + specular * kspecular;
 }
 
 #endif
