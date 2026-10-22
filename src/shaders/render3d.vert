@@ -37,10 +37,10 @@ layout (location = 0) out VertexOutput {
 
 void main()
 {
-    uint idx = indexBufs[push.indices].indices[gl_VertexIndex];
-    HgVertex vert = vertexBufs[push.vertices].verts[idx];
-    mat4 mv = uVP[push.viewProj].view * push.model;
-    mat4 p = uVP[push.viewProj].proj;
+    uint idx = indexBufs[push.inds].indices[gl_VertexIndex];
+    HgVertex vert = vertBufs[push.verts].verts[idx];
+    mat4 mv = uVP[push.vp].view * push.model;
+    mat4 p = uVP[push.vp].proj;
 
     vOut.vert = hgTransformVertex(mv, vert);
     gl_Position = p * vec4(vOut.vert.position, 1.0);

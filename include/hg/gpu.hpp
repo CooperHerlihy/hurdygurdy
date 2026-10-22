@@ -161,6 +161,11 @@ struct GpuBuffer {
     ~GpuBuffer() noexcept;
 
     /**
+     * Get the size of the buffer in bytes
+     */
+    u64 size() const;
+
+    /**
      * Get the uniform buffer descriptor index from the buffer
      */
     u32 uniformDescriptor() const;

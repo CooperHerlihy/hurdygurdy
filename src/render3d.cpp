@@ -1,4 +1,5 @@
 #include "hg/render3d.hpp"
+#include "hg/gpu.hpp"
 
 namespace hg {
 
@@ -46,8 +47,124 @@ void serialize<>(Serializer* s, Material3D* material)
         &material->shininess);
 }
 
+#include "shaders/render3d.vert.spv.h"
+#include "shaders/render3d.frag.spv.h"
+
+struct Push {
+    Mat4 model;
+    u32 dirLights;
+    u32 dirLightCount;
+    u32 pointLights;
+    u32 pointLightCount;
+    u32 colorMap;
+    u32 normalMap;
+    f32 diffuse;
+    f32 shininess;
+    u32 verts;
+    u32 inds;
+    u32 vp;
+};
+
 Renderer3D::Renderer3D(Format colorFormat, Format depthFormat)
 {
+    GpuGraphicsPipelineCreateInfo conf{};
+    conf.vertexShader = shaders_render3d_vert_spv;
+    conf.fragmentShader = shaders_render3d_frag_spv;
+    conf.pushConstantSize = sizeof(Push);
+    Format colorFormats[] = {colorFormat};
+    conf.colorAttachmentFormats = colorFormats;
+    conf.depthAttachmentFormat = depthFormat;
+    conf.cullMode = GpuCull_back;
+    conf.enableDepthRead = true;
+    conf.enableDepthWrite = true;
+
+    pipeline = GpuPipeline::graphics(conf);
+}
+
+void Renderer3D::drawDirectionalLight(Vec3 color, Vec3 dir)
+{
+    dirLights.push({color, dir});
+}
+
+void Renderer3D::drawPointLight(Vec3 color, Vec3 pos)
+{
+    pointLights.push({color, pos});
+}
+
+void Renderer3D::drawModel(
+        const Mesh& mesh,
+        const Texture& colorMap,
+        const Texture& normalMap,
+        f32 diffuse,
+        f32 shininess,
+        const Mat4& transform)
+{
+    models.push({
+        transform,
+        &mesh,
+        &colorMap,
+        &normalMap,
+        diffuse,
+        shininess,
+    });
+}
+
+void Renderer3D::drawModelMaterial(const Material3D& material, const Mat4& transform)
+{
+    drawModel(
+        *material.mesh,
+        *material.colorMap,
+        *material.normalMap,
+        material.diffuse,
+        material.shininess,
+        transform);
+}
+
+void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
+{
+    if (dirLightBuffer.size() < dirLights.count * sizeof(LightData))
+    {
+        gpuWaitIdle();
+        dirLightBuffer = GpuBuffer::create(
+                2 * dirLights.count * sizeof(LightData),
+                GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer,
+                GpuMemoryUsage_frequentUpdate);
+    }
+
+    if (pointLightBuffer.size() < pointLights.count * sizeof(LightData))
+    {
+        gpuWaitIdle();
+        pointLightBuffer = GpuBuffer::create(
+                2 * pointLights.count * sizeof(LightData),
+                GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer,
+                GpuMemoryUsage_frequentUpdate);
+    }
+
+    gpuBindPipeline(cmd, pipeline);
+
+    for (ModelData& model : models)
+    {
+        Push push{};
+        push.model = model.transform;
+        push.dirLights = dirLightBuffer.uniformDescriptor();
+        push.dirLightCount = static_cast<u32>(dirLights.count);
+        push.pointLights = pointLightBuffer.uniformDescriptor();
+        push.pointLightCount = static_cast<u32>(pointLights.count);
+        push.colorMap = model.colorMap->view.samplerDescriptor();
+        push.normalMap = model.normalMap->view.samplerDescriptor();
+        push.diffuse = model.diffuse;
+        push.shininess = model.shininess;
+        push.verts = model.mesh->vertexBuffer.storageDescriptor();
+        push.inds = model.mesh->indexBuffer.storageDescriptor();
+        push.vp = camera.vpBuffer.uniformDescriptor();
+
+        gpuPushConstants(cmd, pipeline, &push, sizeof(push));
+        gpuDraw(cmd, 0, model.mesh->vertexCount, 0, 1);
+    }
+
+    dirLights.reset();
+    pointLights.reset();
+    models.reset();
 }
 
 } // namespace hg

@@ -226,7 +226,18 @@ struct Renderer3D {
     /**
      * Add a model to the scene
      */
-    void drawModel(const Mesh& mesh, const Material3D& material, const Mat4& transform);
+    void drawModel(
+        const Mesh& mesh,
+        const Texture& colorMap,
+        const Texture& normalMap,
+        f32 diffuse,
+        f32 shininess,
+        const Mat4& transform);
+
+    /**
+     * Add a model to the scene
+     */
+    void drawModelMaterial(const Material3D& material, const Mat4& transform);
 
     /**
      * Issue gpu commands to render the scene then clear the scene

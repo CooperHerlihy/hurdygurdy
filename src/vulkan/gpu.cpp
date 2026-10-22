@@ -84,6 +84,11 @@ GpuBuffer::~GpuBuffer() noexcept = default;
 GpuBuffer::GpuBuffer(GpuBuffer&&) noexcept = default;
 GpuBuffer& GpuBuffer::operator=(GpuBuffer&&) noexcept = default;
 
+u64 GpuBuffer::size() const
+{
+    return data == nullptr ? 0 : data->size;
+}
+
 u32 GpuBuffer::uniformDescriptor() const
 {
     HG_ASSERT(data->usage & GpuBufferUsage_uniformBuffer);
