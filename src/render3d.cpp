@@ -145,6 +145,8 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
         Vec4 color;
     };
 
+    Mat4 view = matView(camera.position, Vec3{1.0f}, camera.rotation);
+
     if (dirLights.count > 0)
     {
         ArenaScope scratch = getScratch();
@@ -152,7 +154,7 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
 
         for (LightData& light : dirLights)
         {
-            dirBuf.push({Vec4{light.pos, 0}, Vec4{light.color, 1}});
+            dirBuf.push({view * Vec4{light.pos, 0}, Vec4{light.color, 1}});
         }
         dirLightBuffer.write(dirBuf.vals, 0, dirBuf.count * sizeof(Light));
     }
@@ -162,7 +164,6 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
         ArenaScope scratch = getScratch();
         ArrayTemp<Light> pointBuf{scratch, 0, pointLights.count};
 
-        Mat4 view = matView(camera.position, Vec3{1.0f}, camera.rotation);
         for (LightData& light : pointLights)
         {
             pointBuf.push({view * Vec4{light.pos, 1}, Vec4{light.color, 1}});

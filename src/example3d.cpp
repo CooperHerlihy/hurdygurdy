@@ -18,7 +18,7 @@ int main()
     Renderer3D renderer{window.swapchain().format(), Format_d32_sfloat};
 
     Camera camera{Perspective{aspect, pif / 2.0f, 0.1f, 100.0f}};
-    camera.position = Vec3{0.0f, -1.5f, -5.0f};
+    camera.position = Vec3{0.0f, 1.5f, -5.0f};
 
     Mesh mesh{};
 
@@ -127,12 +127,12 @@ int main()
             f32 rotSpeed = 2.0f;
             Vec2 md = mouseDelta();
             Quat rotX = quatAxisAngle({ 0, 1, 0}, md.x * rotSpeed);
-            Quat rotY = quatAxisAngle({-1, 0, 0}, md.y * rotSpeed);
+            Quat rotY = quatAxisAngle({1, 0, 0}, md.y * rotSpeed);
             camera.rotation = rotX * camera.rotation * rotY;
         }
 
         Vec3 movement = Vec3{0.0f};
-        movement.y += static_cast<f32>(isButtonDown(Button_lshift) - isButtonDown(Button_space));
+        movement.y += static_cast<f32>(isButtonDown(Button_space) - isButtonDown(Button_lshift));
         movement.x += static_cast<f32>(isButtonDown(Button_d) - isButtonDown(Button_a));
         movement.z += static_cast<f32>(isButtonDown(Button_w) - isButtonDown(Button_s));
 
@@ -149,9 +149,9 @@ int main()
         renderer.drawDirectionalLight(Vec3{0.03f}, {-0.3f, 0.8f, 0.5f});
 
         f32 time = static_cast<f32>(elapsed);
-        Vec3 lightPos1{std::sin(time) * 3.0f, -1.5f, std::cos(time) * 3.0f};
-        Vec3 lightPos2{std::sin(time + 2.094f) * 3.0f, -1.5f, std::cos(time + 2.094f) * 3.0f};
-        Vec3 lightPos3{std::sin(time + 4.188f) * 3.0f, -1.5f, std::cos(time + 4.188f) * 3.0f};
+        Vec3 lightPos1{std::sin(time) * 3.0f, 1.5f, std::cos(time) * 3.0f};
+        Vec3 lightPos2{std::sin(time + 2.094f) * 3.0f, 1.5f, std::cos(time + 2.094f) * 3.0f};
+        Vec3 lightPos3{std::sin(time + 4.188f) * 3.0f, 1.5f, std::cos(time + 4.188f) * 3.0f};
 
         renderer.drawPointLight(Vec3{1.0f, 0.0f, 0.0f} * 3.0f, lightPos1);
         renderer.drawPointLight(Vec3{0.0f, 1.0f, 0.0f} * 3.0f, lightPos2);

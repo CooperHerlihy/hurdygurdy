@@ -1,0 +1,123 @@
+#version 450
+#include "hurdygurdy.glsl"
+
+layout(push_constant) uniform Push {
+    uint imgIdx;
+} push;
+
+layout(HgStorageImage, rgba8) uniform writeonly image2D img[];
+
+// Each image row checks one property of the noise / tangent frame math.
+// A passing check writes green, a failing check writes red.
+
+const uint C_TBN_GLTF_GREEN = 0;
+const uint C_SEED_SENSITIVE = 1;
+const uint C_VALUE1D_TILE = 2;
+const uint C_VALUE2D_TILE_X = 3;
+const uint C_VALUE2D_TILE_Y = 4;
+const uint C_VALUE3D_TILE_X = 5;
+const uint C_VALUE4D_TILE_X = 6;
+const uint C_PERLIN1D_TILE = 7;
+const uint C_PERLIN2D_TILE_X = 8;
+const uint C_VALUE3D_MIXED_FINITE = 9;
+const uint C_VALUE4D_MIXED_FINITE = 10;
+
+vec4 passColor(bool pass)
+{
+    return pass ? vec4(0.0, 1.0, 0.0, 1.0) : vec4(1.0, 0.0, 0.0, 1.0);
+}
+
+bool finite1(float v)
+{
+    return !isnan(v) && !isinf(v) && abs(v) <= 1.001;
+}
+
+void main()
+{
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    uint row = uint(coord.y);
+    bool pass = false;
+    const uint seed = 12345u;
+
+    if (row == C_TBN_GLTF_GREEN)
+    {
+        // glTF handedness: bitangent = cross(N, T) * w, w = 1 -> RH basis
+        vec3 t = vec3(1.0, 0.0, 0.0);
+        vec3 n = vec3(0.0, 0.0, 1.0);
+        vec3 m = hgTransformNormalMap(vec3(0.0, 1.0, 0.0), n, vec4(t, 1.0));
+        pass = abs(m.x) < 0.001 && abs(m.y - 1.0) < 0.001 && abs(m.z) < 0.001;
+    }
+    else if (row == C_SEED_SENSITIVE)
+    {
+        float a = hgNoiseNorm(0u, 1.0);
+        float b = hgNoiseNorm(0u, 2.0);
+        pass = abs(a - b) > 0.05;
+    }
+    else if (row == C_VALUE1D_TILE)
+    {
+        float a = hgValueNoise1D(seed, 1.0, 3.5, 4.0);
+        float b = hgValueNoise1D(seed, 1.0, 7.5, 4.0);
+        pass = abs(a - b) < 0.004;
+    }
+    else if (row == C_VALUE2D_TILE_X)
+    {
+        float a = hgValueNoise2D(seed, 1.0, vec2(3.5, 2.25), vec2(4.0, 0.0));
+        float b = hgValueNoise2D(seed, 1.0, vec2(7.5, 2.25), vec2(4.0, 0.0));
+        pass = abs(a - b) < 0.004;
+    }
+    else if (row == C_VALUE2D_TILE_Y)
+    {
+        float a = hgValueNoise2D(seed, 1.0, vec2(2.25, 3.5), vec2(0.0, 4.0));
+        float b = hgValueNoise2D(seed, 1.0, vec2(2.25, 7.5), vec2(0.0, 4.0));
+        pass = abs(a - b) < 0.004;
+    }
+    else if (row == C_VALUE3D_TILE_X)
+    {
+        float a = hgValueNoise3D(seed, 1.0, vec3(3.5, 2.25, 1.5), vec3(4.0, 0.0, 0.0));
+        float b = hgValueNoise3D(seed, 1.0, vec3(7.5, 2.25, 1.5), vec3(4.0, 0.0, 0.0));
+        pass = finite1(a) && finite1(b) && abs(a - b) < 0.004;
+    }
+    else if (row == C_VALUE4D_TILE_X)
+    {
+        float a = hgValueNoise4D(seed, 1.0, vec4(3.5, 2.25, 1.5, 0.75), vec4(4.0, 0.0, 0.0, 0.0));
+        float b = hgValueNoise4D(seed, 1.0, vec4(7.5, 2.25, 1.5, 0.75), vec4(4.0, 0.0, 0.0, 0.0));
+        pass = finite1(a) && finite1(b) && abs(a - b) < 0.004;
+    }
+    else if (row == C_PERLIN1D_TILE)
+    {
+        float a = hgPerlin1D(seed, 1.0, 3.5, 4.0);
+        float b = hgPerlin1D(seed, 1.0, 7.5, 4.0);
+        pass = abs(a - b) < 0.004;
+    }
+    else if (row == C_PERLIN2D_TILE_X)
+    {
+        float a = hgPerlin2D(seed, 1.0, vec2(3.5, 2.25), vec2(4.0, 0.0));
+        float b = hgPerlin2D(seed, 1.0, vec2(7.5, 2.25), vec2(4.0, 0.0));
+        pass = abs(a - b) < 0.004;
+    }
+    else if (row == C_VALUE3D_MIXED_FINITE)
+    {
+        // Mixed tile with a zero axis must be finite, never NaN
+        float v = 0.0;
+        for (uint i = 0u; i < 8u; ++i)
+        {
+            vec3 pos = vec3(0.75 + 3.25 * float(i) * 0.125, 1.25 + float(i) * 0.375, 2.0);
+            v = hgValueNoise3D(seed, 1.0, pos, vec3(4.0, 4.0, 0.0));
+            if (!finite1(v)) break;
+        }
+        pass = finite1(v);
+    }
+    else if (row == C_VALUE4D_MIXED_FINITE)
+    {
+        float v = 0.0;
+        for (uint i = 0u; i < 8u; ++i)
+        {
+            vec4 pos = vec4(0.75 + 3.25 * float(i) * 0.125, 1.25 + float(i) * 0.375, 2.0, 0.5);
+            v = hgValueNoise4D(seed, 1.0, pos, vec4(4.0, 4.0, 0.0, 0.0));
+            if (!finite1(v)) break;
+        }
+        pass = finite1(v);
+    }
+
+    imageStore(img[push.imgIdx], coord, passColor(pass));
+}

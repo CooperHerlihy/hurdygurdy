@@ -1252,6 +1252,21 @@ Vec3 vecRot3(Quat lhs, Vec3 rhs);
 Mat3 matRot3(Quat lhs, Mat3 rhs);
 
 /**
+ * Coordinate conventions for the rendering math in this header
+ *
+ * Model and world space follow glTF: right handed, y up, +z out of the
+ * screen toward the viewer, meters, counter clockwise winding seen from
+ * outside. View space is the camera's local frame; the camera looks along
+ * its local +z (glTF cameras look along -z, so rotate imported camera
+ * nodes 180 degrees around y to fit). Vulkan NDC is y down with depth in
+ * [0, 1]: the perspective projection applies the single y negation needed
+ * to connect y up view space to the y down NDC, and depth maps each view
+ * z in [near, far] to [0, 1]. The orthographic projection instead accepts
+ * y down screen style coordinates directly and maps them to the NDC
+ * unmirrored.
+ */
+
+/**
  * Creates a model matrix for 2D graphics
  *
  * Parameters
@@ -1287,7 +1302,8 @@ Mat4 matView(const Vec3& position, const Vec3& zoom, const Quat& rotation);
 /**
  * Creates a view matrix from a model matrix
  *
- * Note, shearing causes distortion
+ * Note, the result is the inverse of the rotation and translation only,
+ * scale and shear of the model matrix are not reflected in the result
  */
 Mat4 matModelToView(const Mat4& model);
 

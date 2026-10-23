@@ -110,6 +110,7 @@ set(SHADERS
     test/instance.frag
     test/blur.comp
     test/invert.frag
+    test/noise.comp
 )
 
 set(SHADER_HEADERS)

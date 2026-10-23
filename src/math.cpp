@@ -501,7 +501,7 @@ Quat quatBetween(Vec3 from, Vec3 to)
         Vec3 axis = std::abs(from.x) >= 1 - FLT_EPSILON
             ? vecCross3(from, {0, 1, 0})
             : vecCross3(from, {1, 0, 0});
-        return Quat(0, axis.x, axis.y, axis.z);
+        return quatNorm(Quat(0, axis.x, axis.y, axis.z));
     }
 
     Vec3 axis = vecCross3(from, to);
@@ -554,13 +554,12 @@ Mat4 matView(const Vec3& position, const Vec3& zoom, const Quat& rotation)
 {
     Mat4 rot{matRot3(quatConj(rotation), Mat3{1.0f})};
     Mat4 pos{1.0f};
-    pos.x.x = zoom.x;
-    pos.y.y = zoom.y;
-    pos.z.z = zoom.z;
-    pos.w.x = -position.x;
-    pos.w.y = -position.y;
-    pos.w.z = -position.z;
-    return rot * pos;
+    pos.w = Vec4{-position.x, -position.y, -position.z, 1.0f};
+    Mat4 zoomM{1.0f};
+    zoomM.x.x = zoom.x;
+    zoomM.y.y = zoom.y;
+    zoomM.z.z = zoom.z;
+    return zoomM * (rot * pos);
 }
 
 Mat4 matModelToView(const Mat4& model)
@@ -595,7 +594,7 @@ Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far)
     f32 scale = 1.0f / static_cast<f32>(tan(fov * 0.5f));
     return Mat4{
         {scale / aspect, 0.0f, 0.0f, 0.0f},
-        {0.0f, scale, 0.0f, 0.0f},
+        {0.0f, -scale, 0.0f, 0.0f},
         {0.0f, 0.0f, far / (far - near), 1.0f},
         {0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
     };

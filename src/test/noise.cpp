@@ -1,5 +1,8 @@
 #include "tests.hpp"
 #include "hg/noise.hpp"
+#include "hg/gpu.hpp"
+
+#include "test/noise.comp.spv.h"
 
 using namespace hg;
 
@@ -154,4 +157,58 @@ TEST(testRngSequence)
     ASSERT(a != b);
     ASSERT(b != c);
     ASSERT(a != c);
+}
+
+TEST(testNoiseGLSL)
+{
+    // Tests the GLSL math in hurdygurdy.glsl with an offscreen compute dispatch:
+    // src/test/noise.comp writes one pass/fail pixel per row.
+
+    static constexpr u32 imgWidth = 1;
+    static constexpr u32 imgHeight = 11;
+
+    GpuImage img = GpuImage::create(imgWidth, imgHeight, Format_rgba8_unorm,
+        GpuImageUsage_storage | GpuImageUsage_transferSrc);
+    GpuView imgView = GpuView::create(img, GpuAspect_color);
+
+    struct Push {
+        u32 imgIdx;
+    };
+    GpuPipeline pipe = GpuPipeline::compute({test_noise_comp_spv, sizeof(test_noise_comp_spv)},
+        sizeof(Push));
+
+    GpuCmd* cmd = gpuCmdBegin();
+
+    GpuImageBarrier ib{};
+    ib.image = &imgView;
+    ib.nextAccess = GpuAccess_storageImageCompute;
+    ib.nextLayout = GpuLayout_general;
+    gpuMemoryBarrier(cmd, {}, {&ib, 1});
+
+    {
+        GpuPass pass{};
+        GpuView* storageImages[] = {&imgView};
+        pass.storageImages = storageImages;
+        gpuComputePass(cmd, pass);
+
+        Push push{imgView.storageDescriptor()};
+        gpuBindPipeline(cmd, pipe);
+        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuDispatch(cmd, imgWidth, imgHeight, 1);
+    }
+
+    ib.nextAccess = GpuAccess_transferSrc;
+    ib.nextLayout = GpuLayout_transferSrc;
+    gpuMemoryBarrier(cmd, {}, {&ib, 1});
+
+    gpuCmdEnd(cmd);
+
+    u32 result[imgWidth * imgHeight] = {};
+    imgView.read(result);
+
+    const u32 passPixel = 0xFF00FF00; // green
+    for (u32 row = 0; row < imgHeight; ++row)
+    {
+        ASSERT(result[row] == passPixel);
+    }
 }

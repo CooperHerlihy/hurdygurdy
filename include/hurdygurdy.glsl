@@ -116,9 +116,9 @@ float hgSmoothQuintic(float t)
  */
 uint hgNoise(uint seed, uint pos)
 {
-    uint ret = (pos + 384521713u) * 955740521u;
+    uint ret = (pos + seed * 725937977u + 384521713u) * 955740521u;
     ret ^= ret >> 13;
-    ret *= seed * 725937977u;
+    ret *= 725937977u;
     ret ^= ret >> 7;
     ret *= 358166231u;
     ret ^= ret >> 11;
@@ -269,7 +269,7 @@ vec2 hgNoiseVec2D(uint seed, vec2 pos)
  * - seed The seed for the noise function
  * - scale The number of positions before a new value
  * - pos The position for the noise function
- * - tile The distance before the repeating, or 0 to never repeat
+ * - tile The distance before repeating on each axis, 0 disables repeating that axis
  */
 float hgValueNoise1D(uint seed, float scale, float pos, float tile)
 {
@@ -287,7 +287,7 @@ float hgValueNoise1D(uint seed, float scale, float pos, float tile)
 
     return mix(
         hgNoiseNorm(seed, pos0) * 2.0 - 1.0,
-        hgNoiseNorm(seed, floor(pos) + 1) * 2.0 - 1.0,
+        hgNoiseNorm(seed, pos1) * 2.0 - 1.0,
         hgSmooth(fract(pos)));
 }
 
@@ -298,7 +298,7 @@ float hgValueNoise1D(uint seed, float scale, float pos, float tile)
  * - seed The seed for the noise function
  * - scale The number of positions before a new value
  * - pos The position for the noise function
- * - tile The distance before the repeating, or 0 to never repeat
+ * - tile The distance before repeating on each axis, 0 disables repeating that axis
  */
 float hgValueNoise2D(uint seed, float scale, vec2 pos, vec2 tile)
 {
@@ -310,13 +310,12 @@ float hgValueNoise2D(uint seed, float scale, vec2 pos, vec2 tile)
     vec2 pos01 = pos00 + vec2(0, 1);
     vec2 pos11 = pos00 + vec2(1, 1);
 
-    if (tile.x > 0 && tile.y > 0)
-    {
-        pos00 = fract(pos00 / tile) * tile;
-        pos01 = fract(pos01 / tile) * tile;
-        pos10 = fract(pos10 / tile) * tile;
-        pos11 = fract(pos11 / tile) * tile;
-    }
+    bvec2 tileAxis = greaterThan(tile, vec2(0.0));
+    vec2 tileWrap = max(tile, vec2(1.0));
+    pos00 = mix(pos00, fract(pos00 / tileWrap) * tile, tileAxis);
+    pos01 = mix(pos01, fract(pos01 / tileWrap) * tile, tileAxis);
+    pos10 = mix(pos10, fract(pos10 / tileWrap) * tile, tileAxis);
+    pos11 = mix(pos11, fract(pos11 / tileWrap) * tile, tileAxis);
 
     vec2 t = fract(pos);
     return mix(
@@ -338,7 +337,7 @@ float hgValueNoise2D(uint seed, float scale, vec2 pos, vec2 tile)
  * - seed The seed for the noise function
  * - scale The number of positions before a new value
  * - pos The position for the noise function
- * - tile The distance before the repeating, or 0 to never repeat
+ * - tile The distance before repeating on each axis, 0 disables repeating that axis
  */
 float hgValueNoise3D(uint seed, float scale, vec3 pos, vec3 tile)
 {
@@ -354,17 +353,16 @@ float hgValueNoise3D(uint seed, float scale, vec3 pos, vec3 tile)
     vec3 pos011 = pos000 + vec3(0, 1, 1);
     vec3 pos111 = pos000 + vec3(1, 1, 1);
 
-    if (tile.x > 0 && tile.y > 0)
-    {
-        pos000 = fract(pos000 / tile) * tile;
-        pos010 = fract(pos010 / tile) * tile;
-        pos100 = fract(pos100 / tile) * tile;
-        pos110 = fract(pos110 / tile) * tile;
-        pos001 = fract(pos001 / tile) * tile;
-        pos011 = fract(pos011 / tile) * tile;
-        pos101 = fract(pos101 / tile) * tile;
-        pos111 = fract(pos111 / tile) * tile;
-    }
+    bvec3 tileAxis = greaterThan(tile, vec3(0.0));
+    vec3 tileWrap = max(tile, vec3(1.0));
+    pos000 = mix(pos000, fract(pos000 / tileWrap) * tile, tileAxis);
+    pos010 = mix(pos010, fract(pos010 / tileWrap) * tile, tileAxis);
+    pos100 = mix(pos100, fract(pos100 / tileWrap) * tile, tileAxis);
+    pos110 = mix(pos110, fract(pos110 / tileWrap) * tile, tileAxis);
+    pos001 = mix(pos001, fract(pos001 / tileWrap) * tile, tileAxis);
+    pos011 = mix(pos011, fract(pos011 / tileWrap) * tile, tileAxis);
+    pos101 = mix(pos101, fract(pos101 / tileWrap) * tile, tileAxis);
+    pos111 = mix(pos111, fract(pos111 / tileWrap) * tile, tileAxis);
 
     vec3 t = fract(pos);
     return mix(
@@ -398,7 +396,7 @@ float hgValueNoise3D(uint seed, float scale, vec3 pos, vec3 tile)
  * - seed The seed for the noise function
  * - scale The number of positions before a new value
  * - pos The position for the noise function
- * - tile The distance before the repeating, or 0 to never repeat
+ * - tile The distance before repeating on each axis, 0 disables repeating that axis
  */
 float hgValueNoise4D(uint seed, float scale, vec4 pos, vec4 tile)
 {
@@ -422,25 +420,24 @@ float hgValueNoise4D(uint seed, float scale, vec4 pos, vec4 tile)
     vec4 pos0111 = pos0000 + vec4(0, 1, 1, 1);
     vec4 pos1111 = pos0000 + vec4(1, 1, 1, 1);
 
-    if (tile.x > 0 && tile.y > 0)
-    {
-        pos0000 = fract(pos0000 / tile) * tile;
-        pos0100 = fract(pos0100 / tile) * tile;
-        pos1000 = fract(pos1000 / tile) * tile;
-        pos1100 = fract(pos1100 / tile) * tile;
-        pos0010 = fract(pos0010 / tile) * tile;
-        pos0110 = fract(pos0110 / tile) * tile;
-        pos1010 = fract(pos1010 / tile) * tile;
-        pos1110 = fract(pos1110 / tile) * tile;
-        pos0001 = fract(pos0001 / tile) * tile;
-        pos0101 = fract(pos0101 / tile) * tile;
-        pos1001 = fract(pos1001 / tile) * tile;
-        pos1101 = fract(pos1101 / tile) * tile;
-        pos0011 = fract(pos0011 / tile) * tile;
-        pos0111 = fract(pos0111 / tile) * tile;
-        pos1011 = fract(pos1011 / tile) * tile;
-        pos1111 = fract(pos1111 / tile) * tile;
-    }
+    bvec4 tileAxis = greaterThan(tile, vec4(0.0));
+    vec4 tileWrap = max(tile, vec4(1.0));
+    pos0000 = mix(pos0000, fract(pos0000 / tileWrap) * tile, tileAxis);
+    pos0100 = mix(pos0100, fract(pos0100 / tileWrap) * tile, tileAxis);
+    pos1000 = mix(pos1000, fract(pos1000 / tileWrap) * tile, tileAxis);
+    pos1100 = mix(pos1100, fract(pos1100 / tileWrap) * tile, tileAxis);
+    pos0010 = mix(pos0010, fract(pos0010 / tileWrap) * tile, tileAxis);
+    pos0110 = mix(pos0110, fract(pos0110 / tileWrap) * tile, tileAxis);
+    pos1010 = mix(pos1010, fract(pos1010 / tileWrap) * tile, tileAxis);
+    pos1110 = mix(pos1110, fract(pos1110 / tileWrap) * tile, tileAxis);
+    pos0001 = mix(pos0001, fract(pos0001 / tileWrap) * tile, tileAxis);
+    pos0101 = mix(pos0101, fract(pos0101 / tileWrap) * tile, tileAxis);
+    pos1001 = mix(pos1001, fract(pos1001 / tileWrap) * tile, tileAxis);
+    pos1101 = mix(pos1101, fract(pos1101 / tileWrap) * tile, tileAxis);
+    pos0011 = mix(pos0011, fract(pos0011 / tileWrap) * tile, tileAxis);
+    pos0111 = mix(pos0111, fract(pos0111 / tileWrap) * tile, tileAxis);
+    pos1011 = mix(pos1011, fract(pos1011 / tileWrap) * tile, tileAxis);
+    pos1111 = mix(pos1111, fract(pos1111 / tileWrap) * tile, tileAxis);
 
     vec4 t = fract(pos);
     return mix(
@@ -503,7 +500,7 @@ hgFractalNoise4DFunctionDef(hgFractalValueNoise4D, hgValueNoise4D)
  * - seed The seed for the noise function
  * - scale The number of positions before a new gradient
  * - pos The position for the noise function
- * - tile The distance before the repeating, or 0 to never repeat
+ * - tile The distance before repeating, or 0 to never repeat
  */
 float hgPerlin1D(uint seed, float scale, float pos, float tile)
 {
@@ -533,7 +530,7 @@ float hgPerlin1D(uint seed, float scale, float pos, float tile)
  * - seed The seed for the noise function
  * - scale The number of positions before a new gradient
  * - pos The position for the noise function
- * - tile The distance before the repeating, or 0 to never repeat
+ * - tile The distance before repeating on each axis, 0 disables repeating that axis
  */
 float hgPerlin2D(uint seed, float scale, vec2 pos, vec2 tile)
 {
@@ -545,13 +542,12 @@ float hgPerlin2D(uint seed, float scale, vec2 pos, vec2 tile)
     vec2 pos01 = pos00 + vec2(0, 1);
     vec2 pos11 = pos00 + vec2(1, 1);
 
-    if (tile.x > 0 && tile.y > 0)
-    {
-        pos00 = fract(pos00 / tile) * tile;
-        pos01 = fract(pos01 / tile) * tile;
-        pos10 = fract(pos10 / tile) * tile;
-        pos11 = fract(pos11 / tile) * tile;
-    }
+    bvec2 tileAxis = greaterThan(tile, vec2(0.0));
+    vec2 tileWrap = max(tile, vec2(1.0));
+    pos00 = mix(pos00, fract(pos00 / tileWrap) * tile, tileAxis);
+    pos01 = mix(pos01, fract(pos01 / tileWrap) * tile, tileAxis);
+    pos10 = mix(pos10, fract(pos10 / tileWrap) * tile, tileAxis);
+    pos11 = mix(pos11, fract(pos11 / tileWrap) * tile, tileAxis);
 
     vec2 grad00 = hgNoiseVec2D(seed, pos00);
     vec2 grad10 = hgNoiseVec2D(seed, pos10);
@@ -606,6 +602,9 @@ HgVertex hgTransformVertex(mat4 matrix, HgVertex vertex)
 /**
  * Transform the normal from a normal map onto the model
  *
+ * The tangent basis follows the glTF 2.0 handedness convention:
+ * bitangent = cross(normal, tangent.xyz) * tangent.w
+ *
  * Parameters
  * - mapNormal The normal from the normal map
  * - vertexNormal The normal interpolated from the vertices
@@ -615,7 +614,7 @@ vec3 hgTransformNormalMap(vec3 mapNormal, vec3 vertexNormal, vec4 vertexTangent)
 {
     mat3 texToModel = mat3(
         vertexTangent.xyz,
-        cross(vertexTangent.xyz, vertexNormal) * vertexTangent.w,
+        cross(vertexNormal, vertexTangent.xyz) * vertexTangent.w,
         vertexNormal
     );
     return normalize(texToModel * mapNormal);

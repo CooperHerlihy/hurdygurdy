@@ -572,6 +572,81 @@ TEST(testMatOrthographic)
     ASSERT(std::abs(nc.w - 1.0f) < FLT_EPSILON);
 }
 
+TEST(testQuatBetweenAntiparallel)
+{
+    Quat q = quatBetween({1, 0, 0}, {-1, 0, 0});
+    ASSERT(std::abs(quatAbs(q) - 1.0f) < FLT_EPSILON);
+    Vec3 r = vecRot3(q, {1, 0, 0});
+    ASSERT(std::abs(r.x + 1.0f) < 1e-5f);
+    ASSERT(std::abs(r.y) < 1e-5f);
+    ASSERT(std::abs(r.z) < 1e-5f);
+
+    Quat qz = quatBetween({0, 0, 1}, {0, 0, -1});
+    ASSERT(std::abs(quatAbs(qz) - 1.0f) < FLT_EPSILON);
+    Vec3 rz = vecRot3(qz, {0, 0, 1});
+    ASSERT(std::abs(rz.x) < 1e-5f);
+    ASSERT(std::abs(rz.y) < 1e-5f);
+    ASSERT(std::abs(rz.z + 1.0f) < 1e-5f);
+
+    Quat qd = quatBetween({0.7f, 0.7f, 0}, {-0.7f, -0.7f, 0});
+    ASSERT(std::abs(quatAbs(qd) - 1.0f) < FLT_EPSILON);
+    Vec3 rd = vecRot3(qd, {0.7f, 0.7f, 0});
+    ASSERT(std::abs(rd.x + 0.7f) < 1e-5f);
+    ASSERT(std::abs(rd.y + 0.7f) < 1e-5f);
+    ASSERT(std::abs(rd.z) < 1e-5f);
+}
+
+TEST(testMatViewZoom)
+{
+    Quat id{1};
+    Vec3 p{3, 4, 5};
+
+    Mat4 view = matView(p, Vec3{1.0f}, id);
+    Vec4 t = view * Vec4{0, 0, 0, 1};
+    ASSERT(std::abs(t.x + 3.0f) < FLT_EPSILON);
+    ASSERT(std::abs(t.y + 4.0f) < FLT_EPSILON);
+    ASSERT(std::abs(t.z + 5.0f) < FLT_EPSILON);
+    ASSERT(std::abs(t.w - 1.0f) < FLT_EPSILON);
+
+    Mat4 zoomed = matView(p, Vec3{2.0f, 1.0f, 1.0f}, id);
+    Vec4 z = zoomed * Vec4{4, 3, 2, 1};
+    ASSERT(std::abs(z.x - (2.0f * (4.0f - 3.0f))) < FLT_EPSILON);
+    ASSERT(std::abs(z.y - (1.0f * (3.0f - 4.0f))) < FLT_EPSILON);
+    ASSERT(std::abs(z.z - (1.0f * (2.0f - 5.0f))) < FLT_EPSILON);
+
+    Mat4 rotated = matView(p, Vec3{2.0f, 1.0f, 1.0f}, quatAxisAngle({0, 0, 1}, pif / 2.0f));
+    Vec4 rz = rotated * Vec4{4, 3, 2, 1};
+    ASSERT(std::abs(rz.x + 2.0f) < 1e-5f);
+    ASSERT(std::abs(rz.y + 1.0f) < 1e-5f);
+    ASSERT(std::abs(rz.z + 3.0f) < 1e-5f);
+}
+
+TEST(testProjectionOrientation)
+{
+    Mat4 view = matView({0, 0, 0}, Vec3{1.0f}, Quat{1});
+    Mat4 persp = matPerspective(pif / 2.0f, 1.0f, 0.1f, 100.0f);
+
+    Vec4 up = persp * view * Vec4{0, 1, 5, 1};
+    ASSERT(up.w > 0.0f);
+    ASSERT(up.x < FLT_EPSILON);
+    ASSERT(up.y < 0.0f);
+    ASSERT(std::abs(up.z / up.w) < 1.0f);
+
+    Vec4 nz = persp * view * Vec4{0, 0, 0.1f, 1};
+    Vec4 fz = persp * view * Vec4{0, 0, 100.0f, 1};
+    ASSERT(std::abs(nz.z) < 1e-4f);
+    ASSERT(std::abs(fz.z / fz.w - 1.0f) < 1e-3f);
+
+    Mat4 ortho = matOrthographic(-1, 1, 1, -1, 0, 100);
+    Vec4 oUp = ortho * view * Vec4{0, 0.5, 1, 1};
+    ASSERT(oUp.y < 0.0f);
+
+    Vec4 onz = ortho * view * Vec4{0, 0, 0, 1};
+    Vec4 ofz = ortho * view * Vec4{0, 0, 100, 1};
+    ASSERT(std::abs(onz.z) < 1e-5f);
+    ASSERT(std::abs(ofz.z - 1.0f) < 1e-5f);
+}
+
 TEST(testVec2EqualityOperators)
 {
     ASSERT((Vec2{1, 2} == Vec2{1, 2}));
