@@ -400,7 +400,8 @@ Vec2 wheelDelta();
 /**
  * Returns the number of connected gamepads
  *
- * Note, any combination of indices 0-3 may be active
+ * Note, Backends support at least 8 gamepad indices, though physical
+ * device limits may be lower (eg. XInput supports 4 on Windows)
  */
 u32 connectedGamepadCount();
 
@@ -412,7 +413,7 @@ bool isGamepadConnected(u32 gamepad);
 /**
  * Get whether a gamepad button is currently down
  */
-bool isGamepadButtonDown(u32 gamepad, Button key);
+bool isGamepadButtonDown(u32 gamepad, GamepadButton key);
 
 /**
  * Get whether a gamepad button was pressed last frame
@@ -448,6 +449,27 @@ f32 gamepadRightTrigger(u32 gamepad);
  * Configuration for a window
  */
 struct WindowConfig {
+    /**
+     * The width of the window in pixels
+     *
+     * Note, may be ignored depending on platform
+     * Note, 0 lets the platform choose a default size
+     */
+    u32 width = 0;
+    /**
+     * The height of the window in pixels
+     *
+     * Note, may be ignored depending on platform
+     * Note, 0 lets the platform choose a default size
+     */
+    u32 height = 0;
+    /**
+     * The title of the window
+     *
+     * Note, may be truncated on some platforms
+     * Note, an empty title uses the platform default
+     */
+    StringView title = "";
     /**
      * How the swapchain images will be presented
      *

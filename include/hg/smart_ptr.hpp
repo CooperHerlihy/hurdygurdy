@@ -156,7 +156,8 @@ struct SharedPtr {
     {
         SharedPtr other{};
         other.ptr = ptr;
-        ++ptr->refCount;
+        if (ptr != nullptr)
+            ++ptr->refCount;
         return other;
     }
 

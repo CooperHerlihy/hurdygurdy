@@ -852,7 +852,11 @@ WindowData& WindowData::operator=(WindowData&& other) noexcept
 
 Window windowCreate(const WindowConfig& config)
 {
-    (void)config;
+    ArenaScope scratch = getScratch();
+
+    u32 width = config.width != 0 ? config.width : 800;
+    u32 height = config.height != 0 ? config.height : 600;
+    const char* title = config.title.length != 0 ? cString(scratch, config.title) : "Hurdy Gurdy";
 
     WindowData* window = new (heapAlloc(sizeof(WindowData), alignof(WindowData))) WindowData{};
 
@@ -863,7 +867,7 @@ Window windowCreate(const WindowConfig& config)
         windowState.display,
         windowState.root,
         0, 0,
-        800, 600, // Default size
+        static_cast<u16>(width), static_cast<u16>(height),
         0,
         CopyFromParent,
         InputOutput,
@@ -881,7 +885,7 @@ Window windowCreate(const WindowConfig& config)
     }
 
     // Set window title
-    xlibFuncs.XStoreName(windowState.display,window->x11Window, "Hurdy Gurdy");
+    xlibFuncs.XStoreName(windowState.display,window->x11Window, title);
 
     // Set WM_DELETE_WINDOW protocol
     xlibFuncs.XSetWMProtocols(windowState.display,window->x11Window, &windowState.wmDeleteMessage, 1);
@@ -1526,15 +1530,12 @@ bool isGamepadConnected(u32 gamepad)
     return gamepad < windowState.gamepadCount && windowState.gamepads[gamepad].fd >= 0;
 }
 
-bool isGamepadButtonDown(u32 gamepad, Button key)
+bool isGamepadButtonDown(u32 gamepad, GamepadButton key)
 {
     if (gamepad >= windowState.gamepadCount)
         return false;
 
-    if (static_cast<u32>(key) >= GamepadButton_count)
-        return false;
-
-    return windowState.gamepads[gamepad].isButtonDown[static_cast<GamepadButton>(key)];
+    return windowState.gamepads[gamepad].isButtonDown[key];
 }
 
 bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key)

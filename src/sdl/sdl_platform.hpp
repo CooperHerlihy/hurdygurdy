@@ -22,7 +22,7 @@ Span<Event> getEvents();
 
 u32 connectedGamepadCount();
 bool isGamepadConnected(u32 gamepad);
-bool isGamepadButtonDown(u32 gamepad, Button key);
+bool isGamepadButtonDown(u32 gamepad, GamepadButton key);
 bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key);
 bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key);
 Vec2 gamepadLeftStick(u32 gamepad);

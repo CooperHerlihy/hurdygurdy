@@ -805,7 +805,7 @@ bool isGamepadConnected(u32 gamepad)
     return gamepad < maxGamepads && windowState.gamepads[gamepad] != nullptr;
 }
 
-bool isGamepadButtonDown(u32 gamepad, Button key)
+bool isGamepadButtonDown(u32 gamepad, GamepadButton key)
 {
     if (gamepad < maxGamepads)
         return windowState.isGamepadButtonDown[gamepad][key];
@@ -873,9 +873,14 @@ Window windowCreate(const WindowConfig& config)
 
     ArenaScope scratch = getScratch();
 
+    u32 width = config.width != 0 ? config.width : 800;
+    u32 height = config.height != 0 ? config.height : 600;
+    const char* title = config.title.length != 0 ? cString(scratch, config.title) : "Hurdy Gurdy";
+
     wd->sdlWindow = SDL_CreateWindow(
-        "Hurdy Gurdy",
-        800, 600,
+        title,
+        static_cast<int>(width),
+        static_cast<int>(height),
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     if (wd->sdlWindow == nullptr)
         HG_PANIC("SDL could not create window: %s\n", SDL_GetError());

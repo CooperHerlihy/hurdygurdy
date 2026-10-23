@@ -6,6 +6,7 @@
 #include "hg/time.hpp"
 
 #include <imgui.h>
+#include <math.h>
 
 namespace hg {
 
@@ -113,6 +114,101 @@ static ImGuiKey hgButtonToImGuiKey(Button button)
     }
 }
 
+static ImGuiKey hgGamepadButtonToImGuiKey(GamepadButton button)
+{
+    switch (button)
+    {
+        case GamepadButton_south: return ImGuiKey_GamepadFaceDown;
+        case GamepadButton_east: return ImGuiKey_GamepadFaceRight;
+        case GamepadButton_west: return ImGuiKey_GamepadFaceLeft;
+        case GamepadButton_north: return ImGuiKey_GamepadFaceUp;
+        case GamepadButton_back: return ImGuiKey_GamepadBack;
+        case GamepadButton_guide: return ImGuiKey_Menu;
+        case GamepadButton_start: return ImGuiKey_GamepadStart;
+        case GamepadButton_leftStick: return ImGuiKey_GamepadL3;
+        case GamepadButton_rightStick: return ImGuiKey_GamepadR3;
+        case GamepadButton_leftShoulder: return ImGuiKey_GamepadL1;
+        case GamepadButton_rightShoulder: return ImGuiKey_GamepadR1;
+        case GamepadButton_dpadUp: return ImGuiKey_GamepadDpadUp;
+        case GamepadButton_dpadDown: return ImGuiKey_GamepadDpadDown;
+        case GamepadButton_dpadLeft: return ImGuiKey_GamepadDpadLeft;
+        case GamepadButton_dpadRight: return ImGuiKey_GamepadDpadRight;
+        default: return ImGuiKey_None;
+    }
+}
+
+// ImGui nav only follows one gamepad: feed the first connected one each frame
+static void updateImGuiGamepad(ImGuiIO& io)
+{
+    u32 gamepad = UINT32_MAX;
+    for (u32 i = 0; i < 8; i++)
+    {
+        if (isGamepadConnected(i))
+        {
+            gamepad = i;
+            break;
+        }
+    }
+
+    if (gamepad == UINT32_MAX)
+        return;
+
+    for (u32 i = 0; i < static_cast<u32>(GamepadButton_count); i++)
+    {
+        ImGuiKey key = hgGamepadButtonToImGuiKey(static_cast<GamepadButton>(i));
+        if (key != ImGuiKey_None)
+            io.AddKeyEvent(key, isGamepadButtonDown(gamepad, static_cast<GamepadButton>(i)));
+    }
+
+    f32 leftTrigger = gamepadLeftTrigger(gamepad);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadL2,
+        leftTrigger > 0.0f,
+        leftTrigger);
+
+    f32 rightTrigger = gamepadRightTrigger(gamepad);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadR2,
+        rightTrigger > 0.0f,
+        rightTrigger);
+
+    Vec2 leftStick = gamepadLeftStick(gamepad);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadLStickLeft,
+        leftStick.x < 0.0f,
+        leftStick.x < 0.0f ? -leftStick.x : 0.0f);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadLStickRight,
+        leftStick.x > 0.0f,
+        leftStick.x > 0.0f ? leftStick.x : 0.0f);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadLStickDown,
+        leftStick.y > 0.0f,
+        leftStick.y > 0.0f ? leftStick.y : 0.0f);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadLStickUp,
+        leftStick.y < 0.0f,
+        leftStick.y < 0.0f ? -leftStick.y : 0.0f);
+
+    Vec2 rightStick = gamepadRightStick(gamepad);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadRStickLeft,
+        rightStick.x < 0.0f,
+        rightStick.x < 0.0f ? -rightStick.x : 0.0f);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadRStickRight,
+        rightStick.x > 0.0f,
+        rightStick.x > 0.0f ? rightStick.x : 0.0f);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadRStickDown,
+        rightStick.y > 0.0f,
+        rightStick.y > 0.0f ? rightStick.y : 0.0f);
+    io.AddKeyAnalogEvent(
+        ImGuiKey_GamepadRStickUp,
+        rightStick.y < 0.0f,
+        rightStick.y < 0.0f ? -rightStick.y : 0.0f);
+}
+
 void initImGui(
     const Window& window,
     Format colorFormat,
@@ -129,6 +225,7 @@ void initImGui(
     io.BackendPlatformName = "imgui_hurdygurdy";
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
+    io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
 
     state.cursors[ImGuiMouseCursor_Arrow] = CursorType_arrow;
     state.cursors[ImGuiMouseCursor_TextInput] = CursorType_textInput;
@@ -297,6 +394,9 @@ void beginImGuiFrame()
     Vec2 wheel = wheelDelta();
     if (wheel.x != 0.0f || wheel.y != 0.0f)
         io.AddMouseWheelEvent(wheel.x, wheel.y);
+
+    if (io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad)
+        updateImGuiGamepad(io);
 
     if (!(io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange))
     {

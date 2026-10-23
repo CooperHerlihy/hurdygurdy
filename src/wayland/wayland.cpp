@@ -1348,12 +1348,19 @@ static void xdgToplevelConfigure(void* data, struct xdg_toplevel* toplevel,
 
         if (newW != window->width || newH != window->height)
         {
+            // Ignore suggests while creating, before the swapchain exists
+            if (window->swap.data == nullptr)
+            {
+                window->width = newW;
+                window->height = newH;
+                return;
+            }
+
             window->wasResized = true;
             window->width = newW;
             window->height = newH;
 
-            if (window->swap.data != nullptr)
-                window->swap.resize(newW, newH);
+            window->swap.resize(newW, newH);
 
             Event event{};
             event.type = EventType_windowResized;
@@ -2055,13 +2062,11 @@ bool isGamepadConnected(u32 gamepad)
     return gamepad < windowState.gamepadCount && windowState.gamepads[gamepad].fd >= 0;
 }
 
-bool isGamepadButtonDown(u32 gamepad, Button key)
+bool isGamepadButtonDown(u32 gamepad, GamepadButton key)
 {
     if (gamepad >= windowState.gamepadCount)
         return false;
-    if (static_cast<u32>(key) >= GamepadButton_count)
-        return false;
-    return windowState.gamepads[gamepad].isButtonDown[static_cast<GamepadButton>(key)];
+    return windowState.gamepads[gamepad].isButtonDown[key];
 }
 
 bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key)
@@ -2164,10 +2169,13 @@ Window windowCreate(const WindowConfig& config)
     }
 
     xdg_toplevel_add_listener(wd->xdgToplevel, &xdgToplevelListener, wd);
-    xdg_toplevel_set_title(wd->xdgToplevel, "Hurdy Gurdy");
+    xdg_toplevel_set_title(wd->xdgToplevel, config.title.length != 0
+        ? cString(getScratch(), config.title)
+        : "Hurdy Gurdy");
 
-    wd->width = 800;
-    wd->height = 600;
+    // 0 lets the compositor suggest a size, which arrives in the roundtrip below
+    wd->width = config.width != 0 ? config.width : 800;
+    wd->height = config.height != 0 ? config.height : 600;
 
     windowState.windows.add(surfaceKey(wd->wlSurface), wd);
 

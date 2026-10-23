@@ -58,9 +58,9 @@ void main()
                 normal,
                 -normalize(light.pos.xyz),
                 viewDir,
-                16.0,
-                0.7,
-                0.3));
+                push.shininess,
+                push.diffuse,
+                1.0 - push.diffuse));
     }
 
     for (uint i = 0; i < push.pointLightCount; ++i)
@@ -75,9 +75,9 @@ void main()
                 normal,
                 normalize(lightPosRel),
                 viewDir,
-                16.0,
-                0.7,
-                0.3)
+                push.shininess,
+                push.diffuse,
+                1.0 - push.diffuse)
             / dot(lightPosRel, lightPosRel));
     }
 

@@ -217,6 +217,20 @@ void reload(const Asset<T>& asset)
 }
 
 /**
+ * Hot reload an asset from a path
+ */
+template<typename T>
+void reload(StringView path)
+{
+    AssetData<T>** asset = AssetManager<T>::map.get(path);
+    if (asset != nullptr)
+    {
+        (*asset)->asset = {};
+        assetLoadImpl(*asset);
+    }
+}
+
+/**
  * Binary asset load implementation
  */
 template<>

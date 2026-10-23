@@ -435,7 +435,7 @@ int main()
                             for (u32 i = 1; i < GamepadButton_count; ++i)
                             {
                                 GamepadButton b = static_cast<GamepadButton>(i);
-                                bool down = isGamepadButtonDown(g, static_cast<Button>(b));
+                                bool down = isGamepadButtonDown(g, b);
                                 bool pressed = wasGamepadButtonPressed(g, b);
                                 bool released = wasGamepadButtonReleased(g, b);
                                 if (down || pressed || released)

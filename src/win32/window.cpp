@@ -24,7 +24,7 @@
 
 namespace hg::win32 {
 
-static constexpr u32 maxGamepads = 4;
+static constexpr u32 maxGamepads = 8;
 
 struct WindowData {
     GpuSwapchain swap{};
@@ -872,14 +872,10 @@ bool isGamepadConnected(u32 gamepad)
     return gamepad < maxGamepads && windowState.gamepads[gamepad].connected;
 }
 
-bool isGamepadButtonDown(u32 gamepad, Button key)
+bool isGamepadButtonDown(u32 gamepad, GamepadButton key)
 {
     if (gamepad < maxGamepads)
-    {
-        GamepadButton gb = static_cast<GamepadButton>(static_cast<u32>(key));
-        if (gb < GamepadButton_count)
-            return windowState.gamepads[gamepad].isButtonDown[gb];
-    }
+        return windowState.gamepads[gamepad].isButtonDown[key];
     return false;
 }
 
@@ -946,13 +942,29 @@ Window windowCreate(const WindowConfig& config)
 
     WindowData* wd = static_cast<WindowData*>(window.data);
 
-    HWND hwnd = CreateWindowExA(
+    ArenaScope scratch = getScratch();
+
+    u32 width = config.width != 0 ? config.width : 0;
+    u32 height = config.height != 0 ? config.height : 0;
+    const char* title = config.title.length != 0 ? cString(scratch, config.title) : "Hurdy Gurdy";
+
+    wchar_t wtitle[256]{};
+    MultiByteToWideChar(
+        CP_UTF8,
         0,
-        "HurdyGurdyWindow",
-        "Hurdy Gurdy",
+        title,
+        -1,
+        wtitle,
+        static_cast<int>(sizeof(wtitle) / sizeof(wchar_t)) - 1);
+
+    HWND hwnd = CreateWindowExW(
+        0,
+        L"HurdyGurdyWindow",
+        wtitle,
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
-        800, 600,
+        width != 0 ? static_cast<int>(width) : CW_USEDEFAULT,
+        height != 0 ? static_cast<int>(height) : CW_USEDEFAULT,
         nullptr, nullptr,
         windowState.hInstance,
         nullptr);
