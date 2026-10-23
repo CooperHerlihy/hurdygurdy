@@ -82,7 +82,8 @@ struct XkbFuncs {
     HG_X11_FUNC(xkb_keymap_unref);
     HG_X11_FUNC(xkb_state_new);
     HG_X11_FUNC(xkb_state_unref);
-    HG_X11_FUNC(xkb_state_key_get_one_sym);
+    HG_X11_FUNC(xkb_state_key_get_layout);
+    HG_X11_FUNC(xkb_keymap_key_get_syms_by_level);
     HG_X11_FUNC(xkb_state_key_get_utf8);
     HG_X11_FUNC(xkb_state_update_mask);
 };
@@ -210,7 +211,8 @@ static bool loadXkb()
     HG_LOAD_XKB(xkb_keymap_unref);
     HG_LOAD_XKB(xkb_state_new);
     HG_LOAD_XKB(xkb_state_unref);
-    HG_LOAD_XKB(xkb_state_key_get_one_sym);
+    HG_LOAD_XKB(xkb_state_key_get_layout);
+    HG_LOAD_XKB(xkb_keymap_key_get_syms_by_level);
     HG_LOAD_XKB(xkb_state_key_get_utf8);
     HG_LOAD_XKB(xkb_state_update_mask);
 
@@ -1163,7 +1165,6 @@ void processEvents()
             case KeyRelease:
             {
                 bool pressed = (event.type == KeyPress);
-                KeySym keysym = xkbFuncs.xkb_state_key_get_one_sym(windowState.xkbState, event.xkey.keycode);
 
                 // Update XKB state
                 xkbFuncs.xkb_state_update_mask(windowState.xkbState,
@@ -1172,7 +1173,22 @@ void processEvents()
                     0,
                     0, 0, 0);
 
-                Button button = xkbKeysymToButton(keysym);
+                // Buttons represent physical keys, so map the level 0
+                // (unmodified) keysym of the active layout instead of the
+                // modifier-dependent keysym: press/release must resolve to
+                // the same button with or without shift.
+                Button button = Button_count;
+                if (windowState.xkbState != nullptr)
+                {
+                    xkb_layout_index_t layout =
+                        xkbFuncs.xkb_state_key_get_layout(windowState.xkbState, event.xkey.keycode);
+                    const xkb_keysym_t* syms = nullptr;
+                    int numSyms = xkbFuncs.xkb_keymap_key_get_syms_by_level(
+                        windowState.xkbKeymap, event.xkey.keycode, layout, 0, &syms);
+                    if (numSyms > 0 && syms != nullptr)
+                        button = xkbKeysymToButton(syms[0]);
+                }
+
                 if (button < Button_count)
                 {
                     windowState.isKeyDown[button] = pressed;

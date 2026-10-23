@@ -91,7 +91,7 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/map.hpp` - Map, MapTemp
 - `hg/pool.hpp` - Pool, HandlePool
 - `hg/assets.hpp` - AssetT, AssetManagerT, load/reload
-- `hg/serialization.hpp` - Serializer, binary format
+- `hg/serialization.hpp` - Serializer, binary format, JSON (JsonValue/JsonObject)
 - `hg/time.hpp` - Clock, Perf
 - `hg/dynlib.hpp` - Library dynamic loading
 - `hg/filesystem.hpp` - FilePath builder and filesystem ops
@@ -104,8 +104,8 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/ecs.hpp` - Entity component system
 
 `src/` - implementation:
-- `internal.hpp` - internal header (platform/gpu/audio init)
-- `platform_test.cpp` - platform test harness
+- `internal.hpp` - internal declarations (platform Vulkan exts, gpu/render2d/imgui init hooks)
+- `platform_test.cpp` - manual test app: windows, input, audio, ImGui, profiler
 - `error.cpp`
 - `init.cpp`
 - `memory.cpp`
@@ -126,28 +126,35 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
 - `dynlib.cpp`
 - `filesystem.cpp`
-- `minimal.cpp` - minimal example app
-- `embed.c` - embedded resources
+- `example2d.cpp` - standalone 2D demo app
+- `example3d.cpp` - standalone 3D demo app
+- `embed.c` - host build tool: converts a file into a C byte array
 - `stb.c` - stb library impl
 - `vk_mem_alloc.cpp` - Vulkan Memory Allocator impl
 - `pixel_font.h` - embedded pixel font data
 
 `src/vulkan/` - Vulkan implementation:
-- `vulkan_internal.hpp` - internal header, data structs, VulkanFuncs, inline helpers
-- `vulkan.cpp` - internal infrastructure: VulkanState, init/deinit, format tables, samplers, descriptors
-- `loader.cpp` - dynamic Vulkan library loading, function pointer population
-- `gpu.cpp` - public API impl: GpuBuffer/Image/View/Pipeline, cmds, barriers, render/compute passes
+- `vulkan_internal.hpp` - internal header, Gpu*Data structs, VulkanState, Frame, inline enum converters
+- `vulkan.cpp` - internal infrastructure: rglobals VulkanState, init/deinit
+- `loader.cpp` - VulkanFuncs struct, dynamic library loading, vk* wrapper thunks
+- `gpu.cpp` - public API impl: GpuBuffer/Image/View/Pipeline, cmds, barriers, render/compute passes, frame begin/end
 
 `src/sdl/` - SDL implementation:
-- `sdl_internal.hpp` - internal header, SdlFuncs struct, extern libsdl/sdlFuncs
+- `sdl_internal.hpp` - internal header: window/audio init declarations
 - `sdl.cpp` - init/deinit
 - `sdl_platform.hpp` - SDL platform abstractions
-- `window.cpp` - Window create, processEvents, swapchain, gpuFrameBegin/End
-- `audio.cpp` - AudioStream/AudioPlayer impl
+- `window.cpp` - Window create, processEvents, surface, input/gamepad/clipboard
+- `audio.cpp` - SDL audio device/stream open, bridges to user callback
 
 `src/pipewire/` - PipeWire audio implementation:
 - `pipewire_platform.hpp` - internal header, audio callback interface
 - `pipewire.cpp` - PipeWire audio init/deinit, stream management
+
+`src/win32/` - Windows (Win32) window/audio implementation:
+- `win32_platform.hpp` - internal header, mirrors sdl_platform.hpp
+- `win32.cpp` - init/deinit, Vulkan extension list
+- `window.cpp` - window create, WndProc event pump, Vulkan surface, input/clipboard
+- `audio.cpp` - WASAPI shared-mode playback, bridges to user callback
 
 `src/x11/` - X11 window implementation:
 - `x11_platform.hpp` - internal header, window/Vulkan extension interface
@@ -164,15 +171,15 @@ Note: the protocol functions in `wayland.cpp` call through the `wlFuncs` functio
 (see top of `wayland.cpp`). The `wl_*_interface` data globals come from `wayland-protocol.c`.
 
 `src/shaders/` - GLSL shaders:
-- `render2d.vert`/`render2d.frag` - 2D rendering
-- `sprite.vert`/`sprite.frag` - sprite rendering
-- `model.vert`/`model.frag` - 3D model rendering
+- `render2d.vert`/`render2d.frag` - 2D sprite rendering
+- `render3d.vert`/`render3d.frag` - 3D model rendering
 - `skybox.vert`/`skybox.frag` - skybox rendering
-- `debug2d.frag` - 2D debug drawing
 
 `src/test/` - tests:
-- `tests.hpp` - internal header
+- `tests.hpp` - test framework: TEST/ASSERT registration macros, LifecycleT helper
 - `tests.cpp` - runs all tests
-- `*.cpp` - tests, named like headers
+- `render.cpp` - TODO stubs, no actual tests yet
+- `array_temp.cpp`/`ecs_foreach.cpp`/`ecs_serialize.cpp` - tests without matching headers
+- `*.cpp` - remaining tests, named like headers
 - `*.vert`/`*.frag`/`*.comp` - test shaders
 
