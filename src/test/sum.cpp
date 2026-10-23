@@ -84,6 +84,31 @@ TEST(testSumCall)
     ASSERT(called);
 }
 
+TEST(testSumCallConst)
+{
+    const Sum<i32, f64> a{42};
+    bool called = false;
+    a.call([&](const auto& val)
+    {
+        called = true;
+        using T = std::remove_cvref_t<decltype(val)>;
+        ASSERT((std::same_as<T, i32>));
+        ASSERT(val == 42);
+    });
+    ASSERT(called);
+
+    const Sum<i32, f64> b{3.14};
+    called = false;
+    b.call([&](const auto& val)
+    {
+        called = true;
+        using T = std::remove_cvref_t<decltype(val)>;
+        ASSERT((std::same_as<T, f64>));
+        ASSERT(val == 3.14);
+    });
+    ASSERT(called);
+}
+
 TEST(testSumMatch)
 {
     Sum<i32, f64> s{3.14};
@@ -95,6 +120,33 @@ TEST(testSumMatch)
             matched = true;
             ASSERT(v == 3.14);
         }
+    );
+    ASSERT(matched);
+}
+
+TEST(testSumMatchConst)
+{
+    const Sum<i32, f64> s{3.14};
+    bool matched = false;
+    s.match(
+        [&](i32) { ASSERT(false); },
+        [&](f64 v)
+        {
+            matched = true;
+            ASSERT(v == 3.14);
+        }
+    );
+    ASSERT(matched);
+
+    const Sum<i32, f64> t{42};
+    matched = false;
+    t.match(
+        [&](i32 v)
+        {
+            matched = true;
+            ASSERT(v == 42);
+        },
+        [&](f64) { ASSERT(false); }
     );
     ASSERT(matched);
 }

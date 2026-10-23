@@ -220,10 +220,46 @@ struct Sum<T, Ts...> {
     }
 
     /**
+     * Call a function on the currently active element (const)
+     */
+    template<typename F>
+    auto call(F&& f) const
+    {
+        using R = decltype(f(data.template getN<0>()));
+        using RawF = std::remove_reference_t<F>;
+        using Func = R (*)(const Sum*, RawF*);
+
+        return [&]<u64... Is>(std::integer_sequence<u64, Is...>)
+        {
+            static constexpr Func table[count + 1] = {
+                +[](const Sum* self, RawF* fn) -> R
+                {
+                    return std::forward<F>(*fn)(self->data.template getN<Is>());
+                }...,
+                +[](const Sum*, RawF*) -> R
+                {
+                    if constexpr (!std::is_void_v<R>)
+                        HG_PANIC("call on empty Sum");
+                }
+            };
+            return table[tag < count ? tag : count](this, &f);
+        }(std::make_integer_sequence<u64, count>{});
+    }
+
+    /**
      * Match a list of functions to the currently active element
      */
     template<typename... Fs>
     auto match(Fs&&... fs)
+    {
+        return call(Overload{std::forward<Fs>(fs)...});
+    }
+
+    /**
+     * Match a list of functions to the currently active element (const)
+     */
+    template<typename... Fs>
+    auto match(Fs&&... fs) const
     {
         return call(Overload{std::forward<Fs>(fs)...});
     }

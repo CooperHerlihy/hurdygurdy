@@ -287,6 +287,19 @@ struct Map {
     }
 
     /**
+     * Calls a function for each value in the hash map (const)
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, const K&, const V&>
+    void forEach(F fn) const
+    {
+        for (u64 i = 0; i < capacity; ++i)
+        {
+            if (hasVal[i])
+                fn(keys[i], vals[i]);
+        }
+    }
+
+    /**
      * Move construct
      */
     Map(Map&& other) noexcept
@@ -586,6 +599,19 @@ struct MapTemp {
      */
     template<typename F> requires std::is_invocable_r_v<void, F, const K&, V&>
     void forEach(F fn)
+    {
+        for (u64 i = 0; i < capacity; ++i)
+        {
+            if (hasVal[i])
+                fn(keys[i], vals[i]);
+        }
+    }
+
+    /**
+     * Calls a function for each value in the hash map (const)
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, const K&, const V&>
+    void forEach(F fn) const
     {
         for (u64 i = 0; i < capacity; ++i)
         {

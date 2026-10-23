@@ -467,163 +467,36 @@ BinaryView writeSerialBinary(Arena* arena, Serializer* data);
  */
 Serializer readSerialBinary(Arena* arena, BinaryView bin);
 
-// /**
-//  * Write serialized data as json
-//  */
-// StringView jsonWriteSerial(Arena* arena, Serializer* data);
-
-// /**
-//  * Read json data to be deserialized : TODO
-//  */
-// Serializer jsonReadSerial(Arena* arena, StringView json);
-
-// /**
-//  * An error contained in the json
-//  */
-// struct JsonError {
-//     /**
-//      * The next error
-//      */
-//     JsonError* next = nullptr;
-//     /**
-//      * The error message
-//      */
-//     StringView msg = {};
-// };
-//
-// /**
-//  * A node in the json file
-//  */
-// struct JsonNode;
-//
-// /**
-//  * The types contained in nodes
-//  */
-// enum JsonType : u32 {
-//     JsonType_none = 0,
-//     JsonType_struct,
-//     JsonType_field,
-//     JsonType_array,
-//     JsonType_string,
-//     JsonType_float,
-//     JsonType_integer,
-//     JsonType_bool,
-// };
-//
-// /**
-//  * A field in a struct
-//  */
-// struct JsonField {
-//     /**
-//      * The next field
-//      */
-//     JsonField* next = nullptr;
-//     /**
-//      * The name of the field
-//      */
-//     StringView name = {};
-//     /**
-//      * The value stored in the field
-//      */
-//     JsonNode* value = nullptr;
-// };
-//
-// /**
-//  * A struct contained in the json
-//  */
-// struct JsonStruct {
-//     /**
-//      * The first field
-//      */
-//     JsonField* fields = nullptr;
-// };
-//
-// /**
-//  * An element in an array
-//  */
-// struct JsonElem {
-//     /**
-//      * The next element
-//      */
-//     JsonElem* next = nullptr;
-//     /**
-//      * The value stored in the element
-//      */
-//     JsonNode* value = nullptr;
-// };
-//
-// /**
-//  * An array contained in the json
-//  */
-// struct JsonArray {
-//     /**
-//      * The first element
-//      */
-//     JsonElem* elems = nullptr;
-// };
-//
-// /**
-//  * A node in the json file
-//  */
-// struct JsonNode {
-//     /**
-//      * The node's type
-//      */
-//     JsonType type = {};
-//     /**
-//      * The value in the node
-//      */
-//     union {
-//         JsonStruct jstruct;
-//         JsonField field;
-//         JsonArray array;
-//         StringView string;
-//         f64 floating;
-//         i64 integer;
-//         bool boolean;
-//     };
-// };
-//
-// /**
-//  * A parsed Json file
-//  */
-// struct Json {
-//     /**
-//      * The successfully parsed nodes
-//      */
-//     JsonNode* file = nullptr;
-//     /**
-//      * The errors found
-//      */
-//     JsonError* errors = nullptr;
-// };
-//
-// /**
-//  * Parses json text into a tree
-//  *
-//  * Parameters
-//  * - arena The arena to allocate from
-//  * - text The json text to parse
-//  *
-//  * Returns
-//  * - The parsed json, errors contained inside
-//  */
-// Json parseJson(Arena* arena, StringView text);
-
-// JSON
-
+/**
+ * A json value
+ */
 struct JsonValue;
 
+/**
+ * A json value of type object
+ */
 using JsonObject = MapTemp<StringView, JsonValue>;
 
+/**
+ * A json value of type array
+ */
 using JsonArray = ArrayTemp<JsonValue>;
 
+/**
+ * A json value
+ */
 struct JsonValue : Sum<JsonObject, JsonArray, StringView, f64, bool> {
     using Sum::Sum;
 };
 
+/**
+ * Write out a json object to a string
+ */
 StringView writeJson(Arena* arena, const JsonObject& json);
 
+/**
+ * Read a json string to an object
+ */
 JsonObject readJson(Arena* arena, StringView json);
 
 } // namespace hg

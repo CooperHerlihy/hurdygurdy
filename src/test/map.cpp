@@ -115,6 +115,23 @@ TEST(testMapForEach)
     ASSERT(sum == 33.0);
 }
 
+TEST(testMapForEachConst)
+{
+    Map<u32, f32> map;
+    map.add(1, 10.0f);
+    map.add(2, 20.0f);
+    u64 count = 0;
+    f64 sum = 0;
+    const Map<u32, f32>& cmap = map;
+    cmap.forEach([&](const u32& k, const f32& v)
+    {
+        ++count;
+        sum += static_cast<f64>(k) + v;
+    });
+    ASSERT(count == 2);
+    ASSERT(sum == 33.0);
+}
+
 TEST(testMapMoveConstruct)
 {
     Map<u32, f32> a;
@@ -175,6 +192,24 @@ TEST(testMapTempForEach)
     map.add(2, 20.0f);
     f64 sum = 0;
     map.forEach([&](const u32& k, f32& v) { sum += static_cast<f64>(k) + v; });
+    ASSERT(sum == 33.0);
+}
+
+TEST(testMapTempForEachConst)
+{
+    ArenaScope arena = getScratch();
+    MapTemp<u32, f32> map{arena, 0};
+    map.add(1, 10.0f);
+    map.add(2, 20.0f);
+    u64 count = 0;
+    f64 sum = 0;
+    const MapTemp<u32, f32>& cmap = map;
+    cmap.forEach([&](const u32& k, const f32& v)
+    {
+        ++count;
+        sum += static_cast<f64>(k) + v;
+    });
+    ASSERT(count == 2);
     ASSERT(sum == 33.0);
 }
 

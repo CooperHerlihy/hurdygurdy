@@ -223,6 +223,19 @@ struct Set {
     }
 
     /**
+     * Calls a function for each value in the hash set (const)
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, const V&>
+    void forEach(F fn) const
+    {
+        for (u64 i = 0; i < capacity; ++i)
+        {
+            if (hasVal[i])
+                fn(vals[i]);
+        }
+    }
+
+    /**
      * Move construct
      */
     Set(Set&& other) noexcept
@@ -457,6 +470,19 @@ struct SetTemp {
      */
     template<typename F> requires std::is_invocable_r_v<void, F, const V&>
     void forEach(F fn)
+    {
+        for (u64 i = 0; i < capacity; ++i)
+        {
+            if (hasVal[i])
+                fn(vals[i]);
+        }
+    }
+
+    /**
+     * Calls a function for each value in the hash set (const)
+     */
+    template<typename F> requires std::is_invocable_r_v<void, F, const V&>
+    void forEach(F fn) const
     {
         for (u64 i = 0; i < capacity; ++i)
         {

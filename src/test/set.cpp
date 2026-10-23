@@ -116,6 +116,18 @@ TEST(testSetForEach)
     ASSERT(sum == 60);
 }
 
+TEST(testSetForEachConst)
+{
+    Set<u32> set;
+    set.add(10);
+    set.add(20);
+    set.add(30);
+    u64 sum = 0;
+    const Set<u32>& cset = set;
+    cset.forEach([&](const u32& v) { sum += v; });
+    ASSERT(sum == 60);
+}
+
 TEST(testSetMoveConstruct)
 {
     Set<u32> a;
@@ -178,6 +190,18 @@ TEST(testSetTempForEach)
     set.add(10);
     u64 sum = 0;
     set.forEach([&](const u32& v) { sum += v; });
+    ASSERT(sum == 15);
+}
+
+TEST(testSetTempForEachConst)
+{
+    ArenaScope arena = getScratch();
+    SetTemp<u32> set{arena, 0};
+    set.add(5);
+    set.add(10);
+    u64 sum = 0;
+    const SetTemp<u32>& cset = set;
+    cset.forEach([&](const u32& v) { sum += v; });
     ASSERT(sum == 15);
 }
 
