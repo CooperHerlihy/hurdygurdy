@@ -13,7 +13,7 @@ void SpinLock::acquire()
     bool acquiredLocal = false;
     while (!acquired.compare_exchange_weak(acquiredLocal, true))
     {
-        std::this_thread::yield(); // _mm_pause();
+        std::this_thread::yield();
         acquiredLocal = false;
     }
 }
@@ -29,29 +29,12 @@ void SpinLock::release()
     acquired.store(false);
 }
 
-void Fence::add(u32 count)
-{
-    counter.fetch_add(count);
-}
-
-void Fence::signal(u32 count)
-{
-    [[maybe_unused]]
-    u32 prev = counter.fetch_sub(count);
-    HG_ASSERT(prev >= count);
-}
-
-bool Fence::isComplete()
-{
-    return counter.load() == 0;
-}
-
 bool Fence::wait(f64 timeout)
 {
     Clock c{};
     while (!isComplete() && (timeout -= c.tick()) > 0)
     {
-        std::this_thread::yield(); // _mm_pause();
+        std::this_thread::yield();
     }
     return isComplete();
 }
@@ -60,7 +43,7 @@ void Fence::waitIndefinite()
 {
     while (!isComplete())
     {
-        std::this_thread::yield(); // _mm_pause();
+        std::this_thread::yield();
     }
 }
 
@@ -107,7 +90,7 @@ struct ThreadPoolState {
                 for (u32 j = 0; j < spinCount; ++j)
                 {
                     if (!execute())
-                        std::this_thread::yield(); // _mm_pause();
+                        std::this_thread::yield();
                 }
 
                 std::unique_lock lock{mtx};
@@ -165,15 +148,24 @@ static ThreadPoolState& threadPool()
     return pool;
 }
 
-bool helpThreads(Fence* fence, f64 timeout)
+bool helpThreads(f64 timeout, void* data, bool (condition)(void* data))
 {
     Clock c{};
-    while (!fence->isComplete() && (timeout -= c.tick()) > 0)
+    bool success = false;
+    while (!(success = condition(data)) && (timeout -= c.tick()) > 0)
     {
         if (!threadPool().execute())
-            std::this_thread::yield(); // _mm_pause();
+            std::this_thread::yield();
     }
-    return fence->isComplete();
+    return success;
+}
+
+bool helpThreads(Fence* fence, f64 timeout)
+{
+    return helpThreads(timeout, [&]()
+    {
+        return fence->isComplete();
+    });
 }
 
 void callPar(Fence* fence, void* data, void (*fn)(void* data))

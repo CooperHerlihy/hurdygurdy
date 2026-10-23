@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "hg/inttypes.hpp"
+#include "hg/macros.hpp"
 
 namespace hg {
 
@@ -115,7 +116,10 @@ struct Fence {
      * Parameters
      * - count The number of added events
      */
-    void add(u32 count = 1);
+    void add(u32 count = 1)
+    {
+        counter.fetch_add(count);
+    }
 
     /**
      * Signal that events have completed
@@ -123,12 +127,20 @@ struct Fence {
      * Parameters
      * - count The number of signaled events
      */
-    void signal(u32 count = 1);
+    void signal(u32 count = 1)
+    {
+        [[maybe_unused]]
+        u32 prev = counter.fetch_sub(count);
+        HG_ASSERT(prev >= count);
+    }
 
     /**
      * Returns whether all work has been completed
      */
-    bool isComplete();
+    bool isComplete()
+    {
+        return counter.load() == 0;
+    }
 
     /**
      * Spin waits for all work submissions to be completed
@@ -146,6 +158,40 @@ struct Fence {
      */
     void waitIndefinite();
 };
+
+/**
+ * Wait on a condition, and help complete work in the meantime
+ *
+ * Parameters
+ * - timeout The max time in seconds to spend working
+ * - data The data pointer passed to condition
+ * - condition Whether the function should return
+ *
+ * Returns
+ * - true if the condition was fulfilled
+ * - false if the timeout was reached
+ */
+bool helpThreads(f64 timeout, void* data, bool (condition)(void* data));
+
+/**
+ * Wait on a condition, and help complete work in the meantime
+ *
+ * Parameters
+ * - timeout The max time in seconds to spend working
+ * - condition Whether the function should return
+ *
+ * Returns
+ * - true if the condition was fulfilled
+ * - false if the timeout was reached
+ */
+template<typename F> requires std::is_invocable_r_v<bool, F>
+bool helpThreads(f64 timeout, F condition)
+{
+    return helpThreads(timeout, &condition, [](void* data)
+    {
+        return (*static_cast<F*>(data))();
+    });
+}
 
 /**
  * Wait on a fence, and help complete work in the meantime

@@ -450,6 +450,13 @@ f32 gamepadRightTrigger(u32 gamepad);
  */
 struct WindowConfig {
     /**
+     * The title of the window
+     *
+     * Note, may be truncated on some platforms
+     * Note, an empty title uses the platform default
+     */
+    StringView title = "";
+    /**
      * The width of the window in pixels
      *
      * Note, may be ignored depending on platform
@@ -463,13 +470,6 @@ struct WindowConfig {
      * Note, 0 lets the platform choose a default size
      */
     u32 height = 0;
-    /**
-     * The title of the window
-     *
-     * Note, may be truncated on some platforms
-     * Note, an empty title uses the platform default
-     */
-    StringView title = "";
     /**
      * How the swapchain images will be presented
      *
