@@ -746,9 +746,7 @@ TEST(testWriteJsonEmptyObject)
 {
     ArenaScope arena = getScratch();
     JsonObject obj{arena, 0};
-    StringView out = writeJson(arena, obj);
-    HG_LOG("testWriteJsonEmptyObject actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-    ASSERT(out == "{\n}");
+    ASSERT(writeJson(arena, obj) == "{\n}");
 }
 
 TEST(testWriteJsonEmptyArray)
@@ -757,9 +755,7 @@ TEST(testWriteJsonEmptyArray)
     JsonObject obj{arena, 0};
     JsonArray arr{arena};
     obj.add("a", JsonValue{std::move(arr)});
-    StringView out = writeJson(arena, obj);
-    HG_LOG("testWriteJsonEmptyArray actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-    ASSERT(out == "{\n\t\"a\" : [\n\t]\n}");
+    ASSERT(writeJson(arena, obj) == "{\n\t\"a\" : [\n\t]\n}");
 }
 
 TEST(testWriteJsonPrimitives)
@@ -769,44 +765,32 @@ TEST(testWriteJsonPrimitives)
     {
         JsonObject obj{arena, 0};
         obj.add("b", JsonValue{true});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonPrimitives true actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"b\" : true\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"b\" : true\n}");
     }
     {
         JsonObject obj{arena, 0};
         obj.add("b", JsonValue{false});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonPrimitives false actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"b\" : false\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"b\" : false\n}");
     }
     {
         JsonObject obj{arena, 0};
         obj.add("f", JsonValue{f64{2.5}});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonPrimitives f64 actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"f\" : 2.500000\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"f\" : 2.5\n}");
     }
     {
         JsonObject obj{arena, 0};
         obj.add("f", JsonValue{f64{-2.5}});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonPrimitives negative f64 actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"f\" : -2.500000\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"f\" : -2.5\n}");
     }
     {
         JsonObject obj{arena, 0};
         obj.add("f", JsonValue{f64{0.0}});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonPrimitives zero f64 actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"f\" : 0.0\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"f\" : 0\n}");
     }
     {
         JsonObject obj{arena, 0};
         obj.add("s", JsonValue{StringView{"hello"}});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonPrimitives string actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"s\" : \"hello\"\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"s\" : \"hello\"\n}");
     }
 }
 
@@ -819,18 +803,14 @@ TEST(testWriteJsonArrays)
         JsonArray arr{arena};
         arr.push(JsonValue{true});
         obj.add("a", JsonValue{std::move(arr)});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonArrays bool actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"a\" : [\n\t\ttrue\n\t]\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"a\" : [\n\t\ttrue\n\t]\n}");
     }
     {
         JsonObject obj{arena, 0};
         JsonArray arr{arena};
         arr.push(JsonValue{f64{2.5}});
         obj.add("a", JsonValue{std::move(arr)});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonArrays f64 actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"a\" : [\n\t\t2.500000\n\t]\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"a\" : [\n\t\t2.5\n\t]\n}");
     }
     {
         JsonObject obj{arena, 0};
@@ -838,9 +818,7 @@ TEST(testWriteJsonArrays)
         arr.push(JsonValue{StringView{"one"}});
         arr.push(JsonValue{StringView{"two"}});
         obj.add("a", JsonValue{std::move(arr)});
-        StringView out = writeJson(arena, obj);
-        HG_LOG("testWriteJsonArrays strings actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"a\" : [\n\t\t\"one\",\n\t\t\"two\"\n\t]\n}");
+        ASSERT(writeJson(arena, obj) == "{\n\t\"a\" : [\n\t\t\"one\",\n\t\t\"two\"\n\t]\n}");
     }
 }
 
@@ -853,18 +831,14 @@ TEST(testWriteJsonNested)
         inner.add("b", JsonValue{true});
         JsonObject outer{arena, 0};
         outer.add("a", JsonValue{std::move(inner)});
-        StringView out = writeJson(arena, outer);
-        HG_LOG("testWriteJsonNested object actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"a\" : {\n\t\t\"b\" : true\n\t}\n}");
+        ASSERT(writeJson(arena, outer) == "{\n\t\"a\" : {\n\t\t\"b\" : true\n\t}\n}");
     }
     {
         JsonArray inner{arena};
         inner.push(JsonValue{true});
         JsonObject outer{arena, 0};
         outer.add("a", JsonValue{std::move(inner)});
-        StringView out = writeJson(arena, outer);
-        HG_LOG("testWriteJsonNested array actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"a\" : [\n\t\ttrue\n\t]\n}");
+        ASSERT(writeJson(arena, outer) == "{\n\t\"a\" : [\n\t\ttrue\n\t]\n}");
     }
     {
         JsonObject inner{arena, 0};
@@ -873,9 +847,7 @@ TEST(testWriteJsonNested)
         mid.push(JsonValue{std::move(inner)});
         JsonObject outer{arena, 0};
         outer.add("a", JsonValue{std::move(mid)});
-        StringView out = writeJson(arena, outer);
-        HG_LOG("testWriteJsonNested array of objects actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-        ASSERT(out == "{\n\t\"a\" : [\n\t\t{\n\t\t\t\"x\" : 2.500000\n\t\t}\n\t]\n}");
+        ASSERT(writeJson(arena, outer) == "{\n\t\"a\" : [\n\t\t{\n\t\t\t\"x\" : 2.5\n\t\t}\n\t]\n}");
     }
 }
 
@@ -893,7 +865,6 @@ TEST(testWriteJsonDocument)
     obj.add("list", JsonValue{std::move(list)});
 
     StringView out = writeJson(arena, obj);
-    HG_LOG("testWriteJsonDocument actual:\n%.*s\n", static_cast<i32>(out.length), out.chars);
 
     auto contains = [](const StringView& hay, const char* needle)
     {
@@ -950,10 +921,10 @@ TEST(testWriteJsonDocument)
     ASSERT(!trailingComma);
 
     ASSERT(contains(out, "\"name\" : \"hurdy\""));
-    ASSERT(contains(out, "\"count\" : 3.000000"));
+    ASSERT(contains(out, "\"count\" : 3"));
     ASSERT(contains(out, "\"valid\" : true"));
     ASSERT(contains(out, "\"list\" : ["));
-    ASSERT(contains(out, "1.000000"));
+    ASSERT(contains(out, "1"));
     ASSERT(contains(out, "false"));
 }
 
@@ -963,8 +934,6 @@ TEST(testWriteJsonEscaping)
 
     JsonObject obj{arena, 0};
     obj.add("s", JsonValue{StringView{"a\"b\\c\bd\fe\nf\rg\th"}});
-    StringView out = writeJson(arena, obj);
-    HG_LOG("testWriteJsonEscaping actual: %.*s\n", static_cast<i32>(out.length), out.chars);
-    ASSERT(out == "{\n\t\"s\" : \"a\\\"b\\\\c\\bd\\fe\\nf\\rg\\th\"\n}");
+    ASSERT(writeJson(arena, obj) == "{\n\t\"s\" : \"a\\\"b\\\\c\\bd\\fe\\nf\\rg\\th\"\n}");
 }
 

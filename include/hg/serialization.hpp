@@ -500,4 +500,3 @@ StringView writeJson(Arena* arena, const JsonObject& json);
 JsonObject readJson(Arena* arena, StringView json);
 
 } // namespace hg
-

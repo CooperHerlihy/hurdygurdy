@@ -1,5 +1,7 @@
 #include "hg/strings.hpp"
 
+#include <charconv>
+
 namespace hg {
 
 char* cString(Arena* arena, StringView str)
@@ -71,81 +73,91 @@ bool isInteger(StringView str)
         return false;
 
     u64 head = 0;
-    if (!isNumeral(str[head]) && str[head] != '+' && str[head] != '-')
-        return false;
 
     if (str[head] == '+' || str[head] == '-')
-    {
         ++head;
-        if (head >= str.length)
-            return false;
-    }
 
-    while (head < str.length)
+    if (head == str.length)
+        return false;
+
+    while (head < str.length && isNumeral(str[head]))
     {
-        if (!isNumeral(str[head]))
-            return false;
         ++head;
     }
-    return true;
+    return head == str.length;
 }
 
 bool isFloat(StringView str)
 {
-    if (str.length == 0)
-        return false;
-
-    bool hasDecimal = false;
-    bool hasExponent = false;
-    bool hasDigit = false;
+    bool hasNumber = false;
 
     u64 head = 0;
-
-    if (!isNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
+    if (head == str.length)
         return false;
 
-    if (isNumeral(str[head]))
-        hasDigit = true;
+    if (str[head] == '+' || str[head] == '-')
+        ++head;
 
-    if (str[head] == '.')
-        hasDecimal = true;
+    if (head == str.length)
+        return false;
 
-    ++head;
-    while (head < str.length)
+    while (head < str.length && isNumeral(str[head]))
     {
-        if (isNumeral(str[head]))
-        {
-            hasDigit = true;
-            ++head;
-            continue;
-        }
-
-        if (str[head] == '.' && !hasDecimal && !hasExponent)
-        {
-            hasDecimal = true;
-            ++head;
-            continue;
-        }
-
-        if (str[head] == 'e' && !hasExponent)
-        {
-            hasExponent = true;
-            ++head;
-            if (head < str.length && (isNumeral(str[head]) || str[head] == '+' || str[head] == '-'))
-            {
-                ++head;
-                continue;
-            }
-            return false;
-        }
-
-        if (str[head] == 'f' && head == str.length - 1)
-            break;
-
-        return false;
+        hasNumber = true;
+        ++head;
     }
 
-    return hasDigit && (hasDecimal || hasExponent);
+    if (head == str.length)
+        return false;
+
+    if (str[head] != '.' && str[head] != 'e')
+        return false;
+
+    if (str[head] == '.')
+    {
+        ++head;
+        while (head < str.length && isNumeral(str[head]))
+        {
+            hasNumber = true;
+            ++head;
+        }
+    }
+
+    if (!hasNumber)
+        return false;
+
+    if (head == str.length)
+        return true;
+
+    if (str[head] == 'e')
+    {
+        ++head;
+        if (head == str.length)
+            return false;
+
+        if (str[head] == '+' || str[head] == '-')
+            ++head;
+
+        bool hasNumber = false;
+        while (head < str.length && isNumeral(str[head]))
+        {
+            hasNumber = true;
+            ++head;
+        }
+        if (!hasNumber)
+            return false;
+    }
+
+    if (head == str.length)
+        return true;
+
+    if (str[head] == 'f')
+        ++head;
+
+    if (head == str.length)
+        return true;
+
+    return false;
 }
 
 i64 stringToInteger(StringView str)
@@ -158,93 +170,27 @@ i64 stringToInteger(StringView str)
     u64 head = str.length - 1;
     while (head > 0)
     {
-            ret += static_cast<i64>(str[head] - '0') * power;
+        ret += static_cast<i64>(str[head] - '0') * power;
         power *= 10;
         --head;
     }
 
-    if (str[head] != '+')
-    {
-        if (str[head] == '-')
-            ret *= -1;
-        else
+    if (isNumeral(str[head]))
         ret += static_cast<i64>(str[head] - '0') * power;
-    }
+    else if (str[head] == '-')
+        ret *= -1;
 
     return ret;
 }
 
 f64 stringToFloat(StringView str)
 {
-    HG_ASSERT(isFloat(str));
+    HG_ASSERT(str.chars != nullptr);
 
     f64 ret = 0.0;
-    u64 head = 0;
-
-    bool isNegative = str[head] == '-';
-    if (isNegative || str[head] == '+')
-        ++head;
-
-    if (isNumeral(str[head]))
-    {
-        u64 intPartBegin = head;
-        while (head < str.length && str[head] != '.' && str[head] != 'e')
-        {
-            ++head;
-        }
-        ret += static_cast<f64>(stringToInteger({&str[intPartBegin], &str[head]}));
-    }
-
-    if (head < str.length && str[head] == '.')
-    {
-        ++head;
-
-        f64 power = 0.1;
-        while (head < str.length && isNumeral(str[head]))
-        {
-            ret += static_cast<f64>(str[head] - '0') * power;
-            power *= 0.1;
-            ++head;
-        }
-    }
-
-    if (head < str.length && str[head] == 'e')
-    {
-        ++head;
-
-        bool expIsNegative = str[head] == '-';
-        if (expIsNegative || str[head] == '+')
-            ++head;
-
-        u64 expBegin = head;
-        while (head < str.length && isNumeral(str[head]))
-        {
-            ++head;
-        }
-
-        i64 exp = stringToInteger({&str[expBegin], str.chars + head});
-        if (exp != 0)
-        {
-            if (expIsNegative)
-            {
-                for (i64 i = 0; i < exp; ++i)
-                {
-                    ret *= 0.1;
-                }
-            } else {
-                for (i64 i = 0; i < exp; ++i)
-                {
-                    ret *= 10.0;
-                }
-            }
-        } else {
-            ret = 1.0;
-        }
-    }
-
-    if (isNegative)
-        ret *= -1.0;
-
+    std::from_chars_result res = std::from_chars(str.chars, str.chars + str.length, ret);
+    HG_ASSERT(res.ec == std::errc{});
+    HG_ASSERT(res.ptr == str.chars + str.length);
     return ret;
 }
 
@@ -278,33 +224,19 @@ StringBuilder integerToString(Arena* arena, i64 num)
     return ret;
 }
 
-StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount)
+StringBuilder floatToString(Arena* arena, f64 num, u32 precision)
 {
     HG_ASSERT(arena != nullptr);
 
-    ArenaScope scratch = getScratch(arena);
-
-    if (num == 0.0)
-        return {arena, "0.0"};
-
-    StringBuilder intStr = integerToString(scratch, static_cast<i64>(std::abs(num)));
-
-    StringBuilder decStr{scratch};
-    decStr.append('.');
-
-    f64 decPart = std::abs(num);
-    for (u64 i = 0; i < decimalCount; ++i)
-    {
-        decPart *= 10.0;
-        decStr.append('0' + static_cast<char>(static_cast<u64>(decPart) % 10));
-    }
-
-    StringBuilder ret{arena};
-    if (num < 0.0)
-        ret.append('-');
-    ret.append(intStr);
-    ret.append(decStr);
-    return ret;
+    char buffer[64];
+    std::to_chars_result res = std::to_chars(
+        buffer,
+        buffer + sizeof(buffer),
+        num,
+        std::chars_format::general,
+        static_cast<i32>(precision));
+    HG_ASSERT(res.ec == std::errc{});
+    return {arena, StringView{buffer, static_cast<u64>(res.ptr - buffer)}};
 }
 
 } // namespace hg

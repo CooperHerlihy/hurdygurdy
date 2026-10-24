@@ -364,11 +364,8 @@ StringBuilder integerToString(Arena* arena, i64 num);
  * Parameters
  * - arena The arena to allocate from
  * - num The integer number to create from
- * - decimalCount The number of trailing decimal digits
+ * - precision The number of significant digits
  */
-StringBuilder floatToString(Arena* arena, f64 num, u32 decimalCount);
-
-// base 2 and 16 string-int conversions : TODO
-// arbitrary base string-int conversions : TODO?
+StringBuilder floatToString(Arena* arena, f64 num, u32 precision);
 
 } // namespace hg
