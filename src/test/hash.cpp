@@ -9,7 +9,7 @@ TEST(testHashStringConsistency)
     ArenaScope arena = getScratch();
     const char* cstr = "hello";
     StringView sv{cstr};
-    String s = String::create(sv);
+    String s = String{sv};
     StringBuilder sb{arena, sv};
 
     u64 hSv = hash(sv);
@@ -27,7 +27,7 @@ TEST(testHashStringConsistency)
 TEST(testHashEmptyString)
 {
     StringView sv{};
-    String s = String::create(sv);
+    String s = String{sv};
     u64 hSv = hash(sv);
     u64 hStr = hash(s);
     u64 hLit = hash("");

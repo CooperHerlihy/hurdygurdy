@@ -130,7 +130,7 @@ TEST(testStringViewCrossTypeEquality)
 {
     ArenaScope arena = getScratch();
 
-    String owned = String::create("hello");
+    String owned = String{"hello"};
     StringBuilder built{arena, "hello"};
 
     ASSERT(StringView{"hello"} == owned);
@@ -321,23 +321,23 @@ TEST(testStringBuilderGrowth)
 
 TEST(testStringCreate)
 {
-    String s = String::create("hello");
+    String s = String{"hello"};
     ASSERT(s.length == 5);
     ASSERT(s == "hello");
     ASSERT(s[0] == 'h');
     ASSERT(s[4] == 'o');
 
-    String empty = String::create("");
+    String empty = String{""};
     ASSERT(empty.length == 0);
     ASSERT(empty == "");
 
-    String fromView = String::create(StringView{"hello world", 5});
+    String fromView = String{StringView{"hello world", 5}};
     ASSERT(fromView == "hello");
 
     char data[300]{};
     for (u64 i = 0; i < 299; ++i)
         data[i] = 'a' + static_cast<char>(i % 26);
-    String longString = String::create(StringView{data, 299});
+    String longString = String{StringView{data, 299}};
     ASSERT(longString.length == 299);
     for (u64 i = 0; i < 299; ++i)
         ASSERT(longString[i] == 'a' + static_cast<char>(i % 26));
@@ -345,28 +345,28 @@ TEST(testStringCreate)
 
 TEST(testStringMoveSemantics)
 {
-    String a = String::create("hello");
+    String a = String{"hello"};
     String b{std::move(a)};
     ASSERT(a.chars == nullptr);
     ASSERT(a.length == 0);
     ASSERT(b == "hello");
 
-    String c = String::create("world");
+    String c = String{"world"};
     b = std::move(c);
     ASSERT(c.chars == nullptr);
     ASSERT(c.length == 0);
     ASSERT(b == "world");
 
-    String alpha = String::create("alpha");
-    String beta = String::create("beta");
+    String alpha = String{"alpha"};
+    String beta = String{"beta"};
     String gamma = std::move(alpha);
     beta = std::move(gamma);
     ASSERT(beta == "alpha");
     ASSERT(alpha.chars == nullptr);
     ASSERT(gamma.chars == nullptr);
 
-    String movedFrom = String::create("hello");
-    String target = String::create("world");
+    String movedFrom = String{"hello"};
+    String target = String{"world"};
     movedFrom = std::move(target);
     ASSERT(movedFrom == "world");
     ASSERT(target.chars == nullptr);
@@ -374,7 +374,7 @@ TEST(testStringMoveSemantics)
     ASSERT(target == "world");
     ASSERT(movedFrom.chars == nullptr);
 
-    String empty = String::create("");
+    String empty = String{""};
     ASSERT(empty == "");
     String movedEmpty = std::move(empty);
     ASSERT(empty.chars == nullptr);
@@ -383,9 +383,9 @@ TEST(testStringMoveSemantics)
 
 TEST(testStringEquality)
 {
-    String a = String::create("hello");
-    String b = String::create("hello");
-    String c = String::create("world");
+    String a = String{"hello"};
+    String b = String{"hello"};
+    String c = String{"world"};
 
     ASSERT(a == b);
     ASSERT(!(a != b));

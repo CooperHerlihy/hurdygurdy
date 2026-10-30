@@ -208,12 +208,12 @@ TEST(testSetTempForEachConst)
 TEST(testSetStringHeap)
 {
     Set<String> set{16};
-    set.add(String::create("apple"));
-    set.add(String::create("banana"));
-    set.add(String::create("cherry"));
+    set.add(String{"apple"});
+    set.add(String{"banana"});
+    set.add(String{"cherry"});
     ASSERT(set.count == 3);
 
-    ASSERT(set.has(String::create("banana")));
+    ASSERT(set.has(String{"banana"}));
     ASSERT(set.has(StringView{"apple"}));
 
     const char* b = "banana";
@@ -238,9 +238,9 @@ TEST(testSetStringTemp)
 {
     ArenaScope arena = getScratch();
     SetTemp<String> set{arena, 16};
-    set.add(String::create("apple"));
-    set.add(String::create("banana"));
-    set.add(String::create("cherry"));
+    set.add(String{"apple"});
+    set.add(String{"banana"});
+    set.add(String{"cherry"});
     ASSERT(set.count == 3);
 
     ASSERT(set.has(StringView{"apple"}));
@@ -317,13 +317,13 @@ TEST(testSetStringCollision)
         "yellow", "black", "white", "orange", "pink"
     };
     for (u32 i = 0; i < 10; ++i)
-        set.add(String::create(vals[i]));
+        set.add(String{vals[i]});
     ASSERT(set.count == 10);
     for (u32 i = 0; i < 10; ++i)
     {
         ASSERT(set.has(vals[i]));
         ASSERT(set.has(StringView{vals[i]}));
-        ASSERT(set.has(String::create(vals[i])));
+        ASSERT(set.has(String{vals[i]}));
     }
     ASSERT(!set.has("purple"));
 }
@@ -450,9 +450,9 @@ TEST(testSetStringViewComparison)
 TEST(testSetStringMoveOnly)
 {
     Set<String> set{16};
-    set.add(String::create("one"));
-    set.add(String::create("two"));
-    set.add(String::create("three"));
+    set.add(String{"one"});
+    set.add(String{"two"});
+    set.add(String{"three"});
     ASSERT(set.count == 3);
 
     ASSERT(set.has("one"));
@@ -463,7 +463,7 @@ TEST(testSetStringMoveOnly)
     ASSERT(!set.has("two"));
     ASSERT(set.count == 2);
 
-    set.add(String::create("four"));
+    set.add(String{"four"});
     ASSERT(set.has("four"));
     ASSERT(set.count == 3);
 

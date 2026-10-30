@@ -216,13 +216,13 @@ TEST(testMapTempForEachConst)
 TEST(testMapStringHeap)
 {
     Map<String, u32> map{16};
-    map.add(String::create("alpha"), 1u);
-    map.add(String::create("beta"), 2u);
-    map.add(String::create("gamma"), 3u);
+    map.add(String{"alpha"}, 1u);
+    map.add(String{"beta"}, 2u);
+    map.add(String{"gamma"}, 3u);
     ASSERT(map.count == 3);
 
-    ASSERT(map.has(String::create("beta")));
-    ASSERT(*map.get(String::create("beta")) == 2u);
+    ASSERT(map.has(String{"beta"}));
+    ASSERT(*map.get(String{"beta"}) == 2u);
 
     ASSERT(map.has(StringView{"alpha"}));
     ASSERT(*map.get(StringView{"gamma"}) == 3u);
@@ -261,9 +261,9 @@ TEST(testMapStringTemp)
 {
     ArenaScope arena = getScratch();
     MapTemp<String, u32> map{arena, 16};
-    map.add(String::create("alpha"), 1u);
-    map.add(String::create("beta"), 2u);
-    map.add(String::create("gamma"), 3u);
+    map.add(String{"alpha"}, 1u);
+    map.add(String{"beta"}, 2u);
+    map.add(String{"gamma"}, 3u);
     ASSERT(map.count == 3);
 
     ASSERT(map.has(StringView{"alpha"}));
@@ -292,8 +292,8 @@ TEST(testMapStringTemp)
 TEST(testMapStringMoveOnly)
 {
     Map<String, String> map{16};
-    map.add(String::create("k1"), String::create("v1"));
-    map.add(String::create("k2"), String::create("v2"));
+    map.add(String{"k1"}, String{"v1"});
+    map.add(String{"k2"}, String{"v2"});
     ASSERT(map.count == 2);
     ASSERT(map.has("k1"));
     ASSERT(map.has("k2"));
@@ -312,8 +312,8 @@ TEST(testMapStringTempMoveOnly)
 {
     ArenaScope arena = getScratch();
     MapTemp<String, String> map{arena, 16};
-    map.add(String::create("k1"), String::create("v1"));
-    map.add(String::create("k2"), String::create("v2"));
+    map.add(String{"k1"}, String{"v1"});
+    map.add(String{"k2"}, String{"v2"});
     ASSERT(map.count == 2);
     ASSERT(map.has(StringView{"k1"}));
     ASSERT(*map.get("k2") == "v2");
@@ -382,13 +382,13 @@ TEST(testMapStringCollision)
         "yellow", "black", "white", "orange", "pink"
     };
     for (u32 i = 0; i < 10; ++i)
-        map.add(String::create(keys[i]), static_cast<u32>(i));
+        map.add(String{keys[i]}, static_cast<u32>(i));
     ASSERT(map.count == 10);
     for (u32 i = 0; i < 10; ++i)
     {
         ASSERT(map.has(keys[i]));
         ASSERT(*map.get(StringView{keys[i]}) == i);
-        ASSERT(map.has(String::create(keys[i])));
+        ASSERT(map.has(String{keys[i]}));
     }
     ASSERT(!map.has("purple"));
 }

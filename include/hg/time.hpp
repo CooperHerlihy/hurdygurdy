@@ -85,7 +85,7 @@ struct Profiler {
     {
         u32* counter = counters.get(name);
         if (counter == nullptr)
-            counter = counters.add(String::create(name), 0);
+            counter = counters.add(String{name}, 0);
 
         ++*counter;
     }
@@ -137,7 +137,7 @@ struct ProfilerScopeTimer : public ScopeTimer {
         : ScopeTimer{Profiler::timers.get(name)}
     {
         if (out == nullptr)
-            out = Profiler::timers.add(String::create(name), 0.0f);
+            out = Profiler::timers.add(String{name}, 0.0f);
     }
 };
 

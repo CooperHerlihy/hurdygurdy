@@ -92,6 +92,7 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/pool.hpp` - Pool, HandlePool
 - `hg/assets.hpp` - AssetT, AssetManagerT, load/reload
 - `hg/serialization.hpp` - Serializer, binary format, JSON (JsonValue/JsonObject)
+- `hg/json.hpp`
 - `hg/time.hpp` - Clock, Perf
 - `hg/dynlib.hpp` - Library dynamic loading
 - `hg/filesystem.hpp` - FilePath builder and filesystem ops
@@ -119,6 +120,7 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `pool.cpp`
 - `assets.cpp`
 - `serialization.cpp`
+- `json.cpp`
 - `time.cpp`
 - `audio.cpp`
 - `render2d.cpp`

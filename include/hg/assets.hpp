@@ -196,7 +196,7 @@ Asset<T> load(StringView path)
 
     AssetData<T>* data = AssetManager<T>::pool.alloc();
 
-    data->path = String::create(path);
+    data->path = String{path};
     AssetManager<T>::map.add(data->path, data);
 
     assetLoadImpl(data);

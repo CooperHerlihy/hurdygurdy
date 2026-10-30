@@ -178,14 +178,14 @@ TEST(testMaybeMoveAssignEmpty)
 
 TEST(testMaybeStringCreate)
 {
-    Maybe<String> m = String::create("hello world");
+    Maybe<String> m = String{"hello world"};
     ASSERT(m.has);
     ASSERT(m.val == "hello world");
 }
 
 TEST(testMaybeStringMove)
 {
-    Maybe<String> a = String::create("move me");
+    Maybe<String> a = String{"move me"};
     Maybe<String> b = std::move(a);
 
     ASSERT(!a.has);
@@ -195,8 +195,8 @@ TEST(testMaybeStringMove)
 
 TEST(testMaybeStringMoveAssign)
 {
-    Maybe<String> a = String::create("first");
-    Maybe<String> b = String::create("second");
+    Maybe<String> a = String{"first"};
+    Maybe<String> b = String{"second"};
     b = std::move(a);
 
     ASSERT(!a.has);

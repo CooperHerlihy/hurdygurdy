@@ -181,6 +181,7 @@ set(CORE_SOURCES
     src/filesystem.cpp
     src/pool.cpp
     src/serialization.cpp
+    src/json.cpp
     src/time.cpp
     src/audio.cpp
     src/assets.cpp
@@ -293,6 +294,7 @@ add_executable(tests
     src/test/pool.cpp
     src/test/assets.cpp
     src/test/serialization.cpp
+    src/test/json.cpp
     src/test/gpu.cpp
     src/test/render.cpp
     src/test/ecs.cpp

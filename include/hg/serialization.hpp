@@ -467,36 +467,4 @@ BinaryView writeSerialBinary(Arena* arena, Serializer* data);
  */
 Serializer readSerialBinary(Arena* arena, BinaryView bin);
 
-/**
- * A json value
- */
-struct JsonValue;
-
-/**
- * A json value of type object
- */
-using JsonObject = MapTemp<StringBuilder, JsonValue>;
-
-/**
- * A json value of type array
- */
-using JsonArray = ArrayTemp<JsonValue>;
-
-/**
- * A json value
- */
-struct JsonValue : Sum<JsonObject, JsonArray, StringBuilder, f64, bool> {
-    using Sum::Sum;
-};
-
-/**
- * Write out a json object to a string
- */
-StringView writeJson(Arena* arena, const JsonObject& json);
-
-/**
- * Read a json string to an object
- */
-Maybe<JsonObject> readJson(Arena* arena, StringView json);
-
 } // namespace hg

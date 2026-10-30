@@ -41,14 +41,12 @@ void StringBuilder::insert(u64 idx, StringView src)
     length = newLength;
 }
 
-String String::create(StringView data)
+String::String(StringView data)
 {
-    String str;
-    str.chars = heapAlloc<char>(data.length);
-    str.length = data.length;
+    chars = heapAlloc<char>(data.length);
+    length = data.length;
     if (data.length > 0)
-        memcpy(str.chars, data.chars, data.length);
-    return str;
+        memcpy(chars, data.chars, data.length);
 }
 
 String::~String() noexcept

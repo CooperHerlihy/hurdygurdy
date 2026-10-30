@@ -248,7 +248,7 @@ struct String {
     /**
      * Create a new string from data
      */
-    static String create(StringView data);
+    explicit String(StringView data);
 
     /**
      * Destroy the string
