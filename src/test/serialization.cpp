@@ -754,7 +754,7 @@ TEST(testWriteJsonEmptyArray)
     ArenaScope arena = getScratch();
     JsonObject obj{arena, 0};
     JsonArray arr{arena};
-    obj.add("a", JsonValue{std::move(arr)});
+    obj.add(StringBuilder{arena, "a"}, JsonValue{std::move(arr)});
     ASSERT(writeJson(arena, obj) == "{\n\t\"a\" : [\n\t]\n}");
 }
 
@@ -764,32 +764,32 @@ TEST(testWriteJsonPrimitives)
 
     {
         JsonObject obj{arena, 0};
-        obj.add("b", JsonValue{true});
+        obj.add(StringBuilder{arena, "b"}, JsonValue{true});
         ASSERT(writeJson(arena, obj) == "{\n\t\"b\" : true\n}");
     }
     {
         JsonObject obj{arena, 0};
-        obj.add("b", JsonValue{false});
+        obj.add(StringBuilder{arena, "b"}, JsonValue{false});
         ASSERT(writeJson(arena, obj) == "{\n\t\"b\" : false\n}");
     }
     {
         JsonObject obj{arena, 0};
-        obj.add("f", JsonValue{f64{2.5}});
+        obj.add(StringBuilder{arena, "f"}, JsonValue{f64{2.5}});
         ASSERT(writeJson(arena, obj) == "{\n\t\"f\" : 2.5\n}");
     }
     {
         JsonObject obj{arena, 0};
-        obj.add("f", JsonValue{f64{-2.5}});
+        obj.add(StringBuilder{arena, "f"}, JsonValue{f64{-2.5}});
         ASSERT(writeJson(arena, obj) == "{\n\t\"f\" : -2.5\n}");
     }
     {
         JsonObject obj{arena, 0};
-        obj.add("f", JsonValue{f64{0.0}});
+        obj.add(StringBuilder{arena, "f"}, JsonValue{f64{0.0}});
         ASSERT(writeJson(arena, obj) == "{\n\t\"f\" : 0\n}");
     }
     {
         JsonObject obj{arena, 0};
-        obj.add("s", JsonValue{StringView{"hello"}});
+        obj.add(StringBuilder{arena, "s"}, JsonValue{StringBuilder{arena, "hello"}});
         ASSERT(writeJson(arena, obj) == "{\n\t\"s\" : \"hello\"\n}");
     }
 }
@@ -802,22 +802,22 @@ TEST(testWriteJsonArrays)
         JsonObject obj{arena, 0};
         JsonArray arr{arena};
         arr.push(JsonValue{true});
-        obj.add("a", JsonValue{std::move(arr)});
+        obj.add(StringBuilder{arena, "a"}, JsonValue{std::move(arr)});
         ASSERT(writeJson(arena, obj) == "{\n\t\"a\" : [\n\t\ttrue\n\t]\n}");
     }
     {
         JsonObject obj{arena, 0};
         JsonArray arr{arena};
         arr.push(JsonValue{f64{2.5}});
-        obj.add("a", JsonValue{std::move(arr)});
+        obj.add(StringBuilder{arena, "a"}, JsonValue{std::move(arr)});
         ASSERT(writeJson(arena, obj) == "{\n\t\"a\" : [\n\t\t2.5\n\t]\n}");
     }
     {
         JsonObject obj{arena, 0};
         JsonArray arr{arena};
-        arr.push(JsonValue{StringView{"one"}});
-        arr.push(JsonValue{StringView{"two"}});
-        obj.add("a", JsonValue{std::move(arr)});
+        arr.push(JsonValue{StringBuilder{arena, "one"}});
+        arr.push(JsonValue{StringBuilder{arena, "two"}});
+        obj.add(StringBuilder{arena, "a"}, JsonValue{std::move(arr)});
         ASSERT(writeJson(arena, obj) == "{\n\t\"a\" : [\n\t\t\"one\",\n\t\t\"two\"\n\t]\n}");
     }
 }
@@ -828,25 +828,25 @@ TEST(testWriteJsonNested)
 
     {
         JsonObject inner{arena, 0};
-        inner.add("b", JsonValue{true});
+        inner.add(StringBuilder{arena, "b"}, JsonValue{true});
         JsonObject outer{arena, 0};
-        outer.add("a", JsonValue{std::move(inner)});
+        outer.add(StringBuilder{arena, "a"}, JsonValue{std::move(inner)});
         ASSERT(writeJson(arena, outer) == "{\n\t\"a\" : {\n\t\t\"b\" : true\n\t}\n}");
     }
     {
         JsonArray inner{arena};
         inner.push(JsonValue{true});
         JsonObject outer{arena, 0};
-        outer.add("a", JsonValue{std::move(inner)});
+        outer.add(StringBuilder{arena, "a"}, JsonValue{std::move(inner)});
         ASSERT(writeJson(arena, outer) == "{\n\t\"a\" : [\n\t\ttrue\n\t]\n}");
     }
     {
         JsonObject inner{arena, 0};
-        inner.add("x", JsonValue{f64{2.5}});
+        inner.add(StringBuilder{arena, "x"}, JsonValue{f64{2.5}});
         JsonArray mid{arena};
         mid.push(JsonValue{std::move(inner)});
         JsonObject outer{arena, 0};
-        outer.add("a", JsonValue{std::move(mid)});
+        outer.add(StringBuilder{arena, "a"}, JsonValue{std::move(mid)});
         ASSERT(writeJson(arena, outer) == "{\n\t\"a\" : [\n\t\t{\n\t\t\t\"x\" : 2.5\n\t\t}\n\t]\n}");
     }
 }
@@ -856,13 +856,13 @@ TEST(testWriteJsonDocument)
     ArenaScope arena = getScratch();
 
     JsonObject obj{arena, 0};
-    obj.add("name", JsonValue{StringView{"hurdy"}});
-    obj.add("count", JsonValue{f64{3.0}});
-    obj.add("valid", JsonValue{true});
+    obj.add(StringBuilder{arena, "name"}, JsonValue{StringBuilder{arena, "hurdy"}});
+    obj.add(StringBuilder{arena, "count"}, JsonValue{f64{3.0}});
+    obj.add(StringBuilder{arena, "valid"}, JsonValue{true});
     JsonArray list{arena};
     list.push(JsonValue{f64{1.0}});
     list.push(JsonValue{false});
-    obj.add("list", JsonValue{std::move(list)});
+    obj.add(StringBuilder{arena, "list"}, JsonValue{std::move(list)});
 
     StringView out = writeJson(arena, obj);
 
@@ -933,7 +933,239 @@ TEST(testWriteJsonEscaping)
     ArenaScope arena = getScratch();
 
     JsonObject obj{arena, 0};
-    obj.add("s", JsonValue{StringView{"a\"b\\c\bd\fe\nf\rg\th"}});
+    obj.add(StringBuilder{arena, "s"}, JsonValue{StringBuilder{arena, "a\"b\\c\bd\fe\nf\rg\th"}});
     ASSERT(writeJson(arena, obj) == "{\n\t\"s\" : \"a\\\"b\\\\c\\bd\\fe\\nf\\rg\\th\"\n}");
+}
+
+TEST(testReadJsonEmpty)
+{
+    ArenaScope arena = getScratch();
+
+    ASSERT(readJson(arena, "{}").has);
+    ASSERT(readJson(arena, "{ }").has);
+    ASSERT(readJson(arena, "{\n}").has);
+    ASSERT(readJson(arena, "{}")->count == 0);
+
+    Maybe<JsonObject> result = readJson(arena, "{\n\t\"a\" : [\n\t]\n}");
+    ASSERT(result.has);
+    ASSERT(result->count == 1);
+    ASSERT(result->get(StringBuilder{arena, "a"})->is<JsonArray>());
+    ASSERT(result->get(StringBuilder{arena, "a"})->get<JsonArray>().count == 0);
+}
+
+TEST(testReadJsonPrimitives)
+{
+    ArenaScope arena = getScratch();
+
+    Maybe<JsonObject> result = readJson(arena,
+        "{ \"b\" : true , \"c\" : false , \"i\" : 12345 , \"n\" : -7 , \"f\" : 2.5 , \"g\" : -0.5 , \"s\" : \"hi\" }");
+    ASSERT(result.has);
+    ASSERT(result->count == 7);
+
+    JsonValue* b = result->get(StringBuilder{arena, "b"});
+    ASSERT(b != nullptr);
+    ASSERT(b->is<bool>());
+    ASSERT(b->get<bool>() == true);
+
+    JsonValue* c = result->get(StringBuilder{arena, "c"});
+    ASSERT(c != nullptr);
+    ASSERT(c->is<bool>());
+    ASSERT(c->get<bool>() == false);
+
+    JsonValue* i = result->get(StringBuilder{arena, "i"});
+    ASSERT(i != nullptr);
+    ASSERT(i->is<f64>());
+    ASSERT(i->get<f64>() == 12345.0);
+
+    JsonValue* n = result->get(StringBuilder{arena, "n"});
+    ASSERT(n != nullptr);
+    ASSERT(n->is<f64>());
+    ASSERT(n->get<f64>() == -7.0);
+
+    JsonValue* f = result->get(StringBuilder{arena, "f"});
+    ASSERT(f != nullptr);
+    ASSERT(f->is<f64>());
+    ASSERT(f->get<f64>() == 2.5);
+
+    JsonValue* g = result->get(StringBuilder{arena, "g"});
+    ASSERT(g != nullptr);
+    ASSERT(g->is<f64>());
+    ASSERT(g->get<f64>() == -0.5);
+
+    JsonValue* s = result->get(StringBuilder{arena, "s"});
+    ASSERT(s != nullptr);
+    ASSERT(s->is<StringBuilder>());
+    ASSERT(StringView{s->get<StringBuilder>()} == "hi");
+}
+
+TEST(testReadJsonWhitespace)
+{
+    ArenaScope arena = getScratch();
+
+    Maybe<JsonObject> result = readJson(arena,
+        "{\n\t\"a\" : 1,\n\t\"b\" : \"two words\"\n}");
+    ASSERT(result.has);
+    ASSERT(result->count == 2);
+    ASSERT(result->get(StringBuilder{arena, "a"})->get<f64>() == 1.0);
+    ASSERT(StringView{result->get(StringBuilder{arena, "b"})->get<StringBuilder>()} == "two words");
+
+    Maybe<JsonObject> trailing = readJson(arena, "{ \"a\" : 1 , }");
+    ASSERT(trailing.has);
+    ASSERT(trailing->count == 1);
+}
+
+TEST(testReadJsonArrays)
+{
+    ArenaScope arena = getScratch();
+
+    Maybe<JsonObject> result = readJson(arena,
+        "{ \"a\" : [] , \"b\" : [ 1 ] , \"c\" : [ \"x\" , true ] }");
+    ASSERT(result.has);
+    ASSERT(result->count == 3);
+
+    JsonValue* a = result->get(StringBuilder{arena, "a"});
+    ASSERT(a != nullptr);
+    ASSERT(a->is<JsonArray>());
+    ASSERT(a->get<JsonArray>().count == 0);
+
+    JsonValue* b = result->get(StringBuilder{arena, "b"});
+    ASSERT(b != nullptr);
+    ASSERT(b->get<JsonArray>().count == 1);
+    ASSERT(b->get<JsonArray>()[0].get<f64>() == 1.0);
+
+    JsonValue* c = result->get(StringBuilder{arena, "c"});
+    ASSERT(c != nullptr);
+    JsonArray& cArr = c->get<JsonArray>();
+    ASSERT(cArr.count == 2);
+    ASSERT(StringView{cArr[0].get<StringBuilder>()} == "x");
+    ASSERT(cArr[1].get<bool>() == true);
+}
+
+TEST(testReadJsonNested)
+{
+    ArenaScope arena = getScratch();
+
+    Maybe<JsonObject> result = readJson(arena,
+        "{ \"child\" : { \"inner\" : true } , \"list\" : [ { \"id\" : 1 } , { \"id\" : 2 } ] }");
+    ASSERT(result.has);
+
+    JsonValue* child = result->get(StringBuilder{arena, "child"});
+    ASSERT(child != nullptr);
+    ASSERT(child->is<JsonObject>());
+    ASSERT(child->get<JsonObject>().count == 1);
+    JsonValue* inner = child->get<JsonObject>().get(StringBuilder{arena, "inner"});
+    ASSERT(inner != nullptr);
+    ASSERT(inner->is<bool>());
+    ASSERT(inner->get<bool>() == true);
+
+    JsonValue* list = result->get(StringBuilder{arena, "list"});
+    ASSERT(list != nullptr);
+    ASSERT(list->is<JsonArray>());
+    JsonArray& listArr = list->get<JsonArray>();
+    ASSERT(listArr.count == 2);
+    for (u32 i = 0; i < 2; ++i)
+    {
+        ASSERT(listArr[i].is<JsonObject>());
+        JsonValue* id = listArr[i].get<JsonObject>().get(StringBuilder{arena, "id"});
+        ASSERT(id != nullptr);
+        ASSERT(id->is<f64>());
+        ASSERT(id->get<f64>() == static_cast<f64>(i + 1));
+    }
+}
+
+TEST(testReadJsonEscapes)
+{
+    ArenaScope arena = getScratch();
+
+    Maybe<JsonObject> result = readJson(arena,
+        "{ \"s\" : \"a\\\"b\\\\c\\bd\\fe\\nf\\rg\\th\" }");
+    ASSERT(result.has);
+
+    String expected = String::create("a\"b\\c\bd\fe\nf\rg\th");
+    JsonValue* s = result->get(StringBuilder{arena, "s"});
+    ASSERT(s != nullptr);
+    ASSERT(s->is<StringBuilder>());
+    ASSERT(StringView{s->get<StringBuilder>()} == StringView{expected});
+
+    Maybe<JsonObject> empty = readJson(arena, "{ \"s\" : \"\" }");
+    ASSERT(empty.has);
+    ASSERT(empty->get(StringBuilder{arena, "s"})->get<StringBuilder>().length == 0);
+}
+
+TEST(testReadJsonFailure)
+{
+    ArenaScope arena = getScratch();
+
+    ASSERT(!readJson(arena, "").has);
+    ASSERT(!readJson(arena, "junk").has);
+    ASSERT(!readJson(arena, "\"a\" : 1").has);
+    ASSERT(!readJson(arena, "[1,2]").has);
+    ASSERT(!readJson(arena, "{").has);
+    ASSERT(!readJson(arena, "{ \"a\" : }").has);
+    ASSERT(!readJson(arena, "{ : 1 }").has);
+    ASSERT(!readJson(arena, "{ \"a\" 1 }").has);
+    ASSERT(!readJson(arena, "{ \"a\" : \"unterminated }").has);
+    ASSERT(!readJson(arena, "{ \"a\" : 1, \"b\" }").has);
+    ASSERT(!readJson(arena, "{ \"a\" : [ 1, 2 }").has);
+    ASSERT(!readJson(arena, "{ \"a\" : [ 1, 2").has);
+    ASSERT(!readJson(arena, "{ \"a\" : 1, \"b\" : }").has);
+}
+
+TEST(testWriteReadJsonRoundTrip)
+{
+    ArenaScope arena = getScratch();
+
+    JsonObject obj{arena, 0};
+    obj.add(StringBuilder{arena, "name"}, JsonValue{StringBuilder{arena, "hurdy"}});
+    obj.add(StringBuilder{arena, "count"}, JsonValue{f64{42.0}});
+    obj.add(StringBuilder{arena, "valid"}, JsonValue{true});
+    obj.add(StringBuilder{arena, "empty"}, JsonValue{StringBuilder{arena, ""}});
+    JsonArray list{arena};
+    list.push(JsonValue{f64{1.0}});
+    list.push(JsonValue{f64{-2.5}});
+    list.push(JsonValue{false});
+    list.push(JsonValue{StringBuilder{arena, "x"}});
+    obj.add(StringBuilder{arena, "list"}, JsonValue{std::move(list)});
+    JsonObject child{arena, 0};
+    child.add(StringBuilder{arena, "pi"}, JsonValue{f64{3.5}});
+    obj.add(StringBuilder{arena, "child"}, JsonValue{std::move(child)});
+
+    StringView out = writeJson(arena, obj);
+    ASSERT(out.length >= 2);
+
+    Maybe<JsonObject> json = readJson(arena, out);
+    ASSERT(json.has);
+    ASSERT(json->count == 6);
+    ASSERT(StringView{json->get(StringBuilder{arena, "name"})->get<StringBuilder>()} == "hurdy");
+    ASSERT(json->get(StringBuilder{arena, "count"})->get<f64>() == 42.0);
+    ASSERT(json->get(StringBuilder{arena, "valid"})->get<bool>() == true);
+    ASSERT(json->get(StringBuilder{arena, "empty"})->get<StringBuilder>().length == 0);
+    ASSERT(json->get(StringBuilder{arena, "list"})->get<JsonArray>().count == 4);
+    ASSERT(json->get(StringBuilder{arena, "child"})->get<JsonObject>().count == 1);
+
+    StringView out2 = writeJson(arena, *json);
+    ASSERT(out2 == out);
+}
+
+TEST(testReadWriteJsonRoundTrip)
+{
+    ArenaScope arena = getScratch();
+
+    Maybe<JsonObject> result = readJson(arena,
+        "{ \"a\" : 1 , \"b\" : \"str\" , \"c\" : [ true, false, -2.5, \"x\" ] , \"d\" : { \"e\" : [] } }");
+    ASSERT(result.has);
+
+    StringView out = writeJson(arena, *result);
+    ASSERT(out ==
+        "{\n\t\"a\" : 1,\n\t\"b\" : \"str\",\n\t\"c\" : [\n\t\ttrue,\n\t\tfalse,\n\t\t-2.5,\n\t\t\"x\"\n\t],\n\t\"d\" : {\n\t\t\"e\" : [\n\t\t]\n\t}\n}");
+
+    Maybe<JsonObject> json = readJson(arena, out);
+    ASSERT(json.has);
+    ASSERT(json->count == 4);
+    ASSERT(json->get(StringBuilder{arena, "a"})->get<f64>() == 1.0);
+    ASSERT(StringView{json->get(StringBuilder{arena, "b"})->get<StringBuilder>()} == "str");
+    ASSERT(json->get(StringBuilder{arena, "c"})->get<JsonArray>().count == 4);
+    ASSERT(json->get(StringBuilder{arena, "d"})->get<JsonObject>().count == 1);
+    ASSERT(json->get(StringBuilder{arena, "d"})->get<JsonObject>().get(StringBuilder{arena, "e"})->get<JsonArray>().count == 0);
 }
 

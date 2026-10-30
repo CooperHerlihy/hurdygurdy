@@ -1,5 +1,7 @@
 #include "hg/serialization.hpp"
 
+#include "hg/error.hpp"
+
 namespace hg {
 
 Serializer serialWriter(Arena* arena)
@@ -519,7 +521,8 @@ static void writeJsonValue(StringBuilder& str, u32 indent, const JsonValue& valu
         [&](const StringView& val) { writeJsonString(str, val); },
         [&](const f64& val)
         {
-            str.append(floatToString(getScratch(), val, 6));
+            StringBuilder num = floatToString(getScratch(), val, 6);
+            str.append(num);
         },
         [&](const bool& val)
         {
@@ -538,8 +541,284 @@ StringView writeJson(Arena* arena, const JsonObject& json)
     return str;
 }
 
-// JsonObject readJson(Arena* arena, StringView json)
-// {
-// }
+static bool readJsonValue(Arena* arena, JsonValue& val, StringView str, u32& head);
+
+static bool readJsonString(Arena* arena, StringBuilder& val, StringView str, u32& head);
+
+static bool readJsonObject(Arena* arena, JsonObject& val, StringView str, u32& head)
+{
+    u32 count = head;
+    if (count == str.length || str[count] != '{')
+        return false;
+    ++count;
+
+    while (true)
+    {
+        while (count < str.length && isWhitespace(str[count]))
+        {
+            ++count;
+        }
+
+        if (count == str.length)
+            return false;
+
+        if (str[count] == '}')
+        {
+            ++count;
+            head = count;
+            return true;
+        }
+
+        StringBuilder nextName{arena};
+        if (!readJsonString(arena, nextName, str, count))
+            return false;
+
+        while (count < str.length && isWhitespace(str[count]))
+        {
+            ++count;
+        }
+
+        if (count == str.length || str[count] != ':')
+            return false;
+        ++count;
+
+        while (count < str.length && isWhitespace(str[count]))
+        {
+            ++count;
+        }
+
+        JsonValue newVal{};
+        if (!readJsonValue(arena, newVal, str, count))
+            return false;
+
+        val.add(std::move(nextName), std::move(newVal));
+
+        while (count < str.length && isWhitespace(str[count]))
+        {
+            ++count;
+        }
+
+        if (count < str.length && str[count] == '}')
+        {
+            ++count;
+            head = count;
+            return true;
+        }
+
+        if (count == str.length || str[count] != ',')
+            return false;
+        ++count;
+    }
+}
+
+static bool readJsonArray(Arena* arena, JsonArray& val, StringView str, u32& head)
+{
+    u32 count = head;
+    if (count == str.length || str[count] != '[')
+        return false;
+    ++count;
+
+    while (true)
+    {
+        while (count < str.length && isWhitespace(str[count]))
+        {
+            ++count;
+        }
+
+        if (count == str.length)
+            return false;
+
+        if (str[count] == ']')
+        {
+            ++count;
+            head = count;
+            return true;
+        }
+
+        JsonValue newVal{};
+        if (!readJsonValue(arena, newVal, str, count))
+            return false;
+
+        val.push(std::move(newVal));
+
+        while (count < str.length && isWhitespace(str[count]))
+        {
+            ++count;
+        }
+
+        if (count < str.length && str[count] == ']')
+        {
+            ++count;
+            head = count;
+            return true;
+        }
+
+        if (count == str.length || str[count] != ',')
+            return false;
+        ++count;
+    }
+}
+
+static bool readJsonString(Arena* arena, StringBuilder& val, StringView str, u32& head)
+{
+    ArenaScope scratch = getScratch(arena);
+
+    u32 count = head;
+    if (count == str.length || str[count] != '"')
+        return false;
+
+    StringBuilder temp{scratch};
+
+    ++count;
+    if (count == str.length)
+        return false;
+
+    while (str[count] != '"')
+    {
+        if (str[count] == '\n')
+            return false;
+
+        if (str[count] == '\\')
+        {
+            ++count;
+            if (count == str.length)
+                return false;
+
+            switch (str[count])
+            {
+                case '"':
+                    temp.append('"');
+                    break;
+                case '\\':
+                    temp.append('\\');
+                    break;
+                case 'b':
+                    temp.append('\b');
+                    break;
+                case 'f':
+                    temp.append('\f');
+                    break;
+                case 'n':
+                    temp.append('\n');
+                    break;
+                case 'r':
+                    temp.append('\r');
+                    break;
+                case 't':
+                    temp.append('\t');
+                    break;
+                default:
+                    temp.append('\\');
+                    temp.append(str[count]);
+            }
+        }
+        else
+        {
+            temp.append(str[count]);
+        }
+
+        ++count;
+        if (count == str.length)
+            return false;
+    }
+
+    val = {arena, temp};
+    head = count + 1;
+    return true;
+}
+
+static bool readJsonNum(f64& val, StringView str, u32& head)
+{
+    u32 count = head;
+    while (count < str.length && str[count] != ',' && !isWhitespace(str[count]))
+    {
+        ++count;
+    }
+    StringView valStr = {str.chars + head, count - head};
+
+    if (isInteger(valStr))
+    {
+        val = static_cast<f64>(stringToInteger(valStr));
+        head = count;
+        return true;
+    }
+    else if (isFloat(valStr))
+    {
+        val = stringToFloat(valStr);
+        head = count;
+        return true;
+    }
+    return 0;
+}
+
+static bool readJsonBool(bool& val, StringView str, u32& head)
+{
+    if (str.length - head >= 4 && StringView{str.chars + head, 4} == "true")
+    {
+        val = true;
+        head += 4;
+        return true;
+    }
+    if (str.length - head >= 5 && StringView{str.chars + head, 5} == "false")
+    {
+        val = false;
+        head += 5;
+        return true;
+    }
+    return false;
+}
+
+static bool readJsonValue(Arena* arena, JsonValue& val, StringView str, u32& head)
+{
+    bool boolVal;
+    if (readJsonBool(boolVal, str, head))
+    {
+        val = boolVal;
+        return true;
+    }
+
+    f64 numVal;
+    if (readJsonNum(numVal, str, head))
+    {
+        val = numVal;
+        return true;
+    }
+
+    StringBuilder strVal;
+    if (readJsonString(arena, strVal, str, head))
+    {
+        val = strVal;
+        return true;
+    }
+
+    JsonArray arrVal{arena};
+    if (readJsonArray(arena, arrVal, str, head))
+    {
+        val = std::move(arrVal);
+        return true;
+    }
+
+    JsonObject objVal{arena, 0};
+    if (readJsonObject(arena, objVal, str, head))
+    {
+        val = std::move(objVal);
+        return true;
+    }
+
+    return false;
+}
+
+Maybe<JsonObject> readJson(Arena* arena, StringView json)
+{
+    JsonObject ret{arena, 128};
+
+    u32 head = 0;
+    if (!readJsonObject(arena, ret, json, head))
+    {
+        setError("Could not parse JSON");
+        return {};
+    }
+    return ret;
+}
 
 } // namespace hg

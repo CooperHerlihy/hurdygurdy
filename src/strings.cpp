@@ -188,6 +188,7 @@ f64 stringToFloat(StringView str)
     HG_ASSERT(str.chars != nullptr);
 
     f64 ret = 0.0;
+    [[maybe_unused]]
     std::from_chars_result res = std::from_chars(str.chars, str.chars + str.length, ret);
     HG_ASSERT(res.ec == std::errc{});
     HG_ASSERT(res.ptr == str.chars + str.length);

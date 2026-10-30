@@ -475,7 +475,7 @@ struct JsonValue;
 /**
  * A json value of type object
  */
-using JsonObject = MapTemp<StringView, JsonValue>;
+using JsonObject = MapTemp<StringBuilder, JsonValue>;
 
 /**
  * A json value of type array
@@ -485,7 +485,7 @@ using JsonArray = ArrayTemp<JsonValue>;
 /**
  * A json value
  */
-struct JsonValue : Sum<JsonObject, JsonArray, StringView, f64, bool> {
+struct JsonValue : Sum<JsonObject, JsonArray, StringBuilder, f64, bool> {
     using Sum::Sum;
 };
 
@@ -497,6 +497,6 @@ StringView writeJson(Arena* arena, const JsonObject& json);
 /**
  * Read a json string to an object
  */
-JsonObject readJson(Arena* arena, StringView json);
+Maybe<JsonObject> readJson(Arena* arena, StringView json);
 
 } // namespace hg

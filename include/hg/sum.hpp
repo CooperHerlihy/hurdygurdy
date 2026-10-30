@@ -9,6 +9,18 @@
 namespace hg {
 
 /**
+ * Whether a possibly cv/ref-qualified type is the sum alternative V
+ */
+template<typename U, typename V>
+concept SumAlt = std::same_as<std::remove_cvref_t<U>, V>;
+
+/**
+ * Whether a possibly cv/ref-qualified type is any of the sum alternatives
+ */
+template<typename U, typename... Vs>
+concept SumAltOf = (SumAlt<U, Vs> || ...);
+
+/**
  * A recursive union
  */
 template<typename... Ts>
@@ -59,7 +71,7 @@ union SumUntagged<T, Ts...> {
     /**
      * Construct recursive case
      */
-    template<typename U> requires (std::same_as<std::remove_cvref_t<U>, Ts> || ...)
+    template<typename U> requires SumAltOf<U, Ts...>
     constexpr SumUntagged(U&& val)
         : rest{std::forward<U>(val)}
     {}
@@ -67,10 +79,10 @@ union SumUntagged<T, Ts...> {
     /**
      * Get by type
      */
-    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    template<typename U> requires SumAltOf<U, T, Ts...>
     constexpr auto& get()
     {
-        if constexpr (std::same_as<U, T>)
+        if constexpr (SumAlt<U, T>)
             return first;
         else
             return rest.template get<U>();
@@ -79,10 +91,10 @@ union SumUntagged<T, Ts...> {
     /**
      * Get by type as const
      */
-    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    template<typename U> requires SumAltOf<U, T, Ts...>
     constexpr const auto& get() const
     {
-        if constexpr (std::same_as<U, T>)
+        if constexpr (SumAlt<U, T>)
             return first;
         else
             return rest.template get<U>();
@@ -115,10 +127,10 @@ union SumUntagged<T, Ts...> {
     /**
      * Construct in place by type
      */
-    template<typename U, typename... Args> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    template<typename U, typename... Args> requires SumAltOf<U, T, Ts...>
     auto& emplace(Args&&... args)
     {
-        if constexpr (std::same_as<U, T>)
+        if constexpr (SumAlt<U, T>)
             return *(new (&first) T{std::forward<Args>(args)...});
         else
             return rest.template emplace<U>(std::forward<Args>(args)...);
@@ -187,7 +199,7 @@ struct Sum<T, Ts...> {
     /**
      * Construct by type
      */
-    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    template<typename U> requires SumAltOf<U, T, Ts...>
     constexpr Sum(U&& val)
         : tag{typeIdx<std::remove_cvref_t<U>>}, data{std::forward<U>(val)}
     {}
@@ -278,7 +290,7 @@ struct Sum<T, Ts...> {
     template<typename U>
     static constexpr u32 typeIdx = []() constexpr
     {
-        if constexpr (std::same_as<U, T>)
+        if constexpr (SumAlt<U, T>)
             return 0;
         else
             return 1 + Sum<Ts...>::template typeIdx<U>;
@@ -295,7 +307,7 @@ struct Sum<T, Ts...> {
     /**
      * Returns whether the type is active
      */
-    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    template<typename U> requires SumAltOf<U, T, Ts...>
     constexpr bool is() const
     {
         return tag == typeIdx<U>;
@@ -313,7 +325,7 @@ struct Sum<T, Ts...> {
     /**
      * Get by type, asserting that it is active
      */
-    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    template<typename U> requires SumAltOf<U, T, Ts...>
     constexpr auto& get()
     {
         HG_ASSERT(tag == typeIdx<U>);
@@ -323,7 +335,7 @@ struct Sum<T, Ts...> {
     /**
      * Get by type as const, asserting that it is active
      */
-    template<typename U> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    template<typename U> requires SumAltOf<U, T, Ts...>
     constexpr auto& get() const
     {
         HG_ASSERT(tag == typeIdx<U>);
@@ -353,7 +365,7 @@ struct Sum<T, Ts...> {
     /**
      * Construct in place by type
      */
-    template<typename U, typename... Args> requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+    template<typename U, typename... Args> requires SumAltOf<U, T, Ts...>
     auto& emplace(Args&&... args)
     {
         this->~Sum();
