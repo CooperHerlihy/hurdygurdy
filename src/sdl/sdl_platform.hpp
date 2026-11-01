@@ -39,10 +39,6 @@ bool windowWasClosed(void* data);
 bool windowIsFocused(void* data);
 bool windowWasFocusGained(void* data);
 bool windowWasFocusLost(void* data);
-
-
-
-
 bool windowWasResized(void* data);
 void windowGetSize(void* data, u32* w, u32* h);
 

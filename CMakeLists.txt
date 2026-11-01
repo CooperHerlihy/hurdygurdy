@@ -176,16 +176,12 @@ if(HG_LINUX)
 elseif(HG_WINDOWS)
     set(PLATFORM_SOURCES
         src/win32/win32.cpp
-        src/win32/window.cpp
-        src/win32/audio.cpp
     )
 endif()
 
 if(HG_USE_SDL)
     set(SDL_SOURCES
         src/sdl/sdl.cpp
-        src/sdl/window.cpp
-        src/sdl/audio.cpp
     )
 endif()
 

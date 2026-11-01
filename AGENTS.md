@@ -98,8 +98,8 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/audio.hpp`
 - `hg/render2d.hpp`
 - `hg/render3d.hpp`
-- `hg/imgui.hpp` - ImGui impl for HurdyGurdy
 - `hg/ecs.hpp`
+- `hg/imgui.hpp` - ImGui impl for HurdyGurdy
 
 `src/` - implementation:
 - `stb.c` - stb library impl
@@ -117,29 +117,8 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `loader.cpp` - VulkanFuncs struct, dynamic library loading, vk* wrapper thunks
 - `gpu.cpp` - public API impl: GpuBuffer/Image/View/Pipeline, cmds, barriers, render/compute passes, frame begin/end
 
-`src/sdl/` - SDL implementation:
-- `sdl_internal.hpp` - internal header: window/audio init declarations
-- `sdl.cpp` - init/deinit
-- `sdl_platform.hpp` - SDL platform abstractions
-- `window.cpp` - Window create, processEvents, surface, input/clipboard
-- `audio.cpp` - SDL audio device/stream open, bridges to user callback
-
-`src/pipewire/` - PipeWire audio implementation:
-- `pipewire_platform.hpp` - internal header, audio callback interface
-- `pipewire.cpp` - PipeWire audio init/deinit, stream management
-
-`src/win32/` - Windows (Win32) window/audio implementation:
-- `win32_platform.hpp` - internal header, mirrors sdl_platform.hpp
-- `win32.cpp` - init/deinit, Vulkan extension list
-- `window.cpp` - window create, WndProc event pump, Vulkan surface, input/clipboard
-- `audio.cpp` - WASAPI shared-mode playback, bridges to user callback
-
-`src/x11/` - X11 window implementation:
-- `x11_platform.hpp` - internal header, window/Vulkan extension interface
-- `x11.cpp` - X11 window management, input handling
-
 `src/wayland/` - Wayland window implementation:
-- `wayland_platform.hpp` - internal header, window/Vulkan extension interface
+- `wayland_platform.hpp` - internal api header
 - `wayland.cpp` - Wayland window management, input handling
 - `wayland-protocol.h` - hand-written Wayland protocol types, listener structs, interface externs
 - `wayland-protocol.c` - hand-written Wayland protocol interface data tables
@@ -147,6 +126,22 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 
 Note: the protocol functions in `wayland.cpp` call through the `wlFuncs` function pointer struct
 (see top of `wayland.cpp`). The `wl_*_interface` data globals come from `wayland-protocol.c`.
+
+`src/x11/` - X11 window implementation:
+- `x11_platform.hpp` - internal api header
+- `x11.cpp`
+
+`src/pipewire/` - PipeWire audio implementation:
+- `pipewire_platform.hpp` - internal api header
+- `pipewire.cpp`
+
+`src/win32/` - Windows (Win32) window/audio implementation:
+- `win32_platform.hpp` - internal api header
+- `win32.cpp`
+
+`src/sdl/` - SDL implementation:
+- `sdl_platform.hpp` - internal api header
+- `sdl.cpp`
 
 `src/shaders/` - GLSL shaders:
 - `render2d.vert`/`render2d.frag` - 2D sprite rendering
