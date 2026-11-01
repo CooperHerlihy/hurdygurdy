@@ -121,14 +121,13 @@ struct Defer {
 /**
  * Log a message and the last error, and abort the program
  */
-#define HG_PANIC(...) do { logError(); std::fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); std::abort(); \
-} while(0)
+#define HG_PANIC(...) do { logError(); std::fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); std::abort(); } while(0)
 
 #else
 
 #define HG_LOG(...) do {} while(0)
 #define HG_WARN(...) do {} while(0)
-#define HG_PANIC(...) do { abort(); } while(0)
+#define HG_PANIC(...) do { std::abort(); } while(0)
 
 #endif
 

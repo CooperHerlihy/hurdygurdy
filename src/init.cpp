@@ -40,16 +40,6 @@ struct PlatformApi {
     Vec2 (*mouseDelta)();
     Vec2 (*wheelDelta)();
 
-    u32 (*connectedGamepadCount)();
-    bool (*isGamepadConnected)(u32 gamepad);
-    bool (*isGamepadButtonDown)(u32 gamepad, GamepadButton key);
-    bool (*wasGamepadButtonPressed)(u32 gamepad, GamepadButton key);
-    bool (*wasGamepadButtonReleased)(u32 gamepad, GamepadButton key);
-    Vec2 (*gamepadLeftStick)(u32 gamepad);
-    Vec2 (*gamepadRightStick)(u32 gamepad);
-    f32 (*gamepadLeftTrigger)(u32 gamepad);
-    f32 (*gamepadRightTrigger)(u32 gamepad);
-
     void (*setAudioCallback)(AudioCallback callback, void* userData, const AudioConfig& preferredConfig);
     void (*unsetAudioCallback)();
 
@@ -76,62 +66,52 @@ struct PlatformApi {
     void (*openURL)(StringView url);
 };
 
-static PlatformApi api{};
+static PlatformApi platform{};
 
 #if defined(HG_USE_SDL)
 
 static void fillSdl()
 {
-    api.getPlatformVulkanExtensions = sdl::getPlatformVulkanExtensions;
+    platform.getPlatformVulkanExtensions = sdl::getPlatformVulkanExtensions;
 
-    api.displayInfo = sdl::displayInfo;
-    api.setCursor = sdl::setCursor;
-    api.showCursor = sdl::showCursor;
-    api.getClipboardText = sdl::getClipboardText;
-    api.setClipboardText = sdl::setClipboardText;
-    api.openURL = sdl::openURL;
-    api.processEvents = sdl::processEvents;
-    api.getEvents = sdl::getEvents;
-    api.wasQuit = sdl::wasQuit;
+    platform.displayInfo = sdl::displayInfo;
+    platform.setCursor = sdl::setCursor;
+    platform.showCursor = sdl::showCursor;
+    platform.getClipboardText = sdl::getClipboardText;
+    platform.setClipboardText = sdl::setClipboardText;
+    platform.openURL = sdl::openURL;
+    platform.processEvents = sdl::processEvents;
+    platform.getEvents = sdl::getEvents;
+    platform.wasQuit = sdl::wasQuit;
 
-    api.isButtonDown = sdl::isButtonDown;
-    api.wasButtonPressed = sdl::wasButtonPressed;
-    api.wasButtonReleased = sdl::wasButtonReleased;
-    api.mousePos = sdl::mousePos;
-    api.mouseDelta = sdl::mouseDelta;
-    api.wheelDelta = sdl::wheelDelta;
+    platform.isButtonDown = sdl::isButtonDown;
+    platform.wasButtonPressed = sdl::wasButtonPressed;
+    platform.wasButtonReleased = sdl::wasButtonReleased;
+    platform.mousePos = sdl::mousePos;
+    platform.mouseDelta = sdl::mouseDelta;
+    platform.wheelDelta = sdl::wheelDelta;
 
-    api.connectedGamepadCount = sdl::connectedGamepadCount;
-    api.isGamepadConnected = sdl::isGamepadConnected;
-    api.isGamepadButtonDown = sdl::isGamepadButtonDown;
-    api.wasGamepadButtonPressed = sdl::wasGamepadButtonPressed;
-    api.wasGamepadButtonReleased = sdl::wasGamepadButtonReleased;
-    api.gamepadLeftStick = sdl::gamepadLeftStick;
-    api.gamepadRightStick = sdl::gamepadRightStick;
-    api.gamepadLeftTrigger = sdl::gamepadLeftTrigger;
-    api.gamepadRightTrigger = sdl::gamepadRightTrigger;
+    platform.setAudioCallback = sdl::setAudioCallback;
+    platform.unsetAudioCallback = sdl::unsetAudioCallback;
 
-    api.setAudioCallback = sdl::setAudioCallback;
-    api.unsetAudioCallback = sdl::unsetAudioCallback;
-
-    api.windowCreate = sdl::windowCreate;
-    api.windowDestroy = sdl::windowDestroy;
-    api.windowSwapchain = sdl::windowSwapchain;
-    api.windowSetTitle = sdl::windowSetTitle;
-    api.windowGetSize = sdl::windowGetSize;
-    api.windowSetFullscreen = sdl::windowSetFullscreen;
-    api.windowIsFocused = sdl::windowIsFocused;
-    api.windowWasClosed = sdl::windowWasClosed;
-    api.windowWasResized = sdl::windowWasResized;
-    api.windowWasFocusGained = sdl::windowWasFocusGained;
-    api.windowWasFocusLost = sdl::windowWasFocusLost;
-    api.windowMaximize = sdl::windowMaximize;
-    api.windowMinimize = sdl::windowMinimize;
-    api.windowRestore = sdl::windowRestore;
-    api.windowSetFullscreen = sdl::windowSetFullscreen;
-    api.windowEvents = sdl::windowEvents;
-    api.windowMousePos = sdl::windowMousePos;
-    api.windowMouseDelta = sdl::windowMouseDelta;
+    platform.windowCreate = sdl::windowCreate;
+    platform.windowDestroy = sdl::windowDestroy;
+    platform.windowSwapchain = sdl::windowSwapchain;
+    platform.windowSetTitle = sdl::windowSetTitle;
+    platform.windowGetSize = sdl::windowGetSize;
+    platform.windowSetFullscreen = sdl::windowSetFullscreen;
+    platform.windowIsFocused = sdl::windowIsFocused;
+    platform.windowWasClosed = sdl::windowWasClosed;
+    platform.windowWasResized = sdl::windowWasResized;
+    platform.windowWasFocusGained = sdl::windowWasFocusGained;
+    platform.windowWasFocusLost = sdl::windowWasFocusLost;
+    platform.windowMaximize = sdl::windowMaximize;
+    platform.windowMinimize = sdl::windowMinimize;
+    platform.windowRestore = sdl::windowRestore;
+    platform.windowSetFullscreen = sdl::windowSetFullscreen;
+    platform.windowEvents = sdl::windowEvents;
+    platform.windowMousePos = sdl::windowMousePos;
+    platform.windowMouseDelta = sdl::windowMouseDelta;
 }
 
 #endif
@@ -140,109 +120,89 @@ static void fillSdl()
 
 static void fillX11()
 {
-    api.getPlatformVulkanExtensions = x11::getPlatformVulkanExtensions;
+    platform.getPlatformVulkanExtensions = x11::getPlatformVulkanExtensions;
 
-    api.displayInfo = x11::displayInfo;
-    api.setCursor = x11::setCursor;
-    api.showCursor = x11::showCursor;
-    api.getClipboardText = x11::getClipboardText;
-    api.setClipboardText = x11::setClipboardText;
-    api.openURL = x11::openURL;
-    api.processEvents = x11::processEvents;
-    api.getEvents = x11::getEvents;
-    api.wasQuit = x11::wasQuit;
+    platform.displayInfo = x11::displayInfo;
+    platform.setCursor = x11::setCursor;
+    platform.showCursor = x11::showCursor;
+    platform.getClipboardText = x11::getClipboardText;
+    platform.setClipboardText = x11::setClipboardText;
+    platform.openURL = x11::openURL;
+    platform.processEvents = x11::processEvents;
+    platform.getEvents = x11::getEvents;
+    platform.wasQuit = x11::wasQuit;
 
-    api.isButtonDown = x11::isButtonDown;
-    api.wasButtonPressed = x11::wasButtonPressed;
-    api.wasButtonReleased = x11::wasButtonReleased;
-    api.mousePos = x11::mousePos;
-    api.mouseDelta = x11::mouseDelta;
-    api.wheelDelta = x11::wheelDelta;
+    platform.isButtonDown = x11::isButtonDown;
+    platform.wasButtonPressed = x11::wasButtonPressed;
+    platform.wasButtonReleased = x11::wasButtonReleased;
+    platform.mousePos = x11::mousePos;
+    platform.mouseDelta = x11::mouseDelta;
+    platform.wheelDelta = x11::wheelDelta;
 
-    api.connectedGamepadCount = x11::connectedGamepadCount;
-    api.isGamepadConnected = x11::isGamepadConnected;
-    api.isGamepadButtonDown = x11::isGamepadButtonDown;
-    api.wasGamepadButtonPressed = x11::wasGamepadButtonPressed;
-    api.wasGamepadButtonReleased = x11::wasGamepadButtonReleased;
-    api.gamepadLeftStick = x11::gamepadLeftStick;
-    api.gamepadRightStick = x11::gamepadRightStick;
-    api.gamepadLeftTrigger = x11::gamepadLeftTrigger;
-    api.gamepadRightTrigger = x11::gamepadRightTrigger;
-
-    api.windowCreate = x11::windowCreate;
-    api.windowDestroy = x11::windowDestroy;
-    api.windowSwapchain = x11::windowSwapchain;
-    api.windowSetTitle = x11::windowSetTitle;
-    api.windowGetSize = x11::windowGetSize;
-    api.windowSetFullscreen = x11::windowSetFullscreen;
-    api.windowIsFocused = x11::windowIsFocused;
-    api.windowWasClosed = x11::windowWasClosed;
-    api.windowWasResized = x11::windowWasResized;
-    api.windowWasFocusGained = x11::windowWasFocusGained;
-    api.windowWasFocusLost = x11::windowWasFocusLost;
-    api.windowMaximize = x11::windowMaximize;
-    api.windowMinimize = x11::windowMinimize;
-    api.windowRestore = x11::windowRestore;
-    api.windowSetFullscreen = x11::windowSetFullscreen;
-    api.windowEvents = x11::windowEvents;
-    api.windowMousePos = x11::windowMousePos;
-    api.windowMouseDelta = x11::windowMouseDelta;
+    platform.windowCreate = x11::windowCreate;
+    platform.windowDestroy = x11::windowDestroy;
+    platform.windowSwapchain = x11::windowSwapchain;
+    platform.windowSetTitle = x11::windowSetTitle;
+    platform.windowGetSize = x11::windowGetSize;
+    platform.windowSetFullscreen = x11::windowSetFullscreen;
+    platform.windowIsFocused = x11::windowIsFocused;
+    platform.windowWasClosed = x11::windowWasClosed;
+    platform.windowWasResized = x11::windowWasResized;
+    platform.windowWasFocusGained = x11::windowWasFocusGained;
+    platform.windowWasFocusLost = x11::windowWasFocusLost;
+    platform.windowMaximize = x11::windowMaximize;
+    platform.windowMinimize = x11::windowMinimize;
+    platform.windowRestore = x11::windowRestore;
+    platform.windowSetFullscreen = x11::windowSetFullscreen;
+    platform.windowEvents = x11::windowEvents;
+    platform.windowMousePos = x11::windowMousePos;
+    platform.windowMouseDelta = x11::windowMouseDelta;
 }
 
 static void fillPipeWire()
 {
-    api.setAudioCallback = pipewire::setAudioCallback;
-    api.unsetAudioCallback = pipewire::unsetAudioCallback;
+    platform.setAudioCallback = pipewire::setAudioCallback;
+    platform.unsetAudioCallback = pipewire::unsetAudioCallback;
 }
 
 static void fillWayland()
 {
-    api.getPlatformVulkanExtensions = wayland::getPlatformVulkanExtensions;
+    platform.getPlatformVulkanExtensions = wayland::getPlatformVulkanExtensions;
 
-    api.displayInfo = wayland::displayInfo;
-    api.setCursor = wayland::setCursor;
-    api.showCursor = wayland::showCursor;
-    api.getClipboardText = wayland::getClipboardText;
-    api.setClipboardText = wayland::setClipboardText;
-    api.openURL = wayland::openURL;
-    api.processEvents = wayland::processEvents;
-    api.getEvents = wayland::getEvents;
-    api.wasQuit = wayland::wasQuit;
+    platform.displayInfo = wayland::displayInfo;
+    platform.setCursor = wayland::setCursor;
+    platform.showCursor = wayland::showCursor;
+    platform.getClipboardText = wayland::getClipboardText;
+    platform.setClipboardText = wayland::setClipboardText;
+    platform.openURL = wayland::openURL;
+    platform.processEvents = wayland::processEvents;
+    platform.getEvents = wayland::getEvents;
+    platform.wasQuit = wayland::wasQuit;
 
-    api.isButtonDown = wayland::isButtonDown;
-    api.wasButtonPressed = wayland::wasButtonPressed;
-    api.wasButtonReleased = wayland::wasButtonReleased;
-    api.mousePos = wayland::mousePos;
-    api.mouseDelta = wayland::mouseDelta;
-    api.wheelDelta = wayland::wheelDelta;
+    platform.isButtonDown = wayland::isButtonDown;
+    platform.wasButtonPressed = wayland::wasButtonPressed;
+    platform.wasButtonReleased = wayland::wasButtonReleased;
+    platform.mousePos = wayland::mousePos;
+    platform.mouseDelta = wayland::mouseDelta;
+    platform.wheelDelta = wayland::wheelDelta;
 
-    api.connectedGamepadCount = wayland::connectedGamepadCount;
-    api.isGamepadConnected = wayland::isGamepadConnected;
-    api.isGamepadButtonDown = wayland::isGamepadButtonDown;
-    api.wasGamepadButtonPressed = wayland::wasGamepadButtonPressed;
-    api.wasGamepadButtonReleased = wayland::wasGamepadButtonReleased;
-    api.gamepadLeftStick = wayland::gamepadLeftStick;
-    api.gamepadRightStick = wayland::gamepadRightStick;
-    api.gamepadLeftTrigger = wayland::gamepadLeftTrigger;
-    api.gamepadRightTrigger = wayland::gamepadRightTrigger;
-
-    api.windowCreate = wayland::windowCreate;
-    api.windowDestroy = wayland::windowDestroy;
-    api.windowSwapchain = wayland::windowSwapchain;
-    api.windowSetTitle = wayland::windowSetTitle;
-    api.windowGetSize = wayland::windowGetSize;
-    api.windowSetFullscreen = wayland::windowSetFullscreen;
-    api.windowIsFocused = wayland::windowIsFocused;
-    api.windowWasClosed = wayland::windowWasClosed;
-    api.windowWasResized = wayland::windowWasResized;
-    api.windowWasFocusGained = wayland::windowWasFocusGained;
-    api.windowWasFocusLost = wayland::windowWasFocusLost;
-    api.windowMaximize = wayland::windowMaximize;
-    api.windowMinimize = wayland::windowMinimize;
-    api.windowRestore = wayland::windowRestore;
-    api.windowEvents = wayland::windowEvents;
-    api.windowMousePos = wayland::windowMousePos;
-    api.windowMouseDelta = wayland::windowMouseDelta;
+    platform.windowCreate = wayland::windowCreate;
+    platform.windowDestroy = wayland::windowDestroy;
+    platform.windowSwapchain = wayland::windowSwapchain;
+    platform.windowSetTitle = wayland::windowSetTitle;
+    platform.windowGetSize = wayland::windowGetSize;
+    platform.windowSetFullscreen = wayland::windowSetFullscreen;
+    platform.windowIsFocused = wayland::windowIsFocused;
+    platform.windowWasClosed = wayland::windowWasClosed;
+    platform.windowWasResized = wayland::windowWasResized;
+    platform.windowWasFocusGained = wayland::windowWasFocusGained;
+    platform.windowWasFocusLost = wayland::windowWasFocusLost;
+    platform.windowMaximize = wayland::windowMaximize;
+    platform.windowMinimize = wayland::windowMinimize;
+    platform.windowRestore = wayland::windowRestore;
+    platform.windowEvents = wayland::windowEvents;
+    platform.windowMousePos = wayland::windowMousePos;
+    platform.windowMouseDelta = wayland::windowMouseDelta;
 }
 
 #endif
@@ -251,56 +211,46 @@ static void fillWayland()
 
 static void fillWin32()
 {
-    api.getPlatformVulkanExtensions = win32::getPlatformVulkanExtensions;
+    platform.getPlatformVulkanExtensions = win32::getPlatformVulkanExtensions;
 
-    api.displayInfo = win32::displayInfo;
-    api.setCursor = win32::setCursor;
-    api.showCursor = win32::showCursor;
-    api.getClipboardText = win32::getClipboardText;
-    api.setClipboardText = win32::setClipboardText;
-    api.openURL = win32::openURL;
-    api.processEvents = win32::processEvents;
-    api.getEvents = win32::getEvents;
-    api.wasQuit = win32::wasQuit;
+    platform.displayInfo = win32::displayInfo;
+    platform.setCursor = win32::setCursor;
+    platform.showCursor = win32::showCursor;
+    platform.getClipboardText = win32::getClipboardText;
+    platform.setClipboardText = win32::setClipboardText;
+    platform.openURL = win32::openURL;
+    platform.processEvents = win32::processEvents;
+    platform.getEvents = win32::getEvents;
+    platform.wasQuit = win32::wasQuit;
 
-    api.isButtonDown = win32::isButtonDown;
-    api.wasButtonPressed = win32::wasButtonPressed;
-    api.wasButtonReleased = win32::wasButtonReleased;
-    api.mousePos = win32::mousePos;
-    api.mouseDelta = win32::mouseDelta;
-    api.wheelDelta = win32::wheelDelta;
+    platform.isButtonDown = win32::isButtonDown;
+    platform.wasButtonPressed = win32::wasButtonPressed;
+    platform.wasButtonReleased = win32::wasButtonReleased;
+    platform.mousePos = win32::mousePos;
+    platform.mouseDelta = win32::mouseDelta;
+    platform.wheelDelta = win32::wheelDelta;
 
-    api.connectedGamepadCount = win32::connectedGamepadCount;
-    api.isGamepadConnected = win32::isGamepadConnected;
-    api.isGamepadButtonDown = win32::isGamepadButtonDown;
-    api.wasGamepadButtonPressed = win32::wasGamepadButtonPressed;
-    api.wasGamepadButtonReleased = win32::wasGamepadButtonReleased;
-    api.gamepadLeftStick = win32::gamepadLeftStick;
-    api.gamepadRightStick = win32::gamepadRightStick;
-    api.gamepadLeftTrigger = win32::gamepadLeftTrigger;
-    api.gamepadRightTrigger = win32::gamepadRightTrigger;
+    platform.setAudioCallback = win32::setAudioCallback;
+    platform.unsetAudioCallback = win32::unsetAudioCallback;
 
-    api.setAudioCallback = win32::setAudioCallback;
-    api.unsetAudioCallback = win32::unsetAudioCallback;
-
-    api.windowCreate = win32::windowCreate;
-    api.windowDestroy = win32::windowDestroy;
-    api.windowSwapchain = win32::windowSwapchain;
-    api.windowSetTitle = win32::windowSetTitle;
-    api.windowGetSize = win32::windowGetSize;
-    api.windowSetFullscreen = win32::windowSetFullscreen;
-    api.windowIsFocused = win32::windowIsFocused;
-    api.windowWasClosed = win32::windowWasClosed;
-    api.windowWasResized = win32::windowWasResized;
-    api.windowWasFocusGained = win32::windowWasFocusGained;
-    api.windowWasFocusLost = win32::windowWasFocusLost;
-    api.windowMaximize = win32::windowMaximize;
-    api.windowMinimize = win32::windowMinimize;
-    api.windowRestore = win32::windowRestore;
-    api.windowSetFullscreen = win32::windowSetFullscreen;
-    api.windowEvents = win32::windowEvents;
-    api.windowMousePos = win32::windowMousePos;
-    api.windowMouseDelta = win32::windowMouseDelta;
+    platform.windowCreate = win32::windowCreate;
+    platform.windowDestroy = win32::windowDestroy;
+    platform.windowSwapchain = win32::windowSwapchain;
+    platform.windowSetTitle = win32::windowSetTitle;
+    platform.windowGetSize = win32::windowGetSize;
+    platform.windowSetFullscreen = win32::windowSetFullscreen;
+    platform.windowIsFocused = win32::windowIsFocused;
+    platform.windowWasClosed = win32::windowWasClosed;
+    platform.windowWasResized = win32::windowWasResized;
+    platform.windowWasFocusGained = win32::windowWasFocusGained;
+    platform.windowWasFocusLost = win32::windowWasFocusLost;
+    platform.windowMaximize = win32::windowMaximize;
+    platform.windowMinimize = win32::windowMinimize;
+    platform.windowRestore = win32::windowRestore;
+    platform.windowSetFullscreen = win32::windowSetFullscreen;
+    platform.windowEvents = win32::windowEvents;
+    platform.windowMousePos = win32::windowMousePos;
+    platform.windowMouseDelta = win32::windowMouseDelta;
 }
 
 #endif
@@ -490,137 +440,92 @@ HurdyGurdy::~HurdyGurdy() noexcept
 
 Span<StringView> internal::getPlatformVulkanExtensions(Arena* arena)
 {
-    return api.getPlatformVulkanExtensions(arena);
+    return platform.getPlatformVulkanExtensions(arena);
 }
 
 Span<DisplayInfo> displayInfo()
 {
-    return api.displayInfo();
+    return platform.displayInfo();
 }
 
 void setCursor(CursorType type)
 {
-    api.setCursor(type);
+    platform.setCursor(type);
 }
 
 void showCursor(bool show)
 {
-    api.showCursor(show);
+    platform.showCursor(show);
 }
 
 StringView getClipboardText()
 {
-    return api.getClipboardText();
+    return platform.getClipboardText();
 }
 
 void setClipboardText(StringView text)
 {
-    api.setClipboardText(text);
+    platform.setClipboardText(text);
 }
 
 void openURL(StringView url)
 {
-    api.openURL(url);
+    platform.openURL(url);
 }
 
 void processEvents()
 {
-    api.processEvents();
+    platform.processEvents();
 }
 
 Span<Event> getEvents()
 {
-    return api.getEvents();
+    return platform.getEvents();
 }
 
 bool wasQuit()
 {
-    return api.wasQuit();
+    return platform.wasQuit();
 }
 
 bool isButtonDown(Button button)
 {
-    return api.isButtonDown(button);
+    return platform.isButtonDown(button);
 }
 
 bool wasButtonPressed(Button button)
 {
-    return api.wasButtonPressed(button);
+    return platform.wasButtonPressed(button);
 }
 
 bool wasButtonReleased(Button button)
 {
-    return api.wasButtonReleased(button);
+    return platform.wasButtonReleased(button);
 }
 
 Vec2 mousePos()
 {
-    return api.mousePos();
+    return platform.mousePos();
 }
 
 Vec2 mouseDelta()
 {
-    return api.mouseDelta();
+    return platform.mouseDelta();
 }
 
 Vec2 wheelDelta()
 {
-    return api.wheelDelta();
-}
-
-u32 connectedGamepadCount()
-{
-    return api.connectedGamepadCount();
-}
-
-bool isGamepadButtonDown(u32 gamepad, GamepadButton key)
-{
-    return api.isGamepadButtonDown(gamepad, key);
-}
-
-Vec2 gamepadLeftStick(u32 gamepad)
-{
-    return api.gamepadLeftStick(gamepad);
-}
-
-Vec2 gamepadRightStick(u32 gamepad)
-{
-    return api.gamepadRightStick(gamepad);
-}
-
-f32 gamepadLeftTrigger(u32 gamepad)
-{
-    return api.gamepadLeftTrigger(gamepad);
-}
-
-f32 gamepadRightTrigger(u32 gamepad)
-{
-    return api.gamepadRightTrigger(gamepad);
-}
-
-bool isGamepadConnected(u32 gamepad)
-{
-    return api.isGamepadConnected(gamepad);
-}
-
-bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key)
-{
-    return api.wasGamepadButtonPressed(gamepad, key);
-}
-
-bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key)
-{
-    return api.wasGamepadButtonReleased(gamepad, key);
+    return platform.wheelDelta();
 }
 
 void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
 {
-    api.setAudioCallback(callback, userData, preferredConfig);
+    platform.setAudioCallback(callback, userData, preferredConfig);
 }
 
 void unsetAudioCallback()
 {
-    api.unsetAudioCallback();
+    platform.unsetAudioCallback();
 }
 
 Window::Window() noexcept
@@ -630,7 +535,7 @@ Window::Window() noexcept
 Window::~Window() noexcept
 {
     if (data != nullptr)
-        api.windowDestroy(data);
+        platform.windowDestroy(data);
 }
 
 Window::Window(Window&& other) noexcept
@@ -642,7 +547,7 @@ Window& Window::operator=(Window&& other) noexcept
     if (this != &other)
     {
         if (data != nullptr)
-            api.windowDestroy(data);
+            platform.windowDestroy(data);
         data = std::exchange(other.data, nullptr);
     }
     return *this;
@@ -650,82 +555,82 @@ Window& Window::operator=(Window&& other) noexcept
 
 Window Window::create(const WindowConfig& config)
 {
-    return api.windowCreate(config);
+    return platform.windowCreate(config);
 }
 
 GpuSwapchain& Window::swapchain() const
 {
-    return api.windowSwapchain(data);
+    return platform.windowSwapchain(data);
 }
 
 void Window::setTitle(StringView title)
 {
-    api.windowSetTitle(data, title);
+    platform.windowSetTitle(data, title);
 }
 
 Span<Event> Window::events() const
 {
-    return api.windowEvents(data);
+    return platform.windowEvents(data);
 }
 
 bool Window::wasClosed() const
 {
-    return api.windowWasClosed(data);
+    return platform.windowWasClosed(data);
 }
 
 bool Window::isFocused() const
 {
-    return api.windowIsFocused(data);
+    return platform.windowIsFocused(data);
 }
 
 bool Window::wasFocusGained() const
 {
-    return api.windowWasFocusGained(data);
+    return platform.windowWasFocusGained(data);
 }
 
 bool Window::wasFocusLost() const
 {
-    return api.windowWasFocusLost(data);
+    return platform.windowWasFocusLost(data);
 }
 
 bool Window::wasResized() const
 {
-    return api.windowWasResized(data);
+    return platform.windowWasResized(data);
 }
 
 void Window::size(u32* width, u32* height) const
 {
-    api.windowGetSize(data, width, height);
+    platform.windowGetSize(data, width, height);
 }
 
 void Window::maximize()
 {
-    api.windowMaximize(data);
+    platform.windowMaximize(data);
 }
 
 void Window::minimize()
 {
-    api.windowMinimize(data);
+    platform.windowMinimize(data);
 }
 
 void Window::restore()
 {
-    api.windowRestore(data);
+    platform.windowRestore(data);
 }
 
 void Window::setFullscreen(bool set)
 {
-    api.windowSetFullscreen(data, set);
+    platform.windowSetFullscreen(data, set);
 }
 
 Vec2 Window::mousePos() const
 {
-    return api.windowMousePos(data);
+    return platform.windowMousePos(data);
 }
 
 Vec2 Window::mouseDelta() const
 {
-    return api.windowMouseDelta(data);
+    return platform.windowMouseDelta(data);
 }
 
 } // namespace hg

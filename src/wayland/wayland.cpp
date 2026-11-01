@@ -7,11 +7,8 @@
 #include "hg/map.hpp"
 
 #include <math.h>
-#include <sys/stat.h>
 #include <sys/mman.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <dirent.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -23,7 +20,6 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include <linux/input.h>
-#include <libevdev/libevdev.h>
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_wayland.h>
@@ -423,26 +419,12 @@ struct XkbFuncs {
     HG_WL_FUNC(xkb_state_update_mask);
 };
 
-struct EvdevFuncs {
-    HG_WL_FUNC(libevdev_new_from_fd);
-    HG_WL_FUNC(libevdev_free);
-    HG_WL_FUNC(libevdev_get_name);
-    HG_WL_FUNC(libevdev_get_id_vendor);
-    HG_WL_FUNC(libevdev_get_id_product);
-    HG_WL_FUNC(libevdev_has_event_type);
-    HG_WL_FUNC(libevdev_has_event_code);
-    HG_WL_FUNC(libevdev_next_event);
-};
-
 #undef HG_WL_FUNC
 
 static Library libWayland{};
 
 static Library libxkb{};
 static XkbFuncs xkbFuncs{};
-
-static Library libevdevLib{};
-static EvdevFuncs evdevFuncs{};
 
 static bool loadLibwayland()
 {
@@ -512,41 +494,11 @@ static bool loadXkb()
     return true;
 }
 
-static bool loadEvdev()
-{
-    Maybe<Library> lib = Library::load("libevdev.so.2");
-    if (!lib.has)
-    {
-        setError("Could not load libevdev");
-        return false;
-    }
-    libevdevLib = std::move(*lib);
-
-#define HG_LOAD_EVDEV(name) \
-    *(void**)&evdevFuncs.name = libevdevLib.loadSymbol(#name).orElse(nullptr); \
-    if (evdevFuncs.name == nullptr) { setError("Could not load " #name); return false; }
-
-    HG_LOAD_EVDEV(libevdev_new_from_fd);
-    HG_LOAD_EVDEV(libevdev_free);
-    HG_LOAD_EVDEV(libevdev_get_name);
-    HG_LOAD_EVDEV(libevdev_get_id_vendor);
-    HG_LOAD_EVDEV(libevdev_get_id_product);
-    HG_LOAD_EVDEV(libevdev_has_event_type);
-    HG_LOAD_EVDEV(libevdev_has_event_code);
-    HG_LOAD_EVDEV(libevdev_next_event);
-
-#undef HG_LOAD_EVDEV
-
-    return true;
-}
-
 bool loadWayland()
 {
     if (!loadLibwayland())
         return false;
     if (!loadXkb())
-        return false;
-    if (!loadEvdev())
         return false;
 
     return true;
@@ -585,20 +537,6 @@ struct WindowData {
 
     WindowData(const WindowData&) = delete;
     WindowData& operator=(const WindowData&) = delete;
-};
-
-static constexpr u32 maxGamepads = 8;
-
-struct GamepadState {
-    int fd = -1;
-    struct libevdev* dev = nullptr;
-    char name[256]{};
-    u16 vendorId = 0;
-    u16 productId = 0;
-
-    bool isButtonDown[GamepadButton_count]{};
-    bool wasButtonDown[GamepadButton_count]{};
-    i32 axes[6]{};
 };
 
 struct WindowState {
@@ -646,9 +584,6 @@ struct WindowState {
     // Output tracking
     struct wl_output* outputs[16]{};
     u32 outputCount = 0;
-
-    GamepadState gamepads[maxGamepads]{};
-    u32 gamepadCount = 0;
 
     bool globalsReady = false;
 };
@@ -788,25 +723,6 @@ static Button pointerButtonToHgButton(uint32_t button)
         case BTN_SIDE: return Button_mouse4;
         case BTN_EXTRA: return Button_mouse5;
         default: return Button_count;
-    }
-}
-
-static GamepadButton evdevButtonToGamepadButton(unsigned int code)
-{
-    switch (code)
-    {
-        case BTN_SOUTH: return GamepadButton_south;
-        case BTN_EAST: return GamepadButton_east;
-        case BTN_NORTH: return GamepadButton_north;
-        case BTN_WEST: return GamepadButton_west;
-        case BTN_TL: return GamepadButton_leftShoulder;
-        case BTN_TR: return GamepadButton_rightShoulder;
-        case BTN_SELECT: return GamepadButton_back;
-        case BTN_START: return GamepadButton_start;
-        case BTN_MODE: return GamepadButton_guide;
-        case BTN_THUMBL: return GamepadButton_leftStick;
-        case BTN_THUMBR: return GamepadButton_rightStick;
-        default: return GamepadButton_count;
     }
 }
 
@@ -1562,149 +1478,6 @@ static const struct wl_data_source_listener dataSourceListener = {
     .action = [](void*, struct wl_data_source*, uint32_t) {},
 };
 
-// ---- Gamepad handling (same as X11) ----
-
-static void scanForGamepads()
-{
-    windowState.gamepadCount = 0;
-
-    DIR* dir = opendir("/dev/input");
-    if (dir == nullptr)
-        return;
-
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr)
-    {
-        if (windowState.gamepadCount >= maxGamepads)
-            break;
-
-        if (strncmp(entry->d_name, "event", 5) != 0)
-            continue;
-
-        char path[64];
-        snprintf(path, sizeof(path), "/dev/input/%s", entry->d_name);
-
-        int fd = open(path, O_RDONLY | O_NONBLOCK);
-        if (fd < 0)
-            continue;
-
-        struct libevdev* dev = nullptr;
-        int rc = evdevFuncs.libevdev_new_from_fd(fd, &dev);
-        if (rc < 0 || dev == nullptr)
-        {
-            close(fd);
-            continue;
-        }
-
-        if (!evdevFuncs.libevdev_has_event_type(dev, EV_KEY) || !evdevFuncs.libevdev_has_event_code(dev, EV_KEY, BTN_SOUTH) ||
-            !evdevFuncs.libevdev_has_event_type(dev, EV_ABS) || !evdevFuncs.libevdev_has_event_code(dev, EV_ABS, ABS_X))
-        {
-            evdevFuncs.libevdev_free(dev);
-            close(fd);
-            continue;
-        }
-
-        GamepadState& gamepad = windowState.gamepads[windowState.gamepadCount];
-        gamepad.fd = fd;
-        gamepad.dev = dev;
-        strncpy(gamepad.name, evdevFuncs.libevdev_get_name(dev), sizeof(gamepad.name) - 1);
-        gamepad.vendorId = static_cast<u16>(evdevFuncs.libevdev_get_id_vendor(dev));
-        gamepad.productId = static_cast<u16>(evdevFuncs.libevdev_get_id_product(dev));
-
-        windowState.gamepadCount++;
-    }
-
-    closedir(dir);
-}
-
-static void closeGamepads()
-{
-    for (u32 i = 0; i < windowState.gamepadCount; i++)
-    {
-        GamepadState& gamepad = windowState.gamepads[i];
-        if (gamepad.dev != nullptr)
-        {
-            evdevFuncs.libevdev_free(gamepad.dev);
-            gamepad.dev = nullptr;
-        }
-        if (gamepad.fd >= 0)
-        {
-            close(gamepad.fd);
-            gamepad.fd = -1;
-        }
-    }
-    windowState.gamepadCount = 0;
-}
-
-static void readGamepadEvents()
-{
-    for (u32 i = 0; i < windowState.gamepadCount; i++)
-    {
-        GamepadState& gamepad = windowState.gamepads[i];
-        if (gamepad.fd < 0)
-            continue;
-
-        memcpy(gamepad.wasButtonDown, gamepad.isButtonDown, sizeof(gamepad.isButtonDown));
-
-        struct input_event ev;
-        int rc;
-        while ((rc = evdevFuncs.libevdev_next_event(gamepad.dev, LIBEVDEV_READ_FLAG_NORMAL, &ev)) == LIBEVDEV_READ_STATUS_SUCCESS)
-        {
-            if (ev.type == EV_KEY)
-            {
-                GamepadButton button = evdevButtonToGamepadButton(ev.code);
-                if (button < GamepadButton_count)
-                    gamepad.isButtonDown[button] = (ev.value != 0);
-            }
-            else if (ev.type == EV_ABS)
-            {
-                switch (ev.code)
-                {
-                    case ABS_X: gamepad.axes[0] = ev.value; break;
-                    case ABS_Y: gamepad.axes[1] = ev.value; break;
-                    case ABS_RX: gamepad.axes[2] = ev.value; break;
-                    case ABS_RY: gamepad.axes[3] = ev.value; break;
-                    case ABS_Z: gamepad.axes[4] = ev.value; break;
-                    case ABS_RZ: gamepad.axes[5] = ev.value; break;
-                }
-            }
-        }
-    }
-}
-
-static void pollGamepadDevices()
-{
-    static u32 lastPollFrame = 0;
-    static u32 pollCounter = 0;
-    ++pollCounter;
-    if (pollCounter - lastPollFrame < 60)
-        return;
-    lastPollFrame = pollCounter;
-
-    for (u32 i = 0; i < windowState.gamepadCount;)
-    {
-        GamepadState& gamepad = windowState.gamepads[i];
-        struct stat st;
-        char path[64];
-        snprintf(path, sizeof(path), "/dev/input/event%d", i);
-
-        if (stat(path, &st) != 0)
-        {
-            if (gamepad.dev != nullptr)
-                evdevFuncs.libevdev_free(gamepad.dev);
-            if (gamepad.fd >= 0)
-                close(gamepad.fd);
-
-            for (u32 j = i; j < windowState.gamepadCount - 1; j++)
-                windowState.gamepads[j] = windowState.gamepads[j + 1];
-            windowState.gamepadCount--;
-        }
-        else
-        {
-            i++;
-        }
-    }
-}
 
 // ---- Lifecycle ----
 
@@ -1756,7 +1529,6 @@ bool initWayland()
             wl_data_device_add_listener(windowState.dataDevice, &dataDeviceListener, nullptr);
     }
 
-    scanForGamepads();
     windowState.globalsReady = true;
 
     return true;
@@ -1764,8 +1536,6 @@ bool initWayland()
 
 void deinitWayland()
 {
-    closeGamepads();
-
     if (windowState.clipboardFd >= 0)
     {
         close(windowState.clipboardFd);
@@ -1936,9 +1706,6 @@ void processEvents()
         data->wasResized = false;
     });
 
-    readGamepadEvents();
-    pollGamepadDevices();
-
     if (wlFuncs.wl_display_get_error(windowState.display) != 0)
         return;
 
@@ -2050,81 +1817,6 @@ Vec2 windowMouseDelta(void* data)
 Vec2 wheelDelta()
 {
     return windowState.wheelDelta;
-}
-
-u32 connectedGamepadCount()
-{
-    return windowState.gamepadCount;
-}
-
-bool isGamepadConnected(u32 gamepad)
-{
-    return gamepad < windowState.gamepadCount && windowState.gamepads[gamepad].fd >= 0;
-}
-
-bool isGamepadButtonDown(u32 gamepad, GamepadButton key)
-{
-    if (gamepad >= windowState.gamepadCount)
-        return false;
-    return windowState.gamepads[gamepad].isButtonDown[key];
-}
-
-bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key)
-{
-    if (gamepad >= windowState.gamepadCount)
-        return false;
-    const GamepadState& state = windowState.gamepads[gamepad];
-    return !state.wasButtonDown[key] && state.isButtonDown[key];
-}
-
-bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key)
-{
-    if (gamepad >= windowState.gamepadCount)
-        return false;
-    const GamepadState& state = windowState.gamepads[gamepad];
-    return state.wasButtonDown[key] && !state.isButtonDown[key];
-}
-
-Vec2 gamepadLeftStick(u32 gamepad)
-{
-    if (gamepad >= windowState.gamepadCount)
-        return Vec2{};
-    const GamepadState& state = windowState.gamepads[gamepad];
-    constexpr f32 deadzone = 0.15f;
-    f32 x = static_cast<f32>(state.axes[0]) / 32767.0f;
-    f32 y = static_cast<f32>(state.axes[1]) / 32767.0f;
-    if (fabsf(x) < deadzone) x = 0.0f;
-    if (fabsf(y) < deadzone) y = 0.0f;
-    return Vec2{x, y};
-}
-
-Vec2 gamepadRightStick(u32 gamepad)
-{
-    if (gamepad >= windowState.gamepadCount)
-        return Vec2{};
-    const GamepadState& state = windowState.gamepads[gamepad];
-    constexpr f32 deadzone = 0.15f;
-    f32 x = static_cast<f32>(state.axes[2]) / 32767.0f;
-    f32 y = static_cast<f32>(state.axes[3]) / 32767.0f;
-    if (fabsf(x) < deadzone) x = 0.0f;
-    if (fabsf(y) < deadzone) y = 0.0f;
-    return Vec2{x, y};
-}
-
-f32 gamepadLeftTrigger(u32 gamepad)
-{
-    if (gamepad >= windowState.gamepadCount)
-        return 0.0f;
-    const GamepadState& state = windowState.gamepads[gamepad];
-    return static_cast<f32>(state.axes[4]) / 32767.0f;
-}
-
-f32 gamepadRightTrigger(u32 gamepad)
-{
-    if (gamepad >= windowState.gamepadCount)
-        return 0.0f;
-    const GamepadState& state = windowState.gamepads[gamepad];
-    return static_cast<f32>(state.axes[5]) / 32767.0f;
 }
 
 Window windowCreate(const WindowConfig& config)

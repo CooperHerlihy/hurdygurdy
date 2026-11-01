@@ -20,16 +20,6 @@ void processEvents();
 bool wasQuit();
 Span<Event> getEvents();
 
-u32 connectedGamepadCount();
-bool isGamepadConnected(u32 gamepad);
-bool isGamepadButtonDown(u32 gamepad, GamepadButton key);
-bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key);
-bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key);
-Vec2 gamepadLeftStick(u32 gamepad);
-Vec2 gamepadRightStick(u32 gamepad);
-f32 gamepadLeftTrigger(u32 gamepad);
-f32 gamepadRightTrigger(u32 gamepad);
-
 bool isButtonDown(Button key);
 bool wasButtonPressed(Button key);
 bool wasButtonReleased(Button key);

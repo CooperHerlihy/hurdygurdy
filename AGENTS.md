@@ -121,7 +121,7 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `sdl_internal.hpp` - internal header: window/audio init declarations
 - `sdl.cpp` - init/deinit
 - `sdl_platform.hpp` - SDL platform abstractions
-- `window.cpp` - Window create, processEvents, surface, input/gamepad/clipboard
+- `window.cpp` - Window create, processEvents, surface, input/clipboard
 - `audio.cpp` - SDL audio device/stream open, bridges to user callback
 
 `src/pipewire/` - PipeWire audio implementation:

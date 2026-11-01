@@ -230,16 +230,16 @@ target_include_directories(hurdygurdy_imgui
 target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
 
-add_library(hurdygurdy_misc OBJECT
+add_library(hurdygurdy_vendor OBJECT
     src/vk_mem_alloc.cpp
     src/stb.c
 )
-target_include_directories(hurdygurdy_misc
+target_include_directories(hurdygurdy_vendor
     PUBLIC
         ${INCLUDE_DIRS}
         ${VulkanHeaders_INCLUDE_DIR}
 )
-target_compile_options(hurdygurdy_misc PRIVATE ${CLANG_VENDOR_FLAGS})
+target_compile_options(hurdygurdy_vendor PRIVATE ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_core OBJECT ${CORE_SOURCES})
 add_dependencies(hurdygurdy_core shaders resources)
@@ -259,7 +259,6 @@ if(HG_LINUX)
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/pipewire/src
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/pipewire/spa/include
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libxkbcommon/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libevdev
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/wayland/src
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/wayland/egl
     )
@@ -280,12 +279,12 @@ target_compile_definitions(hurdygurdy_core PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 # Static library
 
 add_library(hurdygurdy STATIC)
-target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_misc)
+target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_vendor)
 if(HG_USE_SDL)
     target_link_libraries(hurdygurdy PRIVATE SDL3::SDL3)
 endif()
 if(HG_WINDOWS)
-    target_link_libraries(hurdygurdy PRIVATE ole32 xinput dwmapi)
+    target_link_libraries(hurdygurdy PRIVATE ole32 dwmapi)
 endif()
 
 # Executables

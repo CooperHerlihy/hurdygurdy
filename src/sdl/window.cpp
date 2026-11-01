@@ -35,8 +35,6 @@ struct WindowData {
     WindowData& operator=(const WindowData&) = delete;
 };
 
-static constexpr u32 maxGamepads = 8;
-
 struct WindowState {
     Array<DisplayInfo> displays{};
 
@@ -49,12 +47,6 @@ struct WindowState {
     bool wasKeyDown[Button_count]{};
     Vec2 mouseDelta{};
     Vec2 wheelDelta{};
-
-    Map<SDL_JoystickID, u32> gamepadIds{};
-    SDL_Gamepad* gamepads[maxGamepads]{};
-    bool isGamepadButtonDown[maxGamepads][GamepadButton_count]{};
-    bool wasGamepadButtonDown[maxGamepads][GamepadButton_count]{};
-    i16 gamepadAxes[maxGamepads][6]{};
 
     Map<SDL_WindowID, WindowData*> windows{};
     WindowData* activeWindow = nullptr;
@@ -117,12 +109,6 @@ void windowDeinit()
     {
         *window = {};
     });
-
-    for (SDL_Gamepad* gamepad : windowState.gamepads)
-    {
-        if (gamepad != nullptr)
-            SDL_CloseGamepad(gamepad);
-    }
 
     for (u32 i = 0; i < CursorType_count; i++)
     {
@@ -342,37 +328,6 @@ static Button sdlButtonToHgButton(u32 button)
     return Button_none;
 }
 
-static GamepadButton sdlGamepadButtonToHgButton(u8 button)
-{
-    switch (button)
-    {
-        case SDL_GAMEPAD_BUTTON_SOUTH: return GamepadButton_south;
-        case SDL_GAMEPAD_BUTTON_EAST: return GamepadButton_east;
-        case SDL_GAMEPAD_BUTTON_WEST: return GamepadButton_west;
-        case SDL_GAMEPAD_BUTTON_NORTH: return GamepadButton_north;
-        case SDL_GAMEPAD_BUTTON_BACK: return GamepadButton_back;
-        case SDL_GAMEPAD_BUTTON_GUIDE: return GamepadButton_guide;
-        case SDL_GAMEPAD_BUTTON_START: return GamepadButton_start;
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK: return GamepadButton_leftStick;
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return GamepadButton_rightStick;
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return GamepadButton_leftShoulder;
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return GamepadButton_rightShoulder;
-        case SDL_GAMEPAD_BUTTON_DPAD_UP: return GamepadButton_dpadUp;
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return GamepadButton_dpadDown;
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return GamepadButton_dpadLeft;
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return GamepadButton_dpadRight;
-    }
-    return GamepadButton_none;
-}
-
-static u32 findGamepadIndex(SDL_JoystickID id)
-{
-    u32* idx = windowState.gamepadIds.get(id);
-    if (idx != nullptr)
-        return *idx;
-    return maxGamepads;
-}
-
 static WindowData* getWindow(SDL_WindowID id)
 {
     WindowData** data = windowState.windows.get(id);
@@ -414,8 +369,6 @@ void processEvents()
     memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
     windowState.mouseDelta = {};
     windowState.wheelDelta = {};
-
-    memcpy(windowState.wasGamepadButtonDown, windowState.isGamepadButtonDown, sizeof(windowState.isGamepadButtonDown));
 
     windowState.windows.forEach([&](SDL_WindowID, WindowData* data)
     {
@@ -588,119 +541,6 @@ void processEvents()
                     w->events.push(event);
                 }
             } break;
-            case SDL_EVENT_GAMEPAD_ADDED:
-            {
-                Event event{};
-                event.type = EventType_gamepadConnected;
-                event.timestamp = sdlEvent.common.timestamp;
-
-                u32 idx = findGamepadIndex(sdlEvent.gdevice.which);
-                if (idx >= maxGamepads)
-                    break;
-                event.gamepad.idx = idx;
-                windowState.events.push(event);
-
-                for (u32 i = 0; i < maxGamepads; i++)
-                {
-                    if (windowState.gamepads[i] == nullptr)
-                    {
-                        SDL_Gamepad* gp = SDL_OpenGamepad(sdlEvent.gdevice.which);
-                        if (gp != nullptr)
-                        {
-                            windowState.gamepads[i] = gp;
-                            windowState.gamepadIds.add(sdlEvent.gdevice.which, i);
-                        }
-                        break;
-                    }
-                }
-            } break;
-            case SDL_EVENT_GAMEPAD_REMOVED:
-            {
-                Event event{};
-                event.type = EventType_gamepadDisconnected;
-                event.timestamp = sdlEvent.common.timestamp;
-
-                u32 idx = findGamepadIndex(sdlEvent.gdevice.which);
-                event.gamepad.idx = idx;
-                windowState.events.push(event);
-
-                SDL_CloseGamepad(windowState.gamepads[idx]);
-                windowState.gamepads[idx] = nullptr;
-                windowState.gamepadIds.remove(sdlEvent.gdevice.which);
-            } break;
-            case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-            {
-                u32 idx = findGamepadIndex(sdlEvent.gbutton.which);
-                if (idx < maxGamepads)
-                {
-                    Event event{};
-                    event.type = EventType_gamepadPress;
-                    event.timestamp = sdlEvent.common.timestamp;
-                    event.gamepad.idx = idx;
-                    event.gamepad.button = sdlGamepadButtonToHgButton(sdlEvent.gbutton.button);
-                    windowState.events.push(event);
-
-                    windowState.isGamepadButtonDown[idx][event.gamepad.button] = true;
-                }
-            } break;
-            case SDL_EVENT_GAMEPAD_BUTTON_UP:
-            {
-                u32 idx = findGamepadIndex(sdlEvent.gbutton.which);
-                if (idx < maxGamepads)
-                {
-                    Event event{};
-                    event.type = EventType_gamepadRelease;
-                    event.timestamp = sdlEvent.common.timestamp;
-                    event.gamepad.idx = idx;
-                    event.gamepad.button = sdlGamepadButtonToHgButton(sdlEvent.gbutton.button);
-                    windowState.events.push(event);
-
-                    windowState.isGamepadButtonDown[idx][event.gamepad.button] = false;
-                }
-            } break;
-            case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-            {
-                constexpr EventType types[] = {
-                    EventType_gamepadLeftStick,
-                    EventType_gamepadLeftStick,
-                    EventType_gamepadRightStick,
-                    EventType_gamepadRightStick,
-                    EventType_gamepadLeftTrigger,
-                    EventType_gamepadRightTrigger,
-                };
-
-                u32 idx = findGamepadIndex(sdlEvent.gaxis.which);
-                if (idx < maxGamepads)
-                {
-                    Event event{};
-                    event.type = types[sdlEvent.gaxis.axis];
-                    event.timestamp = sdlEvent.common.timestamp;
-                    event.gamepad.idx = idx;
-
-                    if (idx < maxGamepads && sdlEvent.gaxis.axis < 6)
-                        windowState.gamepadAxes[idx][sdlEvent.gaxis.axis] = sdlEvent.gaxis.value;
-
-                    switch (event.type)
-                    {
-                        case EventType_gamepadLeftStick:
-                            event.gamepad.stick = gamepadLeftStick(idx);
-                            break;
-                        case EventType_gamepadRightStick:
-                            event.gamepad.stick = gamepadRightStick(idx);
-                            break;
-                        case EventType_gamepadLeftTrigger:
-                            event.gamepad.trigger = gamepadLeftTrigger(idx);
-                            break;
-                        case EventType_gamepadRightTrigger:
-                            event.gamepad.trigger = gamepadRightTrigger(idx);
-                            break;
-                        default:
-                            break;
-                    }
-
-                    windowState.events.push(event);
-                }
-            } break;
         }
     }
 }
@@ -787,81 +627,6 @@ Vec2 windowMouseDelta(void* data)
 Vec2 wheelDelta()
 {
     return windowState.wheelDelta;
-}
-
-u32 connectedGamepadCount()
-{
-    u32 count = 0;
-    for (u32 i = 0; i < maxGamepads; i++)
-    {
-        if (windowState.gamepads[i] != nullptr)
-            count++;
-    }
-    return count;
-}
-
-bool isGamepadConnected(u32 gamepad)
-{
-    return gamepad < maxGamepads && windowState.gamepads[gamepad] != nullptr;
-}
-
-bool isGamepadButtonDown(u32 gamepad, GamepadButton key)
-{
-    if (gamepad < maxGamepads)
-        return windowState.isGamepadButtonDown[gamepad][key];
-    return false;
-}
-
-bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key)
-{
-    if (gamepad < maxGamepads)
-        return !windowState.wasGamepadButtonDown[gamepad][key] && windowState.isGamepadButtonDown[gamepad][key];
-    return false;
-}
-
-bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key)
-{
-    if (gamepad < maxGamepads)
-        return windowState.wasGamepadButtonDown[gamepad][key] && !windowState.isGamepadButtonDown[gamepad][key];
-    return false;
-}
-
-Vec2 gamepadLeftStick(u32 gamepad)
-{
-    if (gamepad < maxGamepads && windowState.gamepads[gamepad] != nullptr)
-        return Vec2{
-            static_cast<f32>(windowState.gamepadAxes[gamepad][0]) / 32767.0f,
-            static_cast<f32>(windowState.gamepadAxes[gamepad][1]) / 32767.0f,
-        };
-    else
-        return Vec2{0};
-}
-
-Vec2 gamepadRightStick(u32 gamepad)
-{
-    if (gamepad < maxGamepads && windowState.gamepads[gamepad] != nullptr)
-        return Vec2{
-            static_cast<f32>(windowState.gamepadAxes[gamepad][2]) / 32767.0f,
-            static_cast<f32>(windowState.gamepadAxes[gamepad][3]) / 32767.0f,
-        };
-    else
-        return Vec2{0};
-}
-
-f32 gamepadLeftTrigger(u32 gamepad)
-{
-    if (gamepad < maxGamepads && windowState.gamepads[gamepad] != nullptr)
-        return static_cast<f32>(windowState.gamepadAxes[gamepad][4]) / 32767.0f;
-    else
-        return 0;
-}
-
-f32 gamepadRightTrigger(u32 gamepad)
-{
-    if (gamepad < maxGamepads && windowState.gamepads[gamepad] != nullptr)
-        return static_cast<f32>(windowState.gamepadAxes[gamepad][5]) / 32767.0f;
-    else
-        return 0;
 }
 
 Window windowCreate(const WindowConfig& config)

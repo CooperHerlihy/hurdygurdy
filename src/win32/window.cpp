@@ -9,22 +9,15 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
-#include <xinput.h>
 #include <mmdeviceapi.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
-
-#ifndef XINPUT_GAMEPAD_GUIDE
-#define XINPUT_GAMEPAD_GUIDE 0x0400
-#endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
 namespace hg::win32 {
-
-static constexpr u32 maxGamepads = 8;
 
 struct WindowData {
     GpuSwapchain swap{};
@@ -51,13 +44,6 @@ struct WindowData {
     WindowData& operator=(const WindowData&) = delete;
 };
 
-struct GamepadState {
-    bool connected = false;
-    bool isButtonDown[GamepadButton_count]{};
-    bool wasButtonDown[GamepadButton_count]{};
-    i32 axes[6]{}; // lx, ly, rx, ry, lt, rt
-};
-
 struct WindowState {
     HINSTANCE hInstance = nullptr;
     ATOM windowClass = 0;
@@ -78,8 +64,6 @@ struct WindowState {
     WindowData* activeWindow = nullptr;
 
     Array<char> clipboard{};
-
-    GamepadState gamepads[maxGamepads]{};
 };
 
 static WindowState windowState{};
@@ -351,153 +335,6 @@ static Button win32MouseButtonToButton(u32 btn)
         }
     }
     return Button_none;
-}
-
-static void updateGamepads()
-{
-    for (u32 i = 0; i < maxGamepads; i++)
-    {
-        XINPUT_STATE state{};
-        if (XInputGetState(i, &state) == ERROR_SUCCESS)
-        {
-            GamepadState& gp = windowState.gamepads[i];
-            bool wasConnected = gp.connected;
-            gp.connected = true;
-
-            u16 buttons = state.Gamepad.wButtons;
-
-            bool aDown = (buttons & XINPUT_GAMEPAD_A) != 0;
-            bool bDown = (buttons & XINPUT_GAMEPAD_B) != 0;
-            bool xDown = (buttons & XINPUT_GAMEPAD_X) != 0;
-            bool yDown = (buttons & XINPUT_GAMEPAD_Y) != 0;
-            bool guideDown = (buttons & XINPUT_GAMEPAD_GUIDE) != 0;
-
-            gp.isButtonDown[GamepadButton_south] = aDown;
-            gp.isButtonDown[GamepadButton_east] = bDown;
-            gp.isButtonDown[GamepadButton_west] = xDown;
-            gp.isButtonDown[GamepadButton_north] = yDown;
-            gp.isButtonDown[GamepadButton_guide] = guideDown;
-
-            gp.isButtonDown[GamepadButton_back] = (buttons & XINPUT_GAMEPAD_BACK) != 0;
-            gp.isButtonDown[GamepadButton_start] = (buttons & XINPUT_GAMEPAD_START) != 0;
-            gp.isButtonDown[GamepadButton_leftShoulder] = (buttons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
-            gp.isButtonDown[GamepadButton_rightShoulder] = (buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
-            gp.isButtonDown[GamepadButton_leftStick] = (buttons & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
-            gp.isButtonDown[GamepadButton_rightStick] = (buttons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
-            gp.isButtonDown[GamepadButton_dpadUp] = (buttons & XINPUT_GAMEPAD_DPAD_UP) != 0;
-            gp.isButtonDown[GamepadButton_dpadDown] = (buttons & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
-            gp.isButtonDown[GamepadButton_dpadLeft] = (buttons & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
-            gp.isButtonDown[GamepadButton_dpadRight] = (buttons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
-
-            gp.axes[0] = state.Gamepad.sThumbLX;
-            gp.axes[1] = state.Gamepad.sThumbLY;
-            gp.axes[2] = state.Gamepad.sThumbRX;
-            gp.axes[3] = state.Gamepad.sThumbRY;
-            gp.axes[4] = state.Gamepad.bLeftTrigger;
-            gp.axes[5] = state.Gamepad.bRightTrigger;
-
-            if (!wasConnected)
-            {
-                Event event{};
-                event.type = EventType_gamepadConnected;
-                event.gamepad.idx = i;
-                windowState.events.push(event);
-            }
-        }
-        else
-        {
-            if (windowState.gamepads[i].connected)
-            {
-                Event event{};
-                event.type = EventType_gamepadDisconnected;
-                event.gamepad.idx = i;
-                windowState.events.push(event);
-            }
-            windowState.gamepads[i] = {};
-        }
-    }
-}
-
-static void processGamepadEvents()
-{
-    for (u32 i = 0; i < maxGamepads; i++)
-    {
-        GamepadState& gp = windowState.gamepads[i];
-        if (!gp.connected)
-            continue;
-
-        memcpy(gp.wasButtonDown, gp.isButtonDown, sizeof(gp.isButtonDown));
-    }
-
-    updateGamepads();
-
-    for (u32 i = 0; i < maxGamepads; i++)
-    {
-        GamepadState& gp = windowState.gamepads[i];
-        if (!gp.connected)
-            continue;
-
-        for (u32 b = 0; b < GamepadButton_count; b++)
-        {
-            if (gp.isButtonDown[b] && !gp.wasButtonDown[b])
-            {
-                Event event{};
-                event.type = EventType_gamepadPress;
-                event.gamepad.idx = i;
-                event.gamepad.button = static_cast<GamepadButton>(b);
-                windowState.events.push(event);
-            }
-            if (!gp.isButtonDown[b] && gp.wasButtonDown[b])
-            {
-                Event event{};
-                event.type = EventType_gamepadRelease;
-                event.gamepad.idx = i;
-                event.gamepad.button = static_cast<GamepadButton>(b);
-                windowState.events.push(event);
-            }
-        }
-
-        // Axes
-        constexpr f32 deadzone = 7849.0f / 32767.0f;
-        f32 lx = static_cast<f32>(gp.axes[0]) / 32767.0f;
-        f32 ly = static_cast<f32>(gp.axes[1]) / 32767.0f;
-        f32 rx = static_cast<f32>(gp.axes[2]) / 32767.0f;
-        f32 ry = static_cast<f32>(gp.axes[3]) / 32767.0f;
-
-        if (fabsf(lx) < deadzone) lx = 0.0f;
-        if (fabsf(ly) < deadzone) ly = 0.0f;
-        if (fabsf(rx) < deadzone) rx = 0.0f;
-        if (fabsf(ry) < deadzone) ry = 0.0f;
-
-        {
-            Event event{};
-            event.type = EventType_gamepadLeftStick;
-            event.gamepad.idx = i;
-            event.gamepad.stick = Vec2{lx, ly};
-            windowState.events.push(event);
-        }
-        {
-            Event event{};
-            event.type = EventType_gamepadRightStick;
-            event.gamepad.idx = i;
-            event.gamepad.stick = Vec2{rx, ry};
-            windowState.events.push(event);
-        }
-        {
-            Event event{};
-            event.type = EventType_gamepadLeftTrigger;
-            event.gamepad.idx = i;
-            event.gamepad.trigger = static_cast<f32>(gp.axes[4]) / 255.0f;
-            windowState.events.push(event);
-        }
-        {
-            Event event{};
-            event.type = EventType_gamepadRightTrigger;
-            event.gamepad.idx = i;
-            event.gamepad.trigger = static_cast<f32>(gp.axes[5]) / 255.0f;
-            windowState.events.push(event);
-        }
-    }
 }
 
 static WindowData* getWindow(HWND hwnd)
@@ -788,8 +625,6 @@ void processEvents()
         TranslateMessage(&msg);
         DispatchMessageA(&msg);
     }
-
-    processGamepadEvents();
 }
 
 Span<Event> getEvents()
@@ -854,85 +689,6 @@ Vec2 mouseDelta()
 Vec2 wheelDelta()
 {
     return windowState.wheelDelta;
-}
-
-u32 connectedGamepadCount()
-{
-    u32 count = 0;
-    for (u32 i = 0; i < maxGamepads; i++)
-    {
-        if (windowState.gamepads[i].connected)
-            count++;
-    }
-    return count;
-}
-
-bool isGamepadConnected(u32 gamepad)
-{
-    return gamepad < maxGamepads && windowState.gamepads[gamepad].connected;
-}
-
-bool isGamepadButtonDown(u32 gamepad, GamepadButton key)
-{
-    if (gamepad < maxGamepads)
-        return windowState.gamepads[gamepad].isButtonDown[key];
-    return false;
-}
-
-bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key)
-{
-    if (gamepad < maxGamepads)
-        return !windowState.gamepads[gamepad].wasButtonDown[key] && windowState.gamepads[gamepad].isButtonDown[key];
-    return false;
-}
-
-bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key)
-{
-    if (gamepad < maxGamepads)
-        return windowState.gamepads[gamepad].wasButtonDown[key] && !windowState.gamepads[gamepad].isButtonDown[key];
-    return false;
-}
-
-Vec2 gamepadLeftStick(u32 gamepad)
-{
-    if (gamepad < maxGamepads && windowState.gamepads[gamepad].connected)
-    {
-        constexpr f32 deadzone = 0.15f;
-        f32 x = static_cast<f32>(windowState.gamepads[gamepad].axes[0]) / 32767.0f;
-        f32 y = static_cast<f32>(windowState.gamepads[gamepad].axes[1]) / 32767.0f;
-        if (fabsf(x) < deadzone) x = 0.0f;
-        if (fabsf(y) < deadzone) y = 0.0f;
-        return Vec2{x, y};
-    }
-    return Vec2{0};
-}
-
-Vec2 gamepadRightStick(u32 gamepad)
-{
-    if (gamepad < maxGamepads && windowState.gamepads[gamepad].connected)
-    {
-        constexpr f32 deadzone = 0.15f;
-        f32 x = static_cast<f32>(windowState.gamepads[gamepad].axes[2]) / 32767.0f;
-        f32 y = static_cast<f32>(windowState.gamepads[gamepad].axes[3]) / 32767.0f;
-        if (fabsf(x) < deadzone) x = 0.0f;
-        if (fabsf(y) < deadzone) y = 0.0f;
-        return Vec2{x, y};
-    }
-    return Vec2{0};
-}
-
-f32 gamepadLeftTrigger(u32 gamepad)
-{
-    if (gamepad < maxGamepads && windowState.gamepads[gamepad].connected)
-        return static_cast<f32>(windowState.gamepads[gamepad].axes[4]) / 255.0f;
-    return 0;
-}
-
-f32 gamepadRightTrigger(u32 gamepad)
-{
-    if (gamepad < maxGamepads && windowState.gamepads[gamepad].connected)
-        return static_cast<f32>(windowState.gamepads[gamepad].axes[5]) / 255.0f;
-    return 0;
 }
 
 Window windowCreate(const WindowConfig& config)

@@ -22,14 +22,6 @@ static const char* eventName(EventType type)
         case EventType_keyRelease: return "keyRelease";
         case EventType_mouseMoved: return "mouseMoved";
         case EventType_wheelMoved: return "wheelMoved";
-        case EventType_gamepadConnected: return "gamepadConnected";
-        case EventType_gamepadDisconnected: return "gamepadDisconnected";
-        case EventType_gamepadPress: return "gamepadPress";
-        case EventType_gamepadRelease: return "gamepadRelease";
-        case EventType_gamepadLeftStick: return "gamepadLeftStick";
-        case EventType_gamepadRightStick: return "gamepadRightStick";
-        case EventType_gamepadLeftTrigger: return "gamepadLeftTrigger";
-        case EventType_gamepadRightTrigger: return "gamepadRightTrigger";
         case EventType_windowClosed: return "windowClosed";
         case EventType_windowFocused: return "windowFocused";
         case EventType_windowUnfocused: return "windowUnfocused";
@@ -179,31 +171,6 @@ static const char* cursorName(CursorType t)
     return "?";
 }
 
-static const char* gamepadButtonName(GamepadButton b)
-{
-    switch (b)
-    {
-        case GamepadButton_none: return "none";
-        case GamepadButton_south: return "south";
-        case GamepadButton_east: return "east";
-        case GamepadButton_west: return "west";
-        case GamepadButton_north: return "north";
-        case GamepadButton_back: return "back";
-        case GamepadButton_guide: return "guide";
-        case GamepadButton_start: return "start";
-        case GamepadButton_leftStick: return "leftStick";
-        case GamepadButton_rightStick: return "rightStick";
-        case GamepadButton_leftShoulder: return "leftShoulder";
-        case GamepadButton_rightShoulder: return "rightShoulder";
-        case GamepadButton_dpadUp: return "dpadUp";
-        case GamepadButton_dpadDown: return "dpadDown";
-        case GamepadButton_dpadLeft: return "dpadLeft";
-        case GamepadButton_dpadRight: return "dpadRight";
-        case GamepadButton_count: break;
-    }
-    return "?";
-}
-
 static void audioCallback(void* userData, Span<f32> buf, AudioConfig config)
 {
     static_cast<AudioPlayer*>(userData)->update(buf, config);
@@ -249,7 +216,6 @@ int main()
     bool showEvents = true;
     bool showKeyboard = true;
     bool showMousePanel = true;
-    bool showGamepad = true;
     bool showWindowPanel = true;
     bool showAudio = true;
     bool showDisplay = true;
@@ -283,7 +249,6 @@ int main()
                     ImGui::MenuItem("Events", nullptr, &showEvents);
                     ImGui::MenuItem("Keyboard", nullptr, &showKeyboard);
                     ImGui::MenuItem("Mouse", nullptr, &showMousePanel);
-                    ImGui::MenuItem("Gamepad", nullptr, &showGamepad);
                     ImGui::MenuItem("Window", nullptr, &showWindowPanel);
                     ImGui::MenuItem("Audio", nullptr, &showAudio);
                     ImGui::MenuItem("Display", nullptr, &showDisplay);
@@ -414,50 +379,6 @@ int main()
                         Vec2 swmd = secondWindow.mouseDelta();
                         ImGui::Text("pos: %.1f, %.1f  delta: %.1f, %.1f", swmp.x, swmp.y, swmd.x, swmd.y);
                     }
-                }
-                ImGui::End();
-            }
-
-            if (showGamepad)
-            {
-                if (ImGui::Begin("Gamepad", &showGamepad))
-                {
-                    u32 count = connectedGamepadCount();
-                    ImGui::Text("Connected: %u", count);
-
-                    for (u32 g = 0; g < count; ++g)
-                    {
-                        if (ImGui::TreeNodeEx((void*)(uintptr_t)g, 0, "Gamepad %u", g))
-                        {
-                            ImGui::Text("Connected: %s", isGamepadConnected(g) ? "yes" : "no");
-
-                            ImGui::Text("Buttons");
-                            for (u32 i = 1; i < GamepadButton_count; ++i)
-                            {
-                                GamepadButton b = static_cast<GamepadButton>(i);
-                                bool down = isGamepadButtonDown(g, b);
-                                bool pressed = wasGamepadButtonPressed(g, b);
-                                bool released = wasGamepadButtonReleased(g, b);
-                                if (down || pressed || released)
-                                    ImGui::Text("%s: d=%d p=%d r=%d", gamepadButtonName(b), down, pressed, released);
-                            }
-
-                            ImGui::Text("Sticks");
-                            Vec2 ls = gamepadLeftStick(g);
-                            Vec2 rs = gamepadRightStick(g);
-                            ImGui::Text("Left:  %.3f, %.3f", ls.x, ls.y);
-                            ImGui::Text("Right: %.3f, %.3f", rs.x, rs.y);
-
-                            ImGui::Text("Triggers");
-                            ImGui::Text("Left:  %.3f", gamepadLeftTrigger(g));
-                            ImGui::Text("Right: %.3f", gamepadRightTrigger(g));
-
-                            ImGui::TreePop();
-                        }
-                    }
-
-                    if (count == 0)
-                        ImGui::TextDisabled("No gamepads connected");
                 }
                 ImGui::End();
             }

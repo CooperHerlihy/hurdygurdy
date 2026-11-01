@@ -70,15 +70,6 @@ enum EventType : u32 {
     EventType_mouseMoved,
     EventType_wheelMoved,
 
-    EventType_gamepadConnected,
-    EventType_gamepadDisconnected,
-    EventType_gamepadPress,
-    EventType_gamepadRelease,
-    EventType_gamepadLeftStick,
-    EventType_gamepadRightStick,
-    EventType_gamepadLeftTrigger,
-    EventType_gamepadRightTrigger,
-
     EventType_windowClosed,
     EventType_windowFocused,
     EventType_windowUnfocused,
@@ -209,26 +200,6 @@ enum Button : u32 {
     Button_count,
 };
 
-enum GamepadButton {
-    GamepadButton_none = 0,
-    GamepadButton_south,
-    GamepadButton_east,
-    GamepadButton_west,
-    GamepadButton_north,
-    GamepadButton_back,
-    GamepadButton_guide,
-    GamepadButton_start,
-    GamepadButton_leftStick,
-    GamepadButton_rightStick,
-    GamepadButton_leftShoulder,
-    GamepadButton_rightShoulder,
-    GamepadButton_dpadUp,
-    GamepadButton_dpadDown,
-    GamepadButton_dpadLeft,
-    GamepadButton_dpadRight,
-    GamepadButton_count,
-};
-
 /**
  * A mouse event
  */
@@ -255,33 +226,6 @@ struct WheelEvent {
      * The change in wheel position
      */
     Vec2 delta;
-};
-
-/**
- * A gamepad event
- */
-struct GamepadEvent {
-    /**
-     * The gamepad index
-     */
-    u32 idx;
-    /**
-     * The data
-     */
-    union {
-        /**
-         * The button pressed or released
-         */
-        GamepadButton button;
-        /**
-         * The stick position, each axis in range -1..1
-         */
-        Vec2 stick;
-        /**
-         * The trigger value, in range 0..1
-         */
-        f32 trigger;
-    };
 };
 
 /**
@@ -340,10 +284,6 @@ struct Event {
          */
         WheelEvent wheel;
         /**
-         * A gamepad event
-         */
-        GamepadEvent gamepad;
-        /**
          * A window event
          */
         WindowEvent window;
@@ -396,54 +336,6 @@ Vec2 mouseDelta();
  * Get the mouse wheel movement
  */
 Vec2 wheelDelta();
-
-/**
- * Returns the number of connected gamepads
- *
- * Note, Backends support at least 8 gamepad indices, though physical
- * device limits may be lower (eg. XInput supports 4 on Windows)
- */
-u32 connectedGamepadCount();
-
-/**
- * Returns whether a gamepad index is active
- */
-bool isGamepadConnected(u32 gamepad);
-
-/**
- * Get whether a gamepad button is currently down
- */
-bool isGamepadButtonDown(u32 gamepad, GamepadButton key);
-
-/**
- * Get whether a gamepad button was pressed last frame
- */
-bool wasGamepadButtonPressed(u32 gamepad, GamepadButton key);
-
-/**
- * Get whether a gamepad button was released last frame
- */
-bool wasGamepadButtonReleased(u32 gamepad, GamepadButton key);
-
-/**
- * Get the left stick position, each axis in range -1..1
- */
-Vec2 gamepadLeftStick(u32 gamepad);
-
-/**
- * Get the right stick position, each axis in range -1..1
- */
-Vec2 gamepadRightStick(u32 gamepad);
-
-/**
- * Get the left trigger value, in range 0..1
- */
-f32 gamepadLeftTrigger(u32 gamepad);
-
-/**
- * Get the right trigger value, in range 0..1
- */
-f32 gamepadRightTrigger(u32 gamepad);
 
 /**
  * Configuration for a window

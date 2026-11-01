@@ -69,7 +69,6 @@
                     libxrandr
                     pipewire
                     libxkbcommon
-                    libevdev
                     wayland
                 ];
             };
@@ -139,14 +138,6 @@
                 hash = "sha256-R4Qw+lLLDdt7I0a7A+sgTDqKaG0bfYfEcCvNBHBxRIY=";
             };
 
-            libevdev-src = pkgs.fetchFromGitLab {
-                domain = "gitlab.freedesktop.org";
-                owner = "libevdev";
-                repo = "libevdev";
-                rev = "294f6bc00675915c3186138e84dd35614d2a20f8";
-                hash = "sha256-TMPyrJdcr6TLfQYrmT+RA1uveZXJfNxyliVEdUXBRfI=";
-            };
-
             wayland-src = pkgs.fetchFromGitLab {
                 domain = "gitlab.freedesktop.org";
                 owner = "wayland";
@@ -181,7 +172,7 @@
                 preConfigure = ''
                     rm -rf vendor/imgui vendor/Vulkan-Headers
                     rm -rf vendor/xorgproto vendor/libX11 vendor/libXrandr vendor/libXrender
-                    rm -rf vendor/pipewire vendor/libxkbcommon vendor/libevdev
+                    rm -rf vendor/pipewire vendor/libxkbcommon
                     rm -rf vendor/wayland vendor/wayland-protocols
                     cp -r ${vulkan-headers-src} vendor/Vulkan-Headers
                     cp -r ${imgui-src} vendor/imgui
@@ -191,7 +182,6 @@
                     cp -r ${libXrender-src} vendor/libXrender
                     cp -r ${pipewire-src} vendor/pipewire
                     cp -r ${libxkbcommon-src} vendor/libxkbcommon
-                    cp -r ${libevdev-src} vendor/libevdev
                     cp -r ${wayland-src} vendor/wayland
                     cp -r ${wayland-protocols-src} vendor/wayland-protocols
                     chmod -R u+w vendor/Vulkan-Headers
@@ -202,7 +192,6 @@
                     chmod -R u+w vendor/libXrender
                     chmod -R u+w vendor/pipewire
                     chmod -R u+w vendor/libxkbcommon
-                    chmod -R u+w vendor/libevdev
                     chmod -R u+w vendor/wayland
                     chmod -R u+w vendor/wayland-protocols
                 '';
@@ -214,7 +203,6 @@
                         patchelf --add-rpath ${pkgs.libxrandr}/lib $bin
                         patchelf --add-rpath ${pkgs.pipewire}/lib $bin
                         patchelf --add-rpath ${pkgs.libxkbcommon}/lib $bin
-                        patchelf --add-rpath ${pkgs.libevdev}/lib $bin
                         patchelf --add-rpath ${pkgs.wayland}/lib $bin
                     done
                 '';
