@@ -410,12 +410,6 @@ int main()
                     }
 
                     ImGui::Text("Actions");
-                    if (ImGui::Button("Maximize")) window.maximize();
-                    ImGui::SameLine();
-                    if (ImGui::Button("Minimize")) window.minimize();
-                    ImGui::SameLine();
-                    if (ImGui::Button("Restore")) window.restore();
-
                     if (ImGui::Button("Fullscreen On")) window.setFullscreen(true);
                     ImGui::SameLine();
                     if (ImGui::Button("Fullscreen Off")) window.setFullscreen(false);

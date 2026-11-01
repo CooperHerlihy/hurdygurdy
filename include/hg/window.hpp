@@ -56,6 +56,21 @@ void setCursor(CursorType type);
 void showCursor(bool show = true);
 
 /**
+ * Returns the platform clipboard text
+ */
+StringView getClipboardText();
+
+/**
+ * Set the platform clipboard text
+ */
+void setClipboardText(StringView text);
+
+/**
+ * Open a URL in the platform's default handler
+ */
+void openURL(StringView url);
+
+/**
  * The event types
  */
 enum EventType : u32 {
@@ -345,21 +360,24 @@ struct WindowConfig {
      * The title of the window
      *
      * Note, may be truncated on some platforms
-     * Note, an empty title uses the platform default
+     *
+     * An empty title uses the platform default
      */
     StringView title = "";
     /**
      * The width of the window in pixels
      *
      * Note, may be ignored depending on platform
-     * Note, 0 lets the platform choose a default size
+     *
+     * 0 lets the platform choose a default size
      */
     u32 width = 0;
     /**
      * The height of the window in pixels
      *
      * Note, may be ignored depending on platform
-     * Note, 0 lets the platform choose a default size
+     *
+     * 0 lets the platform choose a default size
      */
     u32 height = 0;
     /**
@@ -414,16 +432,6 @@ struct Window {
     Span<Event> events() const;
 
     /**
-     * Get the mouse position relative to this window
-     */
-    Vec2 mousePos() const;
-
-    /**
-     * Get the change in mouse position relative to this window
-     */
-    Vec2 mouseDelta() const;
-
-    /**
      * Returns whether the window was closed
      */
     bool wasClosed() const;
@@ -454,24 +462,19 @@ struct Window {
     void size(u32* width, u32* height) const;
 
     /**
-     * Maximize the window
-     */
-    void maximize();
-
-    /**
-     * Minimize the window
-     */
-    void minimize();
-
-    /**
-     * Restore the window from being maximized or minimized
-     */
-    void restore();
-
-    /**
      * Set to fullscreen or disable fullscreen
      */
     void setFullscreen(bool set = true);
+
+    /**
+     * Get the mouse position relative to this window
+     */
+    Vec2 mousePos() const;
+
+    /**
+     * Get the change in mouse position relative to this window
+     */
+    Vec2 mouseDelta() const;
 
     /**
      * Move construct
@@ -486,20 +489,5 @@ struct Window {
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
 };
-
-/**
- * Returns the platform clipboard text
- */
-StringView getClipboardText();
-
-/**
- * Set the platform clipboard text
- */
-void setClipboardText(StringView text);
-
-/**
- * Open a URL in the platform's default handler
- */
-void openURL(StringView url);
 
 } // namespace hg

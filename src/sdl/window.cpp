@@ -730,29 +730,6 @@ void windowGetSize(void* data, u32* w, u32* h)
         *h = wd != nullptr ? wd->height : 0;
 }
 
-
-
-
-void windowMaximize(void* data)
-{
-    SDL_MaximizeWindow(static_cast<WindowData*>(data)->sdlWindow);
-}
-
-
-
-void windowMinimize(void* data)
-{
-    SDL_MinimizeWindow(static_cast<WindowData*>(data)->sdlWindow);
-}
-
-
-
-void windowRestore(void* data)
-{
-    SDL_RestoreWindow(static_cast<WindowData*>(data)->sdlWindow);
-}
-
-
 void windowSetFullscreen(void* data, bool set)
 {
     WindowData* wd = static_cast<WindowData*>(data);

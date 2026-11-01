@@ -13,11 +13,11 @@ Span<StringView> getPlatformVulkanExtensions(Arena* arena);
 
 bool initGpu();
 void deinitGpu();
-void* getVulkanInstance();
-void* getVulkanInstanceProcAddr(const char* name);
+void* getVkInstance();
+void* getVkInstanceProcAddr(const char* name);
 
-void initRender2D();
-void deinitRender2D();
+void initPixelFont();
+void deinitPixelFont();
 
 void initImGuiGpu(
     const GpuSwapchain& swap,

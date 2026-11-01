@@ -28,20 +28,19 @@ struct PlatformApi {
     Span<DisplayInfo> (*displayInfo)();
     void (*setCursor)(CursorType type);
     void (*showCursor)(bool show);
+    StringView (*getClipboardText)();
+    void (*setClipboardText)(StringView text);
+    void (*openURL)(StringView url);
 
     void (*processEvents)();
     Span<Event> (*getEvents)();
     bool (*wasQuit)();
-
     bool (*isButtonDown)(Button key);
     bool (*wasButtonPressed)(Button key);
     bool (*wasButtonReleased)(Button key);
     Vec2 (*mousePos)();
     Vec2 (*mouseDelta)();
     Vec2 (*wheelDelta)();
-
-    void (*setAudioCallback)(AudioCallback callback, void* userData, const AudioConfig& preferredConfig);
-    void (*unsetAudioCallback)();
 
     Window (*windowCreate)(const WindowConfig& config);
     void (*windowDestroy)(void* data);
@@ -54,16 +53,12 @@ struct PlatformApi {
     bool (*windowWasFocusLost)(void* data);
     bool (*windowWasResized)(void* data);
     void (*windowGetSize)(void* data, u32* w, u32* h);
-    void (*windowMaximize)(void* data);
-    void (*windowMinimize)(void* data);
-    void (*windowRestore)(void* data);
     void (*windowSetFullscreen)(void* data, bool set);
     Vec2 (*windowMousePos)(void* data);
     Vec2 (*windowMouseDelta)(void* data);
 
-    StringView (*getClipboardText)();
-    void (*setClipboardText)(StringView text);
-    void (*openURL)(StringView url);
+    void (*setAudioCallback)(AudioCallback callback, void* userData, const AudioConfig& preferredConfig);
+    void (*unsetAudioCallback)();
 };
 
 static PlatformApi platform{};
@@ -80,19 +75,16 @@ static void fillSdl()
     platform.getClipboardText = sdl::getClipboardText;
     platform.setClipboardText = sdl::setClipboardText;
     platform.openURL = sdl::openURL;
+
     platform.processEvents = sdl::processEvents;
     platform.getEvents = sdl::getEvents;
     platform.wasQuit = sdl::wasQuit;
-
     platform.isButtonDown = sdl::isButtonDown;
     platform.wasButtonPressed = sdl::wasButtonPressed;
     platform.wasButtonReleased = sdl::wasButtonReleased;
     platform.mousePos = sdl::mousePos;
     platform.mouseDelta = sdl::mouseDelta;
     platform.wheelDelta = sdl::wheelDelta;
-
-    platform.setAudioCallback = sdl::setAudioCallback;
-    platform.unsetAudioCallback = sdl::unsetAudioCallback;
 
     platform.windowCreate = sdl::windowCreate;
     platform.windowDestroy = sdl::windowDestroy;
@@ -105,65 +97,18 @@ static void fillSdl()
     platform.windowWasResized = sdl::windowWasResized;
     platform.windowWasFocusGained = sdl::windowWasFocusGained;
     platform.windowWasFocusLost = sdl::windowWasFocusLost;
-    platform.windowMaximize = sdl::windowMaximize;
-    platform.windowMinimize = sdl::windowMinimize;
-    platform.windowRestore = sdl::windowRestore;
     platform.windowSetFullscreen = sdl::windowSetFullscreen;
     platform.windowEvents = sdl::windowEvents;
     platform.windowMousePos = sdl::windowMousePos;
     platform.windowMouseDelta = sdl::windowMouseDelta;
+
+    platform.setAudioCallback = sdl::setAudioCallback;
+    platform.unsetAudioCallback = sdl::unsetAudioCallback;
 }
 
 #endif
 
 #if defined(HG_PLATFORM_LINUX)
-
-static void fillX11()
-{
-    platform.getPlatformVulkanExtensions = x11::getPlatformVulkanExtensions;
-
-    platform.displayInfo = x11::displayInfo;
-    platform.setCursor = x11::setCursor;
-    platform.showCursor = x11::showCursor;
-    platform.getClipboardText = x11::getClipboardText;
-    platform.setClipboardText = x11::setClipboardText;
-    platform.openURL = x11::openURL;
-    platform.processEvents = x11::processEvents;
-    platform.getEvents = x11::getEvents;
-    platform.wasQuit = x11::wasQuit;
-
-    platform.isButtonDown = x11::isButtonDown;
-    platform.wasButtonPressed = x11::wasButtonPressed;
-    platform.wasButtonReleased = x11::wasButtonReleased;
-    platform.mousePos = x11::mousePos;
-    platform.mouseDelta = x11::mouseDelta;
-    platform.wheelDelta = x11::wheelDelta;
-
-    platform.windowCreate = x11::windowCreate;
-    platform.windowDestroy = x11::windowDestroy;
-    platform.windowSwapchain = x11::windowSwapchain;
-    platform.windowSetTitle = x11::windowSetTitle;
-    platform.windowGetSize = x11::windowGetSize;
-    platform.windowSetFullscreen = x11::windowSetFullscreen;
-    platform.windowIsFocused = x11::windowIsFocused;
-    platform.windowWasClosed = x11::windowWasClosed;
-    platform.windowWasResized = x11::windowWasResized;
-    platform.windowWasFocusGained = x11::windowWasFocusGained;
-    platform.windowWasFocusLost = x11::windowWasFocusLost;
-    platform.windowMaximize = x11::windowMaximize;
-    platform.windowMinimize = x11::windowMinimize;
-    platform.windowRestore = x11::windowRestore;
-    platform.windowSetFullscreen = x11::windowSetFullscreen;
-    platform.windowEvents = x11::windowEvents;
-    platform.windowMousePos = x11::windowMousePos;
-    platform.windowMouseDelta = x11::windowMouseDelta;
-}
-
-static void fillPipeWire()
-{
-    platform.setAudioCallback = pipewire::setAudioCallback;
-    platform.unsetAudioCallback = pipewire::unsetAudioCallback;
-}
 
 static void fillWayland()
 {
@@ -175,10 +120,10 @@ static void fillWayland()
     platform.getClipboardText = wayland::getClipboardText;
     platform.setClipboardText = wayland::setClipboardText;
     platform.openURL = wayland::openURL;
+
     platform.processEvents = wayland::processEvents;
     platform.getEvents = wayland::getEvents;
     platform.wasQuit = wayland::wasQuit;
-
     platform.isButtonDown = wayland::isButtonDown;
     platform.wasButtonPressed = wayland::wasButtonPressed;
     platform.wasButtonReleased = wayland::wasButtonReleased;
@@ -197,12 +142,53 @@ static void fillWayland()
     platform.windowWasResized = wayland::windowWasResized;
     platform.windowWasFocusGained = wayland::windowWasFocusGained;
     platform.windowWasFocusLost = wayland::windowWasFocusLost;
-    platform.windowMaximize = wayland::windowMaximize;
-    platform.windowMinimize = wayland::windowMinimize;
-    platform.windowRestore = wayland::windowRestore;
     platform.windowEvents = wayland::windowEvents;
     platform.windowMousePos = wayland::windowMousePos;
     platform.windowMouseDelta = wayland::windowMouseDelta;
+}
+
+static void fillX11()
+{
+    platform.getPlatformVulkanExtensions = x11::getPlatformVulkanExtensions;
+
+    platform.displayInfo = x11::displayInfo;
+    platform.setCursor = x11::setCursor;
+    platform.showCursor = x11::showCursor;
+    platform.getClipboardText = x11::getClipboardText;
+    platform.setClipboardText = x11::setClipboardText;
+    platform.openURL = x11::openURL;
+
+    platform.processEvents = x11::processEvents;
+    platform.getEvents = x11::getEvents;
+    platform.wasQuit = x11::wasQuit;
+    platform.isButtonDown = x11::isButtonDown;
+    platform.wasButtonPressed = x11::wasButtonPressed;
+    platform.wasButtonReleased = x11::wasButtonReleased;
+    platform.mousePos = x11::mousePos;
+    platform.mouseDelta = x11::mouseDelta;
+    platform.wheelDelta = x11::wheelDelta;
+
+    platform.windowCreate = x11::windowCreate;
+    platform.windowDestroy = x11::windowDestroy;
+    platform.windowSwapchain = x11::windowSwapchain;
+    platform.windowSetTitle = x11::windowSetTitle;
+    platform.windowGetSize = x11::windowGetSize;
+    platform.windowSetFullscreen = x11::windowSetFullscreen;
+    platform.windowIsFocused = x11::windowIsFocused;
+    platform.windowWasClosed = x11::windowWasClosed;
+    platform.windowWasResized = x11::windowWasResized;
+    platform.windowWasFocusGained = x11::windowWasFocusGained;
+    platform.windowWasFocusLost = x11::windowWasFocusLost;
+    platform.windowSetFullscreen = x11::windowSetFullscreen;
+    platform.windowEvents = x11::windowEvents;
+    platform.windowMousePos = x11::windowMousePos;
+    platform.windowMouseDelta = x11::windowMouseDelta;
+}
+
+static void fillPipeWire()
+{
+    platform.setAudioCallback = pipewire::setAudioCallback;
+    platform.unsetAudioCallback = pipewire::unsetAudioCallback;
 }
 
 #endif
@@ -219,19 +205,16 @@ static void fillWin32()
     platform.getClipboardText = win32::getClipboardText;
     platform.setClipboardText = win32::setClipboardText;
     platform.openURL = win32::openURL;
+
     platform.processEvents = win32::processEvents;
     platform.getEvents = win32::getEvents;
     platform.wasQuit = win32::wasQuit;
-
     platform.isButtonDown = win32::isButtonDown;
     platform.wasButtonPressed = win32::wasButtonPressed;
     platform.wasButtonReleased = win32::wasButtonReleased;
     platform.mousePos = win32::mousePos;
     platform.mouseDelta = win32::mouseDelta;
     platform.wheelDelta = win32::wheelDelta;
-
-    platform.setAudioCallback = win32::setAudioCallback;
-    platform.unsetAudioCallback = win32::unsetAudioCallback;
 
     platform.windowCreate = win32::windowCreate;
     platform.windowDestroy = win32::windowDestroy;
@@ -244,13 +227,13 @@ static void fillWin32()
     platform.windowWasResized = win32::windowWasResized;
     platform.windowWasFocusGained = win32::windowWasFocusGained;
     platform.windowWasFocusLost = win32::windowWasFocusLost;
-    platform.windowMaximize = win32::windowMaximize;
-    platform.windowMinimize = win32::windowMinimize;
-    platform.windowRestore = win32::windowRestore;
     platform.windowSetFullscreen = win32::windowSetFullscreen;
     platform.windowEvents = win32::windowEvents;
     platform.windowMousePos = win32::windowMousePos;
     platform.windowMouseDelta = win32::windowMouseDelta;
+
+    platform.setAudioCallback = win32::setAudioCallback;
+    platform.unsetAudioCallback = win32::unsetAudioCallback;
 }
 
 #endif
@@ -258,8 +241,8 @@ static void fillWin32()
 enum WindowBackend {
     WindowBackend_none = 0,
     WindowBackend_sdl,
-    WindowBackend_x11,
     WindowBackend_wayland,
+    WindowBackend_x11,
     WindowBackend_win32,
 };
 
@@ -386,7 +369,7 @@ Maybe<HurdyGurdy> init()
     if (!internal::initGpu())
         goto gpuFailed;
 
-    internal::initRender2D();
+    internal::initPixelFont();
 
     initialized = true;
     return some<HurdyGurdy>();
@@ -428,7 +411,7 @@ HurdyGurdy::~HurdyGurdy() noexcept
 {
     if (--initCount == 0 && initialized)
     {
-        internal::deinitRender2D();
+        internal::deinitPixelFont();
 
         internal::deinitGpu();
 
@@ -518,16 +501,6 @@ Vec2 wheelDelta()
     return platform.wheelDelta();
 }
 
-void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
-{
-    platform.setAudioCallback(callback, userData, preferredConfig);
-}
-
-void unsetAudioCallback()
-{
-    platform.unsetAudioCallback();
-}
-
 Window::Window() noexcept
     : data{nullptr}
 {}
@@ -603,21 +576,6 @@ void Window::size(u32* width, u32* height) const
     platform.windowGetSize(data, width, height);
 }
 
-void Window::maximize()
-{
-    platform.windowMaximize(data);
-}
-
-void Window::minimize()
-{
-    platform.windowMinimize(data);
-}
-
-void Window::restore()
-{
-    platform.windowRestore(data);
-}
-
 void Window::setFullscreen(bool set)
 {
     platform.windowSetFullscreen(data, set);
@@ -631,6 +589,16 @@ Vec2 Window::mousePos() const
 Vec2 Window::mouseDelta() const
 {
     return platform.windowMouseDelta(data);
+}
+
+void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
+{
+    platform.setAudioCallback(callback, userData, preferredConfig);
+}
+
+void unsetAudioCallback()
+{
+    platform.unsetAudioCallback();
 }
 
 } // namespace hg

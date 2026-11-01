@@ -21,7 +21,7 @@ constexpr u64 size(const T& val)
  * Returns the size of a c style array in elements
  */
 template<typename T, u64 N>
-constexpr u64 size(const T (&)[N])
+consteval u64 size(const T (&)[N])
 {
     return N;
 }
@@ -30,7 +30,7 @@ constexpr u64 size(const T (&)[N])
  * Returns the index of T in a set of types First through Rest
  */
 template<typename T, typename First, typename... Rest> requires (std::same_as<T, First> || (std::same_as<T, Rest> || ...))
-constexpr u64 idxOf()
+consteval u64 idxOf()
 {
     if constexpr (std::same_as<T, First>)
         return 0;

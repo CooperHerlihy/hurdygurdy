@@ -87,14 +87,14 @@ ArenaScope getScratch(const Arena* conflict)
 
 ArenaScope getScratch(Span<const Arena*> conflicts)
 {
-    for (u32 i = 0; i < scratchArenas.count; ++i)
+    for (Arena& arena : scratchArenas)
     {
-        for (u32 j = 0; j < conflicts.count; ++j)
+        for (const Arena* conflict : conflicts)
         {
-            if (&scratchArenas[i] == conflicts[j])
+            if (&arena == conflict)
                 goto next;
         }
-        return &scratchArenas[i];
+        return &arena;
 next:
         continue;
     }

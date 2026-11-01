@@ -840,24 +840,6 @@ void windowGetSize(void* data, u32* w, u32* h)
         *h = wd != nullptr ? wd->height : 0;
 }
 
-void windowMaximize(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    ShowWindow(wd->hwnd, SW_MAXIMIZE);
-}
-
-void windowMinimize(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    ShowWindow(wd->hwnd, SW_MINIMIZE);
-}
-
-void windowRestore(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    ShowWindow(wd->hwnd, SW_RESTORE);
-}
-
 void windowSetFullscreen(void* data, bool set)
 {
     WindowData* wd = static_cast<WindowData*>(data);

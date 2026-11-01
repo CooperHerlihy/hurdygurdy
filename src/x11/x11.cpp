@@ -37,7 +37,6 @@ struct XlibFuncs {
     HG_X11_FUNC(XMapWindow);
     HG_X11_FUNC(XUnmapWindow);
     HG_X11_FUNC(XMapRaised);
-    HG_X11_FUNC(XWithdrawWindow);
     HG_X11_FUNC(XResizeWindow);
     HG_X11_FUNC(XMoveResizeWindow);
     HG_X11_FUNC(XMoveWindow);
@@ -118,7 +117,6 @@ static bool loadXlib()
     HG_LOAD_XLIB(XMapWindow);
     HG_LOAD_XLIB(XUnmapWindow);
     HG_LOAD_XLIB(XMapRaised);
-    HG_LOAD_XLIB(XWithdrawWindow);
     HG_LOAD_XLIB(XResizeWindow);
     HG_LOAD_XLIB(XMoveResizeWindow);
     HG_LOAD_XLIB(XMoveWindow);
@@ -259,8 +257,6 @@ struct WindowState {
     Atom wmDeleteMessage = 0;
     Atom wmStateAtom = 0;
     Atom wmStateFullscreen = 0;
-    Atom wmStateMaximizedHorz = 0;
-    Atom wmStateMaximizedVert = 0;
     Atom clipboardAtom = 0;
     Atom targetsAtom = 0;
     Atom utf8StringAtom = 0;
@@ -483,8 +479,6 @@ bool initX11()
     windowState.wmDeleteMessage = xlibFuncs.XInternAtom(windowState.display,"WM_DELETE_WINDOW", False);
     windowState.wmStateAtom = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE", False);
     windowState.wmStateFullscreen = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE_FULLSCREEN", False);
-    windowState.wmStateMaximizedHorz = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE_MAXIMIZED_HORZ", False);
-    windowState.wmStateMaximizedVert = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE_MAXIMIZED_VERT", False);
     windowState.clipboardAtom = xlibFuncs.XInternAtom(windowState.display,"CLIPBOARD", False);
     windowState.targetsAtom = xlibFuncs.XInternAtom(windowState.display,"TARGETS", False);
     windowState.utf8StringAtom = xlibFuncs.XInternAtom(windowState.display,"UTF8_STRING", False);
@@ -672,11 +666,11 @@ Window windowCreate(const WindowConfig& config)
 
     using PFN_vkCreateXlibSurfaceKHR = VkResult(*)(VkInstance, const VkXlibSurfaceCreateInfoKHR*, const VkAllocationCallbacks*, VkSurfaceKHR*);
     auto vkCreateXlibSurfaceKHR = reinterpret_cast<PFN_vkCreateXlibSurfaceKHR>(
-        internal::getVulkanInstanceProcAddr("vkCreateXlibSurfaceKHR"));
+        internal::getVkInstanceProcAddr("vkCreateXlibSurfaceKHR"));
 
     VkSurfaceKHR surface;
     VkResult result = vkCreateXlibSurfaceKHR(
-        static_cast<VkInstance>(internal::getVulkanInstance()),
+        static_cast<VkInstance>(internal::getVkInstance()),
         &createInfo,
         nullptr,
         &surface
@@ -775,48 +769,6 @@ void windowGetSize(void* data, u32* w, u32* h)
     WindowData* window = static_cast<WindowData*>(data);
     *w = window->width;
     *h = window->height;
-}
-
-void windowMaximize(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-
-    XEvent event{};
-    event.xclient.type = ClientMessage;
-    event.xclient.window = window->x11Window;
-    event.xclient.message_type = windowState.wmStateAtom;
-    event.xclient.format = 32;
-    event.xclient.data.l[0] = 1; // _NET_WM_STATE_ADD
-    event.xclient.data.l[1] = static_cast<long>(windowState.wmStateMaximizedHorz);
-    event.xclient.data.l[2] = static_cast<long>(windowState.wmStateMaximizedVert);
-    event.xclient.data.l[3] = 1;
-
-    xlibFuncs.XSendEvent(windowState.display,windowState.root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
-}
-
-void windowMinimize(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    xlibFuncs.XWithdrawWindow(windowState.display, window->x11Window, windowState.screen);
-}
-
-void windowRestore(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-
-    XEvent event{};
-    event.xclient.type = ClientMessage;
-    event.xclient.window = window->x11Window;
-    event.xclient.message_type = windowState.wmStateAtom;
-    event.xclient.format = 32;
-    event.xclient.data.l[0] = 0; // _NET_WM_STATE_REMOVE
-    event.xclient.data.l[1] = static_cast<long>(windowState.wmStateMaximizedHorz);
-    event.xclient.data.l[2] = static_cast<long>(windowState.wmStateFullscreen);
-    event.xclient.data.l[3] = 1;
-
-    xlibFuncs.XSendEvent(windowState.display,windowState.root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
-
-    xlibFuncs.XMapWindow(windowState.display, window->x11Window);
 }
 
 void windowSetFullscreen(void* data, bool set)

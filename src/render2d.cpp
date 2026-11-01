@@ -82,7 +82,7 @@ static RenderState2D render2D;
 
 namespace internal {
 
-void initRender2D()
+void initPixelFont()
 {
     ArenaScope scratch = getScratch();
 
@@ -103,7 +103,7 @@ void initRender2D()
     render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95);
 }
 
-void deinitRender2D()
+void deinitPixelFont()
 {
     render2D = {};
 }

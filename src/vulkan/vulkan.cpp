@@ -828,12 +828,12 @@ void deinitGpu()
     unloadVulkan();
 }
 
-void* getVulkanInstance()
+void* getVkInstance()
 {
     return vk.instance;
 }
 
-void* getVulkanInstanceProcAddr(const char* name)
+void* getVkInstanceProcAddr(const char* name)
 {
     return reinterpret_cast<void*>(vkGetInstanceProcAddr(static_cast<VkInstance>(vk.instance), name));
 }

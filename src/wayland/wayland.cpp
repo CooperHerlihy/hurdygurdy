@@ -351,20 +351,6 @@ xdg_toplevel_set_title(struct xdg_toplevel* toplevel, const char* title)
 }
 
 static void
-xdg_toplevel_set_maximized(struct xdg_toplevel* toplevel)
-{
-    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_SET_MAXIMIZED, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
-}
-
-static void
-xdg_toplevel_unset_maximized(struct xdg_toplevel* toplevel)
-{
-    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_UNSET_MAXIMIZED, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
-}
-
-static void
 xdg_toplevel_set_fullscreen(struct xdg_toplevel* toplevel,
     struct wl_output* output)
 {
@@ -377,13 +363,6 @@ static void
 xdg_toplevel_unset_fullscreen(struct xdg_toplevel* toplevel)
 {
     wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_UNSET_FULLSCREEN, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
-}
-
-static void
-xdg_toplevel_set_minimized(struct xdg_toplevel* toplevel)
-{
-    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)toplevel, XDG_TOPLEVEL_SET_MINIMIZED, NULL,
         wlFuncs.wl_proxy_get_version((struct wl_proxy*)toplevel), 0);
 }
 
@@ -1882,11 +1861,11 @@ Window windowCreate(const WindowConfig& config)
 
     using PFN_vkCreateWaylandSurfaceKHR = VkResult(*)(VkInstance, const VkWaylandSurfaceCreateInfoKHR*, const VkAllocationCallbacks*, VkSurfaceKHR*);
     auto vkCreateWaylandSurfaceKHR = reinterpret_cast<PFN_vkCreateWaylandSurfaceKHR>(
-        internal::getVulkanInstanceProcAddr("vkCreateWaylandSurfaceKHR"));
+        internal::getVkInstanceProcAddr("vkCreateWaylandSurfaceKHR"));
 
     VkSurfaceKHR surface;
     VkResult result = vkCreateWaylandSurfaceKHR(
-        static_cast<VkInstance>(internal::getVulkanInstance()),
+        static_cast<VkInstance>(internal::getVkInstance()),
         &createInfo,
         nullptr,
         &surface
@@ -1969,25 +1948,6 @@ void windowGetSize(void* data, u32* w, u32* h)
         *w = wd->width;
     if (h != nullptr)
         *h = wd->height;
-}
-
-void windowMaximize(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    xdg_toplevel_set_maximized(wd->xdgToplevel);
-}
-
-void windowMinimize(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    xdg_toplevel_set_minimized(wd->xdgToplevel);
-}
-
-void windowRestore(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    xdg_toplevel_unset_maximized(wd->xdgToplevel);
-    xdg_toplevel_unset_fullscreen(wd->xdgToplevel);
 }
 
 void windowSetFullscreen(void* data, bool set)
