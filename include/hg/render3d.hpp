@@ -49,10 +49,6 @@ struct MeshData {
      * The file index of the first geometry index
      */
     Array<u32> indices{};
-    /**
-     * How the vertices should be interpreted in sequence
-     */
-    GpuTopology topology = {};
 };
 
 /**

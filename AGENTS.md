@@ -1,13 +1,12 @@
 # Hurdy Gurdy
 
-C++20 game engine. Vulkan 1.3, SDL3, Dear ImGui.
+C++20 game development library
 
 ## Hard Rules
 
 **Always inform. Never act without approval.**
 - No exceptions, RTTI, third-party code, or reformatting
 - Never run scripts without backups and tests
-- When asked to write tests, load the write-tests skill first
 
 ## Build
 
@@ -44,96 +43,73 @@ valgrind:
   valgrind --leak-check=full ./build/tests
 ```
 
-Driver library leaks suppressed via LSAN_OPTIONS.
-TSan false-positive: lock-order-inversion between SDL3 audio and PipeWire - third-party driver threads, not project code.
-
 ### Windows
 
 Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 
 ## Conventions
 
-- 4-space indent. Braces: next line for code blocks, same line for types/init.
-- `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros.
-- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`. No `int`/`size_t`/`std::*`.
-- RAII, no failing constructors, use static create(), delete copy ctors, use foo.clone().
-- Assert with `HG_ASSERT`. Recoverable errors: `setError()` and `Maybe<T>`. Unrecoverable: `HG_PANIC`.
-- Memory: hg:: temp containers > scratch arena > hg:: containers > heapAlloc/heapFree. Never std:: containers
-- Concurrency: forPar() > callPar() > std:: primitives.
+- 4-space indent
+- Braces: next line for code blocks, same line for struct/initialization
+- `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros
+- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`. No `int`/`size_t`/`std::*`
+- RAII, no failing constructors, use static create() with Maybe, generally delete copy ctors
+- Assertions: `HG_ASSERT`, Recoverable errors: `setError()` and `Maybe<T>`, Unrecoverable: `HG_PANIC`
+- Memory: hg temp containers > scratch arena > hg containers > heapAlloc/heapFree; Never std containers
+- Concurrency: forPar() > callPar() > std:: primitives
 
 ## Contents
 
 `include/` - public headers:
-- `hurdygurdy.hpp` - umbrella, includes all sub-headers
-- `hurdygurdy.glsl` - shared GLSL header
-- `hg/macros.hpp` - config/detection macros, HG_DEFER, HG_LOG, HG_WARN, HG_PANIC, HG_ASSERT
-- `hg/inttypes.hpp` - u8..f64
+- `hurdygurdy.hpp`
+- `hurdygurdy.glsl`
+- `hg/macros.hpp` - HG_DEFER, HG_LOG, HG_WARN
+- `hg/inttypes.hpp`
 - `hg/span.hpp`
 - `hg/product.hpp`
 - `hg/sum.hpp`
 - `hg/maybe.hpp`
-- `hg/error.hpp` - getError, setError, logError
+- `hg/error.hpp` - setError
 - `hg/init.hpp`
-- `hg/utility.hpp` - size, isPowerOf2, align, endianReverse
-- `hg/memory.hpp` - Arena, ArenaScope, heapAlloc/Free, scratch
-- `hg/concurrency.hpp` - SpinLock, Fence, forPar, callPar
-- `hg/math.hpp` - Vec2/3/4, Mat2/3/4, Complex, Quat
-- `hg/geometry2d.hpp` - Circle, Rect, Ray2D, Line2D
-- `hg/geometry3d.hpp` - Sphere, Box, Tri, Plane, Ray3D, Line3D
-- `hg/noise.hpp` - Rng, noise functions
-- `hg/strings.hpp` - StringView, StringBuilder, String
-- `hg/binary.hpp` - BinaryView, BinaryBuilder, Binary
-- `hg/smart_ptr.hpp` - UniquePtr, makeUnique, SharedPtr, makeShared
-- `hg/array.hpp` - Array, ArrayTemp
-- `hg/queue.hpp` - Queue, QueueTemp
-- `hg/hash.hpp` - hgHash template declaration
-- `hg/set.hpp` - Set, SetTemp
-- `hg/map.hpp` - Map, MapTemp
-- `hg/pool.hpp` - Pool, HandlePool
-- `hg/assets.hpp` - AssetT, AssetManagerT, load/reload
-- `hg/serialization.hpp` - Serializer, binary format, JSON (JsonValue/JsonObject)
+- `hg/utility.hpp`
+- `hg/memory.hpp` - Arena, ArenaScope
+- `hg/concurrency.hpp`
+- `hg/math.hpp`
+- `hg/geometry2d.hpp`
+- `hg/geometry3d.hpp`
+- `hg/noise.hpp`
+- `hg/strings.hpp`
+- `hg/binary.hpp`
+- `hg/smart_ptr.hpp`
+- `hg/array.hpp`
+- `hg/queue.hpp`
+- `hg/hash.hpp`
+- `hg/set.hpp`
+- `hg/map.hpp`
+- `hg/pool.hpp`
+- `hg/assets.hpp`
+- `hg/serialization.hpp`
 - `hg/json.hpp`
-- `hg/time.hpp` - Clock, Perf
-- `hg/dynlib.hpp` - Library dynamic loading
-- `hg/filesystem.hpp` - FilePath builder and filesystem ops
-- `hg/gpu.hpp` - Format, GpuBuffer, GpuImage, GpuPipeline, GpuCmd
-- `hg/window.hpp` - Button, Window, input/event types
-- `hg/audio.hpp` - AudioStream, Sound, AudioPlayer
-- `hg/render2d.hpp` - Camera, Texture, Renderer2D
-- `hg/render3d.hpp` - Mesh, Renderer3D
+- `hg/time.hpp`
+- `hg/dynlib.hpp`
+- `hg/filesystem.hpp`
+- `hg/gpu.hpp`
+- `hg/window.hpp`
+- `hg/audio.hpp`
+- `hg/render2d.hpp`
+- `hg/render3d.hpp`
 - `hg/imgui.hpp` - ImGui impl for HurdyGurdy
-- `hg/ecs.hpp` - Entity component system
+- `hg/ecs.hpp`
 
 `src/` - implementation:
-- `internal.hpp` - internal declarations (platform Vulkan exts, gpu/render2d/imgui init hooks)
-- `platform_test.cpp` - manual test app: windows, input, audio, ImGui, profiler
-- `error.cpp`
-- `init.cpp`
-- `memory.cpp`
-- `concurrency.cpp`
-- `math.cpp`
-- `geometry2d.cpp`
-- `geometry3d.cpp`
-- `noise.cpp`
-- `strings.cpp`
-- `binary.cpp`
-- `pool.cpp`
-- `assets.cpp`
-- `serialization.cpp`
-- `json.cpp`
-- `time.cpp`
-- `audio.cpp`
-- `render2d.cpp`
-- `render3d.cpp`
-- `imgui.cpp` - ImGui backend (delegates to window/gpu internal init)
-- `dynlib.cpp`
-- `filesystem.cpp`
-- `example2d.cpp` - standalone 2D demo app
-- `example3d.cpp` - standalone 3D demo app
-- `embed.c` - host build tool: converts a file into a C byte array
 - `stb.c` - stb library impl
 - `vk_mem_alloc.cpp` - Vulkan Memory Allocator impl
-- `pixel_font.h` - embedded pixel font data
+- `embed.c` - build tool: converts a file into a C byte array
+- `internal.hpp` - internal declarations
+- `platform_test.cpp` - manual test app: windows, input, audio, ImGui, profiler
+- `example2d.cpp` - standalone 2D demo app
+- `example3d.cpp` - standalone 3D demo app
+- `*.cpp` - remaining implementations, named like headers
 
 `src/vulkan/` - Vulkan implementation:
 - `vulkan_internal.hpp` - internal header, Gpu*Data structs, VulkanState, Frame, inline enum converters
@@ -180,8 +156,6 @@ Note: the protocol functions in `wayland.cpp` call through the `wlFuncs` functio
 `src/test/` - tests:
 - `tests.hpp` - test framework: TEST/ASSERT registration macros, LifecycleT helper
 - `tests.cpp` - runs all tests
-- `render.cpp` - TODO stubs, no actual tests yet
-- `array_temp.cpp`/`ecs_foreach.cpp`/`ecs_serialize.cpp` - tests without matching headers
 - `*.cpp` - remaining tests, named like headers
-- `*.vert`/`*.frag`/`*.comp` - test shaders
+- `shaders/` - `.vert`/`.frag`/`.comp` test shaders
 

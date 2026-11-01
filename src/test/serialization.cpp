@@ -741,4 +741,3 @@ TEST(testSerializeLargeString)
     ASSERT(copy == val);
     ASSERT(copy.length == 2048);
 }
-

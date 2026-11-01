@@ -78,7 +78,7 @@ struct RenderState2D {
 
 static RenderState2D render2D;
 
-#include "pixel_font.h"
+#include "resources/pixel_font.hg.h"
 
 namespace internal {
 
@@ -87,7 +87,7 @@ void initRender2D()
     ArenaScope scratch = getScratch();
 
     TextureData fontData{};
-    Serializer s = readSerialBinary(scratch, {pixel_font, sizeof(pixel_font)});
+    Serializer s = readSerialBinary(scratch, {resources_pixel_font_hg, sizeof(resources_pixel_font_hg)});
 
     serializeBegin(&s);
     serializeObject(&s, &fontData.width, &fontData.height, &fontData.format);

@@ -201,5 +201,3 @@ TEST(testSharedPtrNullptrDerefSafety)
     SharedPtr<i32> ptr{nullptr};
     ASSERT((i32*)ptr == nullptr);
 }
-
-

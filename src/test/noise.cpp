@@ -2,7 +2,7 @@
 #include "hg/noise.hpp"
 #include "hg/gpu.hpp"
 
-#include "test/noise.comp.spv.h"
+#include "test/shaders/noise.comp.spv.h"
 
 using namespace hg;
 
@@ -174,7 +174,7 @@ TEST(testNoiseGLSL)
     struct Push {
         u32 imgIdx;
     };
-    GpuPipeline pipe = GpuPipeline::compute({test_noise_comp_spv, sizeof(test_noise_comp_spv)},
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_noise_comp_spv, sizeof(test_shaders_noise_comp_spv)},
         sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();

@@ -1,30 +1,30 @@
 #include "tests.hpp"
 #include "hg/gpu.hpp"
 
-#include "test/compute.comp.spv.h"
-#include "test/tri.vert.spv.h"
-#include "test/tri.frag.spv.h"
-#include "test/sampler.frag.spv.h"
-#include "test/mul.comp.spv.h"
-#include "test/buf_to_img.comp.spv.h"
-#include "test/uniform.vert.spv.h"
-#include "test/uniform.frag.spv.h"
-#include "test/storage_img.comp.spv.h"
-#include "test/depth.vert.spv.h"
-#include "test/depth.frag.spv.h"
-#include "test/instance.vert.spv.h"
-#include "test/instance.frag.spv.h"
-#include "test/blur.comp.spv.h"
-#include "test/invert.frag.spv.h"
+#include "test/shaders/compute.comp.spv.h"
+#include "test/shaders/tri.vert.spv.h"
+#include "test/shaders/tri.frag.spv.h"
+#include "test/shaders/sampler.frag.spv.h"
+#include "test/shaders/mul.comp.spv.h"
+#include "test/shaders/buf_to_img.comp.spv.h"
+#include "test/shaders/uniform.vert.spv.h"
+#include "test/shaders/uniform.frag.spv.h"
+#include "test/shaders/storage_img.comp.spv.h"
+#include "test/shaders/depth.vert.spv.h"
+#include "test/shaders/depth.frag.spv.h"
+#include "test/shaders/instance.vert.spv.h"
+#include "test/shaders/instance.frag.spv.h"
+#include "test/shaders/blur.comp.spv.h"
+#include "test/shaders/invert.frag.spv.h"
 
 using namespace hg;
 
 // ---- shared shader spans ----
-static Span<const u8> shTriVert    = {test_tri_vert_spv,      sizeof(test_tri_vert_spv)};
-static Span<const u8> shTriFrag    = {test_tri_frag_spv,      sizeof(test_tri_frag_spv)};
-static Span<const u8> shDepthVert  = {test_depth_vert_spv,    sizeof(test_depth_vert_spv)};
-static Span<const u8> shDepthFrag  = {test_depth_frag_spv,    sizeof(test_depth_frag_spv)};
-static Span<const u8> shSamplerFrag= {test_sampler_frag_spv,  sizeof(test_sampler_frag_spv)};
+static Span<const u8> shTriVert    = {test_shaders_tri_vert_spv,      sizeof(test_shaders_tri_vert_spv)};
+static Span<const u8> shTriFrag    = {test_shaders_tri_frag_spv,      sizeof(test_shaders_tri_frag_spv)};
+static Span<const u8> shDepthVert  = {test_shaders_depth_vert_spv,    sizeof(test_shaders_depth_vert_spv)};
+static Span<const u8> shDepthFrag  = {test_shaders_depth_frag_spv,    sizeof(test_shaders_depth_frag_spv)};
+static Span<const u8> shSamplerFrag= {test_shaders_sampler_frag_spv,  sizeof(test_shaders_sampler_frag_spv)};
 
 static Format kColorFmt = Format_rgba8_unorm;
 
@@ -360,8 +360,8 @@ TEST(testGpuViewExtendedConfigSampler)
     Push push{0.375f, 0.125f, view.samplerDescriptor()};
 
     GpuGraphicsPipelineCreateInfo ci{};
-    ci.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
-    ci.fragmentShader = {test_sampler_frag_spv, sizeof(test_sampler_frag_spv)};
+    ci.vertexShader = {test_shaders_tri_vert_spv, sizeof(test_shaders_tri_vert_spv)};
+    ci.fragmentShader = {test_shaders_sampler_frag_spv, sizeof(test_shaders_sampler_frag_spv)};
     Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
     ci.pushConstantSize = sizeof(Push);
@@ -406,7 +406,7 @@ TEST(testCommandBufferExecutes)
     u32 known = 0xDECAF123;
     staging.write(&known, 0, sizeof(known));
 
-    GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12);
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_compute_comp_spv, sizeof(test_shaders_compute_comp_spv)}, 12);
 
     struct Push {
         u32 addVal;
@@ -461,7 +461,7 @@ TEST(testBufferBarrierComputeSync)
         u32 outIdx;
     };
 
-    GpuPipeline incPipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push));
+    GpuPipeline incPipe = GpuPipeline::compute({test_shaders_compute_comp_spv, sizeof(test_shaders_compute_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -564,7 +564,7 @@ TEST(testCombinedBufferImageBarrier)
         u32 bufIdx;
         u32 imgIdx;
     };
-    GpuPipeline pipe = GpuPipeline::compute({test_buf_to_img_comp_spv, sizeof(test_buf_to_img_comp_spv)}, sizeof(Push));
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_buf_to_img_comp_spv, sizeof(test_shaders_buf_to_img_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -632,7 +632,7 @@ TEST(testComputePassDispatch)
         u32 inIdx;
         u32 outIdx;
     };
-    GpuPipeline pipe = GpuPipeline::compute({test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push));
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_mul_comp_spv, sizeof(test_shaders_mul_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -665,7 +665,7 @@ TEST(testComputePassDispatch)
 
 TEST(testGpuPipelineComputeLifecycle)
 {
-    GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12);
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_compute_comp_spv, sizeof(test_shaders_compute_comp_spv)}, 12);
     ASSERT(pipe.data != nullptr);
 
     // Move construction
@@ -701,7 +701,7 @@ TEST(testComputeDispatchSSBO)
     };
     Push push{addVal, inBuf.storageDescriptor(), outBuf.storageDescriptor()};
 
-    GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push));
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_compute_comp_spv, sizeof(test_shaders_compute_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -728,8 +728,8 @@ TEST(testComputeDispatchSSBO)
 TEST(testGpuPipelineGraphicsLifecycle)
 {
     GpuGraphicsPipelineCreateInfo ci{};
-    ci.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
-    ci.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
+    ci.vertexShader = {test_shaders_tri_vert_spv, sizeof(test_shaders_tri_vert_spv)};
+    ci.fragmentShader = {test_shaders_tri_frag_spv, sizeof(test_shaders_tri_frag_spv)};
     Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
 
@@ -799,7 +799,7 @@ TEST(testComputeSSBOAdd)
     };
     Push push{addVal, inBuf.storageDescriptor(), outBuf.storageDescriptor()};
 
-    GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, sizeof(Push));
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_compute_comp_spv, sizeof(test_shaders_compute_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -925,8 +925,8 @@ TEST(testMultiDrawInstancing)
     };
 
     GpuGraphicsPipelineCreateInfo ci{};
-    ci.vertexShader = {test_instance_vert_spv, sizeof(test_instance_vert_spv)};
-    ci.fragmentShader = {test_instance_frag_spv, sizeof(test_instance_frag_spv)};
+    ci.vertexShader = {test_shaders_instance_vert_spv, sizeof(test_shaders_instance_vert_spv)};
+    ci.fragmentShader = {test_shaders_instance_frag_spv, sizeof(test_shaders_instance_frag_spv)};
     Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
     ci.pushConstantSize = sizeof(Push);
@@ -987,8 +987,8 @@ TEST(testMultiViewportScissor)
     };
 
     GpuGraphicsPipelineCreateInfo ci{};
-    ci.vertexShader = {test_depth_vert_spv, sizeof(test_depth_vert_spv)};
-    ci.fragmentShader = {test_depth_frag_spv, sizeof(test_depth_frag_spv)};
+    ci.vertexShader = {test_shaders_depth_vert_spv, sizeof(test_shaders_depth_vert_spv)};
+    ci.fragmentShader = {test_shaders_depth_frag_spv, sizeof(test_shaders_depth_frag_spv)};
     Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
     ci.pushConstantSize = sizeof(Push);
@@ -1064,7 +1064,7 @@ TEST(testComputeImageFilterBlur)
         u32 dstIdx;
     };
 
-    GpuPipeline pipe = GpuPipeline::compute({test_blur_comp_spv, sizeof(test_blur_comp_spv)}, sizeof(Push));
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_blur_comp_spv, sizeof(test_shaders_blur_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -1122,16 +1122,16 @@ TEST(testRenderToTextureSample)
     GpuView resultView = GpuView::create(resultImg, GpuAspect_color);
 
     GpuGraphicsPipelineCreateInfo pass1CI{};
-    pass1CI.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
-    pass1CI.fragmentShader = {test_tri_frag_spv, sizeof(test_tri_frag_spv)};
+    pass1CI.vertexShader = {test_shaders_tri_vert_spv, sizeof(test_shaders_tri_vert_spv)};
+    pass1CI.fragmentShader = {test_shaders_tri_frag_spv, sizeof(test_shaders_tri_frag_spv)};
     Format colorFmt = Format_rgba8_unorm;
     pass1CI.colorAttachmentFormats = {&colorFmt, 1};
     GpuPipeline pass1Pipe = GpuPipeline::graphics(pass1CI);
 
     struct Push2 { u32 texIdx; };
     GpuGraphicsPipelineCreateInfo pass2CI{};
-    pass2CI.vertexShader = {test_tri_vert_spv, sizeof(test_tri_vert_spv)};
-    pass2CI.fragmentShader = {test_invert_frag_spv, sizeof(test_invert_frag_spv)};
+    pass2CI.vertexShader = {test_shaders_tri_vert_spv, sizeof(test_shaders_tri_vert_spv)};
+    pass2CI.fragmentShader = {test_shaders_invert_frag_spv, sizeof(test_shaders_invert_frag_spv)};
     pass2CI.colorAttachmentFormats = {&colorFmt, 1};
     pass2CI.pushConstantSize = sizeof(Push2);
     GpuPipeline pass2Pipe = GpuPipeline::graphics(pass2CI);
@@ -1212,7 +1212,7 @@ TEST(testBufferReadbackStagingRead)
             GpuMemoryUsage_stagingRead);
 
     struct Push { u32 inIdx; u32 outIdx; };
-    GpuPipeline pipe = GpuPipeline::compute({test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push));
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_mul_comp_spv, sizeof(test_shaders_mul_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -1265,7 +1265,7 @@ TEST(testPipelineBarrierChainedDispatches)
     bufA.write(input, 0, bufSize);
 
     struct Push { u32 inIdx; u32 outIdx; };
-    GpuPipeline pipe = GpuPipeline::compute({test_mul_comp_spv, sizeof(test_mul_comp_spv)}, sizeof(Push));
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_mul_comp_spv, sizeof(test_shaders_mul_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -1387,7 +1387,7 @@ TEST(testGpuWaitIdle)
     u32 known = 0xDEADBEEF;
     staging.write(&known, 0, sizeof(known));
 
-    GpuPipeline pipe = GpuPipeline::compute({test_compute_comp_spv, sizeof(test_compute_comp_spv)}, 12);
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_compute_comp_spv, sizeof(test_shaders_compute_comp_spv)}, 12);
 
     struct Push {
         u32 addVal;
@@ -1441,8 +1441,8 @@ TEST(testUniformBufferVertexShader)
     };
 
     GpuGraphicsPipelineCreateInfo ci{};
-    ci.vertexShader = {test_uniform_vert_spv, sizeof(test_uniform_vert_spv)};
-    ci.fragmentShader = {test_uniform_frag_spv, sizeof(test_uniform_frag_spv)};
+    ci.vertexShader = {test_shaders_uniform_vert_spv, sizeof(test_shaders_uniform_vert_spv)};
+    ci.fragmentShader = {test_shaders_uniform_frag_spv, sizeof(test_shaders_uniform_frag_spv)};
     Format colorFmt = Format_rgba8_unorm;
     ci.colorAttachmentFormats = {&colorFmt, 1};
     ci.pushConstantSize = sizeof(Push);
@@ -1501,7 +1501,7 @@ TEST(testStorageImageComputeShader)
         u32 imgIdx;
     };
 
-    GpuPipeline pipe = GpuPipeline::compute({test_storage_img_comp_spv, sizeof(test_storage_img_comp_spv)}, sizeof(Push));
+    GpuPipeline pipe = GpuPipeline::compute({test_shaders_storage_img_comp_spv, sizeof(test_shaders_storage_img_comp_spv)}, sizeof(Push));
 
     GpuCmd* cmd = gpuCmdBegin();
 

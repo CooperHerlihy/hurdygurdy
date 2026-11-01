@@ -166,4 +166,3 @@ inline void serialize(Serializer* s, Lifecycle* val)
 }
 
 }
-

@@ -11,4 +11,3 @@ TEST(testRender3D)
 {
     HG_WARN("TODO: test render 3d()\n");
 }
-

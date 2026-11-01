@@ -26,21 +26,13 @@ TEST(testArrayPush)
     Array<u32> arr;
     arr.push(10);
     arr.push(20);
-    arr.push(30);
+    u32& ref = arr.push(30);
+    ref = 99;
     ASSERT(arr.count == 3);
     ASSERT(arr.capacity >= 3);
     ASSERT(arr[0] == 10);
     ASSERT(arr[1] == 20);
-    ASSERT(arr[2] == 30);
-}
-
-TEST(testArrayPushReturnRef)
-{
-    Array<u32> arr;
-    u32& ref = arr.push(42);
-    ASSERT(ref == 42);
-    ref = 99;
-    ASSERT(arr[0] == 99);
+    ASSERT(arr[2] == 99);
 }
 
 TEST(testArrayPop)
@@ -56,70 +48,28 @@ TEST(testArrayPop)
     ASSERT(arr[1] == 2);
 }
 
-TEST(testArrayPushDefaultLifecycle)
-{
-    Lifecycle::stats.reset();
-    {
-        Array<Lifecycle> arr;
-        Lifecycle& p1 = arr.push();
-        ASSERT(arr.count == 1);
-        ASSERT(p1.valid);
-        Lifecycle& p2 = arr.push();
-        ASSERT(arr.count == 2);
-        ASSERT(p2.valid);
-        ASSERT(&p2 != &p1);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.dtors == 2);
-    ASSERT(Lifecycle::stats.copies == 0);
-    ASSERT(Lifecycle::stats.moves == 0);
-}
-
-TEST(testArrayPushRvalueLifecycle)
+TEST(testArrayLifecycle)
 {
     Lifecycle::stats.reset();
     {
         Array<Lifecycle> arr;
         Lifecycle lc;
-        arr.push(std::move(lc));
-        ASSERT(arr.count == 1);
-        ASSERT(!lc.valid);
-        ASSERT(arr[0].valid);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.moves == 1);
-    ASSERT(Lifecycle::stats.copies == 0);
-}
-
-TEST(testArrayPushConstRefLifecycle)
-{
-    Lifecycle::stats.reset();
-    {
-        Array<Lifecycle> arr;
-        Lifecycle lc;
+        arr.push();
         arr.push(lc);
-        ASSERT(arr.count == 1);
-        ASSERT(lc.valid);
-        ASSERT(arr[0].valid);
+        ASSERT(arr[1].valid);
+        ASSERT(&arr[1] != &arr[0]);
+        arr.push(std::move(lc));
+        ASSERT(!lc.valid);
+        ASSERT(arr[2].valid);
+        ASSERT(arr.count == 3);
+        Lifecycle popped = arr.pop();
+        ASSERT(popped.valid);
+        ASSERT(arr.count == 2);
+        ASSERT(Lifecycle::stats.moves >= 2);
     }
     ASSERT(Lifecycle::stats.alive == 0);
     ASSERT(Lifecycle::stats.copies == 1);
-    ASSERT(Lifecycle::stats.moves == 0);
-}
-
-TEST(testArrayPopMoveLifecycle)
-{
-    Lifecycle::stats.reset();
-    {
-        Array<Lifecycle> arr;
-        arr.push();
-        Lifecycle val = arr.pop();
-        ASSERT(val.valid);
-        ASSERT(Lifecycle::stats.alive == 1);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.moves == 1);
-    ASSERT(Lifecycle::stats.copies == 0);
+    ASSERT(Lifecycle::stats.dtors == 3);
 }
 
 TEST(testArrayReserve)
@@ -128,15 +78,11 @@ TEST(testArrayReserve)
     arr.reserve(100);
     ASSERT(arr.capacity >= 100);
     ASSERT(arr.count == 0);
-}
-
-TEST(testArrayReserveSmaller)
-{
-    Array<u32> arr;
-    arr.reserve(100);
-    u64 cap = arr.capacity;
     arr.reserve(50);
-    ASSERT(arr.capacity == cap);
+    ASSERT(arr.capacity >= 100);
+    arr.push(42);
+    ASSERT(arr.count == 1);
+    ASSERT(arr[0] == 42);
 }
 
 TEST(testArrayResizeGrow)
@@ -148,12 +94,14 @@ TEST(testArrayResizeGrow)
     ASSERT(arr.count == 5);
     ASSERT(arr[0] == 1);
     ASSERT(arr[1] == 2);
-    ASSERT(arr[2] == 0);
-    ASSERT(arr[3] == 0);
     ASSERT(arr[4] == 0);
+    u32* oldVals = arr.vals;
+    arr.resize(5);
+    ASSERT(arr.vals == oldVals);
+    ASSERT(arr.count == 5);
 }
 
-TEST(testArrayResizeShrink)
+TEST(testArrayResizeShrinkToZero)
 {
     Lifecycle::stats.reset();
     {
@@ -167,6 +115,10 @@ TEST(testArrayResizeShrink)
         ASSERT(arr[0].valid);
         ASSERT(Lifecycle::stats.alive == 1);
         ASSERT(Lifecycle::stats.dtors == 2);
+        arr.resize(0);
+        ASSERT(arr.count == 0);
+        ASSERT(Lifecycle::stats.alive == 0);
+        ASSERT(Lifecycle::stats.dtors == 3);
     }
     ASSERT(Lifecycle::stats.dtors == 3);
 }
@@ -189,7 +141,53 @@ TEST(testArrayReset)
     ASSERT(Lifecycle::stats.ctors >= 4);
 }
 
-TEST(testArrayInsertShiftConstRef)
+TEST(testArrayInsertShift)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32& r = arr.insertShift(1, 99);
+    ASSERT(arr.count == 4);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 99);
+    ASSERT(arr[2] == 20);
+    ASSERT(arr[3] == 30);
+    ASSERT(r == 30);
+    r = 55;
+    ASSERT(arr[3] == 55);
+    arr.insertShift(4, 77);
+    ASSERT(arr.count == 5);
+    ASSERT(arr[4] == 77);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[3] == 55);
+}
+
+TEST(testArrayRemoveShift)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    ASSERT(arr.removeShift(1) == 20);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 30);
+    ASSERT(arr.removeShift(0) == 10);
+    ASSERT(arr.removeShift(0) == 30);
+    ASSERT(arr.count == 0);
+
+    Array<u32> arr2;
+    arr2.push(10);
+    arr2.push(20);
+    arr2.push(30);
+    ASSERT(arr2.removeShift(2) == 30);
+    ASSERT(arr2.count == 2);
+    ASSERT(arr2[0] == 10);
+    ASSERT(arr2[1] == 20);
+}
+
+TEST(testArrayInsertShiftLifecycle)
 {
     Lifecycle::stats.reset();
     {
@@ -200,75 +198,36 @@ TEST(testArrayInsertShiftConstRef)
         ASSERT(val.valid);
         ASSERT(arr[0].valid);
         ASSERT(arr.count == 4);
+        ASSERT(Lifecycle::stats.copies == 1);
+        ASSERT(Lifecycle::stats.moves == 3);
     }
     ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.copies == 1);
-    ASSERT(Lifecycle::stats.moves == 3);
-}
 
-TEST(testArrayInsertShiftAtEnd)
-{
     Lifecycle::stats.reset();
     {
         Array<Lifecycle> arr;
-        arr.push();
-        Lifecycle val;
-        arr.insertShift(1, val);
-        ASSERT(arr.count == 2);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.copies == 1);
-    ASSERT(Lifecycle::stats.moves == 0);
-}
-
-TEST(testArrayInsertShiftAtEndRvalue)
-{
-    Lifecycle::stats.reset();
-    {
-        Array<Lifecycle> arr;
-        arr.push();
-        Lifecycle val;
-        arr.insertShift(1, std::move(val));
-        ASSERT(!val.valid);
-        ASSERT(arr.count == 2);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.moves == 1);
-    ASSERT(Lifecycle::stats.copies == 0);
-}
-
-TEST(testArrayInsertShiftRvalue)
-{
-    Lifecycle::stats.reset();
-    {
-        Array<Lifecycle> arr;
-        arr.push();
+        arr.push(); arr.push();
         Lifecycle val;
         arr.insertShift(0, std::move(val));
         ASSERT(!val.valid);
-        ASSERT(arr.count == 2);
+        ASSERT(arr.count == 3);
+        ASSERT(Lifecycle::stats.moves == 3);
+        ASSERT(Lifecycle::stats.copies == 0);
     }
     ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.moves == 2);
-    ASSERT(Lifecycle::stats.copies == 0);
-}
 
-TEST(testArrayInsertShiftMiddleRvalue)
-{
     Lifecycle::stats.reset();
     {
         Array<Lifecycle> arr;
-        arr.push(); arr.push(); arr.push();
+        arr.push(); arr.push();
         Lifecycle val;
-        arr.insertShift(1, std::move(val));
+        arr.insertShift(2, std::move(val));
         ASSERT(!val.valid);
-        ASSERT(arr[0].valid);
-        ASSERT(arr[1].valid);
-        ASSERT(arr.count == 4);
+        ASSERT(arr.count == 3);
+        ASSERT(Lifecycle::stats.moves == 1);
+        ASSERT(Lifecycle::stats.copies == 0);
     }
     ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.moves == 3);
-    ASSERT(Lifecycle::stats.copies == 0);
 }
 
 TEST(testArrayRemoveShiftLifecycle)
@@ -280,22 +239,38 @@ TEST(testArrayRemoveShiftLifecycle)
         Lifecycle removed = arr.removeShift(0);
         ASSERT(removed.valid);
         ASSERT(arr.count == 2);
+        ASSERT(Lifecycle::stats.moves == 3);
+        ASSERT(Lifecycle::stats.copies == 0);
     }
     ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.copies == 0);
-    ASSERT(Lifecycle::stats.moves == 3);
 }
 
-TEST(testArrayRemoveShiftSingle)
+TEST(testArrayInsertSwap)
 {
     Array<u32> arr;
-    arr.push(99);
-    u32 v = arr.removeShift(0);
-    ASSERT(v == 99);
-    ASSERT(arr.count == 0);
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    u32& r = arr.insertSwap(1, 99);
+    ASSERT(arr.count == 4);
+    ASSERT(arr[0] == 10);
+    ASSERT(arr[1] == 99);
+    ASSERT(arr[3] == 20);
+    ASSERT(r == 20);
+    r = 55;
+    ASSERT(arr[3] == 55);
+
+    Array<u32> arr2;
+    arr2.push(10);
+    arr2.push(20);
+    arr2.insertSwap(2, 30);
+    ASSERT(arr2.count == 3);
+    ASSERT(arr2[0] == 10);
+    ASSERT(arr2[1] == 20);
+    ASSERT(arr2[2] == 30);
 }
 
-TEST(testArrayInsertSwapConstRef)
+TEST(testArrayInsertSwapLifecycle)
 {
     Lifecycle::stats.reset();
     {
@@ -303,60 +278,64 @@ TEST(testArrayInsertSwapConstRef)
         arr.push(); arr.push(); arr.push();
         Lifecycle val;
         arr.insertSwap(0, val);
-        ASSERT(arr.count == 4);
         ASSERT(val.valid);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.copies == 1);
-    ASSERT(Lifecycle::stats.moves == 1);
-}
-
-TEST(testArrayInsertSwapRvalue)
-{
-    Lifecycle::stats.reset();
-    {
-        Array<Lifecycle> arr;
-        arr.push(); arr.push(); arr.push();
-        Lifecycle val;
-        arr.insertSwap(0, std::move(val));
-        ASSERT(!val.valid);
         ASSERT(arr.count == 4);
+        ASSERT(Lifecycle::stats.copies == 1);
+        ASSERT(Lifecycle::stats.moves == 1);
     }
     ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.moves == 2);
-    ASSERT(Lifecycle::stats.copies == 0);
-}
 
-TEST(testArrayInsertSwapAtEnd)
-{
     Lifecycle::stats.reset();
     {
         Array<Lifecycle> arr;
         arr.push(); arr.push();
         Lifecycle val;
-        arr.insertSwap(2, val);
+        arr.insertSwap(1, std::move(val));
+        ASSERT(!val.valid);
         ASSERT(arr.count == 3);
-        ASSERT(val.valid);
+        ASSERT(Lifecycle::stats.moves == 2);
+        ASSERT(Lifecycle::stats.copies == 0);
     }
     ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.copies == 1);
-    ASSERT(Lifecycle::stats.moves == 0);
-}
 
-TEST(testArrayInsertSwapAtEndRvalue)
-{
     Lifecycle::stats.reset();
     {
         Array<Lifecycle> arr;
-        arr.push();
+        arr.push(); arr.push();
         Lifecycle val;
-        arr.insertSwap(1, std::move(val));
+        arr.insertSwap(2, std::move(val));
         ASSERT(!val.valid);
-        ASSERT(arr.count == 2);
+        ASSERT(arr.count == 3);
+        ASSERT(Lifecycle::stats.moves == 1);
+        ASSERT(Lifecycle::stats.copies == 0);
     }
     ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.moves == 1);
-    ASSERT(Lifecycle::stats.copies == 0);
+}
+
+TEST(testArrayRemoveSwap)
+{
+    Array<u32> arr;
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    ASSERT(arr.removeSwap(0) == 10);
+    ASSERT(arr.count == 2);
+    ASSERT(arr[0] == 30);
+    ASSERT(arr[1] == 20);
+
+    Array<u32> arr2;
+    arr2.push(10);
+    arr2.push(20);
+    arr2.push(30);
+    ASSERT(arr2.removeSwap(2) == 30);
+    ASSERT(arr2.count == 2);
+    ASSERT(arr2[0] == 10);
+    ASSERT(arr2[1] == 20);
+
+    Array<u32> arr3;
+    arr3.push(99);
+    ASSERT(arr3.removeSwap(0) == 99);
+    ASSERT(arr3.count == 0);
 }
 
 TEST(testArrayRemoveSwapLifecycle)
@@ -368,180 +347,10 @@ TEST(testArrayRemoveSwapLifecycle)
         Lifecycle removed = arr.removeSwap(0);
         ASSERT(removed.valid);
         ASSERT(arr.count == 2);
+        ASSERT(Lifecycle::stats.moves == 2);
+        ASSERT(Lifecycle::stats.copies == 0);
     }
     ASSERT(Lifecycle::stats.alive == 0);
-    ASSERT(Lifecycle::stats.copies == 0);
-    ASSERT(Lifecycle::stats.moves == 2);
-}
-
-TEST(testArrayRemoveSwapMiddle)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    u32 removed = arr.removeSwap(1);
-    ASSERT(removed == 20);
-    ASSERT(arr.count == 2);
-    ASSERT(arr[0] == 10);
-    ASSERT(arr[1] == 30);
-}
-
-TEST(testArrayRemoveSwapEnd)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    u32 removed = arr.removeSwap(2);
-    ASSERT(removed == 30);
-    ASSERT(arr.count == 2);
-    ASSERT(arr[0] == 10);
-    ASSERT(arr[1] == 20);
-}
-
-TEST(testArrayRemoveSwapSingle)
-{
-    Array<u32> arr;
-    arr.push(99);
-    u32 v = arr.removeSwap(0);
-    ASSERT(v == 99);
-    ASSERT(arr.count == 0);
-}
-
-TEST(testArrayInsertShiftBeginning)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    arr.insertShift(0, 5);
-    ASSERT(arr.count == 4);
-    ASSERT(arr[0] == 5);
-    ASSERT(arr[1] == 10);
-    ASSERT(arr[2] == 20);
-    ASSERT(arr[3] == 30);
-}
-
-TEST(testArrayInsertShiftMiddle)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    arr.insertShift(1, 15);
-    ASSERT(arr[0] == 10);
-    ASSERT(arr[1] == 15);
-    ASSERT(arr[2] == 20);
-    ASSERT(arr[3] == 30);
-}
-
-TEST(testArrayInsertShiftEnd)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.insertShift(2, 30);
-    ASSERT(arr.count == 3);
-    ASSERT(arr[0] == 10);
-    ASSERT(arr[1] == 20);
-    ASSERT(arr[2] == 30);
-}
-
-TEST(testArrayRemoveShiftBeginning)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    u32 removed = arr.removeShift(0);
-    ASSERT(removed == 10);
-    ASSERT(arr.count == 2);
-    ASSERT(arr[0] == 20);
-    ASSERT(arr[1] == 30);
-}
-
-TEST(testArrayRemoveShiftMiddle)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    u32 removed = arr.removeShift(1);
-    ASSERT(removed == 20);
-    ASSERT(arr[0] == 10);
-    ASSERT(arr[1] == 30);
-}
-
-TEST(testArrayRemoveShiftEnd)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    u32 removed = arr.removeShift(2);
-    ASSERT(removed == 30);
-    ASSERT(arr.count == 2);
-}
-
-TEST(testArrayInsertSwapBeginning)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    arr.insertSwap(0, 5);
-    ASSERT(arr.count == 4);
-    ASSERT(arr[0] == 5);
-    ASSERT(arr[3] == 10);
-}
-
-TEST(testArrayInsertSwapMiddle)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    arr.insertSwap(1, 99);
-    ASSERT(arr.count == 4);
-    ASSERT(arr[0] == 10);
-    ASSERT(arr[1] == 99);
-    ASSERT(arr[3] == 20);
-}
-
-TEST(testArrayRemoveSwapSwapWithLast)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    arr.push(30);
-    u32 removed = arr.removeSwap(0);
-    ASSERT(removed == 10);
-    ASSERT(arr.count == 2);
-    ASSERT(arr[0] == 30);
-    ASSERT(arr[1] == 20);
-}
-
-TEST(testArrayInsertShiftReturnValue)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    u32& r = arr.insertShift(1, 99);
-    ASSERT(r == 20);
-    r = 77;
-    ASSERT(arr[2] == 77);
-}
-
-TEST(testArrayInsertSwapReturnValue)
-{
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    u32& r = arr.insertSwap(0, 99);
-    ASSERT(r == 10);
-    r = 55;
-    ASSERT(arr[2] == 55);
 }
 
 TEST(testArrayRangeFor)
@@ -559,14 +368,15 @@ TEST(testArrayRangeFor)
 TEST(testArrayRangeForConst)
 {
     Array<u32> arr;
-    arr.push(1);
-    arr.push(2);
-    arr.push(3);
+    arr.push(10);
+    arr.push(20);
     const Array<u32>& carr = arr;
     u64 sum = 0;
-    for (u32 v : carr)
+    for (const u32& v : carr)
         sum += v;
-    ASSERT(sum == 6);
+    ASSERT(sum == 30);
+    ASSERT(carr.begin() == arr.vals);
+    ASSERT(*carr.begin() == 10);
 }
 
 TEST(testArrayConstIndex)
@@ -604,16 +414,13 @@ TEST(testArrayMoveConstruct)
     Array<u32> a;
     a.push(1);
     a.push(2);
-    u64 oldCount = a.count;
-    u64 oldCap = a.capacity;
     u32* oldVals = a.vals;
     Array<u32> b = std::move(a);
     ASSERT(a.vals == nullptr);
     ASSERT(a.count == 0);
     ASSERT(a.capacity == 0);
     ASSERT(b.vals == oldVals);
-    ASSERT(b.count == oldCount);
-    ASSERT(b.capacity == oldCap);
+    ASSERT(b.count == 2);
     ASSERT(b[0] == 1);
     ASSERT(b[1] == 2);
 }
@@ -631,35 +438,16 @@ TEST(testArrayMoveAssign)
     ASSERT(a.vals == nullptr);
 }
 
-TEST(testArrayResizeToZero)
-{
-    Lifecycle::stats.reset();
-    {
-        Array<Lifecycle> arr;
-        arr.push();
-        arr.push();
-        ASSERT(Lifecycle::stats.alive == 2);
-        arr.resize(0);
-        ASSERT(arr.count == 0);
-        ASSERT(Lifecycle::stats.alive == 0);
-        ASSERT(Lifecycle::stats.dtors == 2);
-    }
-    ASSERT(Lifecycle::stats.dtors == 2);
-}
-
-TEST(testArrayResizeSameSize)
+TEST(testArrayMoveAssignSelf)
 {
     Array<u32> arr;
     arr.push(10);
     arr.push(20);
-    arr.push(30);
-    u64 oldVals = (u64)arr.vals;
-    arr.resize(3);
-    ASSERT(arr.count == 3);
+    Array<u32>& ref = arr;
+    ref = std::move(arr);
+    ASSERT(arr.count == 2);
     ASSERT(arr[0] == 10);
     ASSERT(arr[1] == 20);
-    ASSERT(arr[2] == 30);
-    ASSERT((u64)arr.vals == oldVals);
 }
 
 TEST(testArrayPushManyThenPopAll)
@@ -676,52 +464,57 @@ TEST(testArrayPushManyThenPopAll)
     ASSERT(arr.count == 0);
 }
 
-TEST(testArrayConstRangeFor)
+TEST(testArrayTempCreate)
 {
-    Array<u32> arr;
+    ArrayTemp<u32> def;
+    ASSERT(def.arena == nullptr);
+    ASSERT(def.vals == nullptr);
+    ASSERT(def.count == 0);
+    ASSERT(def.capacity == 0);
+
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 3, 8};
+    ASSERT(arr.arena == arena);
+    ASSERT(arr.vals != nullptr);
+    ASSERT(arr.count == 3);
+    ASSERT(arr.capacity == 8);
+    ASSERT(arr[0] == 0);
+    ASSERT(arr[2] == 0);
+}
+
+TEST(testArrayTempPush)
+{
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
     arr.push(1);
     arr.push(2);
     arr.push(3);
-    const Array<u32>& carr = arr;
-    u64 sum = 0;
-    for (const u32& v : carr)
-        sum += v;
-    ASSERT(sum == 6);
+    ASSERT(arr.count == 3);
+    ASSERT(arr[0] == 1);
+    ASSERT(arr[1] == 2);
+    ASSERT(arr[2] == 3);
 }
 
-TEST(testArrayConstBeginEnd)
+TEST(testArrayTempReserve)
 {
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    const Array<u32>& carr = arr;
-    ASSERT(carr.begin() == arr.vals);
-    ASSERT(carr.end() == arr.vals + 2);
-    ASSERT(*carr.begin() == 10);
-    ASSERT(*(carr.end() - 1) == 20);
-}
-
-TEST(testArrayResetThenPush)
-{
-    Lifecycle::stats.reset();
-    Array<Lifecycle> arr;
-    arr.push();
-    arr.push();
-    arr.reset();
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> arr{arena, 0, 0};
+    arr.reserve(100);
+    ASSERT(arr.capacity >= 100);
     ASSERT(arr.count == 0);
-    arr.push();
-    ASSERT(arr.count == 1);
-    ASSERT(arr[0].valid);
+    arr.push(42);
+    ASSERT(arr[0] == 42);
 }
 
-TEST(testArrayMoveAssignSelf)
+TEST(testArrayTempMoveConstruct)
 {
-    Array<u32> arr;
-    arr.push(10);
-    arr.push(20);
-    Array<u32>& ref = arr;
-    ref = std::move(arr);
-    ASSERT(arr.count == 2);
-    ASSERT(arr[0] == 10);
-    ASSERT(arr[1] == 20);
+    ArenaScope arena = getScratch();
+    ArrayTemp<u32> a{arena, 0, 8};
+    a.push(7);
+    u32* oldVals = a.vals;
+    ArrayTemp<u32> b = std::move(a);
+    ASSERT(a.arena == nullptr);
+    ASSERT(a.vals == nullptr);
+    ASSERT(b.vals == oldVals);
+    ASSERT(b[0] == 7);
 }

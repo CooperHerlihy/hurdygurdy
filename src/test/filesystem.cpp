@@ -1,6 +1,5 @@
 #include "tests.hpp"
 #include "hg/filesystem.hpp"
-#include "hg/error.hpp"
 
 #include <cstdio>
 #include <cstring>

@@ -86,6 +86,29 @@ set(INCLUDE_DIRS
     ${SDL_INCLUDE_DIR}
 )
 
+# Resources
+
+set(RESOURCES
+    resources/pixel_font.hg
+)
+
+set(RESOURCE_HEADERS)
+foreach(resource ${RESOURCES})
+    set(res_h ${CMAKE_CURRENT_BINARY_DIR}/${resource}.h)
+    get_filename_component(res_dir ${res_h} DIRECTORY)
+    add_custom_command(
+        OUTPUT ${res_h}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${res_dir}
+        COMMAND embed ${CMAKE_CURRENT_SOURCE_DIR}/${resource} ${resource} ${res_h}
+        DEPENDS embed
+            ${CMAKE_CURRENT_SOURCE_DIR}/${resource}
+        COMMENT "Embedding ${resource}"
+    )
+    list(APPEND RESOURCE_HEADERS ${res_h})
+endforeach()
+
+add_custom_target(resources DEPENDS ${RESOURCE_HEADERS})
+
 # Shaders
 
 add_executable(embed src/embed.c)
@@ -95,22 +118,22 @@ set(SHADERS
     shaders/render2d.frag
     shaders/render3d.vert
     shaders/render3d.frag
-    test/compute.comp
-    test/tri.vert
-    test/tri.frag
-    test/sampler.frag
-    test/mul.comp
-    test/buf_to_img.comp
-    test/uniform.vert
-    test/uniform.frag
-    test/storage_img.comp
-    test/depth.vert
-    test/depth.frag
-    test/instance.vert
-    test/instance.frag
-    test/blur.comp
-    test/invert.frag
-    test/noise.comp
+    test/shaders/compute.comp
+    test/shaders/tri.vert
+    test/shaders/tri.frag
+    test/shaders/sampler.frag
+    test/shaders/mul.comp
+    test/shaders/buf_to_img.comp
+    test/shaders/uniform.vert
+    test/shaders/uniform.frag
+    test/shaders/storage_img.comp
+    test/shaders/depth.vert
+    test/shaders/depth.frag
+    test/shaders/instance.vert
+    test/shaders/instance.frag
+    test/shaders/blur.comp
+    test/shaders/invert.frag
+    test/shaders/noise.comp
 )
 
 set(SHADER_HEADERS)
@@ -143,7 +166,6 @@ set(VULKAN_SOURCES
     src/vulkan/gpu.cpp
 )
 
-set(PLATFORM_SOURCES)
 if(HG_LINUX)
     set(PLATFORM_SOURCES
         src/wayland/wayland.cpp
@@ -189,8 +211,8 @@ set(CORE_SOURCES
     src/render2d.cpp
     src/render3d.cpp
     src/imgui.cpp
-    ${PLATFORM_SOURCES}
     ${VULKAN_SOURCES}
+    ${PLATFORM_SOURCES}
     ${SDL_SOURCES}
 )
 
@@ -220,7 +242,7 @@ target_include_directories(hurdygurdy_misc
 target_compile_options(hurdygurdy_misc PRIVATE ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_core OBJECT ${CORE_SOURCES})
-add_dependencies(hurdygurdy_core shaders)
+add_dependencies(hurdygurdy_core shaders resources)
 target_include_directories(hurdygurdy_core
     PUBLIC
         ${INCLUDE_DIRS}
@@ -286,7 +308,6 @@ add_executable(tests
     src/test/filesystem.cpp
     src/test/smart_ptr.cpp
     src/test/array.cpp
-    src/test/array_temp.cpp
     src/test/queue.cpp
     src/test/set.cpp
     src/test/map.cpp
@@ -298,8 +319,6 @@ add_executable(tests
     src/test/gpu.cpp
     src/test/render.cpp
     src/test/ecs.cpp
-    src/test/ecs_foreach.cpp
-    src/test/ecs_serialize.cpp
 )
 target_link_libraries(tests hurdygurdy)
 target_precompile_headers(tests PRIVATE <hurdygurdy.hpp>)

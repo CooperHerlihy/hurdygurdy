@@ -88,6 +88,17 @@ TEST(testSpanConstAccess)
     ASSERT(s[2] == 30);
 }
 
+TEST(testSpanConstConversion)
+{
+    u32 vals[3] = {1, 2, 3};
+    Span<u32> s{vals, 3};
+    Span<const u32> cs = s;
+    ASSERT(cs.data == vals);
+    ASSERT(cs.count == 3);
+    ASSERT(cs[0] == 1);
+    ASSERT(cs[2] == 3);
+}
+
 TEST(testSpanMutateViaRef)
 {
     i32 vals[3] = {1, 2, 3};
