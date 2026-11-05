@@ -312,7 +312,7 @@ inline VkFormat formatToVk(Format format)
         case Format_astc_4x4_unorm_block: return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
         case Format_astc_8x8_unorm_block: return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
     }
-    HG_PANIC("Unknown format\n");
+    HG_PANIC("Unknown Vulkan format\n");
     return VK_FORMAT_UNDEFINED;
 }
 

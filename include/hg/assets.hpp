@@ -5,6 +5,8 @@
 #include "hg/binary.hpp"
 #include "hg/map.hpp"
 #include "hg/pool.hpp"
+#include "hg/serialization.hpp"
+#include "hg/filesystem.hpp"
 
 namespace hg {
 
@@ -41,16 +43,6 @@ struct AssetManager {
      */
     static inline Pool<AssetData<T>> pool{};
 };
-
-/**
- * Load an asset, implemented per asset type, should be blocking
- */
-template<typename T>
-void assetLoadImpl(AssetData<T>* data)
-{
-    static_cast<void>(data);
-    static_assert(false, "Asset type cannot be loaded without template specialization");
-}
 
 /**
  * An asset reference
@@ -185,6 +177,78 @@ Asset<T> newAsset()
 }
 
 /**
+ * Create a unique empty asset (does not load)
+ */
+template<typename T>
+Asset<T> newAsset(const T& val)
+{
+    return AssetManager<T>::pool.alloc(val);
+}
+
+/**
+ * Create a unique empty asset (does not load)
+ */
+template<typename T>
+Asset<T> newAsset(T&& val)
+{
+    return AssetManager<T>::pool.alloc(std::move(val));
+}
+
+/**
+ * Default store an asset to a path, may be overridden
+ */
+template<typename T>
+void assetStoreImpl(const T& asset, StringView path)
+{
+    ArenaScope scratch = getScratch();
+
+    Serializer s = serialWriter(scratch);
+    serialize(&s, const_cast<T*>(&asset));
+
+    BinaryView bin = writeSerialBinary(scratch, &s);
+    storeFile(bin, path);
+}
+
+/**
+ * A convenience to follow load name convention
+ */
+template<typename T>
+void store(const T& asset, StringView path)
+{
+    assetStoreImpl(asset, path);
+}
+
+/**
+ * Default load an asset from a path, may be overridden to support other file types
+ *
+ * Note, this function should be blocking, not async
+ */
+template<typename T>
+void assetLoadImpl(AssetData<T>* data)
+{
+    Maybe<Binary> bin = loadFile(data->path);
+    if (!bin.has)
+    {
+        setError("Could not load asset file: %.*s", (int)data->path.length, data->path.chars);
+        return;
+    }
+    if (!isSerialData(*bin))
+    {
+        setError("Asset file does not contain serial data: %.*s", (int)data->path.length, data->path.chars);
+        return;
+    }
+
+    ArenaScope scratch = getScratch();
+
+    Serializer s = readSerialBinary(scratch, *bin);
+    if (!serialize(&s, &data->asset))
+    {
+        setError("Could not deserialize serial data from file: %.*s", (int)data->path.length, data->path.chars);
+        return;
+    }
+}
+
+/**
  * Load an asset (or create a new reference)
  */
 template<typename T>
@@ -228,6 +292,29 @@ void reload(StringView path)
         (*asset)->asset = {};
         assetLoadImpl(*asset);
     }
+}
+
+/**
+ * Asset serialization
+ */
+template<typename T>
+bool serialize(Serializer* s, Asset<T>* asset)
+{
+    if (s->writing)
+    {
+        serialize(s, &asset->data->path);
+    }
+    else
+    {
+        String path;
+        if (!serialize(s, &path))
+            return false;
+        if (path != "")
+            *asset = load<T>(path);
+        else
+            *asset = {};
+    }
+    return true;
 }
 
 /**

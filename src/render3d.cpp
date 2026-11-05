@@ -37,9 +37,9 @@ void assetLoadImpl(AssetData<Mesh>* data)
 }
 
 template<>
-void serialize<>(Serializer* s, Material3D* material)
+bool serialize(Serializer* s, Material3D* material)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &material->mesh,
         &material->colorMap,
         &material->normalMap,

@@ -57,8 +57,8 @@
 #include <hg/set.hpp>
 #include <hg/map.hpp>
 #include <hg/pool.hpp>
-#include <hg/assets.hpp>
 #include <hg/serialization.hpp>
+#include <hg/assets.hpp>
 #include <hg/json.hpp>
 #include <hg/time.hpp>
 #include <hg/dynlib.hpp>

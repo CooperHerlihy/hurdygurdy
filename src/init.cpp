@@ -358,6 +358,10 @@ static void deinitPlatform()
 static bool initialized = false;
 static u32 initCount = 0;
 
+namespace internal {
+    void convertPixelFont();
+}
+
 Maybe<HurdyGurdy> init()
 {
     if (initialized)
@@ -368,6 +372,8 @@ Maybe<HurdyGurdy> init()
 
     if (!internal::initGpu())
         goto gpuFailed;
+
+    // internal::convertPixelFont();
 
     internal::initPixelFont();
 

@@ -22,6 +22,26 @@ struct BinaryView {
     u64 size = 0;
 
     /**
+     * Construct empty
+     */
+    constexpr BinaryView() noexcept = default;
+
+    /**
+     * Construct from pointer and count
+     */
+    constexpr BinaryView(const void* dataVal, u64 sizeVal)
+        : data{dataVal}, size{sizeVal}
+    {}
+
+    /**
+     * Construct from c array
+     */
+    template<typename T, u64 N>
+    constexpr BinaryView(T (&arr)[N])
+        : data{arr}, size{N * sizeof(T)}
+    {}
+
+    /**
      * Read data at index into a buffer
      *
      * Parameters

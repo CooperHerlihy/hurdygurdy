@@ -106,7 +106,7 @@ void serializeEnd(Serializer* s)
     s->parent = s->parent->parent;
 }
 
-void serializeVoid(Serializer* s, Span<void> data)
+bool serializeVoid(Serializer* s, Span<void> data)
 {
     serializeNodeStart(s);
 
@@ -116,14 +116,23 @@ void serializeVoid(Serializer* s, Span<void> data)
     }
     else
     {
-        HG_ASSERT(s->current->data.is<StringView>());
-        HG_ASSERT(s->current->data.get<StringView>().length == data.size);
+        if (!s->current->data.is<StringView>())
+        {
+            setError("Unexpected type while deserializing void data");
+            return false;
+        }
+        if (s->current->data.get<StringView>().length != data.size)
+        {
+            setError("Unexpected string length while deserializing void data");
+            return false;
+        }
         memcpy(data.data, s->current->data.get<StringView>().chars, data.size);
     }
+    return true;
 }
 
 template<>
-void serialize(Serializer* s, bool* val)
+bool serialize(Serializer* s, bool* val)
 {
     serializeNodeStart(s);
 
@@ -133,32 +142,37 @@ void serialize(Serializer* s, bool* val)
     }
     else
     {
-        HG_ASSERT(s->current->data.is<bool>());
+        if (!s->current->data.is<bool>())
+        {
+            setError("Unexpected type while deserializing bool");
+            return false;
+        }
         *val = s->current->data.get<bool>();
     }
+    return true;
 }
 
 template<>
-void serialize(Serializer* s, Vec2* val)
+bool serialize(Serializer* s, Vec2* val)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &val->x,
         &val->y);
 }
 
 template<>
-void serialize(Serializer* s, Vec3* val)
+bool serialize(Serializer* s, Vec3* val)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &val->x,
         &val->y,
         &val->z);
 }
 
 template<>
-void serialize(Serializer* s, Vec4* val)
+bool serialize(Serializer* s, Vec4* val)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &val->x,
         &val->y,
         &val->z,
@@ -166,26 +180,26 @@ void serialize(Serializer* s, Vec4* val)
 }
 
 template<>
-void serialize(Serializer* s, Mat2* val)
+bool serialize(Serializer* s, Mat2* val)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &val->x,
         &val->y);
 }
 
 template<>
-void serialize(Serializer* s, Mat3* val)
+bool serialize(Serializer* s, Mat3* val)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &val->x,
         &val->y,
         &val->z);
 }
 
 template<>
-void serialize(Serializer* s, Mat4* val)
+bool serialize(Serializer* s, Mat4* val)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &val->x,
         &val->y,
         &val->z,
@@ -193,17 +207,17 @@ void serialize(Serializer* s, Mat4* val)
 }
 
 template<>
-void serialize(Serializer* s, Complex* val)
+bool serialize(Serializer* s, Complex* val)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &val->r,
         &val->i);
 }
 
 template<>
-void serialize(Serializer* s, Quat* val)
+bool serialize(Serializer* s, Quat* val)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &val->r,
         &val->i,
         &val->j,
@@ -211,7 +225,7 @@ void serialize(Serializer* s, Quat* val)
 }
 
 template<>
-void serialize(Serializer* s, String* val)
+bool serialize(Serializer* s, String* val)
 {
     serializeNodeStart(s);
 
@@ -221,13 +235,18 @@ void serialize(Serializer* s, String* val)
     }
     else
     {
-        HG_ASSERT(s->current->data.is<StringView>());
+        if (!s->current->data.is<StringView>())
+        {
+            setError("Unexpected type while deserializing string");
+            return false;
+        }
         *val = String{s->current->data.get<StringView>()};
     }
+    return true;
 }
 
 template<>
-void serialize(Serializer* s, Binary* val)
+bool serialize(Serializer* s, Binary* val)
 {
     serializeNodeStart(s);
 
@@ -237,16 +256,26 @@ void serialize(Serializer* s, Binary* val)
     }
     else
     {
-        HG_ASSERT(s->current->data.is<StringView>());
+        if (!s->current->data.is<StringView>())
+        {
+            setError("Unexpected type while deserializing binary data");
+            return false;
+        }
         StringView str = s->current->data.get<StringView>();
         *val = Binary::create({str.chars, str.length});
     }
+    return true;
 }
 
-static constexpr char serialBinTag[] = "Data";
+static constexpr char serialBinTag[] = "HGSD"; // Hurdy Gurdy Serial Data
 static constexpr u32 serialBinVersionMajor = 0;
 static constexpr u32 serialBinVersionMinor = 0;
 static constexpr u32 serialBinVersionPatch = 0;
+
+bool isSerialData(BinaryView bin)
+{
+    return bin.size > sizeof(serialBinTag) && memcmp(bin.data, serialBinTag, sizeof(serialBinTag)) == 0;
+}
 
 struct SerialBinHeader {
     char tag[sizeof(serialBinTag)] = {};

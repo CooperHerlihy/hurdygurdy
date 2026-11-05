@@ -10,9 +10,9 @@ TEST(testSerializeBool)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -23,9 +23,9 @@ TEST(testSerializeI64)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -36,9 +36,9 @@ TEST(testSerializeU32)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -49,9 +49,9 @@ TEST(testSerializeF64)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -62,9 +62,9 @@ TEST(testSerializeVec3)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -75,9 +75,9 @@ TEST(testSerializeMat4)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -88,9 +88,9 @@ TEST(testSerializeComplex)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -101,9 +101,9 @@ TEST(testSerializeQuat)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -117,17 +117,17 @@ TEST(testSerializeNested)
 
     Serializer w = serialWriter(arena);
     serializeBegin(&w);
-    serialize(&w, &outer);
+    ASSERT(serialize(&w, &outer));
     serializeBegin(&w);
-    serialize(&w, &inner);
+    ASSERT(serialize(&w, &inner));
     serializeEnd(&w);
     serializeEnd(&w);
 
     Serializer r = serialReader(arena, w.current);
     serializeBegin(&r);
-    serialize(&r, &outerCopy);
+    ASSERT(serialize(&r, &outerCopy));
     serializeBegin(&r);
-    serialize(&r, &innerCopy);
+    ASSERT(serialize(&r, &innerCopy));
     serializeEnd(&r);
     serializeEnd(&r);
 
@@ -144,12 +144,12 @@ TEST(testSerializeBeginWithSize)
 
     Serializer w = serialWriter(arena);
     serializeBegin(&w);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     serializeEnd(&w);
 
     Serializer r = serialReader(arena, w.current);
     serializeBegin(&r, &childCount);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     serializeEnd(&r);
 
     ASSERT(childCount == 1);
@@ -168,7 +168,7 @@ TEST(testSerializeCompositeStruct)
 
     auto serializeData = [](Serializer* s, Data* val)
     {
-        serializeObject(s,
+        return serializeObject(s,
             &val->a,
             &val->b,
             &val->c,
@@ -186,9 +186,9 @@ TEST(testSerializeCompositeStruct)
 
     Data copy{};
     Serializer w = serialWriter(arena);
-    serializeData(&w, &val);
+    ASSERT(serializeData(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serializeData(&r, &copy);
+    ASSERT(serializeData(&r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b == val.b);
     ASSERT(copy.c == val.c);
@@ -206,9 +206,9 @@ TEST(testSerializeLifecycle)
 
     Lifecycle copy{};
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.id == savedId);
     ASSERT(copy.valid == true);
 }
@@ -220,9 +220,9 @@ TEST(testSerializeCArray)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy[0] == 10);
     ASSERT(copy[1] == 20);
     ASSERT(copy[2] == 30);
@@ -236,9 +236,9 @@ TEST(testSerializeString)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -250,9 +250,9 @@ TEST(testSerializeBinary)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.size == val.size);
     ASSERT(memcmp(copy.data, val.data, val.size) == 0);
 }
@@ -264,9 +264,9 @@ TEST(testSerializeUniquePtr)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(*copy == 42);
     ASSERT(copy.ptr != val.ptr);
 }
@@ -281,9 +281,9 @@ TEST(testSerializeArray)
 
     Array<u32> copy{};
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == val.count);
     for (u32 i = 0; i < val.count; ++i)
         ASSERT(copy[i] == val[i]);
@@ -299,9 +299,9 @@ TEST(testSerializeSet)
 
     Set<u32> copy{};
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == val.count);
     ASSERT(copy.has(10u));
     ASSERT(copy.has(20u));
@@ -318,9 +318,9 @@ TEST(testSerializeMap)
 
     Map<u32, f32> copy{};
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == val.count);
     ASSERT(*copy.get(1u) == 1.5f);
     ASSERT(*copy.get(2u) == 2.5f);
@@ -337,7 +337,7 @@ TEST(testBinaryRoundTripPrimitive)
 
     auto serializeData = [](Serializer* s, Data* val)
     {
-        serializeObject(s,
+        return serializeObject(s,
             &val->a,
             &val->b,
             &val->c);
@@ -351,10 +351,10 @@ TEST(testBinaryRoundTripPrimitive)
 
     Data copy{};
     Serializer w = serialWriter(arena);
-    serializeData(&w, &val);
+    ASSERT(serializeData(&w, &val));
     BinaryView bin = writeSerialBinary(arena, &w);
     Serializer r = readSerialBinary(arena, bin);
-    serializeData(&r, &copy);
+    ASSERT(serializeData(&r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b == val.b);
     ASSERT(copy.c == val.c);
@@ -369,7 +369,7 @@ TEST(testBinaryRoundTripString)
 
     auto serializeData = [](Serializer* s, Data* val)
     {
-        serializeObject(s,
+        return serializeObject(s,
             &val->a,
             &val->b);
     };
@@ -381,10 +381,10 @@ TEST(testBinaryRoundTripString)
 
     Data copy{};
     Serializer w = serialWriter(arena);
-    serializeData(&w, &val);
+    ASSERT(serializeData(&w, &val));
     BinaryView bin = writeSerialBinary(arena, &w);
     Serializer r = readSerialBinary(arena, bin);
-    serializeData(&r, &copy);
+    ASSERT(serializeData(&r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b == val.b);
 }
@@ -398,7 +398,7 @@ TEST(testBinaryRoundTripBinary)
 
     auto serializeData = [](Serializer* s, Data* val)
     {
-        serializeObject(s,
+        return serializeObject(s,
             &val->a,
             &val->b);
     };
@@ -411,10 +411,10 @@ TEST(testBinaryRoundTripBinary)
 
     Data copy{};
     Serializer w = serialWriter(arena);
-    serializeData(&w, &val);
+    ASSERT(serializeData(&w, &val));
     BinaryView bin = writeSerialBinary(arena, &w);
     Serializer r = readSerialBinary(arena, bin);
-    serializeData(&r, &copy);
+    ASSERT(serializeData(&r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b.size == val.b.size);
     ASSERT(memcmp(copy.b.data, val.b.data, val.b.size) == 0);
@@ -427,9 +427,9 @@ TEST(testProductRoundTripPrimitive)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.get<0>() == val.get<0>());
     ASSERT(copy.get<1>() == val.get<1>());
     ASSERT(copy.get<2>() == val.get<2>());
@@ -442,9 +442,9 @@ TEST(testProductRoundTripString)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.get<0>() == val.get<0>());
     ASSERT(copy.get<1>() == val.get<1>());
 }
@@ -456,9 +456,9 @@ TEST(testProductRoundTripEmpty)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
 }
 
 TEST(testProductRoundTripBinary)
@@ -468,10 +468,10 @@ TEST(testProductRoundTripBinary)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     BinaryView bin = writeSerialBinary(arena, &w);
     Serializer r = readSerialBinary(arena, bin);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.get<0>() == val.get<0>());
     ASSERT(copy.get<1>() == val.get<1>());
     ASSERT(copy.get<2>() == val.get<2>());
@@ -484,9 +484,9 @@ TEST(testSumRoundTripFirstType)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.is<i64>());
     ASSERT(copy.get<i64>() == -42);
 }
@@ -498,9 +498,9 @@ TEST(testSumRoundTripSecondType)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.is<f64>());
     ASSERT(copy.get<f64>() == 3.14);
 }
@@ -512,9 +512,9 @@ TEST(testSumRoundTripThirdType)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.is<String>());
     ASSERT(copy.get<String>() == String{"world"});
 }
@@ -526,9 +526,9 @@ TEST(testSumRoundTripEmpty)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(!copy.is<i64>());
     ASSERT(!copy.is<f64>());
     ASSERT(!copy.is<String>());
@@ -541,10 +541,10 @@ TEST(testSumRoundTripBinary)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     BinaryView bin = writeSerialBinary(arena, &w);
     Serializer r = readSerialBinary(arena, bin);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.is<f64>());
     ASSERT(copy.get<f64>() == 99.9);
 }
@@ -556,9 +556,9 @@ TEST(testMaybeRoundTripWithValue)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.has);
     ASSERT(*copy == 42);
 }
@@ -570,9 +570,9 @@ TEST(testMaybeRoundTripWithString)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.has);
     ASSERT(*copy == val.val);
 }
@@ -584,9 +584,9 @@ TEST(testMaybeRoundTripEmpty)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(!copy.has);
 }
 
@@ -597,10 +597,10 @@ TEST(testMaybeRoundTripBinary)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     BinaryView bin = writeSerialBinary(arena, &w);
     Serializer r = readSerialBinary(arena, bin);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.has);
     ASSERT(*copy == 2.5f);
 }
@@ -612,9 +612,9 @@ TEST(testSerializeEmptyString)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -625,9 +625,9 @@ TEST(testSerializeEmptyBinary)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.size == val.size);
 }
 
@@ -638,9 +638,9 @@ TEST(testSerializeEmptyArray)
     Array<u32> copy{};
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == 0);
 }
 
@@ -651,9 +651,9 @@ TEST(testSerializeEmptySet)
     Set<u32> copy{};
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == 0);
 }
 
@@ -664,9 +664,9 @@ TEST(testSerializeEmptyMap)
     Map<u32, f32> copy{};
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == 0);
 }
 
@@ -677,9 +677,9 @@ TEST(testSerializeEmptyMaybe)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(!copy.has);
 }
 
@@ -690,9 +690,9 @@ TEST(testSerializeNestedProduct)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.get<0>().get<0>() == -7);
     ASSERT(copy.get<0>().get<1>() == 2.5f);
     ASSERT(copy.get<1>() == true);
@@ -705,9 +705,9 @@ TEST(testSerializeNestedMaybe)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy.has);
     ASSERT(*copy == val.val);
 }
@@ -719,9 +719,9 @@ TEST(testSerializeBoolFalse)
     ArenaScope arena = getScratch();
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
@@ -735,9 +735,123 @@ TEST(testSerializeLargeString)
     String copy{};
 
     Serializer w = serialWriter(arena);
-    serialize(&w, &val);
+    ASSERT(serialize(&w, &val));
     Serializer r = serialReader(arena, w.current);
-    serialize(&r, &copy);
+    ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
     ASSERT(copy.length == 2048);
+}
+
+TEST(testSerializeReadIntAsFloatError)
+{
+    ArenaScope arena = getScratch();
+    i64 val = 42;
+
+    Serializer w = serialWriter(arena);
+    ASSERT(serialize(&w, &val));
+
+    f64 copy = 0.0;
+    Serializer r = serialReader(arena, w.current);
+    setError("");
+    ASSERT(!serialize(&r, &copy));
+    ASSERT(getError().length > 0);
+}
+
+TEST(testSerializeReadFloatAsIntError)
+{
+    ArenaScope arena = getScratch();
+    f64 val = 2.5;
+
+    Serializer w = serialWriter(arena);
+    ASSERT(serialize(&w, &val));
+
+    i64 copy = 0;
+    Serializer r = serialReader(arena, w.current);
+    setError("");
+    ASSERT(!serialize(&r, &copy));
+    ASSERT(getError().length > 0);
+}
+
+TEST(testSerializeReadStringAsIntError)
+{
+    ArenaScope arena = getScratch();
+    String val = String{"hello"};
+
+    Serializer w = serialWriter(arena);
+    ASSERT(serialize(&w, &val));
+
+    i64 copy = 0;
+    Serializer r = serialReader(arena, w.current);
+    setError("");
+    ASSERT(!serialize(&r, &copy));
+    ASSERT(getError().length > 0);
+}
+
+TEST(testSerializeObjectFailurePropagates)
+{
+    struct Data {
+        i64 a;
+        f64 b;
+    };
+
+    struct Mismatch {
+        f64 a;
+        i64 b;
+    };
+
+    auto serializeData = [](Serializer* s, auto* val)
+    {
+        return serializeObject(s, &val->a, &val->b);
+    };
+
+    ArenaScope arena = getScratch();
+    Data val{};
+    val.a = 1;
+    val.b = 2.5;
+
+    Serializer w = serialWriter(arena);
+    ASSERT(serializeData(&w, &val));
+
+    Mismatch copy{};
+    Serializer r = serialReader(arena, w.current);
+    setError("");
+    ASSERT(!serializeData(&r, &copy));
+    ASSERT(getError().length > 0);
+}
+
+TEST(testSerializeArrayFailurePropagates)
+{
+    ArenaScope arena = getScratch();
+    Array<u32> val{};
+    val.push(1);
+    val.push(2);
+
+    Serializer w = serialWriter(arena);
+    ASSERT(serialize(&w, &val));
+
+    Array<f32> copy{};
+    Serializer r = serialReader(arena, w.current);
+    setError("");
+    ASSERT(!serialize(&r, &copy));
+    ASSERT(getError().length > 0);
+}
+
+TEST(testSerializeNestedFailurePropagates)
+{
+    ArenaScope arena = getScratch();
+    i32 inner = 42;
+
+    Serializer w = serialWriter(arena);
+    serializeBegin(&w);
+    ASSERT(serialize(&w, &inner));
+    serializeEnd(&w);
+
+    ArenaScope arena2 = getScratch();
+    f64 copy = 0.0;
+    Serializer r = serialReader(arena2, w.current);
+    setError("");
+    serializeBegin(&r);
+    ASSERT(!serialize(&r, &copy));
+    serializeEnd(&r);
+    ASSERT(getError().length > 0);
 }

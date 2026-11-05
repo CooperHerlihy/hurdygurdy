@@ -1,8 +1,10 @@
 #pragma once
 
+#include "hg/error.hpp"
 #include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
 #include "hg/strings.hpp"
+#include "hg/binary.hpp"
 #include "hg/memory.hpp"
 #include "hg/math.hpp"
 #include "hg/product.hpp"
@@ -12,7 +14,6 @@
 #include "hg/array.hpp"
 #include "hg/set.hpp"
 #include "hg/map.hpp"
-#include "hg/assets.hpp"
 
 namespace hg {
 
@@ -112,47 +113,49 @@ void serializeEnd(Serializer* s);
 /**
  * Serialize a value of unknown type
  */
-void serializeVoid(Serializer* s, Span<void> data);
+bool serializeVoid(Serializer* s, Span<void> data);
 
 /**
  * Serialize a value, should be overridden
  */
 template<typename T>
-void serialize(Serializer* s, T* val)
+bool serialize(Serializer* s, T* val)
 {
-    serializeVoid(s, {val, sizeof(*val)});
+    return serializeVoid(s, {val, sizeof(*val)});
 }
 
 /**
  * Serialize an object conveniently
  */
 template<typename... Ts>
-void serializeObject(Serializer* s, Ts*... vals)
+bool serializeObject(Serializer* s, Ts*... vals)
 {
     serializeBegin(s);
-    (serialize(s, vals), ...);
-    serializeEnd(s);
+    HG_DEFER(serializeEnd(s));
+    return (serialize(s, vals) && ...);
 }
 
 /**
  * Serialize an array of values
  */
 template<typename T, u64 N>
-void serialize(Serializer* s, T (*arr)[N])
+bool serialize(Serializer* s, T (*arr)[N])
 {
     serializeBegin(s);
-    for (u64 i = 0; i < N; ++i)
+    HG_DEFER(serializeEnd(s));
+    for (T& val : *arr)
     {
-        serialize(s, &(*arr)[i]);
+        if (!serialize(s, &val))
+            return false;
     }
-    serializeEnd(s);
+    return true;
 }
 
 /**
  * Integer serialization
  */
 template<std::integral T>
-void serialize(Serializer* s, T* val)
+bool serialize(Serializer* s, T* val)
 {
     serializeNodeStart(s);
 
@@ -162,16 +165,21 @@ void serialize(Serializer* s, T* val)
     }
     else
     {
-        HG_ASSERT(s->current->data.is<i64>());
+        if (!s->current->data.is<i64>())
+        {
+            setError("Unexpected type while deserializing integer");
+            return false;
+        }
         *val = static_cast<T>(s->current->data.get<i64>());
     }
+    return true;
 }
 
 /**
  * Float serialization
  */
 template<std::floating_point T>
-void serialize(Serializer* s, T* val)
+bool serialize(Serializer* s, T* val)
 {
     serializeNodeStart(s);
 
@@ -181,77 +189,86 @@ void serialize(Serializer* s, T* val)
     }
     else
     {
-        HG_ASSERT(s->current->data.is<f64>());
+        if (!s->current->data.is<f64>())
+        {
+            setError("Unexpected type while deserializing float");
+            return false;
+        }
         *val = static_cast<T>(s->current->data.get<f64>());
     }
+    return true;
 }
 
 /**
  * bool serialization
  */
 template<>
-void serialize(Serializer* s, bool* val);
+bool serialize(Serializer* s, bool* val);
 
 /**
  * Vec2 serialization
  */
 template<>
-void serialize(Serializer* s, Vec2* val);
+bool serialize(Serializer* s, Vec2* val);
 
 /**
  * Vec3 serialization
  */
 template<>
-void serialize(Serializer* s, Vec3* val);
+bool serialize(Serializer* s, Vec3* val);
 
 /**
  * Vec4 serialization
  */
 template<>
-void serialize(Serializer* s, Vec4* val);
+bool serialize(Serializer* s, Vec4* val);
 
 /**
  * Mat2 serialization
  */
 template<>
-void serialize(Serializer* s, Mat2* val);
+bool serialize(Serializer* s, Mat2* val);
 
 /**
  * Mat3 serialization
  */
 template<>
-void serialize(Serializer* s, Mat3* val);
+bool serialize(Serializer* s, Mat3* val);
 
 /**
  * Mat4 serialization
  */
 template<>
-void serialize(Serializer* s, Mat4* val);
+bool serialize(Serializer* s, Mat4* val);
 
 /**
  * Complex serialization
  */
 template<>
-void serialize(Serializer* s, Complex* val);
+bool serialize(Serializer* s, Complex* val);
 
 /**
  * Quat serialization
  */
 template<>
-void serialize(Serializer* s, Quat* val);
+bool serialize(Serializer* s, Quat* val);
 
 /**
  * Product serialization
  */
 template<typename... Ts>
-void serialize(Serializer* s, Product<Ts...>* product)
+bool serialize(Serializer* s, Product<Ts...>* product)
 {
     if constexpr (sizeof...(Ts) > 0)
     {
-        [&]<u64... Is>(std::integer_sequence<u64, Is...>)
+        return [&]<u64... Is>(std::integer_sequence<u64, Is...>)
         {
-            serializeObject(s, &product->template get<Is>()...);
+            return serializeObject(s, &product->template get<Is>()...);
         }(std::make_integer_sequence<u64, sizeof...(Ts)>{});
+    }
+    else
+    {
+        return true;
     }
 }
 
@@ -259,11 +276,15 @@ void serialize(Serializer* s, Product<Ts...>* product)
  * Sum serialization
  */
 template<typename... Ts>
-void serialize(Serializer* s, Sum<Ts...>* sum)
+bool serialize(Serializer* s, Sum<Ts...>* sum)
 {
     serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
+
     u32 tag = sum->tag;
-    serialize(s, &tag);
+    if (!serialize(s, &tag))
+        return false;
+
     if (tag < sum->count)
     {
         if (!s->writing && tag != sum->tag)
@@ -271,76 +292,89 @@ void serialize(Serializer* s, Sum<Ts...>* sum)
             sum->tag = tag;
             sum->call([&](auto& val) { new (&val) std::remove_cvref_t<decltype(val)>{}; });
         }
-        sum->call([&](auto& val) { serialize(s, &val); });
+        return sum->call([&](auto& val) { return serialize(s, &val); });
     }
     else
     {
         if (!s->writing)
             *sum = {};
+        return true;
     }
-    serializeEnd(s);
 }
 
 /**
  * Maybe serialization
  */
 template<typename T>
-void serialize(Serializer* s, Maybe<T>* maybe)
+bool serialize(Serializer* s, Maybe<T>* maybe)
 {
     serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
+
     bool has = maybe->has;
-    serialize(s, &has);
+    if (!serialize(s, &has))
+        return false;
+
     if (has)
     {
         if (!s->writing && !maybe->has)
             *maybe = some<T>();
-        serialize(s, &maybe->val);
+        return serialize(s, &maybe->val);
     }
     else
     {
         if (!s->writing)
             *maybe = {};
+        return true;
     }
-    serializeEnd(s);
 }
 
 /**
  * String serialization
  */
 template<>
-void serialize(Serializer* s, String* val);
+bool serialize(Serializer* s, String* val);
 
 /**
  * Binary serialization
  */
 template<>
-void serialize(Serializer* s, Binary* val);
+bool serialize(Serializer* s, Binary* val);
 
 /**
  * UniquePtr serialization
  */
 template<typename T>
-void serialize(Serializer* s, UniquePtr<T>* ptr)
+bool serialize(Serializer* s, UniquePtr<T>* ptr)
 {
     serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
+
     bool has = *ptr != nullptr;
-    serialize(s, &has);
+    if (!serialize(s, &has))
+        return false;
+
     if (has)
     {
         if (!s->writing)
             *ptr = makeUnique<T>();
-        serialize(s, ptr->ptr);
+        return serialize(s, ptr->ptr);
     }
-    serializeEnd(s);
+    else
+    {
+        return true;
+    }
 }
 
 /**
  * Array serialization
  */
 template<typename T>
-void serialize(Serializer* s, Array<T>* arr)
+bool serialize(Serializer* s, Array<T>* arr)
 {
     serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
+
     if (s->writing)
     {
         serialize(s, &arr->count);
@@ -349,25 +383,32 @@ void serialize(Serializer* s, Array<T>* arr)
     else
     {
         u32 count;
+        if (!serialize(s, &count))
+            return false;
+
         u32 capacity;
-        serialize(s, &count);
-        serialize(s, &capacity);
+        if (!serialize(s, &capacity))
+            return false;
+
         *arr = Array<T>{count, capacity};
     }
+
     for (u32 i = 0; i < arr->count; ++i)
     {
-        serialize(s, arr->vals + i);
+        if (!serialize(s, arr->vals + i))
+            return false;
     }
-    serializeEnd(s);
+    return true;
 }
 
 /**
  * Set serialization
  */
 template<typename V>
-void serialize(Serializer* s, Set<V>* set)
+bool serialize(Serializer* s, Set<V>* set)
 {
     serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
 
     if (s->writing)
     {
@@ -382,29 +423,33 @@ void serialize(Serializer* s, Set<V>* set)
     else
     {
         u32 capacity;
+        if (!serialize(s, &capacity))
+            return false;
+
         u32 count;
-        serialize(s, &capacity);
-        serialize(s, &count);
+        if (!serialize(s, &count))
+            return false;
 
         *set = Set<V>{capacity};
         for (u32 i = 0; i < count; ++i)
         {
             V val;
-            serialize(s, &val);
+            if (!serialize(s, &val))
+                return false;
             set->add(val);
         }
     }
-
-    serializeEnd(s);
+    return true;
 }
 
 /**
  * Map serialization
  */
 template<typename K, typename V>
-void serialize(Serializer* s, Map<K, V>* map)
+bool serialize(Serializer* s, Map<K, V>* map)
 {
     serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
 
     if (s->writing)
     {
@@ -419,43 +464,30 @@ void serialize(Serializer* s, Map<K, V>* map)
     else
     {
         u32 capacity;
+        if (!serialize(s, &capacity))
+            return false;
+
         u32 count;
-        serialize(s, &capacity);
-        serialize(s, &count);
+        if (!serialize(s, &count))
+            return false;
 
         *map = Map<K, V>{capacity};
         for (u32 i = 0; i < count; ++i)
         {
             K key;
             V val;
-            serializeObject(s, &key, &val);
+            if (!serializeObject(s, &key, &val))
+                return false;
             map->add(std::move(key), std::move(val));
         }
     }
-
-    serializeEnd(s);
+    return true;
 }
 
 /**
- * Asset serialization
+ * Returns whether the binary contains serial data
  */
-template<typename T>
-void serialize(Serializer* s, Asset<T>* asset)
-{
-    if (s->writing)
-    {
-        serialize(s, &asset->data->path);
-    }
-    else
-    {
-        String path;
-        serialize(s, &path);
-        if (path != "")
-            *asset = load<T>(path);
-        else
-            *asset = {};
-    }
-}
+bool isSerialData(BinaryView bin);
 
 /**
  * Write serialized data in a binary format

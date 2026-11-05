@@ -87,8 +87,8 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hg/set.hpp`
 - `hg/map.hpp`
 - `hg/pool.hpp`
-- `hg/assets.hpp`
 - `hg/serialization.hpp`
+- `hg/assets.hpp`
 - `hg/json.hpp`
 - `hg/time.hpp`
 - `hg/dynlib.hpp`

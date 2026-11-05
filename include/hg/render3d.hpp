@@ -124,7 +124,7 @@ struct Material3D {
  * Serialization for Material3D
  */
 template<>
-void serialize<>(Serializer* s, Material3D* material);
+bool serialize(Serializer* s, Material3D* material);
 
 /**
  * A basic 3D renderer

@@ -140,7 +140,7 @@ struct Camera {
  * Camera serialization
  */
 template<>
-void serialize(Serializer* s, Camera* camera);
+bool serialize(Serializer* s, Camera* camera);
 
 /**
  * A texture asset
@@ -206,6 +206,12 @@ struct TextureData {
 };
 
 /**
+ * TextureData serialization
+ */
+template<>
+bool serialize(Serializer* s, TextureData* tex);
+
+/**
  * Store an image to disc in the png format
  *
  * Returns
@@ -258,9 +264,17 @@ struct TextureAtlas {
     Array<Rect> sprites{};
 
     /**
-     * Create a new texture atlas
+     * Construct empty
      */
-    static TextureAtlas create(const Asset<Texture>& texture);
+    TextureAtlas() noexcept = default;
+
+    /**
+     * Construct with texture
+     */
+    TextureAtlas(const Asset<Texture>& textureVal)
+        : texture{textureVal.clone()}
+        , sprites{0, 1024}
+    {}
 
     /**
      * Add empty sprites, to control indices
@@ -300,7 +314,7 @@ struct TextureAtlas {
  * TextureAtlas serialization
  */
 template<>
-void serialize(Serializer* s, TextureAtlas* atlas);
+bool serialize(Serializer* s, TextureAtlas* atlas);
 
 /**
  * TextureAtlas asset loading

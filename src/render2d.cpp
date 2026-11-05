@@ -1,6 +1,7 @@
 #include "hg/render2d.hpp"
 
 #include "hg/error.hpp"
+#include "hg/filesystem.hpp"
 
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -41,9 +42,9 @@ void Camera::update()
 }
 
 template<>
-void serialize(Serializer* s, Orthographic* ortho)
+bool serialize(Serializer* s, Orthographic* ortho)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &ortho->left,
         &ortho->right,
         &ortho->top,
@@ -53,9 +54,9 @@ void serialize(Serializer* s, Orthographic* ortho)
 }
 
 template<>
-void serialize(Serializer* s, Perspective* persp)
+bool serialize(Serializer* s, Perspective* persp)
 {
-    serializeObject(s,
+    return serializeObject(s,
         &persp->aspect,
         &persp->fov,
         &persp->near,
@@ -63,56 +64,42 @@ void serialize(Serializer* s, Perspective* persp)
 }
 
 template<>
-void serialize(Serializer* s, Camera* camera)
+bool serialize(Serializer* s, Camera* camera)
 {
-    serializeBegin(s);
-    serialize(s, &camera->projection);
-    serialize(s, &camera->position);
-    serialize(s, &camera->rotation);
-    serializeEnd(s);
+    return serializeObject(s,
+        &camera->projection,
+        &camera->position,
+        &camera->rotation);
 }
 
 struct RenderState2D {
     TextureAtlas defaultFont{};
 };
 
-static RenderState2D render2D;
-
-#include "resources/pixel_font.hg.h"
-
-namespace internal {
-
-void initPixelFont()
-{
-    ArenaScope scratch = getScratch();
-
-    TextureData fontData{};
-    Serializer s = readSerialBinary(scratch, {resources_pixel_font_hg, sizeof(resources_pixel_font_hg)});
-
-    serializeBegin(&s);
-    serializeObject(&s, &fontData.width, &fontData.height, &fontData.format);
-    u64 size = fontData.width * fontData.height * formatToSize(fontData.format);
-    fontData.pixels = heapAlloc(size, formatToSize(fontData.format));
-    serializeVoid(&s, {fontData.pixels, size});
-    serializeEnd(&s);
-
-    render2D.defaultFont.texture = newAsset<Texture>();
-    *render2D.defaultFont.texture = Texture::fromData(fontData);
-
-    render2D.defaultFont.addEmpty(32);
-    render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95);
-}
-
-void deinitPixelFont()
-{
-    render2D = {};
-}
-
-} // namespace internal
-
 TextureData::~TextureData() noexcept
 {
     heapFree(pixels, 0);
+}
+
+template<>
+bool serialize(Serializer* s, TextureData* tex)
+{
+    serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
+
+    if (!serialize(s, &tex->width))
+        return false;
+    if (!serialize(s, &tex->height))
+        return false;
+    if (!serialize(s, &tex->depth))
+        return false;
+    if (!serialize(s, &tex->format))
+        return false;
+
+    u64 size = tex->width * tex->height * tex->depth * formatToSize(tex->format);
+    if (!s->writing)
+        tex->pixels = heapAlloc(size, formatToSize(tex->format));
+    return serializeVoid(s, {tex->pixels, size});
 }
 
 bool storeTexturePng(const TextureData& texture, StringView path)
@@ -184,13 +171,48 @@ void assetLoadImpl(AssetData<Texture>* data)
     data->asset = Texture::fromData(*tex);
 }
 
-TextureAtlas TextureAtlas::create(const Asset<Texture>& texture)
+static RenderState2D render2D;
+
+#include "resources/pixel_font.hg.h"
+
+namespace internal {
+
+void convertPixelFont()
 {
-    TextureAtlas atlas{};
-    atlas.texture = texture.clone();
-    atlas.sprites = Array<Rect>{0, 1024};
-    return atlas;
+    HG_LOG("converting pixel font file\n");
+
+    ArenaScope scratch = getScratch();
+
+    Asset<TextureData> fontData = load<TextureData>("resources/pixel_font.png");
+
+    Serializer s = serialWriter(scratch);
+    serialize(&s, &*fontData);
+
+    BinaryView bin = writeSerialBinary(scratch, &s);
+    storeFile(bin, "resources/pixel_font.hg");
 }
+
+void initPixelFont()
+{
+    ArenaScope scratch = getScratch();
+
+    Serializer s = readSerialBinary(scratch, resources_pixel_font_hg);
+
+    TextureData fontData{};
+    if (!serialize(&s, &fontData))
+        HG_WARN("Could not deserialize pixel font\n");
+
+    render2D.defaultFont = newAsset<Texture>(Texture::fromData(fontData));
+    render2D.defaultFont.addEmpty(32);
+    render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95);
+}
+
+void deinitPixelFont()
+{
+    render2D = {};
+}
+
+} // namespace internal
 
 u32 TextureAtlas::addEmpty(u32 count)
 {
@@ -248,9 +270,11 @@ const TextureAtlas& getDefaultFont()
 }
 
 template<>
-void serialize(Serializer* s, TextureAtlas* atlas)
+bool serialize(Serializer* s, TextureAtlas* atlas)
 {
-    serializeObject(s, &atlas->texture, &atlas->sprites);
+    return serializeObject(s,
+        &atlas->texture,
+        &atlas->sprites);
 }
 
 template<>

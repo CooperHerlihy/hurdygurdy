@@ -153,16 +153,18 @@ inline u64 hash(const Lifecycle& val)
 }
 
 template<>
-inline void serialize(Serializer* s, Lifecycle* val)
+inline bool serialize(Serializer* s, Lifecycle* val)
 {
     serializeBegin(s);
+    HG_DEFER(serializeEnd(s));
     i64 id = static_cast<i64>(val->id);
-    serialize(s, &id);
-    serialize(s, &val->valid);
-    serializeEnd(s);
-
+    if (!serialize(s, &id))
+        return false;
+    if (!serialize(s, &val->valid))
+        return false;
     if (!s->writing)
         val->id = static_cast<u64>(id);
+    return true;
 }
 
 }
