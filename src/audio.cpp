@@ -62,14 +62,14 @@ bool assetLoadImpl(AssetData<Sound>* data)
     }
     else if (bin->size > 3 && memcmp("ID3", bin->data, 3) == 0)
     {
-        drmp3_config config;
+        drmp3_config config{};
         drmp3_uint64 totalPCMFrameCount = 0;
         f32* pSampleData = drmp3_open_file_and_read_pcm_frames_f32(cpath, &config, &totalPCMFrameCount, nullptr);
         if (pSampleData == nullptr) {
             setError("Could not read mp3 file: %s", cpath);
             return false;
         }
-        HG_DEFER(drwav_free(pSampleData, NULL));
+        HG_DEFER(drmp3_free(pSampleData, nullptr));
 
         data->asset.channels = config.channels;
         data->asset.frequency = config.sampleRate;
@@ -102,17 +102,41 @@ bool assetLoadImpl(AssetData<Sound>* data)
     return true;
 }
 
-// bool storeSoundWav(const Sound& sound, StringView path)
-// {
-// }
-//
-// bool storeSoundMp3(const Sound& sound, StringView path)
-// {
-// }
-//
-// bool storeSoundFlac(const Sound& sound, StringView path)
-// {
-// }
+bool storeSoundWav(const Sound& sound, StringView path)
+{
+    if (sound.channels == 0)
+    {
+        setError("Could not store wav file, sound has no channels");
+        return false;
+    }
+
+    ArenaScope scratch = getScratch();
+    char* cpath = cString(scratch, path);
+
+    drwav_data_format format{};
+    format.container = drwav_container_riff;
+    format.format = DR_WAVE_FORMAT_IEEE_FLOAT;
+    format.channels = sound.channels;
+    format.sampleRate = sound.frequency;
+    format.bitsPerSample = 32;
+
+    drwav wav;
+    if (!drwav_init_file_write_sequential(&wav, cpath, &format, sound.data.count, nullptr))
+    {
+        setError("Could not open wav file for writing: %s", cpath);
+        return false;
+    }
+
+    drwav_uint64 frameCount = sound.data.count / sound.channels;
+    drwav_uint64 framesWritten = drwav_write_pcm_frames(&wav, frameCount, sound.data.vals);
+    if (framesWritten != frameCount || drwav_uninit(&wav) != DRWAV_SUCCESS)
+    {
+        setError("Could not write wav file: %s", cpath);
+        return false;
+    }
+
+    return true;
+}
 
 void AudioPlayer::update(Span<f32> buf, AudioConfig config)
 {

@@ -1,12 +1,12 @@
 # Hurdy Gurdy
 
-C++20 game development library
+Modern C++20 game development library
 
 ## Hard Rules
 
 **Always inform. Never act without approval.**
-- No exceptions, RTTI, third-party code, or reformatting
 - Never run scripts without backups and tests
+- No exceptions, RTTI, third-party code, or reformatting
 
 ## Build
 
@@ -52,7 +52,7 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - 4-space indent
 - Braces: next line for code blocks, same line for struct/initialization
 - `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros
-- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`. No `int`/`size_t`/`std::*`
+- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`. No `int`/`float`/`size_t`
 - RAII, no failing constructors, use static create() with Maybe, generally delete copy ctors
 - Assertions: `HG_ASSERT`, Recoverable errors: `setError()` and `Maybe<T>`, Unrecoverable: `HG_PANIC`
 - Memory: hg temp containers > scratch arena > hg containers > heapAlloc/heapFree; Never std containers

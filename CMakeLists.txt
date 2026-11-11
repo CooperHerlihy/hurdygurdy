@@ -309,6 +309,7 @@ add_executable(tests
     src/test/hash.cpp
     src/test/pool.cpp
     src/test/assets.cpp
+    src/test/audio.cpp
     src/test/serialization.cpp
     src/test/json.cpp
     src/test/gpu.cpp

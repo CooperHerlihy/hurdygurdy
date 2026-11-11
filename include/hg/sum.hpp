@@ -158,12 +158,6 @@ struct Overload : Fs... {
 };
 
 /**
- * CTADS for Overload
- */
-template<typename... Fs>
-Overload(Fs...) -> Overload<Fs...>;
-
-/**
  * A sum type, or tagged union
  *
  * Note, may also contain nothing

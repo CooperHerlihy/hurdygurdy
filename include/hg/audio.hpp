@@ -76,20 +76,10 @@ bool serialize(Serializer* s, Sound* sound);
 template<>
 bool assetLoadImpl(AssetData<Sound>* data);
 
-// /**
-//  * Store a sound to disc in wav format
-//  */
-// bool storeSoundWav(const Sound& sound, StringView path);
-//
-// /**
-//  * Store a sound to disc in wav format
-//  */
-// bool storeSoundMp3(const Sound& sound, StringView path);
-//
-// /**
-//  * Store a sound to disc in wav format
-//  */
-// bool storeSoundFlac(const Sound& sound, StringView path);
+/**
+ * Store a sound to disc in wav format
+ */
+bool storeSoundWav(const Sound& sound, StringView path);
 
 /**
  * A music track in the audio player
