@@ -102,11 +102,55 @@ bool serialize(Serializer* s, TextureData* tex)
     return serializeVoid(s, {tex->pixels, size});
 }
 
-bool storeTexturePng(const TextureData& texture, StringView path)
+template<>
+bool assetLoadImpl(AssetData<TextureData>* data)
 {
+    Maybe<Binary> bin = loadFile(data->path);
+    if (!bin.has)
+    {
+        setError("Could not load asset file: %.*s", (int)data->path.length, data->path.chars);
+        return false;
+    }
+
+    if (isSerialData(*bin))
+    {
+        ArenaScope scratch = getScratch();
+
+        Serializer s = readSerialBinary(scratch, *bin);
+        if (!serialize(&s, &data->asset))
+        {
+            setError("Could not deserialize serial data from file: %.*s", (int)data->path.length, data->path.chars);
+            return false;
+        }
+        return true;
+    }
+
     ArenaScope scratch = getScratch();
 
-    const char* cpath = cString(scratch, path);
+    int x, y, channels;
+    data->asset.pixels = stbi_load_from_memory(
+        static_cast<const u8*>(bin->data),
+        (int)bin->size,
+        &x,
+        &y,
+        &channels,
+        4);
+
+    if (data->asset.pixels == nullptr)
+    {
+        setError("Could not decode image: %.*s", (int)data->path.length, data->path.chars);
+        return false;
+    }
+    data->asset.width = static_cast<u32>(x);
+    data->asset.height = static_cast<u32>(y);
+    data->asset.depth = 1;
+    data->asset.format = Format_rgba8_srgb;
+    return true;
+}
+
+bool storeTexturePng(const TextureData& texture, StringView path)
+{
+    const char* cpath = cString(getScratch(), path);
 
     if (!stbi_write_png(
          cpath,
@@ -122,26 +166,42 @@ bool storeTexturePng(const TextureData& texture, StringView path)
     return true;
 }
 
-template<>
-void assetLoadImpl(AssetData<TextureData>* data)
+bool storeTextureJpg(const TextureData& texture, u32 quality, StringView path)
 {
-    ArenaScope scratch = getScratch();
-    char* cpath = cString(scratch, data->path);
+    const char* cpath = cString(getScratch(), path);
 
-    int x, y, channels;
-    data->asset.pixels = stbi_load(cpath, &x, &y, &channels, 4);
-    if (data->asset.pixels == nullptr)
+    if (!stbi_write_jpg(
+         cpath,
+         static_cast<int>(texture.width),
+         static_cast<int>(texture.height),
+         4,
+         texture.pixels,
+         static_cast<int>(quality)))
     {
-        setError("Could not load image: %s", cpath);
-        return;
+        setError("Could not store image: %s", cpath);
+        return false;
     }
-    data->asset.width = static_cast<u32>(x);
-    data->asset.height = static_cast<u32>(y);
-    data->asset.depth = 1;
-    data->asset.format = Format_rgba8_srgb;
+    return true;
 }
 
-Texture Texture::fromData(const TextureData& data)
+bool storeTextureHdr(const TextureData& texture, StringView path)
+{
+    const char* cpath = cString(getScratch(), path);
+
+    if (!stbi_write_hdr(
+         cpath,
+         static_cast<int>(texture.width),
+         static_cast<int>(texture.height),
+         4,
+         static_cast<f32*>(texture.pixels)))
+    {
+        setError("Could not store image: %s", cpath);
+        return false;
+    }
+    return true;
+}
+
+Texture uploadTextureToGpu(const TextureData& data)
 {
     if (data.pixels == nullptr)
         return {};
@@ -161,14 +221,31 @@ Texture Texture::fromData(const TextureData& data)
     return tex;
 }
 
+TextureData downloadTextureFromGpu(const Texture& tex)
+{
+    TextureData data{};
+    data.width = tex.view.width();
+    data.height = tex.view.height();
+    data.depth = tex.view.depth();
+    data.format = tex.view.format();
+
+    u64 size = data.width * data.height * data.depth * formatToSize(data.format);
+    data.pixels = heapAlloc(size, formatToSize(data.format));
+
+    tex.view.read(data.pixels);
+
+    return data;
+}
+
 template<>
-void assetLoadImpl(AssetData<Texture>* data)
+bool assetLoadImpl(AssetData<Texture>* data)
 {
     Asset<TextureData> tex = load<TextureData>(data->path);
     if (tex->pixels == nullptr)
-        return;
+        return false;
 
-    data->asset = Texture::fromData(*tex);
+    data->asset = uploadTextureToGpu(*tex);
+    return true;
 }
 
 static RenderState2D render2D;
@@ -202,7 +279,7 @@ void initPixelFont()
     if (!serialize(&s, &fontData))
         HG_WARN("Could not deserialize pixel font\n");
 
-    render2D.defaultFont = newAsset<Texture>(Texture::fromData(fontData));
+    render2D.defaultFont = newAsset<Texture>(uploadTextureToGpu(fontData));
     render2D.defaultFont.addEmpty(32);
     render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95);
 }
@@ -275,15 +352,6 @@ bool serialize(Serializer* s, TextureAtlas* atlas)
     return serializeObject(s,
         &atlas->texture,
         &atlas->sprites);
-}
-
-template<>
-void assetLoadImpl(AssetData<TextureAtlas>* data)
-{
-    ArenaScope scratch = getScratch();
-
-    Serializer s = readSerialBinary(scratch, *load<Binary>(data->path));
-    serialize(&s, &data->asset);
 }
 
 void Layer2D::clear()

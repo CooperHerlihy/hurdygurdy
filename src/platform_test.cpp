@@ -191,7 +191,7 @@ int main()
 {
     HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
 
-    Window window = Window::create();
+    Window window = Window::create({});
     window.setTitle("Platform API Test");
 
     IMGUI_CHECKVERSION();
@@ -464,16 +464,16 @@ int main()
                         static Asset<Sound> snd;
                         if (snd.data == nullptr)
                         {
-                            static f32 soundData[8000];
-                            for (u64 i = 0; i < size(soundData); ++i)
-                            {
-                                f32 t = static_cast<f32>(i) * pif * 2.0f / 8000.0f;
-                                soundData[i] = noiseNorm(42u, t) / (t + 0.1f);
-                            }
                             snd = newAsset<Sound>();
-                            snd->data = soundData;
+                            snd->data = {0, 8000};
                             snd->frequency = 48000;
                             snd->channels = 1;
+
+                            for (u64 i = 0; i < 8000; ++i)
+                            {
+                                f32 t = static_cast<f32>(i) * pif * 2.0f / 8000.0f;
+                                snd->data.push(noiseNorm(42u, t) / (t + 0.1f));
+                            }
                         }
                         audio.playSound(snd, 0.5f);
                     }
@@ -483,21 +483,22 @@ int main()
                         static Asset<Sound> mus;
                         if (mus.data == nullptr)
                         {
-                            static f32 musicData[48000 * 2];
-                            for (u64 i = 0; i < size(musicData); ++i)
+                            mus = newAsset<Sound>();
+                            mus->data = {0, 48000 * 2};
+                            mus->frequency = 48000;
+                            mus->channels = 1;
+
+                            for (u64 i = 0; i < 48000 * 2; ++i)
                             {
                                 f32 t = static_cast<f32>(i) * pif * 2.0f / 48000.0f;
-                                musicData[i] = 0;
+                                f32 val = 0;
                                 for (u32 j = 1; j <= 8; ++j)
                                 {
                                     f32 x = static_cast<f32>(j);
-                                    musicData[i] += 0.3f / x * std::sin(220.f * t * x);
+                                    val += 0.3f / x * std::sin(220.f * t * x);
                                 }
+                                mus->data.push(val);
                             }
-                            mus = newAsset<Sound>();
-                            mus->data = musicData;
-                            mus->frequency = 48000;
-                            mus->channels = 1;
                         }
                         audio.playMusic(mus, musicGain);
                     }

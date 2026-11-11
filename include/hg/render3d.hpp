@@ -30,6 +30,11 @@ struct MeshVertex {
     Vec4 tan{};
 
     /**
+     * Default construct
+     */
+    MeshVertex() noexcept = default;
+
+    /**
      * Construct the vertex
      */
     MeshVertex(Vec3 pos, Vec3 norm, Vec4 tan, Vec2 uv)
@@ -52,15 +57,10 @@ struct MeshData {
 };
 
 /**
- * Store the model data to disc in gltf format : TODO
- */
-void meshStoreGltf(MeshData* data, StringView path);
-
-/**
- * Mesh asset load implementation
+ * Mesh serialization
  */
 template<>
-void assetLoadImpl(AssetData<MeshData>* data);
+bool serialize(Serializer* s, MeshData* mesh);
 
 /**
  * A 3D mesh asset stored on the gpu
@@ -89,10 +89,20 @@ struct Mesh {
 };
 
 /**
+ * Create a gpu mesh from cpu mesh data
+ */
+Mesh uploadMeshToGpu(const MeshData& data);
+
+/**
+ * Create cpu mesh data from a gpu mesh
+ */
+MeshData downloadMeshFromGpu(const Mesh& mesh);
+
+/**
  * GpuMesh asset load implementation
  */
 template<>
-void assetLoadImpl(AssetData<Mesh>* data);
+bool assetLoadImpl(AssetData<Mesh>* data);
 
 /**
  * A 3D model

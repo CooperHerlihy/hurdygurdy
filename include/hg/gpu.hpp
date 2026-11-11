@@ -193,7 +193,7 @@ struct GpuBuffer {
      * - offset The offset in bytes into the gpu buffer
      * - size The size in bytes to read
      */
-    void read(void* dst, u64 offset, u64 size);
+    void read(void* dst, u64 offset, u64 size) const;
 
     /**
      * Move construct
@@ -510,6 +510,16 @@ struct GpuView {
     u32 height() const;
 
     /**
+     * Get the depth of an image
+     */
+    u32 depth() const;
+
+    /**
+     * Get the format of an image
+     */
+    Format format() const;
+
+    /**
      * Get the image sampler descriptor index from the image view
      */
     u32 samplerDescriptor() const;
@@ -545,7 +555,7 @@ struct GpuView {
      *
      * Note, only the base mip level is read
      */
-    void read(void* dst);
+    void read(void* dst) const;
 
     /**
      * Generates mipmaps from the base level
@@ -582,8 +592,7 @@ u32 getMaxMipmaps(u32 width, u32 height, u32 depth);
  * How the vertex list is interpreted
  */
 enum GpuTopology : u32 {
-    GpuTopology_pointList = 0,
-    GpuTopology_lineList = 1,
+    GpuTopology_pointList = 0, GpuTopology_lineList = 1,
     GpuTopology_lineStrip = 2,
     GpuTopology_triangleList = 3,
     GpuTopology_triangleStrip = 4,

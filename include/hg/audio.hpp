@@ -53,7 +53,7 @@ struct Sound {
     /**
      * The sound data
      */
-    Span<f32> data{};
+    Array<f32> data{};
     /**
      * The floats per second
      */
@@ -65,10 +65,31 @@ struct Sound {
 };
 
 /**
+ * Sound serialization
+ */
+template<>
+bool serialize(Serializer* s, Sound* sound);
+
+/**
  * AudioData asset load implementation
  */
 template<>
-void assetLoadImpl(AssetData<Sound>* data);
+bool assetLoadImpl(AssetData<Sound>* data);
+
+// /**
+//  * Store a sound to disc in wav format
+//  */
+// bool storeSoundWav(const Sound& sound, StringView path);
+//
+// /**
+//  * Store a sound to disc in wav format
+//  */
+// bool storeSoundMp3(const Sound& sound, StringView path);
+//
+// /**
+//  * Store a sound to disc in wav format
+//  */
+// bool storeSoundFlac(const Sound& sound, StringView path);
 
 /**
  * A music track in the audio player

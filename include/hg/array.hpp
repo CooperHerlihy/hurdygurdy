@@ -35,6 +35,21 @@ struct Array {
     /**
      * Construct with init size
      */
+    Array(u64 countVal)
+        : vals{heapAlloc<T>(countVal)}
+        , count{countVal}
+        , capacity{countVal}
+    {
+        HG_ASSERT(capacity >= count);
+        for (u64 i = 0; i < count; ++i)
+        {
+            new (vals + i) T{};
+        }
+    }
+
+    /**
+     * Construct with init size and capacity
+     */
     Array(u64 countVal, u64 capacityVal)
         : vals{heapAlloc<T>(capacityVal)}
         , count{countVal}

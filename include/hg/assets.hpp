@@ -198,7 +198,7 @@ Asset<T> newAsset(T&& val)
  * Default store an asset to a path, may be overridden
  */
 template<typename T>
-void assetStoreImpl(const T& asset, StringView path)
+bool assetStoreImpl(const T& asset, StringView path)
 {
     ArenaScope scratch = getScratch();
 
@@ -206,16 +206,16 @@ void assetStoreImpl(const T& asset, StringView path)
     serialize(&s, const_cast<T*>(&asset));
 
     BinaryView bin = writeSerialBinary(scratch, &s);
-    storeFile(bin, path);
+    return storeFile(bin, path);
 }
 
 /**
  * A convenience to follow load name convention
  */
 template<typename T>
-void store(const T& asset, StringView path)
+bool store(const T& asset, StringView path)
 {
-    assetStoreImpl(asset, path);
+    return assetStoreImpl(asset, path);
 }
 
 /**
@@ -224,28 +224,31 @@ void store(const T& asset, StringView path)
  * Note, this function should be blocking, not async
  */
 template<typename T>
-void assetLoadImpl(AssetData<T>* data)
+bool assetLoadImpl(AssetData<T>* data)
 {
     Maybe<Binary> bin = loadFile(data->path);
     if (!bin.has)
     {
         setError("Could not load asset file: %.*s", (int)data->path.length, data->path.chars);
-        return;
-    }
-    if (!isSerialData(*bin))
-    {
-        setError("Asset file does not contain serial data: %.*s", (int)data->path.length, data->path.chars);
-        return;
+        return false;
     }
 
-    ArenaScope scratch = getScratch();
-
-    Serializer s = readSerialBinary(scratch, *bin);
-    if (!serialize(&s, &data->asset))
+    if (isSerialData(*bin))
     {
-        setError("Could not deserialize serial data from file: %.*s", (int)data->path.length, data->path.chars);
-        return;
+        ArenaScope scratch = getScratch();
+
+        Serializer s = readSerialBinary(scratch, *bin);
+        if (!serialize(&s, &data->asset))
+        {
+            setError("Could not deserialize serial data from file: %.*s", (int)data->path.length, data->path.chars);
+            return false;
+        }
+
+        return true;
     }
+
+    setError("Asset file does not contain serial data: %.*s", (int)data->path.length, data->path.chars);
+    return false;
 }
 
 /**
@@ -263,7 +266,14 @@ Asset<T> load(StringView path)
     data->path = String{path};
     AssetManager<T>::map.add(data->path, data);
 
-    assetLoadImpl(data);
+    if (!assetLoadImpl(data))
+    {
+        [[maybe_unused]]
+        StringView e = getError();
+        HG_WARN("Asset load impl encountered an error while loading file \"%.*s\": %.*s\n",
+            (int)path.length, path.chars,
+            (int)e.length, e.chars);
+    }
     return data;
 }
 
@@ -284,14 +294,23 @@ void reload(const Asset<T>& asset)
  * Hot reload an asset from a path
  */
 template<typename T>
-void reload(StringView path)
+bool reload(StringView path)
 {
     AssetData<T>** asset = AssetManager<T>::map.get(path);
     if (asset != nullptr)
     {
         (*asset)->asset = {};
-        assetLoadImpl(*asset);
+        if (!assetLoadImpl(*asset))
+        {
+            [[maybe_unused]]
+            StringView e = getError();
+            HG_WARN("Asset load impl encountered an error while loading file \"%.*s\": %.*s\n",
+                (int)path.length, path.chars,
+                (int)e.length, e.chars);
+            return false;
+        }
     }
+    return true;
 }
 
 /**
@@ -321,7 +340,7 @@ bool serialize(Serializer* s, Asset<T>* asset)
  * Binary asset load implementation
  */
 template<>
-void assetLoadImpl(AssetData<Binary>* data);
+bool assetLoadImpl(AssetData<Binary>* data);
 
 } // namespace hg
 

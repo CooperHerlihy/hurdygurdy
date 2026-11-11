@@ -212,18 +212,31 @@ template<>
 bool serialize(Serializer* s, TextureData* tex);
 
 /**
- * Store an image to disc in the png format
+ * Texture asset load implementation
+ */
+template<>
+bool assetLoadImpl(AssetData<TextureData>* data);
+
+/**
+ * Store an image to disc in png format
  *
- * Returns
- * - Whether the write succeeded
+ * Note, png expects 8 bit rgba values
  */
 bool storeTexturePng(const TextureData& texture, StringView path);
 
 /**
- * Texture asset load implementation
+ * Store an image to disc in jpg format
+ *
+ * Note, jpg expects 8 bit rgba values
  */
-template<>
-void assetLoadImpl(AssetData<TextureData>* data);
+bool storeTextureJpg(const TextureData& texture, u32 quality, StringView path);
+
+/**
+ * Store an image to disc in hdr format
+ *
+ * Note, hdr expects 32 bit float format
+ */
+bool storeTextureHdr(const TextureData& texture, StringView path);
 
 /**
  * A texture asset stored on the gpu
@@ -237,18 +250,23 @@ struct Texture {
      * The image view
      */
     GpuView view{};
-
-    /**
-     * Create a gpu texture from cpu data
-     */
-    static Texture fromData(const TextureData& data);
 };
 
 /**
- * GpuTexture asset load implementation
+ * Create a gpu texture from cpu texture data
+ */
+Texture uploadTextureToGpu(const TextureData& data);
+
+/**
+ * Create cpu texture data from a gpu texture
+ */
+TextureData downloadTextureFromGpu(const Texture& tex);
+
+/**
+ * Texture asset load implementation
  */
 template<>
-void assetLoadImpl(AssetData<Texture>* data);
+bool assetLoadImpl(AssetData<Texture>* data);
 
 /**
  * A texture atlas
@@ -315,12 +333,6 @@ struct TextureAtlas {
  */
 template<>
 bool serialize(Serializer* s, TextureAtlas* atlas);
-
-/**
- * TextureAtlas asset loading
- */
-template<>
-void assetLoadImpl(AssetData<TextureAtlas>* data);
 
 /**
  * Get an atlas for a default pixel font

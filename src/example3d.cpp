@@ -54,6 +54,8 @@ int main()
         {{-0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
     };
 
+    Asset<MeshData> m = load<MeshData>("cube.hg");
+
     u32 indices[] = {
         0,  1,  2,  2,  3,  0,
         4,  5,  6,  6,  7,  4,

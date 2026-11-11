@@ -227,8 +227,8 @@ target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_vendor OBJECT
-    src/vk_mem_alloc.cpp
-    src/stb.c
+    src/cimpl.c
+    src/cppimpl.cpp
 )
 target_include_directories(hurdygurdy_vendor
     PUBLIC

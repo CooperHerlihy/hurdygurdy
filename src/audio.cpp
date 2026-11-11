@@ -1,13 +1,118 @@
 #include "hg/audio.hpp"
 
+#include "dr_flac.h"
+#include "dr_mp3.h"
+#include "dr_wav.h"
+
 namespace hg {
 
 template<>
-void assetLoadImpl(AssetData<Sound>* data)
+bool serialize(Serializer* s, Sound* sound)
 {
-    static_cast<void>(data);
-    HG_PANIC("Load audio file impl : TODO\n");
+    return serializeObject(s,
+        &sound->data,
+        &sound->frequency,
+        &sound->channels);
 }
+
+template<>
+bool assetLoadImpl(AssetData<Sound>* data)
+{
+    Maybe<Binary> bin = loadFile(data->path);
+    if (!bin.has)
+    {
+        setError("Could not load audio asset file: %.*s", (int)data->path.length, data->path.chars);
+        return false;
+    }
+
+    ArenaScope scratch = getScratch();
+
+    if (isSerialData(*bin))
+    {
+        Serializer s = readSerialBinary(scratch, *bin);
+        if (!serialize(&s, &data->asset))
+        {
+            setError("Could not deserialize serial data from audio file: %.*s", (int)data->path.length, data->path.chars);
+            return false;
+        }
+
+        return true;
+    }
+
+    char* cpath = cString(scratch, data->path);
+
+    if (bin->size > 12 &&
+        memcmp("RIFF", (u8*)bin->data + 0, 4) == 0 &&
+        memcmp("WAVE", (u8*)bin->data + 8, 4) == 0)
+    {
+        unsigned int channels = 0;
+        unsigned int sampleRate = 0;
+        drwav_uint64 totalPCMFrameCount = 0;
+        f32* pSampleData = drwav_open_file_and_read_pcm_frames_f32(cpath, &channels, &sampleRate, &totalPCMFrameCount, nullptr);
+        if (pSampleData == nullptr) {
+            setError("Could not read wav file: %s", cpath);
+            return false;
+        }
+        HG_DEFER(drwav_free(pSampleData, NULL));
+
+        data->asset.channels = channels;
+        data->asset.frequency = sampleRate;
+        data->asset.data = Array<f32>{totalPCMFrameCount * channels};
+        memcpy(data->asset.data.vals, pSampleData, totalPCMFrameCount * sizeof(f32) * channels);
+    }
+    else if (bin->size > 3 && memcmp("ID3", bin->data, 3) == 0)
+    {
+        drmp3_config config;
+        drmp3_uint64 totalPCMFrameCount = 0;
+        f32* pSampleData = drmp3_open_file_and_read_pcm_frames_f32(cpath, &config, &totalPCMFrameCount, nullptr);
+        if (pSampleData == nullptr) {
+            setError("Could not read mp3 file: %s", cpath);
+            return false;
+        }
+        HG_DEFER(drwav_free(pSampleData, NULL));
+
+        data->asset.channels = config.channels;
+        data->asset.frequency = config.sampleRate;
+        data->asset.data = Array<f32>{totalPCMFrameCount * config.channels};
+        memcpy(data->asset.data.vals, pSampleData, totalPCMFrameCount * sizeof(f32) * config.channels);
+    }
+    else if (bin->size > 4 && memcmp("fLaC", bin->data, 4) == 0)
+    {
+        unsigned int channels = 0;
+        unsigned int sampleRate = 0;
+        drflac_uint64 totalPCMFrameCount = 0;
+        f32* pSampleData = drflac_open_file_and_read_pcm_frames_f32(cpath, &channels, &sampleRate, &totalPCMFrameCount, nullptr);
+        if (pSampleData == nullptr) {
+            setError("Could not read flac file: %s", cpath);
+            return false;
+        }
+        HG_DEFER(drwav_free(pSampleData, NULL));
+
+        data->asset.channels = channels;
+        data->asset.frequency = sampleRate;
+        data->asset.data = Array<f32>{totalPCMFrameCount * channels};
+        memcpy(data->asset.data.vals, pSampleData, totalPCMFrameCount * sizeof(f32) * channels);
+    }
+    else
+    {
+        setError("Unknown audio file type: %s", cpath);
+        return false;
+    }
+
+    return true;
+}
+
+// bool storeSoundWav(const Sound& sound, StringView path)
+// {
+// }
+//
+// bool storeSoundMp3(const Sound& sound, StringView path)
+// {
+// }
+//
+// bool storeSoundFlac(const Sound& sound, StringView path)
+// {
+// }
 
 void AudioPlayer::update(Span<f32> buf, AudioConfig config)
 {

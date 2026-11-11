@@ -136,7 +136,7 @@ void GpuBuffer::write(const void* src, u64 offset, u64 size)
     data->lastState = GpuAccess_transferDst;
 }
 
-void GpuBuffer::read(void* dst, u64 offset, u64 size)
+void GpuBuffer::read(void* dst, u64 offset, u64 size) const
 {
     if (size == 0)
         return;
@@ -353,6 +353,16 @@ u32 GpuView::height() const
     return data->image->height;
 }
 
+u32 GpuView::depth() const
+{
+    return data->image->depth;
+}
+
+Format GpuView::format() const
+{
+    return data->image->format;
+}
+
 u32 GpuView::samplerDescriptor() const
 {
     HG_ASSERT(data->image->usage & GpuImageUsage_sampled);
@@ -561,7 +571,7 @@ void GpuView::writeCubemap(const void* src)
     data->lastLayout = GpuLayout_transferDst;
 }
 
-void GpuView::read(void* dst)
+void GpuView::read(void* dst) const
 {
     HG_ASSERT(data->lastLayout != GpuLayout_undefined);
     HG_ASSERT(data != nullptr);
