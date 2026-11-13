@@ -2,27 +2,10 @@
 #include "hg/utility.hpp"
 #include "hg/error.hpp"
 
+#include <string>
 #include <vector>
 
 using namespace hg;
-
-TEST(testIsPowerOf2True)
-{
-    ASSERT(isPowerOf2(1));
-    ASSERT(isPowerOf2(2));
-    ASSERT(isPowerOf2(4));
-    ASSERT(isPowerOf2(1024));
-    ASSERT(isPowerOf2(0x80000000ull));
-}
-
-TEST(testIsPowerOf2False)
-{
-    ASSERT(!isPowerOf2(0));
-    ASSERT(!isPowerOf2(3));
-    ASSERT(!isPowerOf2(5));
-    ASSERT(!isPowerOf2(1023));
-    ASSERT(!isPowerOf2(0x80000001ull));
-}
 
 TEST(testAlignUpAlreadyAligned)
 {
@@ -76,13 +59,13 @@ TEST(testSizeContainer)
     vec.push_back(10);
     vec.push_back(20);
     vec.push_back(30);
-    ASSERT(hg::size(vec) == 3);
+    ASSERT(vec.size() == 3);
 }
 
 TEST(testSizeCArray)
 {
     i32 arr[5] = {1, 2, 3, 4, 5};
-    ASSERT(size(arr) == 5);
+    ASSERT(std::size(arr) == 5);
 }
 
 struct IdxTypeA {};
@@ -91,17 +74,17 @@ struct IdxTypeC {};
 
 TEST(testIdxOfFirst)
 {
-    ASSERT((idxOf<IdxTypeA, IdxTypeA, IdxTypeB, IdxTypeC>()) == 0);
+    ASSERT((idxOfInPack<IdxTypeA, IdxTypeA, IdxTypeB, IdxTypeC>()) == 0);
 }
 
 TEST(testIdxOfMiddle)
 {
-    ASSERT((idxOf<IdxTypeB, IdxTypeA, IdxTypeB, IdxTypeC>()) == 1);
+    ASSERT((idxOfInPack<IdxTypeB, IdxTypeA, IdxTypeB, IdxTypeC>()) == 1);
 }
 
 TEST(testIdxOfLast)
 {
-    ASSERT((idxOf<IdxTypeC, IdxTypeA, IdxTypeB, IdxTypeC>()) == 2);
+    ASSERT((idxOfInPack<IdxTypeC, IdxTypeA, IdxTypeB, IdxTypeC>()) == 2);
 }
 
 TEST(testAlignUpLargeValues)
@@ -135,7 +118,7 @@ TEST(testEndianReverse64SingleByte)
 TEST(testErrorSetGet)
 {
     setError("test error");
-    StringView err = getError();
+    std::string_view err = getError();
     ASSERT(err == "test error");
 }
 
@@ -143,7 +126,7 @@ TEST(testErrorReplace)
 {
     setError("first error");
     setError("second error");
-    StringView err = getError();
+    std::string_view err = getError();
     ASSERT(err == "second error");
 }
 
@@ -151,83 +134,72 @@ TEST(testErrorClear)
 {
     setError("something");
     setError("");
-    StringView err = getError();
-    ASSERT(err.length == 0);
+    std::string_view err = getError();
+    ASSERT(err.length() == 0);
 }
 
 TEST(testErrorAtBoundary)
 {
-    ArenaScope arena = getScratch();
-    StringBuilder longStr{arena};
-    for (u32 i = 0; i < 4096; ++i)
-        longStr.append('x');
-    ASSERT(longStr.length == 4096);
+    std::string longStr(4095, 'x');
+    ASSERT(longStr.length() == 4095);
 
     setError(longStr);
-    StringView err = getError();
-    ASSERT(err.length == 4096);
+    std::string_view err = getError();
+    ASSERT(err.length() == 4095);
 }
 
 TEST(testErrorExceedsBoundary)
 {
-    ArenaScope arena = getScratch();
-    StringBuilder longStr{arena};
-    for (u32 i = 0; i < 5000; ++i)
-        longStr.append('x');
-    ASSERT(longStr.length == 5000);
+    std::string longStr(5000, 'x');
+    ASSERT(longStr.length() == 5000);
 
     setError(longStr);
-    StringView err = getError();
-    ASSERT(err.length == 4096);
+    std::string_view err = getError();
+    ASSERT(err.length() == 4095);
 }
 
 TEST(testErrorFormatInt)
 {
-    setError("error code %d", 42);
-    StringView err = getError();
+    setError("error code {}", 42);
+    std::string_view err = getError();
     ASSERT(err == "error code 42");
 }
 
 TEST(testErrorFormatString)
 {
-    setError("failed to load \"%s\"", "texture.png");
-    StringView err = getError();
+    setError("failed to load \"{}\"", "texture.png");
+    std::string_view err = getError();
     ASSERT(err == "failed to load \"texture.png\"");
 }
 
 TEST(testErrorFormatMultiple)
 {
-    setError("%s:%d: %s", "file.txt", 128, "unexpected token");
-    StringView err = getError();
+    setError("{}:{}: {}", "file.txt", 128, "unexpected token");
+    std::string_view err = getError();
     ASSERT(err == "file.txt:128: unexpected token");
 }
 
 TEST(testErrorFormatTruncated)
 {
-    ArenaScope arena = getScratch();
-    StringBuilder longStr{arena};
-    for (u32 i = 0; i < 4090; ++i)
-        longStr.append('x');
+    std::string longStr(4090, 'x');
 
-    setError("%.*s", (int)longStr.length, longStr.chars);
-    StringView err = getError();
-    ASSERT(err.length == 4090);
+    setError("{}", longStr);
+    std::string_view err = getError();
+    ASSERT(err.length() == 4090);
 
-    StringBuilder tooLong{arena};
-    for (u32 i = 0; i < 5000; ++i)
-        tooLong.append('x');
+    std::string tooLong(5000, 'x');
 
-    setError("%.*s", (int)tooLong.length, tooLong.chars);
+    setError("{}", tooLong);
     err = getError();
-    ASSERT(err.length == 4095);
+    ASSERT(err.length() == 4095);
 }
 
 TEST(testErrorFreshState)
 {
     setError("");
-    StringView err = getError();
-    ASSERT(err.length == 0);
-    ASSERT(err.chars != nullptr);
+    std::string_view err = getError();
+    ASSERT(err.length() == 0);
+    ASSERT(err.data() != nullptr);
 }
 
 TEST(testLogErrorNormal)
@@ -244,10 +216,7 @@ TEST(testLogErrorEmpty)
 
 TEST(testLogErrorLong)
 {
-    ArenaScope arena = getScratch();
-    StringBuilder longStr{arena};
-    for (u32 i = 0; i < 512; ++i)
-        longStr.append('x');
+    std::string longStr(512, 'x');
     setError(longStr);
     logError();
 }

@@ -1,8 +1,9 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/maybe.hpp"
 #include "hg/math.hpp"
+
+#include <optional>
 
 namespace hg {
 
@@ -184,42 +185,42 @@ Plane planeFromTri(Tri tri);
 /**
  * Intersect a ray and a sphere
  */
-Maybe<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere);
+std::optional<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere);
 
 /**
  * Intersect a ray and a box
  */
-Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box);
+std::optional<Hit3D> intersectRayBox(Ray3D ray, Box box);
 
 /**
  * Intersect a ray and a triangle
  */
-Maybe<Hit3D> intersectRayTri(Ray3D ray, Tri tri);
+std::optional<Hit3D> intersectRayTri(Ray3D ray, Tri tri);
 
 /**
  * Intersect a ray and a plane
  */
-Maybe<Hit3D> intersectRayPlane(Ray3D ray, Plane plane);
+std::optional<Hit3D> intersectRayPlane(Ray3D ray, Plane plane);
 
 /**
  * Intersect a line and a sphere
  */
-Maybe<Hit3D> intersectLineSphere(Line3D line, Sphere sphere);
+std::optional<Hit3D> intersectLineSphere(Line3D line, Sphere sphere);
 
 /**
  * Intersect a line and a box
  */
-Maybe<Hit3D> intersectLineBox(Line3D line, Box box);
+std::optional<Hit3D> intersectLineBox(Line3D line, Box box);
 
 /**
  * Intersect a line and a triangle
  */
-Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri);
+std::optional<Hit3D> intersectLineTri(Line3D line, Tri tri);
 
 /**
  * Intersect a line and a plane
  */
-Maybe<Hit3D> intersectLinePlane(Line3D line, Plane plane);
+std::optional<Hit3D> intersectLinePlane(Line3D line, Plane plane);
 
 } // namespace hg
 

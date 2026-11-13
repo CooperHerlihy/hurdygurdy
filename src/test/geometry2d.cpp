@@ -111,85 +111,85 @@ TEST(testIntersectRays2D)
 {
     Ray2D a{{0, 0}, {1, 0}};
     Ray2D b{{0, 0}, {0, 1}};
-    Maybe<Hit2D> hit = intersectRays2D(a, b);
-    ASSERT(hit.has);
+    std::optional<Hit2D> hit = intersectRays2D(a, b);
+    ASSERT(hit.has_value());
 }
 
 TEST(testIntersectRays2DParallel)
 {
     Ray2D a{{0, 0}, {1, 0}};
     Ray2D b{{0, 1}, {1, 0}};
-    ASSERT(!intersectRays2D(a, b).has);
+    ASSERT(!intersectRays2D(a, b).has_value());
 }
 
 TEST(testIntersectRayLine2D)
 {
     Ray2D ray{{0, 0}, {1, 0}};
     Line2D line{{5, -1}, {5, 1}};
-    Maybe<Hit2D> hit = intersectRayLine2D(ray, line);
-    ASSERT(hit.has);
-    if (hit.has)
-        ASSERT(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
+    std::optional<Hit2D> hit = intersectRayLine2D(ray, line);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+        ASSERT(std::abs(hit->dist - 5.0f) < FLT_EPSILON);
 }
 
 TEST(testIntersectRayLine2DBehind)
 {
     Ray2D ray{{0, 0}, {1, 0}};
     Line2D line{{-5, -1}, {-5, 1}};
-    ASSERT(!intersectRayLine2D(ray, line).has);
+    ASSERT(!intersectRayLine2D(ray, line).has_value());
 }
 
 TEST(testIntersectRayCircle)
 {
     Ray2D ray{{0, 0}, {1, 0}};
     Circle c{{10, 0}, 3};
-    Maybe<Hit2D> hit = intersectRayCircle(ray, c);
-    ASSERT(hit.has);
-    if (hit.has)
-        ASSERT(std::abs(hit.val.dist - 7.0f) < FLT_EPSILON);
+    std::optional<Hit2D> hit = intersectRayCircle(ray, c);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+        ASSERT(std::abs(hit->dist - 7.0f) < FLT_EPSILON);
 }
 
 TEST(testIntersectRayCircleMiss)
 {
     Ray2D ray{{0, 0}, {1, 0}};
     Circle c{{10, 5}, 1};
-    ASSERT(!intersectRayCircle(ray, c).has);
+    ASSERT(!intersectRayCircle(ray, c).has_value());
 }
 
 TEST(testIntersectRayRect)
 {
     Ray2D ray{{-5, 5}, {1, 0}};
     Rect r{{0, 0}, {10, 10}};
-    Maybe<Hit2D> hit = intersectRayRect(ray, r);
-    ASSERT(hit.has);
+    std::optional<Hit2D> hit = intersectRayRect(ray, r);
+    ASSERT(hit.has_value());
 }
 
 TEST(testIntersectLines2D)
 {
     Line2D a{{0, 0}, {10, 0}};
     Line2D b{{5, -5}, {5, 5}};
-    ASSERT(intersectLines2D(a, b).has);
+    ASSERT(intersectLines2D(a, b).has_value());
 }
 
 TEST(testIntersectLines2DParallel)
 {
     Line2D a{{0, 0}, {10, 0}};
     Line2D b{{0, 1}, {10, 1}};
-    ASSERT(!intersectLines2D(a, b).has);
+    ASSERT(!intersectLines2D(a, b).has_value());
 }
 
 TEST(testIntersectLineCircle)
 {
     Line2D line{{-10, 3}, {10, 3}};
     Circle c{{0, 5}, 3};
-    ASSERT(intersectLineCircle(line, c).has);
+    ASSERT(intersectLineCircle(line, c).has_value());
 }
 
 TEST(testIntersectLineRect)
 {
     Line2D line{{-5, 5}, {15, 5}};
     Rect r{{0, 0}, {10, 10}};
-    ASSERT(intersectLineRect(line, r).has);
+    ASSERT(intersectLineRect(line, r).has_value());
 }
 
 TEST(testCircleContainment)
@@ -229,28 +229,28 @@ TEST(testRay2DMissRect)
 {
     Ray2D ray{{0, 20}, {1, 0}};
     Rect r{{5, -5}, {15, 5}};
-    ASSERT(!intersectRayRect(ray, r).has);
+    ASSERT(!intersectRayRect(ray, r).has_value());
 }
 
 TEST(testRay2DMissCircle)
 {
     Ray2D ray{{0, 0}, {0, 1}};
     Circle c{{10, 0}, 2};
-    ASSERT(!intersectRayCircle(ray, c).has);
+    ASSERT(!intersectRayCircle(ray, c).has_value());
 }
 
 TEST(testIntersectRays2DCoincident)
 {
     Ray2D ray{{0, 0}, {1, 0}};
     Ray2D same{{0, 0}, {1, 0}};
-    ASSERT(!intersectRays2D(ray, same).has);
+    ASSERT(!intersectRays2D(ray, same).has_value());
 }
 
 TEST(testIntersectLines2DCoincident)
 {
     Line2D a{{0, 0}, {10, 0}};
     Line2D b{{0, 0}, {10, 0}};
-    ASSERT(!intersectLines2D(a, b).has);
+    ASSERT(!intersectLines2D(a, b).has_value());
 }
 
 TEST(testCircleDistPointOnBoundary)
@@ -271,19 +271,19 @@ TEST(testIntersectLineCircleMiss)
 {
     Line2D line{{-10, 20}, {10, 20}};
     Circle c{{0, 0}, 3};
-    ASSERT(!intersectLineCircle(line, c).has);
+    ASSERT(!intersectLineCircle(line, c).has_value());
 }
 
 TEST(testIntersectLineRectMiss)
 {
     Line2D line{{-10, 20}, {10, 20}};
     Rect r{{0, 0}, {10, 10}};
-    ASSERT(!intersectLineRect(line, r).has);
+    ASSERT(!intersectLineRect(line, r).has_value());
 }
 
 TEST(testIntersectRayCircleTangent)
 {
     Ray2D ray{{-10, 5}, {1, 0}};
     Circle c{{0, 0}, 5};
-    ASSERT(intersectRayCircle(ray, c).has);
+    ASSERT(intersectRayCircle(ray, c).has_value());
 }

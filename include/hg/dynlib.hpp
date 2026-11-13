@@ -1,7 +1,8 @@
 #pragma once
 
-#include "hg/maybe.hpp"
-#include "hg/strings.hpp"
+#include <utility>
+#include <optional>
+#include <string_view>
 
 namespace hg {
 
@@ -27,12 +28,12 @@ struct Library {
     /**
      * Load a dynamic library
      */
-    static Maybe<Library> load(StringView path);
+    static std::optional<Library> load(std::string_view path);
 
     /**
      * Find a function pointer in the library
      */
-    Maybe<void*> loadSymbol(StringView name);
+    std::optional<void*> loadSymbol(std::string_view name);
 
     /**
      * Move construct

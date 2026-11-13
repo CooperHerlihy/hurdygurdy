@@ -1,14 +1,25 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/strings.hpp"
-#include "hg/binary.hpp"
-#include "hg/map.hpp"
-#include "hg/pool.hpp"
+#include "hg/error.hpp"
 #include "hg/serialization.hpp"
-#include "hg/filesystem.hpp"
+
+#include <optional>
+#include <span>
+#include <string_view>
+#include <vector>
 
 namespace hg {
+
+/**
+ * Load a file into memory
+ */
+std::optional<std::vector<u8>> loadFile(std::string_view path);
+
+/**
+ * Store a file to disc
+ */
+bool storeFile(std::span<u8> bin, std::string_view path);
 
 /**
  * The data associated with assets
@@ -26,7 +37,7 @@ struct AssetData {
     /**
      * The unique path for caching
      */
-    String path{};
+    std::string path{};
 };
 
 /**
@@ -37,11 +48,11 @@ struct AssetManager {
     /**
      * The asset lookup
      */
-    static inline Map<StringView, AssetData<T>*> map{};
+    static inline HashMap<std::string_view, std::unique_ptr<AssetData<T>>> map{};
     /**
-     * The asset pool
+     * Unique assets
      */
-    static inline Pool<AssetData<T>> pool{};
+    static inline HashMap<AssetData<T>*, std::unique_ptr<AssetData<T>>> unique{};
 };
 
 /**
@@ -76,10 +87,10 @@ struct Asset {
     {
         if (data != nullptr && --data->refCount == 0)
         {
-            if (data->path != "")
+            if (data->path.empty())
+                AssetManager<T>::unique.remove(data);
+            else
                 AssetManager<T>::map.remove(data->path);
-
-            AssetManager<T>::pool.free(data);
         }
     }
 
@@ -173,7 +184,10 @@ bool operator!=(const Asset<T>& lhs, std::nullptr_t)
 template<typename T>
 Asset<T> newAsset()
 {
-    return AssetManager<T>::pool.alloc();
+    std::unique_ptr<AssetData<T>> data = std::make_unique<AssetData<T>>();
+    Asset<T> asset = data.get();
+    AssetManager<T>::unique.add(data.get(), std::move(data));
+    return asset;
 }
 
 /**
@@ -182,7 +196,10 @@ Asset<T> newAsset()
 template<typename T>
 Asset<T> newAsset(const T& val)
 {
-    return AssetManager<T>::pool.alloc(val);
+    std::unique_ptr<AssetData<T>> data = std::make_unique<AssetData<T>>(val);
+    Asset<T> asset = data.get();
+    AssetManager<T>::unique.add(data.get(), std::move(data));
+    return asset;
 }
 
 /**
@@ -191,21 +208,22 @@ Asset<T> newAsset(const T& val)
 template<typename T>
 Asset<T> newAsset(T&& val)
 {
-    return AssetManager<T>::pool.alloc(std::move(val));
+    std::unique_ptr<AssetData<T>> data = std::make_unique<AssetData<T>>(std::move(val));
+    Asset<T> asset = data.get();
+    AssetManager<T>::unique.add(data.get(), std::move(data));
+    return asset;
 }
 
 /**
  * Default store an asset to a path, may be overridden
  */
 template<typename T>
-bool assetStoreImpl(const T& asset, StringView path)
+bool assetStoreImpl(const T& asset, std::string_view path)
 {
-    ArenaScope scratch = getScratch();
-
-    Serializer s = serialWriter(scratch);
+    Serializer s = serialWriter();
     serialize(&s, const_cast<T*>(&asset));
 
-    BinaryView bin = writeSerialBinary(scratch, &s);
+    std::vector<u8> bin = writeSerialBinary(&s);
     return storeFile(bin, path);
 }
 
@@ -213,7 +231,7 @@ bool assetStoreImpl(const T& asset, StringView path)
  * A convenience to follow load name convention
  */
 template<typename T>
-bool store(const T& asset, StringView path)
+bool store(const T& asset, std::string_view path)
 {
     return assetStoreImpl(asset, path);
 }
@@ -226,28 +244,25 @@ bool store(const T& asset, StringView path)
 template<typename T>
 bool assetLoadImpl(AssetData<T>* data)
 {
-    Maybe<Binary> bin = loadFile(data->path);
-    if (!bin.has)
+    std::optional<std::vector<u8>> bin = loadFile(data->path);
+    if (!bin.has_value())
     {
-        setError("Could not load asset file: %.*s", (int)data->path.length, data->path.chars);
+        setError("Could not load asset file: {}", data->path.c_str());
         return false;
     }
 
     if (isSerialData(*bin))
     {
-        ArenaScope scratch = getScratch();
-
-        Serializer s = readSerialBinary(scratch, *bin);
-        if (!serialize(&s, &data->asset))
+        std::optional<Serializer> s = readSerialBinary(*bin);
+        if (!s.has_value() || !serialize(&*s, &data->asset))
         {
-            setError("Could not deserialize serial data from file: %.*s", (int)data->path.length, data->path.chars);
+            setError("Could not deserialize serial data from file: {}", data->path.c_str());
             return false;
         }
-
         return true;
     }
 
-    setError("Asset file does not contain serial data: %.*s", (int)data->path.length, data->path.chars);
+    setError("Asset file does not contain serial data: {}", data->path.c_str());
     return false;
 }
 
@@ -255,26 +270,28 @@ bool assetLoadImpl(AssetData<T>* data)
  * Load an asset (or create a new reference)
  */
 template<typename T>
-Asset<T> load(StringView path)
+Asset<T> load(std::string_view path)
 {
-    AssetData<T>** asset = AssetManager<T>::map.get(path);
-    if (asset != nullptr)
-        return *asset;
+    {
+        std::unique_ptr<AssetData<T>>* asset = AssetManager<T>::map.get(path);
+        if (asset != nullptr)
+            return asset->get();
+    }
 
-    AssetData<T>* data = AssetManager<T>::pool.alloc();
+    std::unique_ptr<AssetData<T>> data = std::make_unique<AssetData<T>>();
+    AssetData<T>* dataPtr = data.get();
+    Asset<T> asset = dataPtr;
 
-    data->path = String{path};
-    AssetManager<T>::map.add(data->path, data);
-
-    if (!assetLoadImpl(data))
+    data->path = path;
+    AssetManager<T>::map.add(data->path, std::move(data));
+    if (!assetLoadImpl(dataPtr))
     {
         [[maybe_unused]]
-        StringView e = getError();
-        HG_WARN("Asset load impl encountered an error while loading file \"%.*s\": %.*s\n",
-            (int)path.length, path.chars,
-            (int)e.length, e.chars);
+        std::string_view e = getError();
+        HG_WARN("Asset load impl encountered an error while loading file \"{}\": {}\n", path, e);
     }
-    return data;
+
+    return asset;
 }
 
 /**
@@ -294,7 +311,7 @@ void reload(const Asset<T>& asset)
  * Hot reload an asset from a path
  */
 template<typename T>
-bool reload(StringView path)
+bool reload(std::string_view path)
 {
     AssetData<T>** asset = AssetManager<T>::map.get(path);
     if (asset != nullptr)
@@ -303,10 +320,8 @@ bool reload(StringView path)
         if (!assetLoadImpl(*asset))
         {
             [[maybe_unused]]
-            StringView e = getError();
-            HG_WARN("Asset load impl encountered an error while loading file \"%.*s\": %.*s\n",
-                (int)path.length, path.chars,
-                (int)e.length, e.chars);
+            std::string_view e = getError();
+            HG_WARN("Asset load impl encountered an error while loading file \"{}\": {}\n", path, e);
             return false;
         }
     }
@@ -325,7 +340,7 @@ bool serialize(Serializer* s, Asset<T>* asset)
     }
     else
     {
-        String path;
+        std::string path;
         if (!serialize(s, &path))
             return false;
         if (path != "")
@@ -336,11 +351,4 @@ bool serialize(Serializer* s, Asset<T>* asset)
     return true;
 }
 
-/**
- * Binary asset load implementation
- */
-template<>
-bool assetLoadImpl(AssetData<Binary>* data);
-
 } // namespace hg
-

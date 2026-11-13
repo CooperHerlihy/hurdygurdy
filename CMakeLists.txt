@@ -189,20 +189,17 @@ set(CORE_SOURCES
     src/error.cpp
     src/init.cpp
     src/memory.cpp
+    src/strings.cpp
     src/concurrency.cpp
     src/math.cpp
     src/geometry2d.cpp
     src/geometry3d.cpp
     src/noise.cpp
-    src/strings.cpp
-    src/binary.cpp
-    src/filesystem.cpp
-    src/pool.cpp
     src/serialization.cpp
+    src/assets.cpp
     src/json.cpp
     src/time.cpp
     src/audio.cpp
-    src/assets.cpp
     src/dynlib.cpp
     src/render2d.cpp
     src/render3d.cpp
@@ -287,10 +284,6 @@ endif()
 
 add_executable(tests
     src/test/tests.cpp
-    src/test/span.cpp
-    src/test/product.cpp
-    src/test/sum.cpp
-    src/test/maybe.cpp
     src/test/utility.cpp
     src/test/memory.cpp
     src/test/concurrency.cpp
@@ -299,21 +292,16 @@ add_executable(tests
     src/test/geometry3d.cpp
     src/test/noise.cpp
     src/test/strings.cpp
-    src/test/binary.cpp
     src/test/filesystem.cpp
-    src/test/smart_ptr.cpp
-    src/test/array.cpp
-    src/test/queue.cpp
-    src/test/set.cpp
-    src/test/map.cpp
     src/test/hash.cpp
-    src/test/pool.cpp
     src/test/assets.cpp
     src/test/audio.cpp
     src/test/serialization.cpp
     src/test/json.cpp
     src/test/gpu.cpp
     src/test/render.cpp
+    src/test/texture.cpp
+    src/test/dynlib.cpp
     src/test/ecs.cpp
 )
 target_link_libraries(tests hurdygurdy)

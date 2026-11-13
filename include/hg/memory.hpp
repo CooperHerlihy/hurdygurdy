@@ -1,64 +1,16 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/span.hpp"
+#include "hg/macros.hpp"
 
 #include <utility>
+#include <span>
 #include <new>
 
+#include <string>
+#include <vector>
+
 namespace hg {
-
-/**
- * Allocates memory from a general purpose allocator
- *
- * Parameters
- * - size The size in bytes to allocate
- * - alignment The required alignment of the allocation in bytes
- *
- * Returns
- * - The allocation, never nullptr
- */
-void* heapAlloc(u64 size, u64 alignment);
-
-/**
- * A convenience to allocate an array of a type
- *
- * Note, objects are not initialized
- *
- * Parameters
- * - count The number of T to allocate
- *
- * Returns
- * - The allocated array, never nullptr
- */
-template<typename T>
-T* heapAlloc(u64 count)
-{
-    return static_cast<T*>(heapAlloc(count * sizeof(T), alignof(T)));
-}
-
-/**
- * Free an allocation from a general purpose allocator
- *
- * Parameters
- * - allocation The allocation to free
- * - size The size of the allocation in bytes
- * - alignment The alignment of the allocation in bytes
- */
-void heapFree(void* allocation, u64 size);
-
-/**
- * A convenience to free an allocation from a general purpose allocator
- *
- * Parameters
- * - allocation The allocation to free
- * - count The number of T allocated
- */
-template<typename T>
-void heapFree(T* allocation, u64 count)
-{
-    heapFree(static_cast<void*>(allocation), count * sizeof(T));
-}
 
 /**
  * An arena allocator
@@ -105,41 +57,12 @@ struct Arena {
     void* alloc(u64 size, u64 alignment);
 
     /**
-     * A convenience to allocate an array of a type
-     *
-     * Note, objects are not initialized
-     *
-     * Parameters
-     * - count The number of T to allocate
-     *
-     * Returns
-     * - The allocated array, or nullptr if out of memory
-     */
-    template<typename T>
-    T* alloc(u64 count)
-    {
-        return static_cast<T*>(alloc(count * sizeof(T), alignof(T)));
-    }
-
-    /**
      * Extends the allocation from oldSize to newSize if possible
      *
      * Returns
      * - Whether it could be extended
      */
     bool extend(void* allocation, u64 oldSize, u64 newSize);
-
-    /**
-     * Extends the allocation to newSize, canExtend must return true
-     *
-     * Returns
-     * - Whether it could be extended
-     */
-    template<typename T>
-    bool extend(T* allocation, u64 oldSize, u64 newSize)
-    {
-        return extend(static_cast<void*>(allocation), oldSize * sizeof(T), newSize * sizeof(T));
-    }
 
     /**
      * Move construct
@@ -210,61 +133,6 @@ struct ArenaScope {
     }
 
     /**
-     * Allocates memory
-     *
-     * Parameters
-     * - size The size in bytes to allocate
-     * - alignment The required alignment of the allocation in bytes
-     *
-     * Returns
-     * - The allocation, or nullptr if out of memory
-     */
-    void* alloc(u64 size, u64 alignment)
-    {
-        return arena->alloc(size, alignment);
-    }
-
-    /**
-     * A convenience to allocate an array of a type
-     *
-     * Note, objects are not initialized
-     *
-     * Parameters
-     * - count The number of T to allocate
-     *
-     * Returns
-     * - The allocated array, or nullptr if out of memory
-     */
-    template<typename T>
-    T* alloc(u64 count)
-    {
-        return arena->alloc<T>(count);
-    }
-
-    /**
-     * Extends the allocation from oldSize to newSize if possible
-     *
-     * Returns
-     * - Whether it could be extended
-     */
-    bool extend(void* allocation, u64 oldSize, u64 newSize)
-    {
-        return arena->extend(allocation, oldSize, newSize);
-    }
-
-    /**
-     * Extends the allocation to newSize, canExtend must return true
-     *
-     * Returns
-     * - Whether it could be extended
-     */
-    template<typename T>
-    bool extend(T* allocation, u64 oldSize, u64 newSize)
-    {
-        return arena->extend(allocation, oldSize, newSize);
-    }
-
-    /**
      * Move construct
      */
     ArenaScope(ArenaScope&& other) noexcept
@@ -288,6 +156,76 @@ struct ArenaScope {
     ArenaScope(const ArenaScope&) = delete;
     ArenaScope& operator=(const ArenaScope&) = delete;
 };
+
+/**
+ * An arena allocator for std containers
+ */
+template<typename T>
+struct ArenaAllocator {
+    /**
+     * The type to be allocated
+     */
+    using value_type = T;
+
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+
+    /**
+     * Construct empty
+     */
+    ArenaAllocator() noexcept = default;
+
+    /**
+     * Construct with an arena
+     */
+    ArenaAllocator(Arena* arenaVal)
+        : arena{arenaVal}
+    {}
+
+    /**
+     * Construct with an arena scope
+     */
+    ArenaAllocator(const ArenaScope& scope)
+        : arena{scope.arena}
+    {}
+
+    /**
+     * Allocate from the arena
+     */
+    T* allocate(std::size_t size)
+    {
+        HG_ASSERT(arena != nullptr);
+        return new (static_cast<T*>(arena->alloc(size * sizeof(T), alignof(T)))) T;
+    }
+
+    /**
+     * Deallocate from the arena
+     */
+    void deallocate(T*, std::size_t)
+    {
+    }
+};
+
+/**
+ * Compare arena allocators
+ */
+template <typename T, typename U>
+bool operator==(const ArenaAllocator<T>& lhs, const ArenaAllocator<U>& rhs) noexcept {
+    return lhs.arena == rhs.arena;
+}
+
+/**
+ * A string using an arena allocator
+ */
+using string_temp = std::basic_string<char, std::char_traits<char>, ArenaAllocator<char>>;
+
+/**
+ * A vector using an arena allocator
+ */
+template<typename T>
+using vector_temp = std::vector<T, ArenaAllocator<T>>;
 
 /**
  * Get a scratch arena for temporary allocations
@@ -318,7 +256,6 @@ ArenaScope getScratch(const Arena* conflict);
  * Returns
  * - A scratch arena, never nullptr
  */
-ArenaScope getScratch(Span<const Arena*> conflicts);
+ArenaScope getScratch(std::span<const Arena*> conflicts);
 
 } // namespace hg
-

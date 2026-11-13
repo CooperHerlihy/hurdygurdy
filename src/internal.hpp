@@ -1,15 +1,15 @@
 #pragma once
 
-#include "hg/span.hpp"
-#include "hg/memory.hpp"
-#include "hg/strings.hpp"
+// #include "hg/memory.hpp"
 #include "hg/gpu.hpp"
+
+#include <string_view>
 
 namespace hg {
 
 namespace internal {
 
-Span<StringView> getPlatformVulkanExtensions(Arena* arena);
+std::span<std::string_view> getPlatformVulkanExtensions();
 
 bool initGpu();
 void deinitGpu();

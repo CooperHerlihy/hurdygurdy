@@ -1,17 +1,19 @@
 #include "tests.hpp"
 #include "hg/serialization.hpp"
 
+#include <string>
+#include <vector>
+
 using namespace hg;
 
 TEST(testSerializeBool)
 {
     bool val = true;
     bool copy = false;
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
@@ -20,11 +22,10 @@ TEST(testSerializeI64)
 {
     i64 val = -1234567890123;
     i64 copy = 0;
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
@@ -33,11 +34,10 @@ TEST(testSerializeU32)
 {
     u32 val = 0xDEADBEEF;
     u32 copy = 0;
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
@@ -46,11 +46,10 @@ TEST(testSerializeF64)
 {
     f64 val = 3.14159265358979;
     f64 copy = 0.0;
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
@@ -59,11 +58,10 @@ TEST(testSerializeVec3)
 {
     Vec3 val{1.0f, 2.0f, 3.0f};
     Vec3 copy{};
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
@@ -72,11 +70,10 @@ TEST(testSerializeMat4)
 {
     Mat4 val{1.0f};
     Mat4 copy{};
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
@@ -85,11 +82,10 @@ TEST(testSerializeComplex)
 {
     Complex val{3.0f, 4.0f};
     Complex copy{};
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
@@ -98,24 +94,22 @@ TEST(testSerializeQuat)
 {
     Quat val{0.707f, 0.0f, 0.707f, 0.0f};
     Quat copy{};
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
 TEST(testSerializeNested)
 {
-    ArenaScope arena = getScratch();
     i32 outer = 7;
     i32 inner = 42;
     i32 outerCopy = 0;
     i32 innerCopy = 0;
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     serializeBegin(&w);
     ASSERT(serialize(&w, &outer));
     serializeBegin(&w);
@@ -123,7 +117,7 @@ TEST(testSerializeNested)
     serializeEnd(&w);
     serializeEnd(&w);
 
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     serializeBegin(&r);
     ASSERT(serialize(&r, &outerCopy));
     serializeBegin(&r);
@@ -137,17 +131,16 @@ TEST(testSerializeNested)
 
 TEST(testSerializeBeginWithSize)
 {
-    ArenaScope arena = getScratch();
     u32 childCount = 0;
     u32 val = 99;
     u32 copy = 0;
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     serializeBegin(&w);
     ASSERT(serialize(&w, &val));
     serializeEnd(&w);
 
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     serializeBegin(&r, &childCount);
     ASSERT(serialize(&r, &copy));
     serializeEnd(&r);
@@ -163,7 +156,7 @@ TEST(testSerializeCompositeStruct)
         u16 b;
         f32 c;
         bool d;
-        String e;
+        std::string e;
     };
 
     auto serializeData = [](Serializer* s, Data* val)
@@ -175,19 +168,17 @@ TEST(testSerializeCompositeStruct)
             &val->d,
             &val->e);
     };
-
-    ArenaScope arena = getScratch();
     Data val{};
     val.a = -42;
     val.b = 99;
     val.c = 2.5f;
     val.d = true;
-    val.e = String{"composite"};
+    val.e = std::string{"composite"};
 
     Data copy{};
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serializeData(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serializeData(&r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b == val.b);
@@ -199,15 +190,14 @@ TEST(testSerializeCompositeStruct)
 TEST(testSerializeLifecycle)
 {
     Lifecycle::stats.reset();
-    ArenaScope arena = getScratch();
 
     Lifecycle val{};
     u64 savedId = val.id;
 
     Lifecycle copy{};
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy.id == savedId);
     ASSERT(copy.valid == true);
@@ -217,11 +207,10 @@ TEST(testSerializeCArray)
 {
     u32 val[4] = {10, 20, 30, 40};
     u32 copy[4] = {};
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy[0] == 10);
     ASSERT(copy[1] == 20);
@@ -229,78 +218,182 @@ TEST(testSerializeCArray)
     ASSERT(copy[3] == 40);
 }
 
-TEST(testSerializeString)
+TEST(testSerializeTrivialArray)
 {
-    String val = String{"hello world"};
-    String copy{};
-    ArenaScope arena = getScratch();
+    std::array<u32, 4> val{10, 20, 30, 40};
+    std::array<u32, 4> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
-TEST(testSerializeBinary)
+TEST(testSerializeArrayOfStrings)
 {
-    u8 raw[8] = {0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE};
-    Binary val = Binary::create({raw, 8});
-    Binary copy{};
-    ArenaScope arena = getScratch();
+    std::array<std::string, 2> val{std::string{"alpha"}, std::string{"beta"}};
+    std::array<std::string, 2> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size == val.size);
-    ASSERT(memcmp(copy.data, val.data, val.size) == 0);
+    ASSERT(copy[0] == "alpha");
+    ASSERT(copy[1] == "beta");
+}
+
+TEST(testSerializeString)
+{
+    std::string val = std::string{"hello world"};
+    std::string copy{};
+
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &val));
+    Serializer r = serialReader(std::move(w.root));
+    ASSERT(serialize(&r, &copy));
+    ASSERT(copy == val);
+}
+
+TEST(testSerializeMultipleRootValues)
+{
+    i32 a = -7;
+    f64 b = 2.5;
+    std::string c = "third";
+
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &a));
+    ASSERT(serialize(&w, &b));
+    ASSERT(serialize(&w, &c));
+
+    i32 aCopy = 0;
+    f64 bCopy = 0.0;
+    std::string cCopy{};
+
+    Serializer r = serialReader(std::move(w.root));
+    ASSERT(serialize(&r, &aCopy));
+    ASSERT(serialize(&r, &bCopy));
+    ASSERT(serialize(&r, &cCopy));
+    ASSERT(aCopy == a);
+    ASSERT(bCopy == b);
+    ASSERT(cCopy == c);
+}
+
+TEST(testSerializeTrivialVector)
+{
+    std::vector<u8> val{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE};
+    std::vector<u8> copy{};
+
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &val));
+    Serializer r = serialReader(std::move(w.root));
+    ASSERT(serialize(&r, &copy));
+    ASSERT(copy.size() == val.size());
+    ASSERT(memcmp(copy.data(), val.data(), val.size()) == 0);
+}
+
+TEST(testSerializeTrivialVectorInObject)
+{
+    struct Data {
+        std::string name;
+        std::vector<u8> bytes;
+        i32 id;
+    };
+
+    auto serializeData = [](Serializer* s, Data* val)
+    {
+        return serializeObject(s, &val->name, &val->bytes, &val->id);
+    };
+
+    Data val{};
+    val.name = "blob";
+    val.bytes = {0x01, 0x02, 0x03};
+    val.id = -5;
+
+    Data copy{};
+    Serializer w = serialWriter();
+    ASSERT(serializeData(&w, &val));
+    Serializer r = serialReader(std::move(w.root));
+    ASSERT(serializeData(&r, &copy));
+    ASSERT(copy.name == val.name);
+    ASSERT(copy.bytes == val.bytes);
+    ASSERT(copy.id == val.id);
+}
+
+TEST(testSerializeVectorOfStrings)
+{
+    std::vector<std::string> val{"one", "two", "three"};
+    std::vector<std::string> copy{};
+
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &val));
+    Serializer r = serialReader(std::move(w.root));
+    ASSERT(serialize(&r, &copy));
+    ASSERT(copy.size() == val.size());
+    ASSERT(copy[0] == "one");
+    ASSERT(copy[1] == "two");
+    ASSERT(copy[2] == "three");
+}
+
+TEST(testSerializeVectorOfVectors)
+{
+    std::vector<std::vector<u32>> val{{1, 2}, {}, {3}};
+    std::vector<std::vector<u32>> copy{};
+
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &val));
+    Serializer r = serialReader(std::move(w.root));
+    ASSERT(serialize(&r, &copy));
+    ASSERT(copy.size() == val.size());
+    ASSERT(copy[0].size() == 2);
+    ASSERT(copy[0][0] == 1);
+    ASSERT(copy[0][1] == 2);
+    ASSERT(copy[1].size() == 0);
+    ASSERT(copy[2].size() == 1);
+    ASSERT(copy[2][0] == 3);
 }
 
 TEST(testSerializeUniquePtr)
 {
-    UniquePtr<i32> val = makeUnique<i32>(42);
-    UniquePtr<i32> copy{};
-    ArenaScope arena = getScratch();
+    std::unique_ptr<i32> val = std::make_unique<i32>(42);
+    std::unique_ptr<i32> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(*copy == 42);
-    ASSERT(copy.ptr != val.ptr);
+    ASSERT(copy.get() != val.get());
 }
 
 TEST(testSerializeArray)
 {
-    ArenaScope arena = getScratch();
-    Array<u32> val{};
-    val.push(1);
-    val.push(2);
-    val.push(3);
+    std::vector<u32> val{};
+    val.push_back(1);
+    val.push_back(2);
+    val.push_back(3);
 
-    Array<u32> copy{};
-    Serializer w = serialWriter(arena);
+    std::vector<u32> copy{};
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.count == val.count);
-    for (u32 i = 0; i < val.count; ++i)
+    ASSERT(copy.size() == val.size());
+    for (u32 i = 0; i < val.size(); ++i)
         ASSERT(copy[i] == val[i]);
 }
 
 TEST(testSerializeSet)
 {
-    ArenaScope arena = getScratch();
-    Set<u32> val{};
+    HashSet<u32> val{};
     val.add(10);
     val.add(20);
     val.add(30);
 
-    Set<u32> copy{};
-    Serializer w = serialWriter(arena);
+    HashSet<u32> copy{};
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == val.count);
     ASSERT(copy.has(10u));
@@ -310,16 +403,15 @@ TEST(testSerializeSet)
 
 TEST(testSerializeMap)
 {
-    ArenaScope arena = getScratch();
-    Map<u32, f32> val{};
+    HashMap<u32, f32> val{};
     val.add(1, 1.5f);
     val.add(2, 2.5f);
     val.add(3, 3.5f);
 
-    Map<u32, f32> copy{};
-    Serializer w = serialWriter(arena);
+    HashMap<u32, f32> copy{};
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == val.count);
     ASSERT(*copy.get(1u) == 1.5f);
@@ -342,18 +434,18 @@ TEST(testBinaryRoundTripPrimitive)
             &val->b,
             &val->c);
     };
-
-    ArenaScope arena = getScratch();
     Data val{};
     val.a = -999;
     val.b = 3.14;
     val.c = true;
 
     Data copy{};
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serializeData(&w, &val));
-    BinaryView bin = writeSerialBinary(arena, &w);
-    Serializer r = readSerialBinary(arena, bin);
+    std::vector<u8> bin = writeSerialBinary(&w);
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
     ASSERT(serializeData(&r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b == val.b);
@@ -364,7 +456,7 @@ TEST(testBinaryRoundTripString)
 {
     struct Data {
         i64 a;
-        String b;
+        std::string b;
     };
 
     auto serializeData = [](Serializer* s, Data* val)
@@ -373,27 +465,27 @@ TEST(testBinaryRoundTripString)
             &val->a,
             &val->b);
     };
-
-    ArenaScope arena = getScratch();
     Data val{};
     val.a = -999;
-    val.b = String{"binary-test"};
+    val.b = std::string{"binary-test"};
 
     Data copy{};
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serializeData(&w, &val));
-    BinaryView bin = writeSerialBinary(arena, &w);
-    Serializer r = readSerialBinary(arena, bin);
+    std::vector<u8> bin = writeSerialBinary(&w);
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
     ASSERT(serializeData(&r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b == val.b);
 }
 
-TEST(testBinaryRoundTripBinary)
+TEST(testBinaryRoundTripTrivialVector)
 {
     struct Data {
         i64 a;
-        Binary b;
+        std::vector<u8> b;
     };
 
     auto serializeData = [](Serializer* s, Data* val)
@@ -402,456 +494,498 @@ TEST(testBinaryRoundTripBinary)
             &val->a,
             &val->b);
     };
-
-    ArenaScope arena = getScratch();
-    u8 raw[4] = {0xDE, 0xAD, 0xBE, 0xEF};
     Data val{};
     val.a = -123;
-    val.b = Binary::create({raw, 4});
+    val.b = {0xDE, 0xAD, 0xBE, 0xEF};
 
     Data copy{};
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serializeData(&w, &val));
-    BinaryView bin = writeSerialBinary(arena, &w);
-    Serializer r = readSerialBinary(arena, bin);
+    std::vector<u8> bin = writeSerialBinary(&w);
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
     ASSERT(serializeData(&r, &copy));
     ASSERT(copy.a == val.a);
-    ASSERT(copy.b.size == val.b.size);
-    ASSERT(memcmp(copy.b.data, val.b.data, val.b.size) == 0);
+    ASSERT(copy.b.size() == val.b.size());
+    ASSERT(memcmp(copy.b.data(), val.b.data(), val.b.size()) == 0);
+}
+
+TEST(testBinaryRoundTripVector)
+{
+    std::vector<u32> val{1, 2, 3, 4};
+    std::vector<u32> copy{};
+
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &val));
+    std::vector<u8> bin = writeSerialBinary(&w);
+    ASSERT(isSerialData(bin));
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
+    ASSERT(serialize(&r, &copy));
+    ASSERT(copy == val);
+}
+
+TEST(testBinaryRoundTripVectorOfStrings)
+{
+    std::vector<std::string> val{"alpha", "", "gamma"};
+    std::vector<std::string> copy{};
+
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &val));
+    std::vector<u8> bin = writeSerialBinary(&w);
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
+    ASSERT(serialize(&r, &copy));
+    ASSERT(copy == val);
+}
+
+TEST(testBinaryRoundTripMap)
+{
+    HashMap<std::string, i32> val{};
+    val.add("a", 1);
+    val.add("b", -2);
+
+    HashMap<std::string, i32> copy{};
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &val));
+    std::vector<u8> bin = writeSerialBinary(&w);
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
+    ASSERT(serialize(&r, &copy));
+    ASSERT(copy.count == val.count);
+    ASSERT(*copy.get("a") == 1);
+    ASSERT(*copy.get("b") == -2);
+}
+
+TEST(testIsSerialData)
+{
+    Serializer w = serialWriter();
+    i32 val = 5;
+    ASSERT(serialize(&w, &val));
+    std::vector<u8> bin = writeSerialBinary(&w);
+    ASSERT(isSerialData(bin));
+
+    ASSERT(!isSerialData({}));
+
+    std::vector<u8> garbage(32, 0);
+    ASSERT(!isSerialData(garbage));
+}
+
+TEST(testReadSerialBinaryRejectsGarbage)
+{
+    setError("");
+    ASSERT(!readSerialBinary({}).has_value());
+    ASSERT(getError().length() > 0);
+
+    std::vector<u8> garbage(32, 0);
+    setError("");
+    ASSERT(!readSerialBinary(garbage).has_value());
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testReadSerialBinaryRejectsWrongVersion)
+{
+    Serializer w = serialWriter();
+    i32 val = 5;
+    ASSERT(serialize(&w, &val));
+    std::vector<u8> bin = writeSerialBinary(&w);
+
+    // The major version follows the 4 byte tag
+    u32 version = 1;
+    memcpy(bin.data() + 4, &version, sizeof(version));
+
+    setError("");
+    ASSERT(!readSerialBinary(bin).has_value());
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testReadSerialBinaryRejectsTruncation)
+{
+    Serializer w = serialWriter();
+    std::vector<u32> val{1, 2, 3};
+    ASSERT(serialize(&w, &val));
+    std::vector<u8> bin = writeSerialBinary(&w);
+    ASSERT(isSerialData(bin));
+
+    // Every truncation must fail: the loader validates node and leaf ranges
+    for (u64 cut = 1; cut < bin.size(); ++cut)
+    {
+        std::vector<u8> trunc(bin.begin(), bin.end() - static_cast<i64>(cut));
+        setError("");
+        ASSERT(!readSerialBinary(trunc).has_value());
+        ASSERT(getError().length() > 0);
+    }
 }
 
 TEST(testProductRoundTripPrimitive)
 {
-    Product<i64, f64, bool> val{-42, 3.14, true};
-    Product<i64, f64, bool> copy{};
-    ArenaScope arena = getScratch();
+    std::tuple<i64, f64, bool> val{-42, 3.14, true};
+    std::tuple<i64, f64, bool> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.get<0>() == val.get<0>());
-    ASSERT(copy.get<1>() == val.get<1>());
-    ASSERT(copy.get<2>() == val.get<2>());
+    ASSERT(std::get<0>(copy) == std::get<0>(val));
+    ASSERT(std::get<1>(copy) == std::get<1>(val));
+    ASSERT(std::get<2>(copy) == std::get<2>(val));
 }
 
 TEST(testProductRoundTripString)
 {
-    Product<i64, String> val{7, String{"hello"}};
-    Product<i64, String> copy{};
-    ArenaScope arena = getScratch();
+    std::tuple<i64, std::string> val{7, std::string{"hello"}};
+    std::tuple<i64, std::string> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.get<0>() == val.get<0>());
-    ASSERT(copy.get<1>() == val.get<1>());
+    ASSERT(std::get<0>(copy) == std::get<0>(val));
+    ASSERT(std::get<1>(copy) == std::get<1>(val));
 }
 
 TEST(testProductRoundTripEmpty)
 {
-    Product<> val{};
-    Product<> copy{};
-    ArenaScope arena = getScratch();
+    std::tuple<> val{};
+    std::tuple<> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
 }
 
 TEST(testProductRoundTripBinary)
 {
-    Product<i32, String, f32> val{42, String{"binary"}, 2.5f};
-    Product<i32, String, f32> copy{};
-    ArenaScope arena = getScratch();
+    std::tuple<i32, std::string, f32> val{42, std::string{"binary"}, 2.5f};
+    std::tuple<i32, std::string, f32> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    BinaryView bin = writeSerialBinary(arena, &w);
-    Serializer r = readSerialBinary(arena, bin);
+    std::vector<u8> bin = writeSerialBinary(&w);
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.get<0>() == val.get<0>());
-    ASSERT(copy.get<1>() == val.get<1>());
-    ASSERT(copy.get<2>() == val.get<2>());
+    ASSERT(std::get<0>(copy) == std::get<0>(val));
+    ASSERT(std::get<1>(copy) == std::get<1>(val));
+    ASSERT(std::get<2>(copy) == std::get<2>(val));
 }
 
 TEST(testSumRoundTripFirstType)
 {
-    Sum<i64, f64, String> val{i64{-42}};
-    Sum<i64, f64, String> copy{};
-    ArenaScope arena = getScratch();
+    std::variant<i64, f64, std::string> val{i64{-42}};
+    std::variant<i64, f64, std::string> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.is<i64>());
-    ASSERT(copy.get<i64>() == -42);
+    ASSERT(std::holds_alternative<i64>(copy));
+    ASSERT(std::get<i64>(copy) == -42);
 }
 
 TEST(testSumRoundTripSecondType)
 {
-    Sum<i64, f64, String> val{f64{3.14}};
-    Sum<i64, f64, String> copy{};
-    ArenaScope arena = getScratch();
+    std::variant<i64, f64, std::string> val{f64{3.14}};
+    std::variant<i64, f64, std::string> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.is<f64>());
-    ASSERT(copy.get<f64>() == 3.14);
+    ASSERT(std::holds_alternative<f64>(copy));
+    ASSERT(std::get<f64>(copy) == 3.14);
 }
 
 TEST(testSumRoundTripThirdType)
 {
-    Sum<i64, f64, String> val{String{"world"}};
-    Sum<i64, f64, String> copy{};
-    ArenaScope arena = getScratch();
+    std::variant<i64, f64, std::string> val{std::string{"world"}};
+    std::variant<i64, f64, std::string> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.is<String>());
-    ASSERT(copy.get<String>() == String{"world"});
+    ASSERT(std::holds_alternative<std::string>(copy));
+    ASSERT(std::get<std::string>(copy) == std::string{"world"});
 }
 
 TEST(testSumRoundTripEmpty)
 {
-    Sum<i64, f64, String> val{};
-    Sum<i64, f64, String> copy{};
-    ArenaScope arena = getScratch();
+    std::variant<i64, f64, std::string> val{};
+    std::variant<i64, f64, std::string> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(!copy.is<i64>());
-    ASSERT(!copy.is<f64>());
-    ASSERT(!copy.is<String>());
+    ASSERT(std::holds_alternative<i64>(copy));
+    ASSERT(std::get<i64>(copy) == 0);
 }
 
 TEST(testSumRoundTripBinary)
 {
-    Sum<i64, f64, String> val{f64{99.9}};
-    Sum<i64, f64, String> copy{};
-    ArenaScope arena = getScratch();
+    std::variant<i64, f64, std::string> val{f64{99.9}};
+    std::variant<i64, f64, std::string> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    BinaryView bin = writeSerialBinary(arena, &w);
-    Serializer r = readSerialBinary(arena, bin);
+    std::vector<u8> bin = writeSerialBinary(&w);
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.is<f64>());
-    ASSERT(copy.get<f64>() == 99.9);
+    ASSERT(std::holds_alternative<f64>(copy));
+    ASSERT(std::get<f64>(copy) == 99.9);
 }
 
 TEST(testMaybeRoundTripWithValue)
 {
-    Maybe<i64> val{42};
-    Maybe<i64> copy{};
-    ArenaScope arena = getScratch();
+    std::optional<i64> val{42};
+    std::optional<i64> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.has);
+    ASSERT(copy.has_value());
     ASSERT(*copy == 42);
 }
 
 TEST(testMaybeRoundTripWithString)
 {
-    Maybe<String> val{String{"maybe"}};
-    Maybe<String> copy{};
-    ArenaScope arena = getScratch();
+    std::optional<std::string> val{std::string{"maybe"}};
+    std::optional<std::string> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.has);
-    ASSERT(*copy == val.val);
+    ASSERT(copy.has_value());
+    ASSERT(*copy == *val);
 }
 
 TEST(testMaybeRoundTripEmpty)
 {
-    Maybe<i64> val{};
-    Maybe<i64> copy{Maybe<i64>{99}};
-    ArenaScope arena = getScratch();
+    std::optional<i64> val{};
+    std::optional<i64> copy{std::optional<i64>{99}};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(!copy.has);
+    ASSERT(!copy.has_value());
 }
 
 TEST(testMaybeRoundTripBinary)
 {
-    Maybe<f32> val{2.5f};
-    Maybe<f32> copy{};
-    ArenaScope arena = getScratch();
+    std::optional<f32> val{2.5f};
+    std::optional<f32> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    BinaryView bin = writeSerialBinary(arena, &w);
-    Serializer r = readSerialBinary(arena, bin);
+    std::vector<u8> bin = writeSerialBinary(&w);
+    std::optional<Serializer> rOpt = readSerialBinary(bin);
+    ASSERT(rOpt.has_value());
+    Serializer& r = *rOpt;
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.has);
+    ASSERT(copy.has_value());
     ASSERT(*copy == 2.5f);
 }
 
 TEST(testSerializeEmptyString)
 {
-    String val = String{""};
-    String copy{};
-    ArenaScope arena = getScratch();
+    std::string val = std::string{""};
+    std::string copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
-TEST(testSerializeEmptyBinary)
+TEST(testSerializeEmptyTrivialVector)
 {
-    Binary val = Binary::create({nullptr, 0});
-    Binary copy{};
-    ArenaScope arena = getScratch();
+    std::vector<u8> val{};
+    std::vector<u8> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size == val.size);
+    ASSERT(copy.size() == val.size());
 }
 
 TEST(testSerializeEmptyArray)
 {
-    ArenaScope arena = getScratch();
-    Array<u32> val{};
-    Array<u32> copy{};
+    std::vector<u32> val{};
+    std::vector<u32> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.count == 0);
+    ASSERT(copy.size() == 0);
 }
 
 TEST(testSerializeEmptySet)
 {
-    ArenaScope arena = getScratch();
-    Set<u32> val{};
-    Set<u32> copy{};
+    HashSet<u32> val{};
+    HashSet<u32> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == 0);
 }
 
 TEST(testSerializeEmptyMap)
 {
-    ArenaScope arena = getScratch();
-    Map<u32, f32> val{};
-    Map<u32, f32> copy{};
+    HashMap<u32, f32> val{};
+    HashMap<u32, f32> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy.count == 0);
 }
 
 TEST(testSerializeEmptyMaybe)
 {
-    Maybe<i64> val{};
-    Maybe<i64> copy{Maybe<i64>{99}};
-    ArenaScope arena = getScratch();
+    std::optional<i64> val{};
+    std::optional<i64> copy{std::optional<i64>{99}};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(!copy.has);
+    ASSERT(!copy.has_value());
 }
 
 TEST(testSerializeNestedProduct)
 {
-    Product<Product<i64, f64>, bool> val{Product<i64, f64>{-7, 2.5f}, true};
-    Product<Product<i64, f64>, bool> copy{};
-    ArenaScope arena = getScratch();
+    std::tuple<std::tuple<i64, f64>, bool> val{std::tuple<i64, f64>{-7, 2.5f}, true};
+    std::tuple<std::tuple<i64, f64>, bool> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.get<0>().get<0>() == -7);
-    ASSERT(copy.get<0>().get<1>() == 2.5f);
-    ASSERT(copy.get<1>() == true);
+    ASSERT(std::get<0>(std::get<0>(copy)) == -7);
+    ASSERT(std::get<1>(std::get<0>(copy)) == 2.5f);
+    ASSERT(std::get<1>(copy) == true);
 }
 
 TEST(testSerializeNestedMaybe)
 {
-    Maybe<String> val{String{"nested"}};
-    Maybe<String> copy{};
-    ArenaScope arena = getScratch();
+    std::optional<std::string> val{std::string{"nested"}};
+    std::optional<std::string> copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.has);
-    ASSERT(*copy == val.val);
+    ASSERT(copy.has_value());
+    ASSERT(*copy == *val);
 }
 
 TEST(testSerializeBoolFalse)
 {
     bool val = false;
     bool copy = true;
-    ArenaScope arena = getScratch();
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
 }
 
 TEST(testSerializeLargeString)
 {
-    ArenaScope arena = getScratch();
-    StringBuilder builder{arena};
+    std::string builder{};
     for (u32 i = 0; i < 2048; ++i)
-        builder.append("x");
-    String val = String{builder};
-    String copy{};
+        builder += "x";
+    std::string val = builder;
+    std::string copy{};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
     ASSERT(copy == val);
-    ASSERT(copy.length == 2048);
-}
-
-TEST(testSerializeReadIntAsFloatError)
-{
-    ArenaScope arena = getScratch();
-    i64 val = 42;
-
-    Serializer w = serialWriter(arena);
-    ASSERT(serialize(&w, &val));
-
-    f64 copy = 0.0;
-    Serializer r = serialReader(arena, w.current);
-    setError("");
-    ASSERT(!serialize(&r, &copy));
-    ASSERT(getError().length > 0);
-}
-
-TEST(testSerializeReadFloatAsIntError)
-{
-    ArenaScope arena = getScratch();
-    f64 val = 2.5;
-
-    Serializer w = serialWriter(arena);
-    ASSERT(serialize(&w, &val));
-
-    i64 copy = 0;
-    Serializer r = serialReader(arena, w.current);
-    setError("");
-    ASSERT(!serialize(&r, &copy));
-    ASSERT(getError().length > 0);
+    ASSERT(copy.size() == 2048);
 }
 
 TEST(testSerializeReadStringAsIntError)
 {
-    ArenaScope arena = getScratch();
-    String val = String{"hello"};
+    std::string val = std::string{"hello"};
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
 
     i64 copy = 0;
-    Serializer r = serialReader(arena, w.current);
+    Serializer r = serialReader(std::move(w.root));
     setError("");
     ASSERT(!serialize(&r, &copy));
-    ASSERT(getError().length > 0);
+    ASSERT(getError().length() > 0);
 }
 
-TEST(testSerializeObjectFailurePropagates)
+TEST(testSerializeReadMissingChildError)
 {
-    struct Data {
-        i64 a;
-        f64 b;
-    };
+    i64 val = 42;
 
-    struct Mismatch {
-        f64 a;
-        i64 b;
-    };
-
-    auto serializeData = [](Serializer* s, auto* val)
-    {
-        return serializeObject(s, &val->a, &val->b);
-    };
-
-    ArenaScope arena = getScratch();
-    Data val{};
-    val.a = 1;
-    val.b = 2.5;
-
-    Serializer w = serialWriter(arena);
-    ASSERT(serializeData(&w, &val));
-
-    Mismatch copy{};
-    Serializer r = serialReader(arena, w.current);
-    setError("");
-    ASSERT(!serializeData(&r, &copy));
-    ASSERT(getError().length > 0);
-}
-
-TEST(testSerializeArrayFailurePropagates)
-{
-    ArenaScope arena = getScratch();
-    Array<u32> val{};
-    val.push(1);
-    val.push(2);
-
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     ASSERT(serialize(&w, &val));
 
-    Array<f32> copy{};
-    Serializer r = serialReader(arena, w.current);
+    struct Data {
+        i64 a;
+        i64 b;
+    };
+    Data copy{};
+
+    Serializer r = serialReader(std::move(w.root));
+    setError("");
+    ASSERT(!serializeObject(&r, &copy.a, &copy.b));
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testSerializeReadSizeMismatchError)
+{
+    u32 val = 0xCAFEBABE;
+
+    Serializer w = serialWriter();
+    ASSERT(serialize(&w, &val));
+
+    i64 copy = 0;
+    Serializer r = serialReader(std::move(w.root));
     setError("");
     ASSERT(!serialize(&r, &copy));
-    ASSERT(getError().length > 0);
+    ASSERT(getError().length() > 0);
 }
 
 TEST(testSerializeNestedFailurePropagates)
 {
-    ArenaScope arena = getScratch();
     i32 inner = 42;
 
-    Serializer w = serialWriter(arena);
+    Serializer w = serialWriter();
     serializeBegin(&w);
     ASSERT(serialize(&w, &inner));
     serializeEnd(&w);
-
-    ArenaScope arena2 = getScratch();
     f64 copy = 0.0;
-    Serializer r = serialReader(arena2, w.current);
+    Serializer r = serialReader(std::move(w.root));
     setError("");
     serializeBegin(&r);
     ASSERT(!serialize(&r, &copy));
     serializeEnd(&r);
-    ASSERT(getError().length > 0);
+    ASSERT(getError().length() > 0);
 }
+

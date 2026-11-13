@@ -35,28 +35,17 @@
 
 #include <hg/macros.hpp>
 #include <hg/inttypes.hpp>
-#include <hg/span.hpp>
-#include <hg/product.hpp>
-#include <hg/sum.hpp>
-#include <hg/maybe.hpp>
 #include <hg/error.hpp>
 #include <hg/init.hpp>
 #include <hg/utility.hpp>
+#include <hg/strings.hpp>
 #include <hg/memory.hpp>
 #include <hg/concurrency.hpp>
 #include <hg/math.hpp>
 #include <hg/geometry2d.hpp>
 #include <hg/geometry3d.hpp>
 #include <hg/noise.hpp>
-#include <hg/strings.hpp>
-#include <hg/binary.hpp>
-#include <hg/smart_ptr.hpp>
-#include <hg/array.hpp>
-#include <hg/queue.hpp>
 #include <hg/hash.hpp>
-#include <hg/set.hpp>
-#include <hg/map.hpp>
-#include <hg/pool.hpp>
 #include <hg/serialization.hpp>
 #include <hg/json.hpp>
 #include <hg/assets.hpp>
@@ -67,6 +56,6 @@
 #include <hg/audio.hpp>
 #include <hg/render2d.hpp>
 #include <hg/render3d.hpp>
-#include <hg/imgui.hpp>
 #include <hg/ecs.hpp>
+#include <hg/imgui.hpp>
 

@@ -2,34 +2,9 @@
 #include "hg/memory.hpp"
 #include "hg/error.hpp"
 
+#include <vector>
+
 using namespace hg;
-
-// heapAlloc
-
-TEST(testHeapAllocReturnsNonNull)
-{
-    void* p = heapAlloc(64, 1);
-    ASSERT(p != nullptr);
-    heapFree(p, 64);
-}
-
-TEST(testHeapAllocZeroSize)
-{
-    void* p = heapAlloc(0, 1);
-    ASSERT(p != nullptr);
-    heapFree(p, 0);
-}
-
-TEST(testHeapAllocTyped)
-{
-    u32* arr = heapAlloc<u32>(4);
-    ASSERT(arr != nullptr);
-    arr[0] = 10;
-    arr[3] = 40;
-    ASSERT(arr[0] == 10);
-    ASSERT(arr[3] == 40);
-    heapFree<u32>(arr, 4);
-}
 
 // Arena
 
@@ -84,14 +59,14 @@ TEST(testArenaOutOfMemory)
     a.alloc(16, 1);
     void* p = a.alloc(1, 1);
     ASSERT(p == nullptr);
-    ASSERT(getError().length > 0);
+    ASSERT(getError().length() > 0);
     setError("");
 }
 
 TEST(testArenaTypedAlloc)
 {
     Arena a{256};
-    u32* p = a.alloc<u32>(3);
+    u32* p = static_cast<u32*>(a.alloc(3 * sizeof(u32), alignof(u32)));
     ASSERT(p != nullptr);
     p[0] = 10;
     p[1] = 20;
@@ -103,10 +78,10 @@ TEST(testArenaTypedAlloc)
 TEST(testArenaExtendSuccess)
 {
     Arena a{256};
-    u32* p = a.alloc<u32>(2);
+    u32* p = static_cast<u32*>(a.alloc(2 * sizeof(u32), alignof(u32)));
     ASSERT(p != nullptr);
     ASSERT(a.head == 8);
-    bool ok = a.extend(p, 2, 4);
+    bool ok = a.extend(p, 2 * sizeof(u32), 4 * sizeof(u32));
     ASSERT(ok);
     ASSERT(a.head == 16);
 }
@@ -114,9 +89,9 @@ TEST(testArenaExtendSuccess)
 TEST(testArenaExtendNonLast)
 {
     Arena a{256};
-    u32* first = a.alloc<u32>(2);
-    a.alloc<u32>(2);
-    bool ok = a.extend(first, 2, 4);
+    u32* first = static_cast<u32*>(a.alloc(2 * sizeof(u32), alignof(u32)));
+    a.alloc(2 * sizeof(u32), alignof(u32));
+    bool ok = a.extend(first, 2 * sizeof(u32), 4 * sizeof(u32));
     ASSERT(!ok);
     ASSERT(a.head == 16);
 }
@@ -206,7 +181,7 @@ TEST(testArenaScopeAlloc)
 {
     Arena a{256};
     ArenaScope scope{&a};
-    u32* p = static_cast<u32*>(scope.alloc(4, 4));
+    u32* p = static_cast<u32*>(scope.arena->alloc(4, 4));
     ASSERT(p != nullptr);
     ASSERT(a.head == 4);
 }
@@ -215,7 +190,7 @@ TEST(testArenaScopeTypedAlloc)
 {
     Arena a{256};
     ArenaScope scope{&a};
-    u32* p = scope.alloc<u32>(3);
+    u32* p = static_cast<u32*>(scope.arena->alloc(3 * sizeof(u32), alignof(u32)));
     ASSERT(p != nullptr);
     p[0] = 10;
     ASSERT(p[0] == 10);
@@ -225,9 +200,9 @@ TEST(testArenaScopeExtend)
 {
     Arena a{256};
     ArenaScope scope{&a};
-    u32* p = scope.alloc<u32>(2);
+    u32* p = static_cast<u32*>(scope.arena->alloc(2 * sizeof(u32), alignof(u32)));
     ASSERT(p != nullptr);
-    bool ok = scope.extend(p, 2, 4);
+    bool ok = scope.arena->extend(p, 2 * sizeof(u32), 4 * sizeof(u32));
     ASSERT(ok);
     ASSERT(a.head == 16);
 }
@@ -275,12 +250,12 @@ TEST(testGetScratchSameArena)
 TEST(testGetScratchConflict)
 {
     ArenaScope a = getScratch();
-    u32* p = a.alloc<u32>(1);
+    u32* p = static_cast<u32*>(a.arena->alloc(sizeof(u32), alignof(u32)));
     ASSERT(p != nullptr);
     const Arena* conflicts[] = {a.arena};
     ArenaScope b = getScratch(conflicts);
     ASSERT(b.arena != a.arena);
-    u32* q = b.alloc<u32>(1);
+    u32* q = static_cast<u32*>(b.arena->alloc(sizeof(u32), alignof(u32)));
     ASSERT(q != nullptr);
     *q = 42;
     ASSERT(*q == 42);

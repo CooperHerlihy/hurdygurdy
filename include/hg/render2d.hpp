@@ -1,10 +1,8 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/strings.hpp"
 #include "hg/math.hpp"
 #include "hg/geometry2d.hpp"
-#include "hg/array.hpp"
 #include "hg/assets.hpp"
 #include "hg/serialization.hpp"
 #include "hg/gpu.hpp"
@@ -106,7 +104,7 @@ struct Camera {
     /**
      * The projection
      */
-    Sum<Orthographic, Perspective> projection{};
+    std::variant<Orthographic, Perspective> projection{};
     /**
      * The current position
      */
@@ -124,7 +122,7 @@ struct Camera {
     /**
      * Initialize with projection and others or defaults
      */
-    Camera(Sum<Orthographic, Perspective> projectionVal, Vec3 positionVal = Vec3{0.0f}, Quat rotationVal = Quat{1.0f})
+    Camera(std::variant<Orthographic, Perspective> projectionVal, Vec3 positionVal = Vec3{0.0f}, Quat rotationVal = Quat{1.0f})
         : projection{projectionVal}
         , position{positionVal}
         , rotation{rotationVal}
@@ -222,21 +220,21 @@ bool assetLoadImpl(AssetData<TextureData>* data);
  *
  * Note, png expects 8 bit rgba values
  */
-bool storeTexturePng(const TextureData& texture, StringView path);
+bool storeTexturePng(const TextureData& texture, std::string_view path);
 
 /**
  * Store an image to disc in jpg format
  *
  * Note, jpg expects 8 bit rgba values
  */
-bool storeTextureJpg(const TextureData& texture, u32 quality, StringView path);
+bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view path);
 
 /**
  * Store an image to disc in hdr format
  *
  * Note, hdr expects 32 bit float format
  */
-bool storeTextureHdr(const TextureData& texture, StringView path);
+bool storeTextureHdr(const TextureData& texture, std::string_view path);
 
 /**
  * A texture asset stored on the gpu
@@ -279,7 +277,7 @@ struct TextureAtlas {
     /**
      * The sprites
      */
-    Array<Rect> sprites{};
+    std::vector<Rect> sprites{};
 
     /**
      * Construct empty
@@ -291,7 +289,6 @@ struct TextureAtlas {
      */
     TextureAtlas(const Asset<Texture>& textureVal)
         : texture{textureVal.clone()}
-        , sprites{0, 1024}
     {}
 
     /**
@@ -565,7 +562,7 @@ struct Layer2D {
     /**
      * The instance data
      */
-    Array<Instance> instances{};
+    std::vector<Instance> instances{};
     /**
      * The gpu side instance buffer
      */
@@ -639,7 +636,7 @@ struct Layer2D {
      * Returns
      * - The characters that could not fit
      */
-    StringView drawText(StringView text, Vec4 color, const TextBuilder2D& box);
+    std::string_view drawText(std::string_view text, Vec4 color, const TextBuilder2D& box);
 };
 
 /**
@@ -653,7 +650,7 @@ struct Renderer2D {
     /**
      * The layers to render this frame
      */
-    Array<Layer2D*> layerQueue{};
+    std::vector<Layer2D*> layerQueue{};
 
     /**
      * Construct without init

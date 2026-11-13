@@ -51,8 +51,8 @@ static Library libpipewire{};
 
 bool loadPipeWire()
 {
-    Maybe<Library> lib = Library::load("libpipewire-0.3.so.0");
-    if (!lib.has)
+    std::optional<Library> lib = Library::load("libpipewire-0.3.so.0");
+    if (!lib.has_value())
     {
         setError("Could not load libpipewire");
         return false;
@@ -60,8 +60,15 @@ bool loadPipeWire()
     libpipewire = std::move(*lib);
 
 #define HG_LOAD_PW(name) \
-    *(void**)&pwFuncs.name = libpipewire.loadSymbol(#name).orElse(nullptr); \
-    if (pwFuncs.name == nullptr) { setError("Could not load " #name); return false; }
+    { \
+        auto sym = libpipewire.loadSymbol(#name); \
+        if (!sym.has_value()) \
+        { \
+            setError("Could not load " #name); \
+            return false; \
+        } \
+        *(void**)&pwFuncs.name = *sym; \
+    }
 
     HG_LOAD_PW(pw_init);
     HG_LOAD_PW(pw_deinit);
@@ -123,14 +130,14 @@ static void streamProcess(void* userData)
     u64 maxBytes = buf->datas[0].maxsize;
     u64 frames = maxBytes / sizeof(f32) / state->callbackConfig.channels;
     u64 totalSamples = frames * state->callbackConfig.channels;
-    memset(data, 0, totalSamples * sizeof(f32));
-    Span<f32> buffer{data, totalSamples};
+    std::memset(data, 0, totalSamples * sizeof(f32));
+    std::span<f32> buffer{data, totalSamples};
 
     if (state->callback != nullptr)
         state->callback(state->callbackData, buffer, state->callbackConfig);
 
     buf->datas[0].chunk->offset = 0;
-    buf->datas[0].chunk->size = static_cast<uint32_t>(buffer.count * sizeof(f32));
+    buf->datas[0].chunk->size = static_cast<uint32_t>(buffer.size() * sizeof(f32));
     buf->datas[0].chunk->stride = static_cast<int32_t>(sizeof(f32) * state->callbackConfig.channels);
     pwBuf->size = static_cast<uint32_t>(frames);
 

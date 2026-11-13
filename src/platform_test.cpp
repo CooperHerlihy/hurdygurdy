@@ -171,13 +171,13 @@ static const char* cursorName(CursorType t)
     return "?";
 }
 
-static void audioCallback(void* userData, Span<f32> buf, AudioConfig config)
+static void audioCallback(void* userData, std::span<f32> buf, AudioConfig config)
 {
     static_cast<AudioPlayer*>(userData)->update(buf, config);
 
     if (toneActive)
     {
-        for (u64 i = 0; i < buf.count; i += config.channels)
+        for (u64 i = 0; i < buf.size(); i += config.channels)
         {
             f32 val = std::sin(toneT * 440.0f * pif * 2.0f) * 0.3f;
             for (u32 c = 0; c < config.channels; ++c)
@@ -189,7 +189,9 @@ static void audioCallback(void* userData, Span<f32> buf, AudioConfig config)
 
 int main()
 {
-    HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
+    std::optional<HurdyGurdy> hg = init();
+    if (!hg.has_value())
+        HG_PANIC("Could not initialize Hurdy Gurdy\n");
 
     Window window = Window::create({});
     window.setTitle("Platform API Test");
@@ -267,8 +269,8 @@ int main()
             {
                 if (ImGui::Begin("Events", &showEvents))
                 {
-                    Span<Event> events = getEvents();
-                    ImGui::Text("Event count: %d", (int)events.count);
+                    std::span<Event> events = getEvents();
+                    ImGui::Text("Event count: %d", (int)events.size());
                     if (ImGui::BeginTable("events", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0, 200)))
                     {
                         ImGui::TableSetupColumn("Type");
@@ -276,7 +278,7 @@ int main()
                         ImGui::TableSetupColumn("Value 1");
                         ImGui::TableSetupColumn("Value 2");
                         ImGui::TableHeadersRow();
-                        for (u64 i = 0; i < events.count; ++i)
+                        for (u64 i = 0; i < events.size(); ++i)
                         {
                             const Event& e = events[i];
                             ImGui::TableNextRow();
@@ -432,9 +434,9 @@ int main()
                             secondWindow.setTitle("Renamed!");
                     }
 
-                    Span<Event> wevts = window.events();
+                    std::span<Event> wevts = window.events();
                     ImGui::Text("Window Events");
-                    ImGui::Text("Count: %d", (int)wevts.count);
+                    ImGui::Text("Count: %d", (int)wevts.size());
                 }
                 ImGui::End();
             }
@@ -472,7 +474,7 @@ int main()
                             for (u64 i = 0; i < 8000; ++i)
                             {
                                 f32 t = static_cast<f32>(i) * pif * 2.0f / 8000.0f;
-                                snd->data.push(noiseNorm(42u, t) / (t + 0.1f));
+                                snd->data.emplace_back(noiseNorm(42u, t) / (t + 0.1f));
                             }
                         }
                         audio.playSound(snd, 0.5f);
@@ -497,7 +499,7 @@ int main()
                                     f32 x = static_cast<f32>(j);
                                     val += 0.3f / x * std::sin(220.f * t * x);
                                 }
-                                mus->data.push(val);
+                                mus->data.emplace_back(val);
                             }
                         }
                         audio.playMusic(mus, musicGain);
@@ -505,20 +507,20 @@ int main()
                     ImGui::SameLine();
                     if (ImGui::Button("Pause Music"))
                     {
-                        if (audio.music.count > 0)
-                            audio.pauseMusic(audio.music.vals[0].asset);
+                        if (audio.music.size() > 0)
+                            audio.pauseMusic(audio.music[0].asset);
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("Kill Music"))
                     {
-                        if (audio.music.count > 0)
-                            audio.killMusic(audio.music.vals[0].asset);
+                        if (audio.music.size() > 0)
+                            audio.killMusic(audio.music[0].asset);
                     }
 
                     if (ImGui::SliderFloat("Gain", &musicGain, 0.0f, 2.0f))
                     {
-                        if (audio.music.count > 0)
-                            audio.setMusicGain(audio.music.vals[0].asset, musicGain);
+                        if (audio.music.size() > 0)
+                            audio.setMusicGain(audio.music[0].asset, musicGain);
                     }
                 }
                 ImGui::End();
@@ -528,9 +530,9 @@ int main()
             {
                 if (ImGui::Begin("Display", &showDisplay))
                 {
-                    Span<DisplayInfo> displays = displayInfo();
-                    ImGui::Text("Count: %d", (int)displays.count);
-                    for (u64 i = 0; i < displays.count; ++i)
+                    std::span<DisplayInfo> displays = displayInfo();
+                    ImGui::Text("Count: %d", (int)displays.size());
+                    for (u64 i = 0; i < displays.size(); ++i)
                     {
                         if (ImGui::TreeNodeEx((void*)i, 0, "Display %d", (int)i))
                         {
@@ -570,9 +572,9 @@ int main()
                 {
                     if (ImGui::Button("Get"))
                     {
-                        StringView sv = getClipboardText();
-                        u64 len = sv.length < sizeof(clipboardBuf) - 1 ? sv.length : sizeof(clipboardBuf) - 1;
-                        memcpy(clipboardBuf, sv.chars, len);
+                        std::string_view sv = getClipboardText();
+                        u64 len = sv.length() < sizeof(clipboardBuf) - 1 ? sv.length() : sizeof(clipboardBuf) - 1;
+                        std::memcpy(clipboardBuf, sv.data(), len);
                         clipboardBuf[len] = '\0';
                     }
                     ImGui::InputText("##clip", clipboardBuf, sizeof(clipboardBuf));
@@ -589,13 +591,13 @@ int main()
             {
                 ImGui::Text("%.1f FPS (%.3fms)", 1.0 / delta, delta * 1000.0);
                 ImGui::Separator();
-                Profiler::forEachTimer([&](const String& name, f64 time)
+                Profiler::forEachTimer([&](const std::string& name, f64 time)
                 {
-                    ImGui::Text("%.*s: %.3fms", (int)name.length, name.chars, time * 1.e3f);
+                    ImGui::Text("%.*s: %.3fms", (int)name.length(), name.data(), time * 1.e3f);
                 });
-                Profiler::forEachCounter([&](const String& name, u32 count)
+                Profiler::forEachCounter([&](const std::string& name, u32 count)
                 {
-                    ImGui::Text("%.*s: %d", (int)name.length, name.chars, count);
+                    ImGui::Text("%.*s: %d", (int)name.length(), name.data(), count);
                 });
                 Profiler::clear();
             }

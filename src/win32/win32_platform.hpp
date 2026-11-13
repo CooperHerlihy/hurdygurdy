@@ -3,23 +3,21 @@
 #include "hg/window.hpp"
 #include "hg/audio.hpp"
 #include "hg/gpu.hpp"
-#include "hg/span.hpp"
-#include "hg/strings.hpp"
-#include "hg/memory.hpp"
+// #include "hg/memory.hpp"
 
 namespace hg::win32 {
 
 bool loadWin32();
 bool initWin32();
 void deinitWin32();
-Span<StringView> getPlatformVulkanExtensions(Arena* arena);
+std::span<std::string_view> getPlatformVulkanExtensions();
 
-Span<DisplayInfo> displayInfo();
+std::span<DisplayInfo> displayInfo();
 void setCursor(CursorType type);
 void showCursor(bool show);
 void processEvents();
 bool wasQuit();
-Span<Event> getEvents();
+std::span<Event> getEvents();
 
 bool isButtonDown(Button key);
 bool wasButtonPressed(Button key);
@@ -34,8 +32,8 @@ void unsetAudioCallback();
 Window windowCreate(const WindowConfig& config);
 void windowDestroy(void* data);
 GpuSwapchain& windowSwapchain(void* data);
-void windowSetTitle(void* data, StringView title);
-Span<Event> windowEvents(void* data);
+void windowSetTitle(void* data, std::string_view title);
+std::span<Event> windowEvents(void* data);
 bool windowWasClosed(void* data);
 bool windowIsFocused(void* data);
 bool windowWasFocusGained(void* data);
@@ -46,8 +44,8 @@ void windowSetFullscreen(void* data, bool set);
 Vec2 windowMousePos(void* data);
 Vec2 windowMouseDelta(void* data);
 
-StringView getClipboardText();
-void setClipboardText(StringView text);
-void openURL(StringView url);
+std::string_view getClipboardText();
+void setClipboardText(std::string_view text);
+void openURL(std::string_view url);
 
 } // namespace hg::win32

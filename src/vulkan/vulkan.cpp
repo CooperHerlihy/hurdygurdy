@@ -2,8 +2,7 @@
 
 #include "internal.hpp"
 #include "hg/error.hpp"
-#include "hg/utility.hpp"
-#include "hg/array.hpp"
+#include "hg/memory.hpp"
 
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
@@ -222,8 +221,8 @@ static bool isDebugMessengerAvailable()
 
     u32 layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    ArrayTemp<VkLayerProperties> layers{scratch, layerCount, layerCount};
-    vkEnumerateInstanceLayerProperties(&layerCount, layers.vals);
+    vector_temp<VkLayerProperties> layers{layerCount, scratch};
+    vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
     for (VkLayerProperties& layer : layers)
     {
@@ -235,8 +234,8 @@ layerFound:
 
     u32 extCount;
     vkEnumerateInstanceExtensionProperties(nullptr, &extCount, nullptr);
-    ArrayTemp<VkExtensionProperties> exts{scratch, extCount, extCount};
-    vkEnumerateInstanceExtensionProperties(nullptr, &extCount, exts.vals);
+    vector_temp<VkExtensionProperties> exts{extCount, scratch};
+    vkEnumerateInstanceExtensionProperties(nullptr, &extCount, exts.data());
 
     for (VkExtensionProperties& ext : exts)
     {
@@ -250,11 +249,8 @@ extFound:
     return false;
 }
 
-static VkInstance createInstance(Span<StringView> extensions)
+static VkInstance createInstance(std::span<std::string_view> extensions)
 {
-    if (extensions.count > 0)
-        HG_ASSERT(extensions.data != nullptr);
-
     ArenaScope scratch = getScratch();
 
     VkApplicationInfo appInfo{};
@@ -276,25 +272,29 @@ static VkInstance createInstance(Span<StringView> extensions)
         const char* layers[]{
             "VK_LAYER_KHRONOS_validation",
         };
-        instanceInfo.enabledLayerCount = static_cast<u32>(size(layers));
+        instanceInfo.enabledLayerCount = static_cast<u32>(std::size(layers));
         instanceInfo.ppEnabledLayerNames = layers;
     }
 
-    ArrayTemp<const char*> extCStrs{scratch};
-    for (u32 i = 0; i < extensions.count; ++i)
+    vector_temp<string_temp> extStrs{scratch};
+    extStrs.reserve(extensions.size());
+    vector_temp<const char*> extCStrs{scratch};
+    extCStrs.reserve(extensions.size() + 1);
+    for (u32 i = 0; i < extensions.size(); ++i)
     {
-        extCStrs.push(cString(scratch, extensions[i]));
+        extStrs.emplace_back(extensions[i], scratch);
+        extCStrs.push_back(extStrs.back().c_str());
     }
     if (vk.enableDebugMessenger)
-        extCStrs.push("VK_EXT_debug_utils");
-    instanceInfo.enabledExtensionCount = (u32)extCStrs.count;
-    instanceInfo.ppEnabledExtensionNames = extCStrs.vals;
+        extCStrs.emplace_back("VK_EXT_debug_utils");
+    instanceInfo.enabledExtensionCount = static_cast<u32>(extCStrs.size());
+    instanceInfo.ppEnabledExtensionNames = extCStrs.data();
 
     VkInstance instance = nullptr;
     VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
     if (instance == nullptr)
     {
-        setError("Failed to create Vulkan instance: %s", vkResultToStr(result));
+        setError("Failed to create Vulkan instance: {}", vkResultToStr(result));
     }
 
     return instance;
@@ -308,7 +308,7 @@ static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
     VkResult result = vkCreateDebugUtilsMessengerEXT(vk.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
     {
-        setError("Failed to create Vulkan debug messenger: %s", vkResultToStr(result));
+        setError("Failed to create Vulkan debug messenger: {}", vkResultToStr(result));
     }
 
     return messenger;
@@ -323,8 +323,8 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
 
     u32 familyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, nullptr);
-    VkQueueFamilyProperties* families = scratch.alloc<VkQueueFamilyProperties>(familyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families);
+    vector_temp<VkQueueFamilyProperties> families{familyCount, scratch};
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.data());
 
     for (u32 i = 0; i < familyCount; ++i)
     {
@@ -348,22 +348,21 @@ static VkPhysicalDevice findPhysicalDevice()
 
     u32 gpuCount;
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, nullptr);
-    VkPhysicalDevice* gpus = scratch.alloc<VkPhysicalDevice>(gpuCount);
-    vkEnumeratePhysicalDevices(vk.instance, &gpuCount, gpus);
+    vector_temp<VkPhysicalDevice> gpus{gpuCount, scratch};
+    vkEnumeratePhysicalDevices(vk.instance, &gpuCount, gpus.data());
 
-    ArrayTemp<VkExtensionProperties> extProps{scratch, 0, 0};
+    vector_temp<VkExtensionProperties> extProps{scratch};
 
-    for (u32 i = 0; i < gpuCount; ++i)
+    for (VkPhysicalDevice gpu : gpus)
     {
-        VkPhysicalDevice gpu = gpus[i];
         u32 family;
 
         u32 propCount = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &propCount, nullptr);
         extProps.resize(propCount);
-        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &propCount, extProps.vals);
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &propCount, extProps.data());
 
-        for (u32 j = 0; j < static_cast<u32>(size(deviceExtensions)); j++)
+        for (u32 j = 0; j < static_cast<u32>(std::size(deviceExtensions)); j++)
         {
             for (u32 k = 0; k < propCount; k++)
             {
@@ -375,8 +374,7 @@ nextExt:
             continue;
         }
 
-        if (!findQueueFamily(gpu, &family,
-                VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
+        if (!findQueueFamily(gpu, &family, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
             goto nextGpu;
 
         return gpu;
@@ -442,7 +440,7 @@ static VkDevice createDevice()
     deviceInfo.pNext = &synchronization2Feature;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueInfo;
-    deviceInfo.enabledExtensionCount = static_cast<u32>(size(deviceExtensions));
+    deviceInfo.enabledExtensionCount = static_cast<u32>(std::size(deviceExtensions));
     deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     deviceInfo.pEnabledFeatures = &features;
 
@@ -450,7 +448,7 @@ static VkDevice createDevice()
     VkResult result = vkCreateDevice(vk.physicalDevice, &deviceInfo, nullptr, &device);
     if (device == nullptr)
     {
-        setError("Could not create VkDevice: %s", vkResultToStr(result));
+        setError("Could not create VkDevice: {}", vkResultToStr(result));
     }
 
     return device;
@@ -468,7 +466,7 @@ static VmaAllocator createVma()
     VkResult result = vmaCreateAllocator(&allocatorInfo, &vma);
     if (vma == nullptr)
     {
-        setError("Could not create Vulkan memory allocator: %s", vkResultToStr(result));
+        setError("Could not create Vulkan memory allocator: {}", vkResultToStr(result));
     }
 
     return vma;
@@ -487,13 +485,13 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     info.maxSets = 1;
-    info.poolSizeCount = static_cast<u32>(size(sizes));
+    info.poolSizeCount = static_cast<u32>(std::size(sizes));
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
     [[maybe_unused]] VkResult result = vkCreateDescriptorPool(vk.device, &info, nullptr, &pool);
     if (pool == nullptr)
-        HG_PANIC("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkDescriptorPool: {}\n", vkResultToStr(result));
 
     return pool;
 }
@@ -514,20 +512,20 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    flagsInfo.bindingCount = static_cast<u32>(size(bindings));
+    flagsInfo.bindingCount = static_cast<u32>(std::size(bindings));
     flagsInfo.pBindingFlags = flags;
 
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &flagsInfo;
     info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    info.bindingCount = static_cast<u32>(size(bindings));
+    info.bindingCount = static_cast<u32>(std::size(bindings));
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
     [[maybe_unused]] VkResult result = vkCreateDescriptorSetLayout(vk.device, &info, nullptr, &layout);
     if (layout == nullptr)
-        HG_PANIC("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create bindless VkDescriptorSetLayout: {}\n", vkResultToStr(result));
 
     return layout;
 }
@@ -543,7 +541,7 @@ static Frame createFrame()
     [[maybe_unused]]
     VkResult poolResult = vkCreateCommandPool(vk.device, &poolInfo, nullptr, &frame.cmdPool);
     if (frame.cmdPool == nullptr)
-        HG_PANIC("Could not create Vulkan command pool: %s\n", vkResultToStr(poolResult));
+        HG_PANIC("Could not create Vulkan command pool: {}\n", vkResultToStr(poolResult));
 
     VkCommandBufferAllocateInfo cmdInfo{};
     cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -554,7 +552,7 @@ static Frame createFrame()
     [[maybe_unused]]
     VkResult cmdResult = vkAllocateCommandBuffers(vk.device, &cmdInfo, &frame.cmd);
     if (frame.cmd == nullptr)
-        HG_PANIC("Could not create Vulkan command buffer: %s\n", vkResultToStr(cmdResult));
+        HG_PANIC("Could not create Vulkan command buffer: {}\n", vkResultToStr(cmdResult));
 
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -563,7 +561,7 @@ static Frame createFrame()
     [[maybe_unused]]
     VkResult fenceResult = vkCreateFence(vk.device, &fenceInfo, nullptr, &frame.fence);
     if (frame.fence == nullptr)
-        HG_PANIC("Could not create Vulkan fence: %s\n", vkResultToStr(fenceResult));
+        HG_PANIC("Could not create Vulkan fence: {}\n", vkResultToStr(fenceResult));
 
     return frame;
 }
@@ -586,7 +584,7 @@ GpuDescriptor createBufferDescriptor(
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = vk.bindlessSet;
     write.dstBinding = type;
-    write.dstArrayElement = desc.idx();
+    write.dstArrayElement = desc;
     write.descriptorCount = 1;
     write.descriptorType = descriptorTypeToVk(type);
     write.pBufferInfo = &bufferInfo;
@@ -619,7 +617,7 @@ GpuDescriptor createImageDescriptor(
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = vk.bindlessSet;
     write.dstBinding = type;
-    write.dstArrayElement = desc.idx();
+    write.dstArrayElement = desc;
     write.descriptorCount = 1;
     write.descriptorType = descriptorTypeToVk(type);
     write.pBufferInfo = nullptr;
@@ -633,8 +631,7 @@ GpuDescriptor createImageDescriptor(
 
 void descriptorDestroy(GpuDescriptor desc, DescriptorType type)
 {
-    if (desc != nullHandle)
-        vk.descriptorPools[type].free(desc);
+    vk.descriptorPools[type].free(desc);
 }
 
 static VkSampler samplerCreate(SamplerInfo* desc)
@@ -657,7 +654,7 @@ static VkSampler samplerCreate(SamplerInfo* desc)
     VkSampler sampler = nullptr;
     [[maybe_unused]]     VkResult result = vkCreateSampler(vk.device, &info, nullptr, &sampler);
     if (sampler == nullptr)
-        HG_PANIC("Could not create VkSampler: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkSampler: {}\n", vkResultToStr(result));
 
     return sampler;
 }
@@ -689,7 +686,7 @@ bool initGpu()
 
     vk.enableDebugMessenger = isDebugMessengerAvailable();
 
-    vk.instance = createInstance(getPlatformVulkanExtensions(scratch));
+    vk.instance = createInstance(getPlatformVulkanExtensions());
     if (vk.instance == nullptr)
         goto instanceFailed;
     if (!loadVulkanInstanceFuncs(vk.instance))
@@ -734,7 +731,7 @@ bool initGpu()
 
         [[maybe_unused]]         VkResult result = vkCreateCommandPool(vk.device, &cmdPoolInfo, nullptr, &vk.cmdPool);
         if (vk.cmdPool == nullptr)
-            HG_PANIC("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not create Vulkan command pool: {}\n", vkResultToStr(result));
     }
 
     vk.bindlessPool = createBindlessDescriptorPool();
@@ -748,27 +745,26 @@ bool initGpu()
 
         [[maybe_unused]]         VkResult result = vkAllocateDescriptorSets(vk.device, &info, &vk.bindlessSet);
         if (vk.bindlessSet == nullptr)
-            HG_PANIC("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not allocate bindless VkDescriptorSet: {}\n", vkResultToStr(result));
     }
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vk.descriptorPools[i] = HandlePool{};
+        vk.descriptorPools[i] = {};
     }
 
-    vk.samplers = Map<SamplerInfo, VkSampler>(
+    vk.samplers = HashMap<SamplerInfo, VkSampler>(
         2 *
         GpuFilter_count *
         GpuSamplerEdgeMode_count *
         GpuSamplerBorder_count);
 
-    vk.frameCount = 2;
-    vk.currentFrame = 0;
-    vk.frames = heapAlloc<Frame>(vk.frameCount);
-    for (u32 i = 0; i < vk.frameCount; ++i)
+    vk.frames.resize(2);
+    for (Frame& frame : vk.frames)
     {
-        new (vk.frames + i) Frame{createFrame()};
+        frame = createFrame();
     }
+    vk.currentFrame = 0;
 
     return true;
 
@@ -792,13 +788,12 @@ loadFailed:
 
 void deinitGpu()
 {
-    for (u32 i = 0; i < vk.frameCount; ++i)
+    for (u32 i = 0; i < vk.frames.size(); ++i)
     {
         vkDestroyFence(vk.device, vk.frames[i].fence, nullptr);
         vkDestroyCommandPool(vk.device, vk.frames[i].cmdPool, nullptr);
         vk.frames[i].swapchains = {};
     }
-    heapFree(vk.frames, vk.frameCount);
 
     vk.samplers.forEach([](const SamplerInfo&, VkSampler& sampler)
     {
@@ -808,7 +803,7 @@ void deinitGpu()
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vk.descriptorPools[i].reset();
+        vk.descriptorPools[i] = {};
     }
 
     vkDestroyDescriptorSetLayout(vk.device, vk.bindlessLayout, nullptr);

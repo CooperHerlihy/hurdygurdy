@@ -1,8 +1,12 @@
 #include "win32_platform.hpp"
 
 #include "hg/error.hpp"
-#include "hg/array.hpp"
-#include "hg/map.hpp"
+#include "hg/hash.hpp"
+
+#include <string>
+#include <vector>
+#include <string_view>
+#include <memory>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -58,12 +62,13 @@ void deinitWin32()
     windowDeinit();
 }
 
-Span<StringView> getPlatformVulkanExtensions(Arena* arena)
+std::span<std::string_view> getPlatformVulkanExtensions()
 {
-    Span<StringView> extBuffer{arena->alloc<StringView>(2), 2};
-    extBuffer[0] = "VK_KHR_surface";
-    extBuffer[1] = "VK_KHR_win32_surface";
-    return extBuffer;
+    static std::string_view exts[] = {
+        "VK_KHR_surface",
+        "VK_KHR_win32_surface",
+    };
+    return exts;
 }
 
 struct WindowData {
@@ -71,7 +76,7 @@ struct WindowData {
 
     HWND hwnd = nullptr;
 
-    Array<Event> events{};
+    std::vector<Event> events{};
     Vec2 mouse{};
     u32 width = 0;
     u32 height = 0;
@@ -98,19 +103,19 @@ struct WindowState {
     HCURSOR cursors[CursorType_count]{};
     HCURSOR currentCursor = nullptr;
 
-    Array<DisplayInfo> displays{};
+    std::vector<DisplayInfo> displays{};
 
-    Array<Event> events{};
+    std::vector<Event> events{};
     bool wasQuit = false;
     bool isKeyDown[Button_count]{};
     bool wasKeyDown[Button_count]{};
     Vec2 mouseDelta{};
     Vec2 wheelDelta{};
 
-    Map<u64, WindowData*> windows{};
+    HashMap<u64, WindowData*> windows{};
     WindowData* activeWindow = nullptr;
 
-    Array<char> clipboard{};
+    std::vector<char> clipboard{};
 };
 
 static WindowState windowState{};
@@ -157,7 +162,7 @@ static bool windowInit(HINSTANCE hInst)
 
     // Enumerate displays
     struct EnumData {
-        Array<DisplayInfo>* displays;
+        std::vector<DisplayInfo>* displays;
     } enumData{&windowState.displays};
 
     MONITORENUMPROC monitorEnumProc = [](HMONITOR hmon, HDC, LPRECT, LPARAM lp) -> BOOL
@@ -191,7 +196,7 @@ static bool windowInit(HINSTANCE hInst)
 
     EnumDisplayMonitors(nullptr, nullptr, monitorEnumProc, reinterpret_cast<LPARAM>(&enumData));
 
-    if (windowState.displays.count == 0)
+    if (windowState.displays.size() == 0)
     {
         DisplayInfo info{};
         info.sizeW = static_cast<u32>(GetSystemMetrics(SM_CXSCREEN));
@@ -199,7 +204,7 @@ static bool windowInit(HINSTANCE hInst)
         info.workSizeW = info.sizeW;
         info.workSizeH = info.sizeH;
         info.dpiScale = 1.0f;
-        windowState.displays.push(info);
+        windowState.displays.push_back(info);
     }
 
     return true;
@@ -405,8 +410,8 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 Event event{};
                 event.type = EventType_windowClosed;
                 event.window.window = w;
-                windowState.events.push(event);
-                w->events.push(event);
+                windowState.events.push_back(event);
+                w->events.push_back(event);
             }
             DestroyWindow(hwnd);
             return 0;
@@ -418,7 +423,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 windowState.wasQuit = true;
                 Event event{};
                 event.type = EventType_quit;
-                windowState.events.push(event);
+                windowState.events.push_back(event);
             }
             return 0;
         }
@@ -442,8 +447,8 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 event.window.window = w;
                 event.window.width = width;
                 event.window.height = height;
-                windowState.events.push(event);
-                w->events.push(event);
+                windowState.events.push_back(event);
+                w->events.push_back(event);
             }
             return 0;
         }
@@ -458,8 +463,8 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
                 Event event{};
                 event.type = EventType_windowFocused;
-                windowState.events.push(event);
-                w->events.push(event);
+                windowState.events.push_back(event);
+                w->events.push_back(event);
             }
             return 0;
         }
@@ -475,8 +480,8 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
                 Event event{};
                 event.type = EventType_windowUnfocused;
-                windowState.events.push(event);
-                w->events.push(event);
+                windowState.events.push_back(event);
+                w->events.push_back(event);
             }
             return 0;
         }
@@ -498,7 +503,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 event.mouse.delta = delta;
                 event.mouse.pos = newPos;
                 event.mouse.globalPos = newPos;
-                windowState.events.push(event);
+                windowState.events.push_back(event);
             }
             return 0;
         }
@@ -511,7 +516,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             Event event{};
             event.type = EventType_wheelMoved;
             event.wheel.delta = Vec2{0.0f, delta};
-            windowState.events.push(event);
+            windowState.events.push_back(event);
             return 0;
         }
         case WM_MOUSEHWHEEL:
@@ -523,7 +528,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             Event event{};
             event.type = EventType_wheelMoved;
             event.wheel.delta = Vec2{delta, 0.0f};
-            windowState.events.push(event);
+            windowState.events.push_back(event);
             return 0;
         }
         case WM_LBUTTONDOWN:
@@ -538,7 +543,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 Event event{};
                 event.type = EventType_keyPress;
                 event.button = button;
-                windowState.events.push(event);
+                windowState.events.push_back(event);
             }
             return 0;
         }
@@ -554,7 +559,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 Event event{};
                 event.type = EventType_keyRelease;
                 event.button = button;
-                windowState.events.push(event);
+                windowState.events.push_back(event);
             }
             return 0;
         }
@@ -569,7 +574,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 Event event{};
                 event.type = EventType_keyPress;
                 event.button = button;
-                windowState.events.push(event);
+                windowState.events.push_back(event);
             }
 
             // Text input
@@ -591,9 +596,9 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 {
                     Event event{};
                     event.type = EventType_text;
-                    memset(event.text, 0, sizeof(event.text));
-                    memcpy(event.text, utf8Buf, static_cast<u64>(utf8Len) < sizeof(event.text) - 1 ? static_cast<u64>(utf8Len) : sizeof(event.text) - 1);
-                    windowState.events.push(event);
+                    std::memset(event.text, 0, sizeof(event.text));
+                    std::memcpy(event.text, utf8Buf, static_cast<u64>(utf8Len) < sizeof(event.text) - 1 ? static_cast<u64>(utf8Len) : sizeof(event.text) - 1);
+                    windowState.events.push_back(event);
                 }
             }
             return 0;
@@ -609,7 +614,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 Event event{};
                 event.type = EventType_keyRelease;
                 event.button = button;
-                windowState.events.push(event);
+                windowState.events.push_back(event);
             }
             return 0;
         }
@@ -623,7 +628,7 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
     return DefWindowProcA(hwnd, msg, wParam, lParam);
 }
 
-Span<DisplayInfo> displayInfo()
+std::span<DisplayInfo> displayInfo()
 {
     return windowState.displays;
 }
@@ -644,15 +649,15 @@ void showCursor(bool show)
 
 void processEvents()
 {
-    windowState.events.reset();
+    windowState.events.clear();
 
-    memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
+    std::memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
     windowState.mouseDelta = {};
     windowState.wheelDelta = {};
 
     windowState.windows.forEach([](u64, WindowData* data)
     {
-        data->events.reset();
+        data->events.clear();
         data->wasFocusGained = false;
         data->wasFocusLost = false;
         data->wasResized = false;
@@ -666,7 +671,7 @@ void processEvents()
             windowState.wasQuit = true;
             Event event{};
             event.type = EventType_quit;
-            windowState.events.push(event);
+            windowState.events.push_back(event);
             break;
         }
         TranslateMessage(&msg);
@@ -674,7 +679,7 @@ void processEvents()
     }
 }
 
-Span<Event> getEvents()
+std::span<Event> getEvents()
 {
     return windowState.events;
 }
@@ -741,15 +746,14 @@ Vec2 wheelDelta()
 Window windowCreate(const WindowConfig& config)
 {
     Window window{};
-    window.data = new (heapAlloc(sizeof(WindowData), alignof(WindowData))) WindowData{};
 
-    WindowData* wd = static_cast<WindowData*>(window.data);
-
-    ArenaScope scratch = getScratch();
+    std::unique_ptr<WindowData> data = std::make_unique<WindowData>();
+    WindowData* wd = data.get();
 
     u32 width = config.width != 0 ? config.width : 0;
     u32 height = config.height != 0 ? config.height : 0;
-    const char* title = config.title.length != 0 ? cString(scratch, config.title) : "Hurdy Gurdy";
+    std::string titleStr = config.title.length() != 0 ? std::string{config.title} : "Hurdy Gurdy";
+    const char* title = titleStr.c_str();
 
     wchar_t wtitle[256]{};
     MultiByteToWideChar(
@@ -774,8 +778,6 @@ Window windowCreate(const WindowConfig& config)
 
     if (hwnd == nullptr)
     {
-        wd->~WindowData();
-        heapFree(wd, 1);
         setError("Could not create Win32 window");
         return Window{};
     }
@@ -808,8 +810,6 @@ Window windowCreate(const WindowConfig& config)
     if (result != VK_SUCCESS)
     {
         DestroyWindow(hwnd);
-        wd->~WindowData();
-        heapFree(wd, 1);
         setError("Could not create Vulkan surface");
         return Window{};
     }
@@ -819,14 +819,14 @@ Window windowCreate(const WindowConfig& config)
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
 
+    window.data = data.release();
     return window;
 }
 
 void windowDestroy(void* data)
 {
     WindowData* wd = static_cast<WindowData*>(data);
-    wd->~WindowData();
-    heapFree(wd, 1);
+    delete wd;
 }
 
 GpuSwapchain& windowSwapchain(void* data)
@@ -834,12 +834,12 @@ GpuSwapchain& windowSwapchain(void* data)
     return static_cast<WindowData*>(data)->swap;
 }
 
-void windowSetTitle(void* data, StringView title)
+void windowSetTitle(void* data, std::string_view title)
 {
     WindowData* wd = static_cast<WindowData*>(data);
     char buf[256];
-    u64 len = title.length < sizeof(buf) - 1 ? title.length : sizeof(buf) - 1;
-    memcpy(buf, title.chars, len);
+    u64 len = title.length() < sizeof(buf) - 1 ? title.length() : sizeof(buf) - 1;
+    std::memcpy(buf, title.data(), len);
     buf[len] = '\0';
 
     // Convert to wide string
@@ -848,7 +848,7 @@ void windowSetTitle(void* data, StringView title)
     SetWindowTextW(wd->hwnd, wbuf);
 }
 
-Span<Event> windowEvents(void* data)
+std::span<Event> windowEvents(void* data)
 {
     return static_cast<WindowData*>(data)->events;
 }
@@ -960,12 +960,12 @@ Vec2 windowMouseDelta(void* data)
     return windowState.mouseDelta;
 }
 
-StringView getClipboardText()
+std::string_view getClipboardText()
 {
     if (!OpenClipboard(nullptr))
-        return StringView{};
+        return std::string_view{};
 
-    StringView result{};
+    std::string_view result{};
 
     HANDLE hData = GetClipboardData(CF_UNICODETEXT);
     if (hData != nullptr)
@@ -977,9 +977,9 @@ StringView getClipboardText()
             int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, nullptr, 0, nullptr, nullptr);
             if (utf8Len > 0)
             {
-                windowState.clipboard.resize(static_cast<u64>(utf8Len - 1));
-                WideCharToMultiByte(CP_UTF8, 0, wstr, -1, windowState.clipboard.vals, utf8Len, nullptr, nullptr);
-                result = StringView{windowState.clipboard.vals, static_cast<u64>(utf8Len - 1)};
+                windowState.clipboard.resize(static_cast<u64>(utf8Len));
+                WideCharToMultiByte(CP_UTF8, 0, wstr, -1, windowState.clipboard.data(), utf8Len, nullptr, nullptr);
+                result = std::string_view{windowState.clipboard.data(), static_cast<u64>(utf8Len - 1)};
             }
             GlobalUnlock(hData);
         }
@@ -989,7 +989,7 @@ StringView getClipboardText()
     return result;
 }
 
-void setClipboardText(StringView text)
+void setClipboardText(std::string_view text)
 {
     if (!OpenClipboard(nullptr))
         return;
@@ -997,14 +997,14 @@ void setClipboardText(StringView text)
     EmptyClipboard();
 
     // Convert UTF-8 to wide string
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, text.chars, static_cast<int>(text.length), nullptr, 0);
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.length()), nullptr, 0);
     if (wlen > 0)
     {
         HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, static_cast<SIZE_T>((wlen + 1) * sizeof(wchar_t)));
         if (hMem != nullptr)
         {
             wchar_t* wstr = static_cast<wchar_t*>(GlobalLock(hMem));
-            MultiByteToWideChar(CP_UTF8, 0, text.chars, static_cast<int>(text.length), wstr, wlen);
+            MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.length()), wstr, wlen);
             wstr[wlen] = L'\0';
             GlobalUnlock(hMem);
 
@@ -1015,11 +1015,10 @@ void setClipboardText(StringView text)
     CloseClipboard();
 }
 
-void openURL(StringView url)
+void openURL(std::string_view url)
 {
-    ArenaScope scratch = getScratch();
-    char* cstr = cString(scratch, url);
-    ShellExecuteA(nullptr, "open", cstr, nullptr, nullptr, SW_SHOW);
+    std::string cstr{url};
+    ShellExecuteA(nullptr, "open", cstr.c_str(), nullptr, nullptr, SW_SHOW);
 }
 
 struct AudioState {
@@ -1067,12 +1066,12 @@ static DWORD WINAPI wasapiAudioThread(LPVOID lpParam)
         if (FAILED(hr))
             continue;
 
-        memset(data, 0, static_cast<u64>(availableFrames) * sizeof(f32) * audio.callbackConfig.channels);
+        std::memset(data, 0, static_cast<u64>(availableFrames) * sizeof(f32) * audio.callbackConfig.channels);
 
         if (audio.callback != nullptr)
         {
             u64 totalSamples = static_cast<u64>(availableFrames) * audio.callbackConfig.channels;
-            Span<f32> buffer{reinterpret_cast<f32*>(data), totalSamples};
+            std::span<f32> buffer{reinterpret_cast<f32*>(data), totalSamples};
             audio.callback(audio.callbackData, buffer, audio.callbackConfig);
         }
 

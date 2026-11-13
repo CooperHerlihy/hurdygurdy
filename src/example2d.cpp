@@ -6,7 +6,9 @@ static volatile bool quit = false;
 
 int main()
 {
-    HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
+    std::optional<HurdyGurdy> hg = init();
+    if (!hg.has_value())
+        HG_PANIC("Could not initialize Hurdy Gurdy\n");
 
     Window window = Window::create({});
     window.setTitle("Hurdy Gurdy 2D Example");
@@ -33,7 +35,7 @@ int main()
     spriteTex.image = GpuImage::create(2, 2, Format_rgba8_srgb,
         GpuImageUsage_sampled | GpuImageUsage_transferDst);
     spriteTex.view = GpuView::create(spriteTex.image, GpuAspect_color, GpuFilter_nearest);
-    spriteTex.view.write(defaultColors);
+    spriteTex.view.write(std::as_bytes(std::span{defaultColors}));
 
     Vec2 spritePos{0.5f, 0.5f};
     f32 spriteRot = 0.0f;

@@ -1,139 +1,152 @@
 #include "hg/json.hpp"
 
+#include "hg/macros.hpp"
 #include "hg/error.hpp"
+#include "hg/memory.hpp"
+#include "hg/strings.hpp"
+
+#include <optional>
+#include <string_view>
 
 namespace hg {
 
-JsonValue& JsonObject::getValue(StringView name)
+JsonValue& JsonObject::getValue(std::string_view name)
 {
     JsonValue* val = values.get(name);
     HG_ASSERT(val != nullptr);
     return *val;
 }
 
-JsonObject& JsonObject::getObject(StringView name)
+JsonObject& JsonObject::getObject(std::string_view name)
 {
     JsonValue* val = values.get(name);
     HG_ASSERT(val != nullptr);
     return val->object();
 }
 
-JsonArray& JsonObject::getArray(StringView name)
+JsonArray& JsonObject::getArray(std::string_view name)
 {
     JsonValue* val = values.get(name);
     HG_ASSERT(val != nullptr);
     return val->array();
 }
 
-StringBuilder& JsonObject::getString(StringView name)
+std::string& JsonObject::getString(std::string_view name)
 {
     JsonValue* val = values.get(name);
     HG_ASSERT(val != nullptr);
     return val->string();
 }
 
-f64& JsonObject::getNumber(StringView name)
+f64& JsonObject::getNumber(std::string_view name)
 {
     JsonValue* val = values.get(name);
     HG_ASSERT(val != nullptr);
     return val->number();
 }
 
-bool& JsonObject::getBoolean(StringView name)
+bool& JsonObject::getBoolean(std::string_view name)
 {
     JsonValue* val = values.get(name);
     HG_ASSERT(val != nullptr);
     return val->boolean();
 }
 
-JsonValue& JsonObject::setValue(StringView name, JsonValue&& val)
+JsonValue& JsonObject::setValue(std::string_view name, JsonValue&& val)
 {
-    return *values.add(StringBuilder{values.arena, name}, std::move(val));
+    return *values.add(std::string{name}, std::move(val));
 }
 
-JsonObject& JsonObject::setObject(StringView name, JsonObject&& val)
+JsonObject& JsonObject::setObject(std::string_view name, JsonObject&& val)
 {
-    return values.add(StringBuilder{values.arena, name}, std::move(val))->object();
+    return values.add(std::string{name}, std::move(val))->object();
 }
 
-JsonArray& JsonObject::setArray(StringView name, JsonArray&& val)
+JsonArray& JsonObject::setArray(std::string_view name, JsonArray&& val)
 {
-    return values.add(StringBuilder{values.arena, name}, std::move(val))->array();
+    return values.add(std::string{name}, std::move(val))->array();
 }
 
-StringBuilder& JsonObject::setString(StringView name, StringView val)
+std::string& JsonObject::setString(std::string_view name, std::string_view val)
 {
-    return values.add(StringBuilder{values.arena, name}, StringBuilder{values.arena, val})->string();
+    return values.add(std::string{name}, std::string{val})->string();
 }
 
-f64& JsonObject::setNumber(StringView name, f64 val)
+f64& JsonObject::setNumber(std::string_view name, f64 val)
 {
-    return values.add(StringBuilder{values.arena, name}, std::move(val))->number();
+    return values.add(std::string{name}, std::move(val))->number();
 }
 
-bool& JsonObject::setBoolean(StringView name, bool val)
+bool& JsonObject::setBoolean(std::string_view name, bool val)
 {
-    return values.add(StringBuilder{values.arena, name}, std::move(val))->boolean();
+    return values.add(std::string{name}, std::move(val))->boolean();
+}
+
+u64 JsonArray::count() const
+{
+    return values.size();
 }
 
 JsonValue& JsonArray::pushValue(JsonValue&& val)
 {
-    return values.push(std::move(val));
+    return values.emplace_back(std::move(val));
 }
 
 JsonObject& JsonArray::pushObject(JsonObject&& val)
 {
-    return values.push(std::move(val)).object();
+    return values.emplace_back(std::move(val)).object();
 }
 
 JsonArray& JsonArray::pushArray(JsonArray&& val)
 {
-    return values.push(std::move(val)).array();
+    return values.emplace_back(std::move(val)).array();
 }
 
-StringBuilder& JsonArray::pushString(StringView val)
+std::string& JsonArray::pushString(std::string_view val)
 {
-    return values.push(StringBuilder{values.arena, val}).string();
+    return values.emplace_back(std::string{val}).string();
 }
 
 f64& JsonArray::pushNumber(f64 val)
 {
-    return values.push(std::move(val)).number();
+    return values.emplace_back(std::move(val)).number();
 }
 
 bool& JsonArray::pushBoolean(bool val)
 {
-    return values.push(std::move(val)).boolean();
+    return values.emplace_back(std::move(val)).boolean();
 }
 
 JsonValue JsonArray::removeValue(u64 idx)
 {
-    return values.removeShift(idx);
+    JsonValue ret = std::move(values[idx]);
+    values.erase(values.begin() + static_cast<i64>(idx));
+    return ret;
 }
 
 JsonObject JsonArray::removeObject(u64 idx)
 {
-    return std::move(values.removeShift(idx).object());
+    return std::move(removeValue(idx).object());
 }
 
 JsonArray JsonArray::removeArray(u64 idx)
 {
-    return std::move(values.removeShift(idx).array());
+    return std::move(removeValue(idx).array());
 }
 
-StringBuilder JsonArray::removeString(u64 idx)
+std::string JsonArray::removeString(u64 idx)
 {
-    return std::move(values.removeShift(idx).string());
+    return std::move(removeValue(idx).string());
 }
 
 f64 JsonArray::removeNumber(u64 idx)
 {
-    return values.removeShift(idx).number();
+    return removeValue(idx).number();
 }
 
 bool JsonArray::removeBoolean(u64 idx)
 {
-    return values.removeShift(idx).boolean();
+    return removeValue(idx).boolean();
 }
 
 JsonValue& JsonArray::getValue(u64 idx)
@@ -151,7 +164,7 @@ JsonArray& JsonArray::getArray(u64 idx)
     return values[idx].array();
 }
 
-StringBuilder& JsonArray::getString(u64 idx)
+std::string& JsonArray::getString(u64 idx)
 {
     return values[idx].string();
 }
@@ -168,151 +181,153 @@ bool& JsonArray::getBoolean(u64 idx)
 
 JsonValue* JsonArray::begin()
 {
-    return values.begin();
+    return values.data();
 }
 
 const JsonValue* JsonArray::begin() const
 {
-    return values.begin();
+    return values.data();
 }
 
 JsonValue* JsonArray::end()
 {
-    return values.end();
+    return values.data() + values.size();
 }
 
 const JsonValue* JsonArray::end() const
 {
-    return values.end();
+    return values.data() + values.size();
 }
 
-void addIndent(StringBuilder& str, u32 indent)
+void addIndent(std::string& str, u32 indent)
 {
     for (u32 i = 0; i < indent; ++i)
     {
-        str.append('\t');
+        str += "\t";
     }
 }
 
-static void writeJsonValue(StringBuilder& str, u32 indent, const JsonValue& value);
+static void writeJsonValue(std::string& str, u32 indent, const JsonValue& value);
 
-static void writeJsonObject(StringBuilder& str, u32 indent, const JsonObject& object)
+static void writeJsonObject(std::string& str, u32 indent, const JsonObject& object)
 {
-    str.append("{\n");
-    object.forEach([&](StringView id, const JsonValue& val)
+    str += "{\n";
+    object.forEach([&](std::string_view id, const JsonValue& val)
     {
         addIndent(str, indent + 1);
-        str.append('"');
-        str.append(id);
-        str.append('"');
-        str.append(" : ");
+        str += "\"";
+        str += id;
+        str += "\"";
+        str += " : ";
         writeJsonValue(str, indent + 1, val);
-        str.append(",\n");
+        str += ",\n";
     });
     if (object.count() > 0)
-        str[--str.length - 1] = '\n';
+    {
+        str.erase(str.length() - 1);
+        str[str.length() - 1] = '\n';
+    }
     addIndent(str, indent);
-    str.append("}");
+    str += "}";
 }
 
-static void writeJsonArray(StringBuilder& str, u32 indent, const JsonArray& array)
+static void writeJsonArray(std::string& str, u32 indent, const JsonArray& array)
 {
-    str.append("[\n");
+    str += "[\n";
     for (const JsonValue& val : array)
     {
         addIndent(str, indent + 1);
         writeJsonValue(str, indent + 1, val);
-        str.append(",\n");
+        str += ",\n";
     }
     if (array.count() > 0)
-        str[--str.length - 1] = '\n';
+    {
+        str.erase(str.length() - 1);
+        str[str.length() - 1] = '\n';
+    }
     addIndent(str, indent);
-    str.append("]");
+    str += "]";
 }
 
-static void writeJsonString(StringBuilder& ret, StringView val)
+static void writeJsonString(std::string& ret, std::string_view val)
 {
-    ret.append('"');
+    ret += "\"";
     for (char c : val)
     {
         switch (c)
         {
             case '"':
-                ret.append("\\\"");
+                ret += "\\\"";
                 break;
             case '\\':
-                ret.append("\\\\");
+                ret += "\\\\";
                 break;
             case '\b':
-                ret.append("\\b");
+                ret += "\\b";
                 break;
             case '\f':
-                ret.append("\\f");
+                ret += "\\f";
                 break;
             case '\n':
-                ret.append("\\n");
+                ret += "\\n";
                 break;
             case '\r':
-                ret.append("\\r");
+                ret += "\\r";
                 break;
             case '\t':
-                ret.append("\\t");
+                ret += "\\t";
                 break;
             default:
-                ret.append(c);
+                ret += c;
                 break;
         }
     }
-    ret.append('"');
+    ret += '"';
 }
 
-static void writeJsonValue(StringBuilder& str, u32 indent, const JsonValue& value)
+static void writeJsonValue(std::string& str, u32 indent, const JsonValue& value)
 {
     value.match(
         [&](const JsonObject& val) { writeJsonObject(str, indent, val); },
         [&](const JsonArray& val) { writeJsonArray(str, indent, val); },
-        [&](const StringView& val) { writeJsonString(str, val); },
-        [&](const f64& val)
-        {
-            StringBuilder num = floatToString(getScratch(), val, 6);
-            str.append(num);
-        },
+        [&](const std::string& val) { writeJsonString(str, val); },
+        [&](const f64& val) { str += floatToString(val, 6); },
         [&](const bool& val)
         {
             if (val)
-                str.append("true");
+                str += "true";
             else
-                str.append("false");
+                str += "false";
         }
     );
 }
 
-StringView writeJson(Arena* arena, const JsonObject& json)
+std::string writeJson(const JsonObject& json)
 {
-    StringBuilder str{arena};
+    std::string str;
     writeJsonObject(str, 0, json);
     return str;
 }
 
-static bool readJsonValue(Arena* arena, JsonValue& val, StringView str, u32& head);
+static bool readJsonValue(JsonValue& val, std::string_view str, u32& head);
 
-static bool readJsonString(Arena* arena, StringBuilder& val, StringView str, u32& head);
+static bool readJsonString(std::string& val, std::string_view str, u32& head);
 
-static bool readJsonObject(Arena* arena, JsonObject& val, StringView str, u32& head)
+static bool readJsonObject(JsonObject& val, std::string_view str, u32& head)
 {
     u32 count = head;
-    if (count == str.length || str[count] != '{')
+    if (count == str.length() || str[count] != '{')
         return false;
     ++count;
 
     while (true)
     {
-        while (count < str.length && isWhitespace(str[count]))
+        while (count < str.length() && isWhitespace(str[count]))
         {
             ++count;
         }
 
-        if (count == str.length)
+        if (count == str.length())
             return false;
 
         if (str[count] == '}')
@@ -322,63 +337,63 @@ static bool readJsonObject(Arena* arena, JsonObject& val, StringView str, u32& h
             return true;
         }
 
-        StringBuilder nextName{arena};
-        if (!readJsonString(arena, nextName, str, count))
+        std::string nextName{};
+        if (!readJsonString(nextName, str, count))
             return false;
 
-        while (count < str.length && isWhitespace(str[count]))
+        while (count < str.length() && isWhitespace(str[count]))
         {
             ++count;
         }
 
-        if (count == str.length || str[count] != ':')
+        if (count == str.length() || str[count] != ':')
             return false;
         ++count;
 
-        while (count < str.length && isWhitespace(str[count]))
+        while (count < str.length() && isWhitespace(str[count]))
         {
             ++count;
         }
 
         JsonValue newVal{};
-        if (!readJsonValue(arena, newVal, str, count))
+        if (!readJsonValue(newVal, str, count))
             return false;
 
         val.setValue(std::move(nextName), std::move(newVal));
 
-        while (count < str.length && isWhitespace(str[count]))
+        while (count < str.length() && isWhitespace(str[count]))
         {
             ++count;
         }
 
-        if (count < str.length && str[count] == '}')
+        if (count < str.length() && str[count] == '}')
         {
             ++count;
             head = count;
             return true;
         }
 
-        if (count == str.length || str[count] != ',')
+        if (count == str.length() || str[count] != ',')
             return false;
         ++count;
     }
 }
 
-static bool readJsonArray(Arena* arena, JsonArray& val, StringView str, u32& head)
+static bool readJsonArray(JsonArray& val, std::string_view str, u32& head)
 {
     u32 count = head;
-    if (count == str.length || str[count] != '[')
+    if (count == str.length() || str[count] != '[')
         return false;
     ++count;
 
     while (true)
     {
-        while (count < str.length && isWhitespace(str[count]))
+        while (count < str.length() && isWhitespace(str[count]))
         {
             ++count;
         }
 
-        if (count == str.length)
+        if (count == str.length())
             return false;
 
         if (str[count] == ']')
@@ -389,41 +404,40 @@ static bool readJsonArray(Arena* arena, JsonArray& val, StringView str, u32& hea
         }
 
         JsonValue newVal{};
-        if (!readJsonValue(arena, newVal, str, count))
+        if (!readJsonValue(newVal, str, count))
             return false;
 
         val.pushValue(std::move(newVal));
 
-        while (count < str.length && isWhitespace(str[count]))
+        while (count < str.length() && isWhitespace(str[count]))
         {
             ++count;
         }
 
-        if (count < str.length && str[count] == ']')
+        if (count < str.length() && str[count] == ']')
         {
             ++count;
             head = count;
             return true;
         }
 
-        if (count == str.length || str[count] != ',')
+        if (count == str.length() || str[count] != ',')
             return false;
         ++count;
     }
 }
 
-static bool readJsonString(Arena* arena, StringBuilder& val, StringView str, u32& head)
+static bool readJsonString(std::string& val, std::string_view str, u32& head)
 {
-    ArenaScope scratch = getScratch(arena);
-
     u32 count = head;
-    if (count == str.length || str[count] != '"')
+    if (count == str.length() || str[count] != '"')
         return false;
 
-    StringBuilder temp{scratch};
+    ArenaScope scratch = getScratch();
+    string_temp temp{scratch};
 
     ++count;
-    if (count == str.length)
+    if (count == str.length())
         return false;
 
     while (str[count] != '"')
@@ -434,60 +448,60 @@ static bool readJsonString(Arena* arena, StringBuilder& val, StringView str, u32
         if (str[count] == '\\')
         {
             ++count;
-            if (count == str.length)
+            if (count == str.length())
                 return false;
 
             switch (str[count])
             {
                 case '"':
-                    temp.append('"');
+                    temp += '"';
                     break;
                 case '\\':
-                    temp.append('\\');
+                    temp += '\\';
                     break;
                 case 'b':
-                    temp.append('\b');
+                    temp += '\b';
                     break;
                 case 'f':
-                    temp.append('\f');
+                    temp += '\f';
                     break;
                 case 'n':
-                    temp.append('\n');
+                    temp += '\n';
                     break;
                 case 'r':
-                    temp.append('\r');
+                    temp += '\r';
                     break;
                 case 't':
-                    temp.append('\t');
+                    temp += '\t';
                     break;
                 default:
-                    temp.append('\\');
-                    temp.append(str[count]);
+                    temp += '\\';
+                    temp += str[count];
             }
         }
         else
         {
-            temp.append(str[count]);
+            temp += str[count];
         }
 
         ++count;
-        if (count == str.length)
+        if (count == str.length())
             return false;
     }
 
-    val = {arena, temp};
+    val = temp;
     head = count + 1;
     return true;
 }
 
-static bool readJsonNum(f64& val, StringView str, u32& head)
+static bool readJsonNum(f64& val, std::string_view str, u32& head)
 {
     u32 count = head;
-    while (count < str.length && str[count] != ',' && !isWhitespace(str[count]))
+    while (count < str.length() && str[count] != ',' && !isWhitespace(str[count]))
     {
         ++count;
     }
-    StringView valStr = {str.chars + head, count - head};
+    std::string_view valStr = {str.data() + head, count - head};
 
     if (isInteger(valStr))
     {
@@ -504,15 +518,15 @@ static bool readJsonNum(f64& val, StringView str, u32& head)
     return 0;
 }
 
-static bool readJsonBool(bool& val, StringView str, u32& head)
+static bool readJsonBool(bool& val, std::string_view str, u32& head)
 {
-    if (str.length - head >= 4 && StringView{str.chars + head, 4} == "true")
+    if (str.length() - head >= 4 && std::string_view{str.data() + head, 4} == "true")
     {
         val = true;
         head += 4;
         return true;
     }
-    if (str.length - head >= 5 && StringView{str.chars + head, 5} == "false")
+    if (str.length() - head >= 5 && std::string_view{str.data() + head, 5} == "false")
     {
         val = false;
         head += 5;
@@ -521,7 +535,7 @@ static bool readJsonBool(bool& val, StringView str, u32& head)
     return false;
 }
 
-static bool readJsonValue(Arena* arena, JsonValue& val, StringView str, u32& head)
+static bool readJsonValue(JsonValue& val, std::string_view str, u32& head)
 {
     bool boolVal;
     if (readJsonBool(boolVal, str, head))
@@ -537,22 +551,22 @@ static bool readJsonValue(Arena* arena, JsonValue& val, StringView str, u32& hea
         return true;
     }
 
-    StringBuilder strVal;
-    if (readJsonString(arena, strVal, str, head))
+    std::string strVal{};
+    if (readJsonString(strVal, str, head))
     {
         val = std::move(strVal);
         return true;
     }
 
-    JsonArray arrVal{arena};
-    if (readJsonArray(arena, arrVal, str, head))
+    JsonArray arrVal{};
+    if (readJsonArray(arrVal, str, head))
     {
         val = std::move(arrVal);
         return true;
     }
 
-    JsonObject objVal{arena};
-    if (readJsonObject(arena, objVal, str, head))
+    JsonObject objVal{};
+    if (readJsonObject(objVal, str, head))
     {
         val = std::move(objVal);
         return true;
@@ -561,12 +575,12 @@ static bool readJsonValue(Arena* arena, JsonValue& val, StringView str, u32& hea
     return false;
 }
 
-Maybe<JsonObject> readJson(Arena* arena, StringView json)
+std::optional<JsonObject> readJson(std::string_view json)
 {
-    JsonObject ret{arena};
+    JsonObject ret{};
 
     u32 head = 0;
-    if (!readJsonObject(arena, ret, json, head))
+    if (!readJsonObject(ret, json, head))
     {
         setError("Could not parse JSON");
         return {};

@@ -1,21 +1,23 @@
 #include "hg/error.hpp"
 
 #include <algorithm>
+#include <cstring>
 
 namespace hg {
 
 thread_local static char errorData[4096];
 thread_local static u64 errorLength = 0;
 
-StringView getError()
+std::string_view getError()
 {
     return {errorData, errorLength};
 }
 
-void setError(StringView error)
+void setError(std::string_view error)
 {
-    u64 newLength = std::min(error.length, static_cast<u64>(sizeof(errorData)));
-    memcpy(errorData, error.chars, newLength);
+    u64 newLength = std::min(error.length(), static_cast<u64>(sizeof(errorData) - 1));
+    std::memcpy(errorData, error.data(), newLength);
+    errorData[newLength] = '\0';
     errorLength = newLength;
 }
 

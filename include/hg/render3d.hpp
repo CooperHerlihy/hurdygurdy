@@ -49,11 +49,11 @@ struct MeshData {
     /**
      * The file index of the first vertex
      */
-    Array<MeshVertex> vertices{};
+    std::vector<MeshVertex> vertices{};
     /**
      * The file index of the first geometry index
      */
-    Array<u32> indices{};
+    std::vector<u32> indices{};
 };
 
 /**
@@ -199,15 +199,15 @@ struct Renderer3D {
     /**
      * The directional lights
      */
-    Array<LightData> dirLights{};
+    std::vector<LightData> dirLights{};
     /**
      * The point lights
      */
-    Array<LightData> pointLights{};
+    std::vector<LightData> pointLights{};
     /**
      * The models to render this frame
      */
-    Array<ModelData> models{};
+    std::vector<ModelData> models{};
 
     /**
      * Create uninitialized

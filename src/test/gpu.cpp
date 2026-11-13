@@ -20,11 +20,11 @@
 using namespace hg;
 
 // ---- shared shader spans ----
-static Span<const u8> shTriVert    = {test_shaders_tri_vert_spv,      sizeof(test_shaders_tri_vert_spv)};
-static Span<const u8> shTriFrag    = {test_shaders_tri_frag_spv,      sizeof(test_shaders_tri_frag_spv)};
-static Span<const u8> shDepthVert  = {test_shaders_depth_vert_spv,    sizeof(test_shaders_depth_vert_spv)};
-static Span<const u8> shDepthFrag  = {test_shaders_depth_frag_spv,    sizeof(test_shaders_depth_frag_spv)};
-static Span<const u8> shSamplerFrag= {test_shaders_sampler_frag_spv,  sizeof(test_shaders_sampler_frag_spv)};
+static std::span<const u8> shTriVert    = {test_shaders_tri_vert_spv,      sizeof(test_shaders_tri_vert_spv)};
+static std::span<const u8> shTriFrag    = {test_shaders_tri_frag_spv,      sizeof(test_shaders_tri_frag_spv)};
+static std::span<const u8> shDepthVert  = {test_shaders_depth_vert_spv,    sizeof(test_shaders_depth_vert_spv)};
+static std::span<const u8> shDepthFrag  = {test_shaders_depth_frag_spv,    sizeof(test_shaders_depth_frag_spv)};
+static std::span<const u8> shSamplerFrag= {test_shaders_sampler_frag_spv,  sizeof(test_shaders_sampler_frag_spv)};
 
 static Format kColorFmt = Format_rgba8_unorm;
 
@@ -64,7 +64,7 @@ static GpuPass simpleColorPass(GpuAttachment* colorAtt,
     return pass;
 }
 
-static GpuPipeline makeSimplePipeline(Span<const u8> vertShader, Span<const u8> fragShader,
+static GpuPipeline makeSimplePipeline(std::span<const u8> vertShader, std::span<const u8> fragShader,
                                       u32 pushSize = 0, GpuTopology topo = GpuTopology_triangleList)
 {
     GpuGraphicsPipelineCreateInfo ci{};
@@ -171,25 +171,25 @@ TEST(testGpuBufferWriteReadOffsets)
         // Write 68 bytes of 0x11111111 starting at offset 0
         u32 fillVal = 0x11111111;
         for (u32 off = 0; off < 68; off += 4)
-            buf.write(&fillVal, off, sizeof(fillVal));
+            buf.write(std::as_bytes(std::span{&fillVal, 1}), off);
 
         // Overwrite at offset 64 and 128
         u32 v2 = 0x22222222;
         u32 v3 = 0x33333333;
-        buf.write(&v2, 64, sizeof(v2));
-        buf.write(&v3, 128, sizeof(v3));
+        buf.write(std::as_bytes(std::span{&v2, 1}), 64);
+        buf.write(std::as_bytes(std::span{&v3, 1}), 128);
 
         u32 r1 = 0, r2 = 0, r3 = 0;
-        buf.read(&r1, 0, sizeof(r1));
-        buf.read(&r2, 64, sizeof(r2));
-        buf.read(&r3, 128, sizeof(r3));
+        buf.read(std::as_writable_bytes(std::span{&r1, 1}), 0);
+        buf.read(std::as_writable_bytes(std::span{&r2, 1}), 64);
+        buf.read(std::as_writable_bytes(std::span{&r3, 1}), 128);
         ASSERT(r1 == 0x11111111);
         ASSERT(r2 == 0x22222222);
         ASSERT(r3 == 0x33333333);
 
         // Cross-boundary read: 8 bytes starting at offset 60
         u64 cross = 0;
-        buf.read(&cross, 60, sizeof(cross));
+        buf.read(std::as_writable_bytes(std::span{&cross, 1}), 60);
         u32 tail = static_cast<u32>(cross & 0xFFFFFFFF);
         u32 head = static_cast<u32>((cross >> 32) & 0xFFFFFFFF);
         ASSERT(tail == 0x11111111);
@@ -203,23 +203,23 @@ TEST(testGpuBufferWriteReadOffsets)
 
         u32 fillVal = 0x11111111;
         for (u32 off = 0; off < 68; off += 4)
-            buf.write(&fillVal, off, sizeof(fillVal));
+            buf.write(std::as_bytes(std::span{&fillVal, 1}), off);
 
         u32 v2 = 0x22222222;
         u32 v3 = 0x33333333;
-        buf.write(&v2, 64, sizeof(v2));
-        buf.write(&v3, 128, sizeof(v3));
+        buf.write(std::as_bytes(std::span{&v2, 1}), 64);
+        buf.write(std::as_bytes(std::span{&v3, 1}), 128);
 
         u32 r1 = 0, r2 = 0, r3 = 0;
-        buf.read(&r1, 0, sizeof(r1));
-        buf.read(&r2, 64, sizeof(r2));
-        buf.read(&r3, 128, sizeof(r3));
+        buf.read(std::as_writable_bytes(std::span{&r1, 1}), 0);
+        buf.read(std::as_writable_bytes(std::span{&r2, 1}), 64);
+        buf.read(std::as_writable_bytes(std::span{&r3, 1}), 128);
         ASSERT(r1 == 0x11111111);
         ASSERT(r2 == 0x22222222);
         ASSERT(r3 == 0x33333333);
 
         u64 cross = 0;
-        buf.read(&cross, 60, sizeof(cross));
+        buf.read(std::as_writable_bytes(std::span{&cross, 1}), 60);
         u32 tail = static_cast<u32>(cross & 0xFFFFFFFF);
         u32 head = static_cast<u32>((cross >> 32) & 0xFFFFFFFF);
         ASSERT(tail == 0x11111111);
@@ -233,9 +233,9 @@ TEST(testGpuBufferWriteReadMultiple)
     u32 src[16] = {};
     for (u32 i = 0; i < 16; ++i)
         src[i] = i * 3 + 7;
-    buf.write(src, 0, sizeof(src));
+    buf.write(std::as_bytes(std::span{src}), 0);
     u32 dst[16] = {};
-    buf.read(dst, 0, sizeof(dst));
+    buf.read(std::as_writable_bytes(std::span{dst}), 0);
     for (u32 i = 0; i < 16; ++i)
         ASSERT(dst[i] == i * 3 + 7);
 }
@@ -306,9 +306,9 @@ TEST(testGpuViewWriteRead)
     u32 src[16 * 16] = {};
     for (u32 i = 0; i < 16 * 16; ++i)
         src[i] = 0x30405060;
-    view.write(src);
+    view.write(std::as_bytes(std::span{src}));
     u32 dst[16 * 16] = {};
-    view.read(dst);
+    view.read(std::as_writable_bytes(std::span{dst}));
     for (u32 i = 0; i < 16 * 16; ++i)
         ASSERT(dst[i] == 0x30405060);
 }
@@ -334,12 +334,12 @@ TEST(testGpuViewExtendedConfigSampler)
     vci.filter = GpuFilter_linear;
     vci.edgeMode = GpuSamplerEdgeMode_clampToEdge;
     GpuView view = GpuView::createEx(vci);
-    view.write(checker);
+    view.write(std::as_bytes(std::span{checker}));
 
     // Verify descriptor is valid
     // Read back texture data to verify write
     u32 readback[texSize * texSize] = {};
-    view.read(readback);
+    view.read(std::as_writable_bytes(std::span{readback}));
     bool match = true;
     for (u32 i = 0; i < texSize * texSize; ++i)
         if (readback[i] != checker[i])
@@ -383,13 +383,13 @@ TEST(testGpuViewExtendedConfigSampler)
 
     gpuBeginRenderPass(cmd, pass);
     gpuBindPipeline(cmd, pipe);
-    gpuPushConstants(cmd, pipe, &push, sizeof(push));
+    gpuPushConstants(cmd, pipe, push);
     gpuDraw(cmd, 0, 3, 0, 1);
     gpuEndRenderPass(cmd);
     gpuCmdEnd(cmd);
 
     u32 result[outSize * outSize] = {};
-    outView.read(result);
+    outView.read(std::as_writable_bytes(std::span{result}));
     // Sampling center of white texel (1,0) -> white (0xFFFFFFFF)
     ASSERT(result[0] == 0xFFFFFFFF);
 }
@@ -404,7 +404,7 @@ TEST(testCommandBufferExecutes)
             GpuMemoryUsage_frequentUpdate);
 
     u32 known = 0xDECAF123;
-    staging.write(&known, 0, sizeof(known));
+    staging.write(std::as_bytes(std::span{&known, 1}), 0);
 
     GpuPipeline pipe = GpuPipeline::compute({test_shaders_compute_comp_spv, sizeof(test_shaders_compute_comp_spv)}, 12);
 
@@ -424,7 +424,7 @@ TEST(testCommandBufferExecutes)
     gpuMemoryBarrier(cmd, {&stagingBarrier, 1}, {});
 
     gpuBindPipeline(cmd, pipe);
-    gpuPushConstants(cmd, pipe, &push, sizeof(push));
+    gpuPushConstants(cmd, pipe, push);
     gpuDispatch(cmd, 1, 1, 1);
 
     GpuBufferBarrier devBarrier{};
@@ -435,7 +435,7 @@ TEST(testCommandBufferExecutes)
     gpuCmdEnd(cmd);
 
     u32 result = 0;
-    devBuf.read(&result, 0, sizeof(result));
+    devBuf.read(std::as_writable_bytes(std::span{&result, 1}), 0);
     ASSERT(result == 0xDECAF123);
 }
 
@@ -453,7 +453,7 @@ TEST(testBufferBarrierComputeSync)
     u32 input[elemCount] = {};
     for (u32 i = 0; i < elemCount; ++i)
         input[i] = i;
-    buf.write(input, 0, bufSize);
+    buf.write(std::as_bytes(std::span{input}), 0);
 
     struct Push {
         u32 addVal;
@@ -475,7 +475,7 @@ TEST(testBufferBarrierComputeSync)
     {
         Push push{1, buf.storageDescriptor(), buf.storageDescriptor()};
         gpuBindPipeline(cmd, incPipe);
-        gpuPushConstants(cmd, incPipe, &push, sizeof(push));
+        gpuPushConstants(cmd, incPipe, push);
         gpuDispatch(cmd, elemCount, 1, 1);
     }
 
@@ -487,14 +487,14 @@ TEST(testBufferBarrierComputeSync)
     {
         Push push{0, buf.storageDescriptor(), outBuf.storageDescriptor()};
         gpuBindPipeline(cmd, incPipe);
-        gpuPushConstants(cmd, incPipe, &push, sizeof(push));
+        gpuPushConstants(cmd, incPipe, push);
         gpuDispatch(cmd, elemCount, 1, 1);
     }
 
     gpuCmdEnd(cmd);
 
     u32 result[elemCount] = {};
-    outBuf.read(result, 0, bufSize);
+    outBuf.read(std::as_writable_bytes(std::span{result}), 0);
     for (u32 i = 0; i < elemCount; ++i)
         ASSERT(result[i] == input[i] + 1);
 }
@@ -511,7 +511,7 @@ TEST(testImageBarrierLayoutTransition)
     u32 red[imgSize * imgSize] = {};
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         red[i] = 0xFF0000FF;
-    view.write(red);
+    view.write(std::as_bytes(std::span{red}));
 
     // Do a round-trip layout transition:
     // transferDst (after write) -> general -> transferSrc
@@ -531,7 +531,7 @@ TEST(testImageBarrierLayoutTransition)
 
     // Read back -- data should survive the transitions
     u32 result[imgSize * imgSize] = {};
-    view.read(result);
+    view.read(std::as_writable_bytes(std::span{result}));
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         ASSERT(result[i] == 0xFF0000FF);
 }
@@ -558,7 +558,7 @@ TEST(testCombinedBufferImageBarrier)
         pixelData[i] = r | (static_cast<u32>(g) << 8)
                      | (static_cast<u32>(b) << 16) | (0xFFu << 24);
     }
-    storageBuf.write(pixelData, 0, sizeof(pixelData));
+    storageBuf.write(std::as_bytes(std::span{pixelData}), 0);
 
     struct Push {
         u32 bufIdx;
@@ -589,7 +589,7 @@ TEST(testCombinedBufferImageBarrier)
 
         Push push{storageBuf.storageDescriptor(), imgView.storageDescriptor()};
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, imgSize, imgSize, 1);
     }
 
@@ -603,13 +603,13 @@ TEST(testCombinedBufferImageBarrier)
 
     // Read back buffer -- should still contain original data
     u32 bufResult[imgSize * imgSize] = {};
-    storageBuf.read(bufResult, 0, sizeof(bufResult));
+    storageBuf.read(std::as_writable_bytes(std::span{bufResult}), 0);
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         ASSERT(bufResult[i] == pixelData[i]);
 
     // Read back image -- should match buffer data
     u32 imgResult[imgSize * imgSize] = {};
-    imgView.read(imgResult);
+    imgView.read(std::as_writable_bytes(std::span{imgResult}));
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         ASSERT(imgResult[i] == pixelData[i]);
 }
@@ -626,7 +626,7 @@ TEST(testComputePassDispatch)
     u32 input[elemCount] = {};
     for (u32 i = 0; i < elemCount; ++i)
         input[i] = i;
-    inBuf.write(input, 0, bufSize);
+    inBuf.write(std::as_bytes(std::span{input}), 0);
 
     struct Push {
         u32 inIdx;
@@ -651,14 +651,14 @@ TEST(testComputePassDispatch)
 
         Push push{inBuf.storageDescriptor(), outBuf.storageDescriptor()};
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, elemCount, 1, 1);
     }
 
     gpuCmdEnd(cmd);
 
     u32 output[elemCount] = {};
-    outBuf.read(output, 0, bufSize);
+    outBuf.read(std::as_writable_bytes(std::span{output}), 0);
     for (u32 i = 0; i < elemCount; ++i)
         ASSERT(output[i] == input[i] * 2);
 }
@@ -692,7 +692,7 @@ TEST(testComputeDispatchSSBO)
     u32 input[elemCount] = {};
     for (u32 i = 0; i < elemCount; ++i)
         input[i] = i;
-    inBuf.write(input, 0, bufSize);
+    inBuf.write(std::as_bytes(std::span{input}), 0);
 
     struct Push {
         u32 addVal;
@@ -713,13 +713,13 @@ TEST(testComputeDispatchSSBO)
     gpuMemoryBarrier(cmd, {barriers, 2}, {});
 
     gpuBindPipeline(cmd, pipe);
-    gpuPushConstants(cmd, pipe, &push, sizeof(push));
+    gpuPushConstants(cmd, pipe, push);
     gpuDispatch(cmd, elemCount, 1, 1);
 
     gpuCmdEnd(cmd);
 
     u32 output[elemCount] = {};
-    outBuf.read(output, 0, bufSize);
+    outBuf.read(std::as_writable_bytes(std::span{output}), 0);
 
     for (u32 i = 0; i < elemCount; ++i)
         ASSERT(output[i] == input[i] + addVal);
@@ -768,7 +768,7 @@ TEST(testOffscreenRenderTriangle)
     gpuCmdEnd(cmd);
 
     u32 pixelData[imgSize * imgSize] = {};
-    colorView.read(pixelData);
+    colorView.read(std::as_writable_bytes(std::span{pixelData}));
 
     // Triangle covers the whole viewport; all pixels should be (0.2, 0.4, 0.6, 1.0)
     // packed RGBA -> 0xFF996633
@@ -790,7 +790,7 @@ TEST(testComputeSSBOAdd)
     u32 input[elemCount] = {};
     for (u32 i = 0; i < elemCount; ++i)
         input[i] = i;
-    inBuf.write(input, 0, bufSize);
+    inBuf.write(std::as_bytes(std::span{input}), 0);
 
     struct Push {
         u32 addVal;
@@ -817,14 +817,14 @@ TEST(testComputeSSBOAdd)
         gpuComputePass(cmd, pass);
 
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, elemCount, 1, 1);
     }
 
     gpuCmdEnd(cmd);
 
     u32 output[elemCount] = {};
-    outBuf.read(output, 0, bufSize);
+    outBuf.read(std::as_writable_bytes(std::span{output}), 0);
 
     for (u32 i = 0; i < elemCount; ++i)
         ASSERT(output[i] == input[i] + addVal);
@@ -871,11 +871,11 @@ TEST(testOffscreenRenderDepthTest)
     gpuBindPipeline(cmd, pipe);
 
     Push farPush{0.75f, {}, {1.0f, 0.0f, 0.0f, 1.0f}};
-    gpuPushConstants(cmd, pipe, &farPush, sizeof(farPush));
+    gpuPushConstants(cmd, pipe, farPush);
     gpuDraw(cmd, 0, 3, 0, 1);
 
     Push nearPush{0.25f, {}, {0.0f, 1.0f, 0.0f, 1.0f}};
-    gpuPushConstants(cmd, pipe, &nearPush, sizeof(nearPush));
+    gpuPushConstants(cmd, pipe, nearPush);
     gpuDraw(cmd, 0, 3, 0, 1);
 
     gpuEndRenderPass(cmd);
@@ -885,13 +885,13 @@ TEST(testOffscreenRenderDepthTest)
     gpuCmdEnd(cmd);
 
     u32 colorPixels[imgSize * imgSize] = {};
-    colorView.read(colorPixels);
+    colorView.read(std::as_writable_bytes(std::span{colorPixels}));
 
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         ASSERT(colorPixels[i] == 0xFF00FF00);
 
     f32 depthPixels[imgSize * imgSize] = {};
-    depthView.read(depthPixels);
+    depthView.read(std::as_writable_bytes(std::span{depthPixels}));
 
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         ASSERT(depthPixels[i] > 0.24f && depthPixels[i] < 0.26f);
@@ -914,7 +914,7 @@ TEST(testMultiDrawInstancing)
 
     GpuBuffer instBuf = GpuBuffer::create(sizeof(instanceData),
             GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
-    instBuf.write(instanceData, 0, sizeof(instanceData));
+    instBuf.write(std::as_bytes(std::span{instanceData}), 0);
 
     GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
@@ -956,14 +956,14 @@ TEST(testMultiDrawInstancing)
     gpuBindPipeline(cmd, pipe);
 
     Push push{instBuf.uniformDescriptor()};
-    gpuPushConstants(cmd, pipe, &push, sizeof(push));
+    gpuPushConstants(cmd, pipe, push);
     gpuDraw(cmd, 0, 4, 0, instanceCount);
 
     gpuEndRenderPass(cmd);
     gpuCmdEnd(cmd);
 
     u32 pixels[imgSize * imgSize] = {};
-    colorView.read(pixels);
+    colorView.read(std::as_writable_bytes(std::span{pixels}));
 
     u32 green = 0xFF00FF00;
     ASSERT(pixels[2 * imgSize + 2] == green);
@@ -1012,20 +1012,20 @@ TEST(testMultiViewportScissor)
     Push red{0.0f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
     gpuSetViewport(cmd, 0.0f, 0.0f, 8.0f, 16.0f);
     gpuSetScissor(cmd, 0, 0, 8, 16);
-    gpuPushConstants(cmd, pipe, &red, sizeof(red));
+    gpuPushConstants(cmd, pipe, red);
     gpuDraw(cmd, 0, 3, 0, 1);
 
     Push blue{0.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
     gpuSetViewport(cmd, 8.0f, 0.0f, 8.0f, 16.0f);
     gpuSetScissor(cmd, 8, 0, 8, 16);
-    gpuPushConstants(cmd, pipe, &blue, sizeof(blue));
+    gpuPushConstants(cmd, pipe, blue);
     gpuDraw(cmd, 0, 3, 0, 1);
 
     gpuEndRenderPass(cmd);
     gpuCmdEnd(cmd);
 
     u32 pixels[imgSize * imgSize] = {};
-    colorView.read(pixels);
+    colorView.read(std::as_writable_bytes(std::span{pixels}));
 
     u32 redPx = 0xFF0000FF;
     u32 bluePx = 0xFFFF0000;
@@ -1049,7 +1049,7 @@ TEST(testComputeImageFilterBlur)
     u32 whiteImg[imgSize * imgSize];
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         whiteImg[i] = white;
-    srcView.write(whiteImg);
+    srcView.write(std::as_bytes(std::span{whiteImg}));
 
     GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_storage | GpuImageUsage_transferSrc);
@@ -1089,7 +1089,7 @@ TEST(testComputeImageFilterBlur)
 
         Push push{srcView.samplerDescriptor(), dstView.storageDescriptor()};
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, imgSize, imgSize, 1);
     }
 
@@ -1102,7 +1102,7 @@ TEST(testComputeImageFilterBlur)
     gpuCmdEnd(cmd);
 
     u32 pixels[imgSize * imgSize] = {};
-    dstView.read(pixels);
+    dstView.read(std::as_writable_bytes(std::span{pixels}));
 
     for (u32 y = 1; y < imgSize - 1; ++y)
         for (u32 x = 1; x < imgSize - 1; ++x)
@@ -1178,7 +1178,7 @@ TEST(testRenderToTextureSample)
         gpuBeginRenderPass(cmd, pass);
         gpuBindPipeline(cmd, pass2Pipe);
         Push2 push{firstView.samplerDescriptor()};
-        gpuPushConstants(cmd, pass2Pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pass2Pipe, push);
         gpuDraw(cmd, 0, 3, 0, 1);
         gpuEndRenderPass(cmd);
     }
@@ -1186,7 +1186,7 @@ TEST(testRenderToTextureSample)
     gpuCmdEnd(cmd);
 
     u32 pixels[imgSize * imgSize] = {};
-    resultView.read(pixels);
+    resultView.read(std::as_writable_bytes(std::span{pixels}));
 
     // Invert of vec4(0.2, 0.4, 0.6, 1.0) = vec4(0.8, 0.6, 0.4, 0.0)
     // In RGBA8: R=204, G=153, B=102, A=0  => 0x006699CC
@@ -1205,7 +1205,7 @@ TEST(testBufferReadbackStagingRead)
     u32 input[elemCount] = {};
     for (u32 i = 0; i < elemCount; ++i)
         input[i] = i + 1;
-    inBuf.write(input, 0, bufSize);
+    inBuf.write(std::as_bytes(std::span{input}), 0);
 
     GpuBuffer outBuf = GpuBuffer::create(bufSize,
             GpuBufferUsage_storageBuffer | GpuBufferUsage_transferSrc,
@@ -1231,7 +1231,7 @@ TEST(testBufferReadbackStagingRead)
 
         Push push{inBuf.storageDescriptor(), outBuf.storageDescriptor()};
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, elemCount, 1, 1);
     }
 
@@ -1243,7 +1243,7 @@ TEST(testBufferReadbackStagingRead)
     gpuCmdEnd(cmd);
 
     u32 output[elemCount] = {};
-    outBuf.read(output, 0, bufSize);
+    outBuf.read(std::as_writable_bytes(std::span{output}), 0);
     for (u32 i = 0; i < elemCount; ++i)
         ASSERT(output[i] == input[i] * 2);
 }
@@ -1262,7 +1262,7 @@ TEST(testPipelineBarrierChainedDispatches)
     u32 input[elemCount] = {};
     for (u32 i = 0; i < elemCount; ++i)
         input[i] = i + 1;
-    bufA.write(input, 0, bufSize);
+    bufA.write(std::as_bytes(std::span{input}), 0);
 
     struct Push { u32 inIdx; u32 outIdx; };
     GpuPipeline pipe = GpuPipeline::compute({test_shaders_mul_comp_spv, sizeof(test_shaders_mul_comp_spv)}, sizeof(Push));
@@ -1285,7 +1285,7 @@ TEST(testPipelineBarrierChainedDispatches)
 
         Push push{bufA.storageDescriptor(), bufB.storageDescriptor()};
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, elemCount, 1, 1);
     }
 
@@ -1308,7 +1308,7 @@ TEST(testPipelineBarrierChainedDispatches)
 
         Push push{bufB.storageDescriptor(), bufC.storageDescriptor()};
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, elemCount, 1, 1);
     }
 
@@ -1323,7 +1323,7 @@ TEST(testPipelineBarrierChainedDispatches)
     gpuCmdEnd(cmd);
 
     u32 output[elemCount] = {};
-    bufC.read(output, 0, bufSize);
+    bufC.read(std::as_writable_bytes(std::span{output}), 0);
     for (u32 i = 0; i < elemCount; ++i)
         ASSERT(output[i] == input[i] * 4);
 }
@@ -1368,7 +1368,7 @@ TEST(testImageArrayRendering)
         gpuCmdEnd(cmd);
 
         u32 pixels[imgSize * imgSize] = {};
-        layerView.read(pixels);
+        layerView.read(std::as_writable_bytes(std::span{pixels}));
 
         for (u32 i = 0; i < imgSize * imgSize; ++i)
             ASSERT(pixels[i] == 0xFF996633);
@@ -1385,7 +1385,7 @@ TEST(testGpuWaitIdle)
             GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
 
     u32 known = 0xDEADBEEF;
-    staging.write(&known, 0, sizeof(known));
+    staging.write(std::as_bytes(std::span{&known, 1}), 0);
 
     GpuPipeline pipe = GpuPipeline::compute({test_shaders_compute_comp_spv, sizeof(test_shaders_compute_comp_spv)}, 12);
 
@@ -1404,7 +1404,7 @@ TEST(testGpuWaitIdle)
     gpuMemoryBarrier(cmd, {&stagingBarrier, 1}, {});
 
     gpuBindPipeline(cmd, pipe);
-    gpuPushConstants(cmd, pipe, &push, sizeof(push));
+    gpuPushConstants(cmd, pipe, push);
     gpuDispatch(cmd, 1, 1, 1);
 
     GpuBufferBarrier devBarrier{};
@@ -1418,7 +1418,7 @@ TEST(testGpuWaitIdle)
     gpuWaitIdle();
 
     u32 result = 0;
-    devBuf.read(&result, 0, sizeof(result));
+    devBuf.read(std::as_writable_bytes(std::span{&result, 1}), 0);
     ASSERT(result == 0xDEADBEEF);
 }
 
@@ -1430,7 +1430,7 @@ TEST(testUniformBufferVertexShader)
     f32 colorData[4] = {0.5f, 0.3f, 0.7f, 1.0f};
 
     GpuBuffer uniformBuf = GpuBuffer::create(64, GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
-    uniformBuf.write(colorData, 0, sizeof(colorData));
+    uniformBuf.write(std::as_bytes(std::span{colorData}), 0);
 
     GpuImage colorImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
             GpuImageUsage_colorAttachment | GpuImageUsage_transferSrc);
@@ -1466,13 +1466,13 @@ TEST(testUniformBufferVertexShader)
 
     gpuBeginRenderPass(cmd, pass);
     gpuBindPipeline(cmd, pipe);
-    gpuPushConstants(cmd, pipe, &push, sizeof(push));
+    gpuPushConstants(cmd, pipe, push);
     gpuDraw(cmd, 0, 3, 0, 1);
     gpuEndRenderPass(cmd);
     gpuCmdEnd(cmd);
 
     u32 pixels[imgSize * imgSize] = {};
-    colorView.read(pixels);
+    colorView.read(std::as_writable_bytes(std::span{pixels}));
 
     // Expected: f32(0.5, 0.3, 0.7, 1.0) -> unorm8(128, 76, 178, 255)
     for (u32 i = 0; i < imgSize * imgSize; ++i)
@@ -1520,7 +1520,7 @@ TEST(testStorageImageComputeShader)
 
         Push push{view.storageDescriptor()};
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, imgSize, imgSize, 1);
     }
 
@@ -1532,7 +1532,7 @@ TEST(testStorageImageComputeShader)
     gpuCmdEnd(cmd);
 
     u32 pixels[imgSize * imgSize] = {};
-    view.read(pixels);
+    view.read(std::as_writable_bytes(std::span{pixels}));
 
     // Shader writes: (x+y)&1==0 -> vec4(1,1,1,1)=0xFFFFFFFF, else vec4(0,0,0,1)=0xFF000000
     u32 expected[imgSize * imgSize] = {};
@@ -1597,7 +1597,7 @@ TEST(testGpuViewWriteCubemap)
     fillFace(1, 1, 0xFF, 0x00, 0xFF, 0xFF); // +Z (layer 4): magenta
     fillFace(3, 1, 0x00, 0xFF, 0xFF, 0xFF); // -Z (layer 5): cyan
 
-    cubeView.writeCubemap(cross);
+    cubeView.writeCubemap(std::as_bytes(std::span{cross}));
 
     // Read back layer 0 (+X) via a single-layer view
     GpuViewCreateInfo readVci{};
@@ -1613,7 +1613,7 @@ TEST(testGpuViewWriteCubemap)
     gpuCmdEnd(cmd);
 
     u32 face[faceSize * faceSize] = {};
-    readView.read(face);
+    readView.read(std::as_writable_bytes(std::span{face}));
     for (u32 i = 0; i < faceSize * faceSize; ++i)
         ASSERT(face[i] == 0xFF0000FF); // RGBA: R=0xFF, G=0x00, B=0x00, A=0xFF
 }
@@ -1642,12 +1642,12 @@ TEST(testGpuViewGenMipmapsBaseLevel)
     u32 src[imgSize * imgSize] = {};
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         src[i] = yellow;
-    mipView.write(src);
+    mipView.write(std::as_bytes(std::span{src}));
 
     mipView.genMipmaps();
 
     u32 dst[imgSize * imgSize] = {};
-    mipView.read(dst);
+    mipView.read(std::as_writable_bytes(std::span{dst}));
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         ASSERT(dst[i] == yellow);
 }
@@ -1680,7 +1680,7 @@ TEST(testGpuViewGenMipmapsMip1Content)
     for (u32 y = 0; y < h; ++y)
         for (u32 x = 0; x < w; ++x)
             src[y * w + x] = (x < 2 && y < 2) ? red : green;
-    fullView.write(src);
+    fullView.write(std::as_bytes(std::span{src}));
 
     fullView.genMipmaps();
 
@@ -1698,7 +1698,7 @@ TEST(testGpuViewGenMipmapsMip1Content)
     gpuCmdEnd(cmd);
 
     u32 mip1[4] = {};
-    mip1View.read(mip1);
+    mip1View.read(std::as_writable_bytes(std::span{mip1}));
 
     // Mip 1 (2x2): top-left averages the red 2x2 block -> red;
     // the other three average green quadrants -> green
@@ -1724,7 +1724,7 @@ TEST(testGpuLoadOpLoadPreservesContent)
     u32 src[w * h];
     for (u32 i = 0; i < w * h; ++i)
         src[i] = redPx;
-    view.write(src);
+    view.write(std::as_bytes(std::span{src}));
 
     GpuPipeline pipe = makeSimplePipeline(shTriVert, shTriFrag);
 
@@ -1746,7 +1746,7 @@ TEST(testGpuLoadOpLoadPreservesContent)
     gpuCmdEnd(cmd);
 
     u32 pixels[w * h] = {};
-    view.read(pixels);
+    view.read(std::as_writable_bytes(std::span{pixels}));
 
     u32 triColor = 0xFF996633;
     for (u32 y = 0; y < h; ++y)
@@ -1772,7 +1772,7 @@ TEST(testGpuViewMirroredRepeat)
     vci.filter = GpuFilter_nearest;
     vci.edgeMode = GpuSamplerEdgeMode_mirroredRepeat;
     GpuView view = GpuView::createEx(vci);
-    view.write(pattern);
+    view.write(std::as_bytes(std::span{pattern}));
 
     GpuImage outImg = makeColorTarget(outSize, outSize);
     GpuView outView = GpuView::create(outImg, GpuAspect_color);
@@ -1793,13 +1793,13 @@ TEST(testGpuViewMirroredRepeat)
 
     gpuBeginRenderPass(cmd, pass);
     gpuBindPipeline(cmd, pipe);
-    gpuPushConstants(cmd, pipe, &push, sizeof(push));
+    gpuPushConstants(cmd, pipe, push);
     gpuDraw(cmd, 0, 3, 0, 1);
     gpuEndRenderPass(cmd);
     gpuCmdEnd(cmd);
 
     u32 result[outSize * outSize] = {};
-    outView.read(result);
+    outView.read(std::as_writable_bytes(std::span{result}));
     for (u32 i = 0; i < outSize * outSize; ++i)
         ASSERT(result[i] == 0xFF00FF00); // green from mirrored repeat
 }
@@ -1838,7 +1838,7 @@ TEST(testBarrierFlagsAllGraphics)
     gpuCmdEnd(cmd);
 
     u32 pixels[imgSize * imgSize] = {};
-    colorView.read(pixels);
+    colorView.read(std::as_writable_bytes(std::span{pixels}));
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         ASSERT(pixels[i] == 0xFF996633);
 }

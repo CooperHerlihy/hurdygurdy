@@ -3,8 +3,11 @@
 #include "internal.hpp"
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"
-#include "hg/array.hpp"
-#include "hg/map.hpp"
+#include "hg/hash.hpp"
+
+#include <vector>
+#include <string_view>
+#include <memory>
 
 #include <math.h>
 #include <sys/mman.h>
@@ -407,8 +410,8 @@ static XkbFuncs xkbFuncs{};
 
 static bool loadLibwayland()
 {
-    Maybe<Library> lib = Library::load("libwayland-client.so.0");
-    if (!lib.has)
+    std::optional<Library> lib = Library::load("libwayland-client.so.0");
+    if (!lib.has_value())
     {
         setError("Could not load libwayland-client");
         return false;
@@ -416,7 +419,7 @@ static bool loadLibwayland()
     libWayland = std::move(*lib);
 
 #define HG_LOAD_WL(name) \
-    *(void**)&wlFuncs.name = libWayland.loadSymbol(#name).orElse(nullptr); \
+    *(void**)&wlFuncs.name = libWayland.loadSymbol(#name).value_or(nullptr); \
     if (wlFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_WL(wl_display_connect);
@@ -444,8 +447,8 @@ static bool loadLibwayland()
 
 static bool loadXkb()
 {
-    Maybe<Library> lib = Library::load("libxkbcommon.so.0");
-    if (!lib.has)
+    std::optional<Library> lib = Library::load("libxkbcommon.so.0");
+    if (!lib.has_value())
     {
         setError("Could not load libxkbcommon");
         return false;
@@ -453,7 +456,7 @@ static bool loadXkb()
     libxkb = std::move(*lib);
 
 #define HG_LOAD_XKB(name) \
-    *(void**)&xkbFuncs.name = libxkb.loadSymbol(#name).orElse(nullptr); \
+    *(void**)&xkbFuncs.name = libxkb.loadSymbol(#name).value_or(nullptr); \
     if (xkbFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_XKB(xkb_context_new);
@@ -483,12 +486,13 @@ bool loadWayland()
     return true;
 }
 
-Span<StringView> getPlatformVulkanExtensions(Arena* arena)
+std::span<std::string_view> getPlatformVulkanExtensions()
 {
-    Span<StringView> extBuffer{arena->alloc<StringView>(2), 2};
-    extBuffer[0] = "VK_KHR_surface";
-    extBuffer[1] = "VK_KHR_wayland_surface";
-    return extBuffer;
+    static std::string_view exts[] = {
+        "VK_KHR_surface",
+        "VK_KHR_wayland_surface",
+    };
+    return exts;
 }
 
 struct WindowData {
@@ -498,7 +502,7 @@ struct WindowData {
     struct xdg_surface* xdgSurface = nullptr;
     struct xdg_toplevel* xdgToplevel = nullptr;
 
-    Array<Event> events{};
+    std::vector<Event> events{};
     Vec2 mouse{};
     u32 width = 0;
     u32 height = 0;
@@ -530,26 +534,26 @@ struct WindowState {
     struct wl_data_device* dataDevice = nullptr;
     struct wl_data_source* dataSource = nullptr;
 
-    Array<DisplayInfo> displays{};
+    std::vector<DisplayInfo> displays{};
 
-    Array<Event> events{};
+    std::vector<Event> events{};
     bool wasQuit = false;
     bool isKeyDown[Button_count]{};
     bool wasKeyDown[Button_count]{};
     Vec2 mouseDelta{};
     Vec2 wheelDelta{};
 
-    Map<u64, WindowData*> windows{};
+    HashMap<u64, WindowData*> windows{};
     WindowData* activeWindow = nullptr;
 
-    Array<char> clipboard{};
+    std::vector<char> clipboard{};
     bool clipboardOwned = false;
 
     // Incoming clipboard transfer
     struct wl_data_offer* pendingOffer = nullptr;
     int clipboardFd = -1;
     bool clipboardHasText = false;
-    Array<char> clipboardIncoming{};
+    std::vector<char> clipboardIncoming{};
 
     struct xkb_context* xkbContext = nullptr;
     struct xkb_keymap* xkbKeymap = nullptr;
@@ -768,8 +772,8 @@ static void keyboardEnter(void* data, struct wl_keyboard* keyboard,
 
         Event event{};
         event.type = EventType_windowFocused;
-        windowState.events.push(event);
-        (*found)->events.push(event);
+        windowState.events.push_back(event);
+        (*found)->events.push_back(event);
     }
 }
 
@@ -794,8 +798,8 @@ static void keyboardLeave(void* data, struct wl_keyboard* keyboard,
 
         Event event{};
         event.type = EventType_windowUnfocused;
-        windowState.events.push(event);
-        (*found)->events.push(event);
+        windowState.events.push_back(event);
+        (*found)->events.push_back(event);
     }
 }
 
@@ -832,7 +836,7 @@ static void keyboardKey(void* data, struct wl_keyboard* keyboard,
         Event event{};
         event.type = pressed ? EventType_keyPress : EventType_keyRelease;
         event.button = button;
-        windowState.events.push(event);
+        windowState.events.push_back(event);
     }
 
     if (pressed && windowState.xkbState != nullptr)
@@ -844,9 +848,9 @@ static void keyboardKey(void* data, struct wl_keyboard* keyboard,
             buf[len] = '\0';
             Event event{};
             event.type = EventType_text;
-            memset(event.text, 0, sizeof(event.text));
-            memcpy(event.text, buf, static_cast<u64>(len));
-            windowState.events.push(event);
+            std::memset(event.text, 0, sizeof(event.text));
+            std::memcpy(event.text, buf, static_cast<u64>(len));
+            windowState.events.push_back(event);
         }
     }
 }
@@ -938,7 +942,7 @@ static void pointerMotion(void* data, struct wl_pointer* pointer,
         event.mouse.delta = delta;
         event.mouse.pos = newPos;
         event.mouse.globalPos = newPos;
-        windowState.events.push(event);
+        windowState.events.push_back(event);
     }
 }
 
@@ -961,7 +965,7 @@ static void pointerButton(void* data, struct wl_pointer* pointer,
         Event event{};
         event.type = pressed ? EventType_keyPress : EventType_keyRelease;
         event.button = hgButton;
-        windowState.events.push(event);
+        windowState.events.push_back(event);
     }
 }
 
@@ -987,7 +991,7 @@ static void pointerAxis(void* data, struct wl_pointer* pointer,
         Event event{};
         event.type = EventType_wheelMoved;
         event.wheel.delta = delta;
-        windowState.events.push(event);
+        windowState.events.push_back(event);
     }
 }
 
@@ -1062,7 +1066,7 @@ static void outputGeometry(void* data, struct wl_output* output,
     {
         if (windowState.outputs[i] == output)
         {
-            if (windowState.displays.count <= i)
+            if (windowState.displays.size() <= i)
                 windowState.displays.resize(static_cast<u64>(i + 1));
             windowState.displays[i].posX = x;
             windowState.displays[i].posY = y;
@@ -1084,7 +1088,7 @@ static void outputMode(void* data, struct wl_output* output,
     {
         if (windowState.outputs[i] == output)
         {
-            if (windowState.displays.count <= i)
+            if (windowState.displays.size() <= i)
                 windowState.displays.resize(static_cast<u64>(i + 1));
             windowState.displays[i].sizeW = static_cast<u32>(width);
             windowState.displays[i].sizeH = static_cast<u32>(height);
@@ -1112,7 +1116,7 @@ static void outputScale(void* data, struct wl_output* output, int32_t factor)
     {
         if (windowState.outputs[i] == output)
         {
-            if (windowState.displays.count <= i)
+            if (windowState.displays.size() <= i)
                 windowState.displays.resize(static_cast<u64>(i + 1));
             windowState.displays[i].dpiScale = static_cast<f32>(factor);
             break;
@@ -1262,8 +1266,8 @@ static void xdgToplevelConfigure(void* data, struct xdg_toplevel* toplevel,
             event.window.window = window;
             event.window.width = newW;
             event.window.height = newH;
-            windowState.events.push(event);
-            window->events.push(event);
+            windowState.events.push_back(event);
+            window->events.push_back(event);
         }
     }
 }
@@ -1280,8 +1284,8 @@ static void xdgToplevelClose(void* data, struct xdg_toplevel* toplevel)
 
     Event event{};
     event.type = EventType_windowClosed;
-    windowState.events.push(event);
-    window->events.push(event);
+    windowState.events.push_back(event);
+    window->events.push_back(event);
 }
 
 static void xdgToplevelConfigureBounds(void* data, struct xdg_toplevel* toplevel,
@@ -1433,9 +1437,9 @@ static void dataSourceSend(void* data, struct wl_data_source* source,
     (void)source;
     (void)mimeType;
 
-    if (windowState.clipboard.count > 0)
+    if (windowState.clipboard.size() > 0)
     {
-        ssize_t written = write(fd, windowState.clipboard.vals, windowState.clipboard.count);
+        ssize_t written = write(fd, windowState.clipboard.data(), windowState.clipboard.size());
         (void)written;
     }
     close(fd);
@@ -1592,7 +1596,7 @@ WindowData::WindowData(WindowData&& other) noexcept
     , wlSurface{std::exchange(other.wlSurface, nullptr)}
     , xdgSurface{std::exchange(other.xdgSurface, nullptr)}
     , xdgToplevel{std::exchange(other.xdgToplevel, nullptr)}
-    , events{std::exchange(other.events, Array<Event>{})}
+    , events{std::exchange(other.events, std::vector<Event>{})}
     , mouse{other.mouse}
     , width{other.width}
     , height{other.height}
@@ -1615,7 +1619,7 @@ WindowData& WindowData::operator=(WindowData&& other) noexcept
 
 // ---- Public API ----
 
-Span<DisplayInfo> displayInfo()
+std::span<DisplayInfo> displayInfo()
 {
     return windowState.displays;
 }
@@ -1643,9 +1647,9 @@ static void readClipboard()
     bool eof = false;
     while ((n = read(windowState.clipboardFd, buf, sizeof(buf))) > 0)
     {
-        u64 old = windowState.clipboardIncoming.count;
+        u64 old = windowState.clipboardIncoming.size();
         windowState.clipboardIncoming.resize(old + static_cast<u64>(n));
-        memcpy(windowState.clipboardIncoming.vals + old, buf, static_cast<u64>(n));
+        std::memcpy(windowState.clipboardIncoming.data() + old, buf, static_cast<u64>(n));
     }
     if (n == 0)
         eof = true;
@@ -1657,8 +1661,8 @@ static void readClipboard()
         close(windowState.clipboardFd);
         windowState.clipboardFd = -1;
 
-        windowState.clipboard.resize(windowState.clipboardIncoming.count);
-        memcpy(windowState.clipboard.vals, windowState.clipboardIncoming.vals, windowState.clipboardIncoming.count);
+        windowState.clipboard.resize(windowState.clipboardIncoming.size());
+        std::memcpy(windowState.clipboard.data(), windowState.clipboardIncoming.data(), windowState.clipboardIncoming.size());
         windowState.clipboardIncoming.resize(0);
 
         if (windowState.pendingOffer != nullptr)
@@ -1671,15 +1675,15 @@ static void readClipboard()
 
 void processEvents()
 {
-    windowState.events.reset();
+    windowState.events.clear();
 
-    memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
+    std::memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
     windowState.mouseDelta = {};
     windowState.wheelDelta = {};
 
     windowState.windows.forEach([](u64, WindowData* data)
     {
-        data->events.reset();
+        data->events.clear();
         data->wasFocusGained = false;
         data->wasFocusLost = false;
         data->wasResized = false;
@@ -1720,7 +1724,7 @@ void processEvents()
     readClipboard();
 }
 
-Span<Event> getEvents()
+std::span<Event> getEvents()
 {
     return windowState.events;
 }
@@ -1801,15 +1805,13 @@ Vec2 wheelDelta()
 Window windowCreate(const WindowConfig& config)
 {
     Window window{};
-    window.data = new (heapAlloc(sizeof(WindowData), alignof(WindowData))) WindowData{};
 
-    WindowData* wd = static_cast<WindowData*>(window.data);
+    std::unique_ptr<WindowData> data = std::make_unique<WindowData>();
+    WindowData* wd = data.get();
 
     wd->wlSurface = wl_compositor_create_surface(windowState.compositor);
     if (wd->wlSurface == nullptr)
     {
-        wd->~WindowData();
-        heapFree(wd, 1);
         setError("Could not create Wayland surface");
         return Window{};
     }
@@ -1819,8 +1821,6 @@ Window windowCreate(const WindowConfig& config)
     {
         wl_surface_destroy(wd->wlSurface);
         wd->wlSurface = nullptr;
-        wd->~WindowData();
-        heapFree(wd, 1);
         setError("Could not create XDG surface");
         return Window{};
     }
@@ -1833,15 +1833,13 @@ Window windowCreate(const WindowConfig& config)
         xdg_surface_destroy(wd->xdgSurface);
         wl_surface_destroy(wd->wlSurface);
         wd->wlSurface = nullptr;
-        wd->~WindowData();
-        heapFree(wd, 1);
         setError("Could not create XDG toplevel");
         return Window{};
     }
 
     xdg_toplevel_add_listener(wd->xdgToplevel, &xdgToplevelListener, wd);
-    xdg_toplevel_set_title(wd->xdgToplevel, config.title.length != 0
-        ? cString(getScratch(), config.title)
+    xdg_toplevel_set_title(wd->xdgToplevel, config.title.length() != 0
+        ? std::string{config.title}.c_str()
         : "Hurdy Gurdy");
 
     // 0 lets the compositor suggest a size, which arrives in the roundtrip below
@@ -1878,22 +1876,20 @@ Window windowCreate(const WindowConfig& config)
         xdg_surface_destroy(wd->xdgSurface);
         wl_surface_destroy(wd->wlSurface);
         wd->wlSurface = nullptr;
-        wd->~WindowData();
-        heapFree(wd, 1);
         setError("Could not create Vulkan surface");
         return Window{};
     }
 
     wd->swap = GpuSwapchain::create(surface, wd->width, wd->height, config.preferredPresentMode, config.imageUsage);
 
+    window.data = data.release();
     return window;
 }
 
 void windowDestroy(void* data)
 {
     WindowData* wd = static_cast<WindowData*>(data);
-    wd->~WindowData();
-    heapFree(wd, 1);
+    delete wd;
 }
 
 GpuSwapchain& windowSwapchain(void* data)
@@ -1901,17 +1897,17 @@ GpuSwapchain& windowSwapchain(void* data)
     return static_cast<WindowData*>(data)->swap;
 }
 
-void windowSetTitle(void* data, StringView title)
+void windowSetTitle(void* data, std::string_view title)
 {
     WindowData* wd = static_cast<WindowData*>(data);
     char buf[256];
-    u64 len = title.length < sizeof(buf) - 1 ? title.length : sizeof(buf) - 1;
-    memcpy(buf, title.chars, len);
+    u64 len = title.length() < sizeof(buf) - 1 ? title.length() : sizeof(buf) - 1;
+    std::memcpy(buf, title.data(), len);
     buf[len] = '\0';
     xdg_toplevel_set_title(wd->xdgToplevel, buf);
 }
 
-Span<Event> windowEvents(void* data)
+std::span<Event> windowEvents(void* data)
 {
     return static_cast<WindowData*>(data)->events;
 }
@@ -1959,20 +1955,20 @@ void windowSetFullscreen(void* data, bool set)
         xdg_toplevel_unset_fullscreen(wd->xdgToplevel);
 }
 
-StringView getClipboardText()
+std::string_view getClipboardText()
 {
-    if (windowState.clipboard.count == 0)
-        return StringView{};
-    return StringView{windowState.clipboard.vals, windowState.clipboard.count};
+    if (windowState.clipboard.size() == 0)
+        return std::string_view{};
+    return std::string_view{windowState.clipboard.data(), windowState.clipboard.size()};
 }
 
-void setClipboardText(StringView text)
+void setClipboardText(std::string_view text)
 {
     if (windowState.dataDevice == nullptr)
         return;
 
-    windowState.clipboard.resize(text.length);
-    memcpy(windowState.clipboard.vals, text.chars, text.length);
+    windowState.clipboard.resize(text.length());
+    std::memcpy(windowState.clipboard.data(), text.data(), text.length());
 
     struct wl_data_source* source = wl_data_device_manager_create_data_source(windowState.dataDeviceManager);
     wl_data_source_offer(source, "text/plain;charset=utf-8");
@@ -1985,11 +1981,11 @@ void setClipboardText(StringView text)
     windowState.clipboardOwned = true;
 }
 
-void openURL(StringView url)
+void openURL(std::string_view url)
 {
     char cmd[1024];
-    u64 len = url.length < sizeof(cmd) - 16 ? url.length : sizeof(cmd) - 16;
-    memcpy(cmd, url.chars, len);
+    u64 len = url.length() < sizeof(cmd) - 16 ? url.length() : sizeof(cmd) - 16;
+    std::memcpy(cmd, url.data(), len);
     cmd[len] = '\0';
 
     char fullCmd[1024];

@@ -1,6 +1,5 @@
 #include "hg/dynlib.hpp"
 #include "hg/error.hpp"
-#include "hg/strings.hpp"
 #include "hg/memory.hpp"
 
 namespace hg {
@@ -9,16 +8,16 @@ namespace hg {
 
 #include <dlfcn.h>
 
-Maybe<Library> Library::load(StringView path)
+std::optional<Library> Library::load(std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    char* cstr = cString(scratch, path);
+    string_temp p{path, scratch};
 
-    Maybe<Library> lib = some<Library>();
-    lib->lib = dlopen(cstr, RTLD_LAZY);
+    std::optional<Library> lib = std::make_optional<Library>();
+    lib->lib = dlopen(p.c_str(), RTLD_LAZY);
     if (lib->lib == nullptr)
     {
-        setError("Could not load dynamic library \"%s\": %s", cstr, dlerror());
+        setError("Could not load dynamic library \"{}\": {}", p.c_str(), dlerror());
         return {};
     }
 
@@ -31,19 +30,19 @@ Library::~Library() noexcept
         dlclose(lib);
 }
 
-Maybe<void*> Library::loadSymbol(StringView name)
+std::optional<void*> Library::loadSymbol(std::string_view name)
 {
     ArenaScope scratch = getScratch();
-    char* cstr = cString(scratch, name);
+    string_temp n{name, scratch};
 
-    void* fn = dlsym(lib, cstr);
-    if (fn == nullptr)
+    std::optional<void*> fn = dlsym(lib, n.c_str());
+    if (*fn == nullptr)
     {
-        setError("Could not load function symbol \"%s\": %s", cstr, dlerror());
+        setError("Could not load function symbol \"{}\": {}", n.c_str(), dlerror());
         return {};
     }
 
-    return some<void*>(fn);
+    return fn;
 }
 
 #elif defined(HG_PLATFORM_WINDOWS)
@@ -51,16 +50,16 @@ Maybe<void*> Library::loadSymbol(StringView name)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-Maybe<Library> Library::load(StringView path)
+std::optional<Library> Library::load(std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    char* cstr = cString(scratch, path);
+    string_temp p{path, scratch};
 
-    Maybe<Library> lib = some<Library>();
-    lib->lib = static_cast<void*>(LoadLibraryA(cstr));
+    std::optional<Library> lib = std::make_optional<Library>();
+    lib->lib = static_cast<void*>(LoadLibraryA(p.c_str()));
     if (lib->lib == nullptr)
     {
-        setError("Could not load dynamic library \"%s\"", cstr);
+        setError("Could not load dynamic library \"{}\"", p.c_str());
         return {};
     }
 
@@ -73,19 +72,19 @@ Library::~Library() noexcept
         FreeLibrary(static_cast<HMODULE>(lib));
 }
 
-Maybe<void*> Library::loadSymbol(StringView name)
+std::optional<void*> Library::loadSymbol(StringView name)
 {
     ArenaScope scratch = getScratch();
-    char* cstr = cString(scratch, name);
+    string_temp p{path, scratch};
 
-    void* fn = reinterpret_cast<void*>(GetProcAddress(reinterpret_cast<HMODULE>(lib), cstr));
+    std::optional<void*> fn = reinterpret_cast<void*>(GetProcAddress(reinterpret_cast<HMODULE>(lib), n.c_str()));
     if (fn == nullptr)
     {
-        setError("Could not load function symbol \"%s\"", cstr);
+        setError("Could not load function symbol \"{}\"", n.c_str());
         return {};
     }
 
-    return some<void*>(fn);
+    return fn;
 }
 
 #endif

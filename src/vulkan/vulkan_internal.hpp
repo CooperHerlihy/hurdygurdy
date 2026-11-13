@@ -1,17 +1,44 @@
 #pragma once
 
 #include "hg/gpu.hpp"
-#include "hg/map.hpp"
-#include "hg/pool.hpp"
+#include "hg/hash.hpp"
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
+#include <algorithm>
 #include <utility>
+#include <vector>
 
 namespace hg {
 
-using GpuDescriptor = Handle;
+using GpuDescriptor = u32;
+
+struct GpuDescriptorPool {
+    std::vector<u32> freed{};
+    u32 next = 0;
+
+    u32 alloc()
+    {
+        if (freed.empty())
+        {
+            return next++;
+        }
+        else
+        {
+            u32 desc = freed.back();
+            freed.pop_back();
+            return desc;
+        }
+    }
+
+    void free(u32 desc)
+    {
+        HG_ASSERT(desc < next);
+        HG_ASSERT(!std::ranges::any_of(freed, [&](u32 f) { return desc == f; }));
+        freed.emplace_back(desc);
+    }
+};
 
 enum GpuMemoryHostAccess : u32 {
     GpuMemoryHostAccess_none = 0x0,
@@ -153,6 +180,7 @@ struct GpuPipelineData {
     VkPipeline pipeline = nullptr;
     VkPipelineLayout layout = nullptr;
     VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    u32 pushSize = 0;
 
     GpuPipelineData() = default;
     ~GpuPipelineData();
@@ -161,6 +189,7 @@ struct GpuPipelineData {
         : pipeline{std::exchange(other.pipeline, nullptr)}
         , layout{std::exchange(other.layout, nullptr)}
         , bindPoint{other.bindPoint}
+        , pushSize{other.pushSize}
     {}
 
     GpuPipelineData& operator=(GpuPipelineData&& other) noexcept
@@ -180,10 +209,10 @@ struct GpuPipelineData {
 struct GpuSwapchainData {
     VkSurfaceKHR surface = nullptr;
     VkSwapchainKHR swapchain = nullptr;
-    Array<GpuImage> images{};
-    Array<GpuView> views{};
-    Array<VkSemaphore> imageAvailable{};
-    Array<VkSemaphore> readyToPresent{};
+    std::vector<GpuImage> images{};
+    std::vector<GpuView> views{};
+    std::vector<VkSemaphore> imageAvailable{};
+    std::vector<VkSemaphore> readyToPresent{};
     u32 imageIdx = (u32)-1;
     u32 width = 0;
     u32 height = 0;
@@ -239,6 +268,19 @@ struct SamplerInfo {
     GpuSamplerBorder border = GpuSamplerBorder_floatTransparentBlack;
 };
 
+} // namespace vulkan
+
+/**
+ * SamplerInfo hash function
+ */
+template<>
+constexpr u64 hash(const vulkan::SamplerInfo& info)
+{
+    return info.border + (info.mode << 4) + (info.filter << 8);
+}
+
+namespace vulkan {
+
 constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
 {
     return lhs.filter == rhs.filter
@@ -247,7 +289,7 @@ constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
 }
 
 struct Frame {
-    Array<GpuSwapchain*> swapchains = {};
+    std::vector<GpuSwapchain*> swapchains = {};
     VkCommandPool cmdPool = nullptr;
     VkCommandBuffer cmd = nullptr;
     VkFence fence = nullptr;
@@ -266,10 +308,9 @@ struct VulkanState {
     VkDescriptorPool bindlessPool = nullptr;
     VkDescriptorSetLayout bindlessLayout = nullptr;
     VkDescriptorSet bindlessSet = nullptr;
-    HandlePool descriptorPools[DescriptorType_count];
-    Map<SamplerInfo, VkSampler> samplers;
-    Frame* frames = nullptr;
-    u32 frameCount = 0;
+    GpuDescriptorPool descriptorPools[DescriptorType_count];
+    HashMap<SamplerInfo, VkSampler> samplers;
+    std::vector<Frame> frames{};
     u32 currentFrame = 0;
 };
 
@@ -463,7 +504,7 @@ inline VkDescriptorType descriptorTypeToVk(DescriptorType type)
         case DescriptorType_storageBuffer:
             return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         default:
-            HG_PANIC("invalid GpuDescriptorType: %d", type);
+            HG_PANIC("invalid GpuDescriptorType: {}", static_cast<u32>(type));
     }
 }
 
@@ -481,7 +522,7 @@ inline VmaAllocationCreateFlags gpuMemoryUsageToVma(GpuMemoryUsage usage)
             return VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
         default:
-            HG_PANIC("Invalid GpuMemoryUsage: %d\n", usage);
+            HG_PANIC("Invalid GpuMemoryUsage: {}\n", static_cast<u32>(usage));
     }
 }
 
@@ -498,7 +539,7 @@ inline GpuMemoryHostAccess gpuMemoryUsageToHostAccess(GpuMemoryUsage usage)
         case GpuMemoryUsage_frequentUpdate:
             return GpuMemoryHostAccess_none;
         default:
-            HG_PANIC("Invalid GpuMemoryUsage: %d\n", usage);
+            HG_PANIC("Invalid GpuMemoryUsage: {}\n", static_cast<u32>(usage));
     }
 }
 
@@ -513,7 +554,7 @@ inline VkImageType imageDimensionsToVkImage(u32 dimensions)
         case 3:
             return VK_IMAGE_TYPE_3D;
         default:
-            HG_PANIC("Invalid image dimensions: %d\n", dimensions);
+            HG_PANIC("Invalid image dimensions: {}\n", dimensions);
     }
 }
 
@@ -556,7 +597,7 @@ inline GpuViewType imageDimensionsToHgView(u32 dimensions)
         case 3:
             return GpuViewType_3D;
         default:
-            HG_PANIC("Invalid image dimensions: %d\n", dimensions);
+            HG_PANIC("Invalid image dimensions: {}\n", dimensions);
     }
 }
 
@@ -586,11 +627,5 @@ VkSampler samplerGet(
     GpuSamplerBorder borderColor = GpuSamplerBorder_floatTransparentBlack);
 
 } // namespace vulkan
-
-template<>
-constexpr u64 hash(const vulkan::SamplerInfo& info)
-{
-    return info.border + (info.mode << 4) + (info.filter << 8);
-}
 
 } // namespace hg

@@ -1,7 +1,7 @@
 #include "hg/math.hpp"
 
 #include <cmath>
-#include <cfloat>
+#include <limits>
 
 namespace hg {
 
@@ -427,7 +427,7 @@ f32 complexAbsSqr(Complex comp)
 
 f32 complexAbs(Complex comp)
 {
-    return sqrtf(complexAbsSqr(comp));
+    return std::sqrt(complexAbsSqr(comp));
 }
 
 Complex complexNorm(Complex comp)
@@ -460,7 +460,7 @@ f32 quatAbsSqr(Quat quat)
 
 f32 quatAbs(Quat quat)
 {
-    return sqrtf(quatAbsSqr(quat));
+    return std::sqrt(quatAbsSqr(quat));
 }
 
 Quat quatNorm(Quat quat)
@@ -471,10 +471,10 @@ Quat quatNorm(Quat quat)
 
 Quat quatAxisAngle(Vec3 axis, f32 angle)
 {
-    f32 halfAngle = angle * (f32)0.5;
-    f32 sinHalfAngle = sinf(halfAngle);
+    f32 halfAngle = angle * 0.5f;
+    f32 sinHalfAngle = std::sin(halfAngle);
     return Quat{
-        cosf(halfAngle),
+        std::cos(halfAngle),
         axis.x * sinHalfAngle,
         axis.y * sinHalfAngle,
         axis.z * sinHalfAngle,
@@ -491,14 +491,14 @@ Quat quatBetween(Vec3 from, Vec3 to)
 
     f32 dot = vecDot3(from, to);
 
-    if (dot > 1 - FLT_EPSILON)
+    if (dot > 1 - std::numeric_limits<f32>::epsilon())
     {
         return Quat{1};
     }
 
-    if (dot < -1 + FLT_EPSILON)
+    if (dot < -1 + std::numeric_limits<f32>::epsilon())
     {
-        Vec3 axis = std::abs(from.x) >= 1 - FLT_EPSILON
+        Vec3 axis = std::abs(from.x) >= 1 - std::numeric_limits<f32>::epsilon()
             ? vecCross3(from, {0, 1, 0})
             : vecCross3(from, {1, 0, 0});
         return quatNorm(Quat(0, axis.x, axis.y, axis.z));
@@ -526,8 +526,8 @@ Mat3 matRot3(Quat lhs, Mat3 rhs)
 Mat4 matModel2D(Vec3 position, Vec2 scale, f32 rotation)
 {
     Mat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
-    f32 rotSin = sinf(rotation);
-    f32 rotCos = cosf(rotation);
+    f32 rotSin = std::sin(rotation);
+    f32 rotCos = std::cos(rotation);
     Mat2 rot{{rotCos, rotSin}, {-rotSin, rotCos}};
     Mat4 m4 = Mat4{rot * m2};
     m4.w.x = position.x;
@@ -591,7 +591,7 @@ Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far)
 {
     HG_ASSERT(near > 0.0f);
     HG_ASSERT(far > near);
-    f32 scale = 1.0f / static_cast<f32>(tan(fov * 0.5f));
+    f32 scale = 1.0f / std::tan(fov * 0.5f);
     return Mat4{
         {scale / aspect, 0.0f, 0.0f, 0.0f},
         {0.0f, -scale, 0.0f, 0.0f},

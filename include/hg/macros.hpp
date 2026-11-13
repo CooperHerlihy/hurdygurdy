@@ -1,7 +1,10 @@
 #pragma once
 
+#include "hg/inttypes.hpp"
+
 #include <cstdio>
 #include <cstdlib>
+#include <format>
 #include <utility>
 
 #ifdef __GNUC__
@@ -93,7 +96,59 @@ struct Defer {
     }
 };
 
+/**
+ * Format a message into a stack buffer
+ *
+ * The buffer is null terminated on write
+ *
+ * Returns
+ * - The number of characters written
+ */
+template<typename... Ts>
+inline u64 formatStack(char (&buf)[4096], std::format_string<Ts...> fmt, Ts&&... args)
+{
+    auto res = std::format_to_n(buf, sizeof(buf) - 1, fmt, std::forward<Ts>(args)...);
+    *res.out = '\0';
+    return static_cast<u64>(res.size) < sizeof(buf)
+        ? static_cast<u64>(res.size)
+        : sizeof(buf) - 1;
+}
+
 } // namespace internal
+
+/**
+ * Format a log message to stderr
+ */
+template<typename... Ts>
+inline void logFormat(std::format_string<Ts...> fmt, Ts&&... args)
+{
+    char buf[4096];
+    internal::formatStack(buf, fmt, std::forward<Ts>(args)...);
+    std::fprintf(stderr, "HurdyGurdy Log: %s", buf);
+}
+
+/**
+ * Format a warning to stderr
+ */
+template<typename... Ts>
+inline void warnFormat(std::format_string<Ts...> fmt, Ts&&... args)
+{
+    char buf[4096];
+    internal::formatStack(buf, fmt, std::forward<Ts>(args)...);
+    std::fprintf(stderr, "HurdyGurdy Warn: %s", buf);
+}
+
+/**
+ * Format a panic message to stderr and abort the program
+ */
+template<typename... Ts>
+[[noreturn]] inline void panicFormat(std::format_string<Ts...> fmt, Ts&&... args)
+{
+    char buf[4096];
+    internal::formatStack(buf, fmt, std::forward<Ts>(args)...);
+    std::fprintf(stderr, "HurdyGurdy Panic: %s", buf);
+    std::abort();
+}
 
 } // namespace hg
 
@@ -111,17 +166,17 @@ struct Defer {
 /**
  * Log to stderr
  */
-#define HG_LOG(...) do { std::fprintf(stderr, "HurdyGurdy Log: " __VA_ARGS__); } while(0)
+#define HG_LOG(...) do { ::hg::logFormat(__VA_ARGS__); } while(0)
 
 /**
  * Log a warning to stderr
  */
-#define HG_WARN(...) do { std::fprintf(stderr, "HurdyGurdy Warn: " __VA_ARGS__); } while(0)
+#define HG_WARN(...) do { ::hg::warnFormat(__VA_ARGS__); } while(0)
 
 /**
- * Log a message and the last error, and abort the program
+ * Log the last error, a message, and abort the program
  */
-#define HG_PANIC(...) do { logError(); std::fprintf(stderr, "HurdyGurdy Panic: " __VA_ARGS__); std::abort(); } while(0)
+#define HG_PANIC(...) do { ::hg::logError(); ::hg::panicFormat(__VA_ARGS__); } while(0)
 
 #else
 
@@ -138,7 +193,7 @@ struct Defer {
  */
 #define HG_ASSERT(cond) do { \
     if (!(cond)) \
-        HG_PANIC("Assertion failed in " __FILE__ ":%d %s() \"" #cond "\"\n", __LINE__, __func__); \
+        HG_PANIC("Assertion failed in {}:{} {}() \"{}\"\n", __FILE__, __LINE__, __func__, #cond); \
 } while(0)
 
 #else

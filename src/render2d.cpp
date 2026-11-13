@@ -1,7 +1,8 @@
 #include "hg/render2d.hpp"
 
+#include "hg/utility.hpp"
 #include "hg/error.hpp"
-#include "hg/filesystem.hpp"
+#include "hg/memory.hpp"
 
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -17,7 +18,7 @@ void Camera::update()
     }
 
     VPBuffer vp{};
-    projection.match(
+    match(projection,
         [&](Perspective& persp)
         {
             vp.proj = matPerspective(
@@ -38,7 +39,7 @@ void Camera::update()
         });
     vp.view = matView(position, Vec3{1.0f}, rotation);
 
-    vpBuffer.write(&vp, 0, sizeof(vp));
+    vpBuffer.write(std::as_bytes(std::span{&vp, 1}), 0);
 }
 
 template<>
@@ -72,13 +73,9 @@ bool serialize(Serializer* s, Camera* camera)
         &camera->rotation);
 }
 
-struct RenderState2D {
-    TextureAtlas defaultFont{};
-};
-
 TextureData::~TextureData() noexcept
 {
-    heapFree(pixels, 0);
+    std::free(pixels);
 }
 
 template<>
@@ -98,39 +95,35 @@ bool serialize(Serializer* s, TextureData* tex)
 
     u64 size = tex->width * tex->height * tex->depth * formatToSize(tex->format);
     if (!s->writing)
-        tex->pixels = heapAlloc(size, formatToSize(tex->format));
-    return serializeVoid(s, {tex->pixels, size});
+        tex->pixels = std::malloc(size);
+    return serializeVoid(s, {static_cast<u8*>(tex->pixels), size});
 }
 
 template<>
 bool assetLoadImpl(AssetData<TextureData>* data)
 {
-    Maybe<Binary> bin = loadFile(data->path);
-    if (!bin.has)
+    std::optional<std::vector<u8>> bin = loadFile(data->path);
+    if (!bin.has_value())
     {
-        setError("Could not load asset file: %.*s", (int)data->path.length, data->path.chars);
+        setError("Could not load asset file: {}", data->path.c_str());
         return false;
     }
 
     if (isSerialData(*bin))
     {
-        ArenaScope scratch = getScratch();
-
-        Serializer s = readSerialBinary(scratch, *bin);
-        if (!serialize(&s, &data->asset))
+        std::optional<Serializer> s = readSerialBinary(*bin);
+        if (!s.has_value() || !serialize(&*s, &data->asset))
         {
-            setError("Could not deserialize serial data from file: %.*s", (int)data->path.length, data->path.chars);
+            setError("Could not deserialize serial data from file: {}", data->path.c_str());
             return false;
         }
         return true;
     }
 
-    ArenaScope scratch = getScratch();
-
     int x, y, channels;
     data->asset.pixels = stbi_load_from_memory(
-        static_cast<const u8*>(bin->data),
-        (int)bin->size,
+        bin->data(),
+        static_cast<int>(bin->size()),
         &x,
         &y,
         &channels,
@@ -138,7 +131,7 @@ bool assetLoadImpl(AssetData<TextureData>* data)
 
     if (data->asset.pixels == nullptr)
     {
-        setError("Could not decode image: %.*s", (int)data->path.length, data->path.chars);
+        setError("Could not decode image: {}", data->path.c_str());
         return false;
     }
     data->asset.width = static_cast<u32>(x);
@@ -148,54 +141,57 @@ bool assetLoadImpl(AssetData<TextureData>* data)
     return true;
 }
 
-bool storeTexturePng(const TextureData& texture, StringView path)
+bool storeTexturePng(const TextureData& texture, std::string_view path)
 {
-    const char* cpath = cString(getScratch(), path);
+    ArenaScope scratch = getScratch();
+    string_temp p{path, scratch};
 
     if (!stbi_write_png(
-         cpath,
+         p.c_str(),
          static_cast<int>(texture.width),
          static_cast<int>(texture.height),
          4,
          texture.pixels,
          static_cast<int>(texture.width * sizeof(u32))))
     {
-        setError("Could not store image: %s", cpath);
+        setError("Could not store image: {}", p.c_str());
         return false;
     }
     return true;
 }
 
-bool storeTextureJpg(const TextureData& texture, u32 quality, StringView path)
+bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view path)
 {
-    const char* cpath = cString(getScratch(), path);
+    ArenaScope scratch = getScratch();
+    string_temp p{path, scratch};
 
     if (!stbi_write_jpg(
-         cpath,
+         p.c_str(),
          static_cast<int>(texture.width),
          static_cast<int>(texture.height),
          4,
          texture.pixels,
          static_cast<int>(quality)))
     {
-        setError("Could not store image: %s", cpath);
+        setError("Could not store image: {}", p.c_str());
         return false;
     }
     return true;
 }
 
-bool storeTextureHdr(const TextureData& texture, StringView path)
+bool storeTextureHdr(const TextureData& texture, std::string_view path)
 {
-    const char* cpath = cString(getScratch(), path);
+    ArenaScope scratch = getScratch();
+    string_temp p{path, scratch};
 
     if (!stbi_write_hdr(
-         cpath,
+         p.c_str(),
          static_cast<int>(texture.width),
          static_cast<int>(texture.height),
          4,
          static_cast<f32*>(texture.pixels)))
     {
-        setError("Could not store image: %s", cpath);
+        setError("Could not store image: {}", p.c_str());
         return false;
     }
     return true;
@@ -216,7 +212,9 @@ Texture uploadTextureToGpu(const TextureData& data)
     Texture tex{};
     tex.image = GpuImage::createEx(imageInfo);
     tex.view = GpuView::create(tex.image, GpuAspect_color, GpuFilter_nearest);
-    tex.view.write(data.pixels);
+
+    u64 size = static_cast<u64>(data.width) * data.height * data.depth * formatToSize(data.format);
+    tex.view.write(std::span<const std::byte>{static_cast<const std::byte*>(data.pixels), size});
 
     return tex;
 }
@@ -229,10 +227,10 @@ TextureData downloadTextureFromGpu(const Texture& tex)
     data.depth = tex.view.depth();
     data.format = tex.view.format();
 
-    u64 size = data.width * data.height * data.depth * formatToSize(data.format);
-    data.pixels = heapAlloc(size, formatToSize(data.format));
+    u64 size = static_cast<u64>(data.width) * data.height * data.depth * formatToSize(data.format);
+    data.pixels = std::malloc(size);
 
-    tex.view.read(data.pixels);
+    tex.view.read(std::span{static_cast<std::byte*>(data.pixels), size});
 
     return data;
 }
@@ -248,6 +246,10 @@ bool assetLoadImpl(AssetData<Texture>* data)
     return true;
 }
 
+struct RenderState2D {
+    TextureAtlas defaultFont{};
+};
+
 static RenderState2D render2D;
 
 #include "resources/pixel_font.hg.h"
@@ -258,26 +260,24 @@ void convertPixelFont()
 {
     HG_LOG("converting pixel font file\n");
 
-    ArenaScope scratch = getScratch();
-
     Asset<TextureData> fontData = load<TextureData>("resources/pixel_font.png");
 
-    Serializer s = serialWriter(scratch);
+    Serializer s = serialWriter();
     serialize(&s, &*fontData);
 
-    BinaryView bin = writeSerialBinary(scratch, &s);
+    std::vector<u8> bin = writeSerialBinary(&s);
     storeFile(bin, "resources/pixel_font.hg");
 }
 
 void initPixelFont()
 {
-    ArenaScope scratch = getScratch();
-
-    Serializer s = readSerialBinary(scratch, resources_pixel_font_hg);
+    std::optional<Serializer> s = readSerialBinary(resources_pixel_font_hg);
 
     TextureData fontData{};
-    if (!serialize(&s, &fontData))
-        HG_WARN("Could not deserialize pixel font\n");
+    if (!s.has_value() || !serialize(&*s, &fontData))
+    {
+        HG_WARN("Could not deserialize pixel font: {}", getError());
+    }
 
     render2D.defaultFont = newAsset<Texture>(uploadTextureToGpu(fontData));
     render2D.defaultFont.addEmpty(32);
@@ -293,24 +293,24 @@ void deinitPixelFont()
 
 u32 TextureAtlas::addEmpty(u32 count)
 {
-    u32 idx = static_cast<u32>(sprites.count);
+    u32 idx = static_cast<u32>(sprites.size());
     for (u32 i = 0; i < count; ++i)
     {
-        sprites.push(rectEmpty());
+        sprites.emplace_back(rectEmpty());
     }
     return idx;
 }
 
 u32 TextureAtlas::add(Rect sprite)
 {
-    u32 idx = static_cast<u32>(sprites.count);
-    sprites.push(sprite);
+    u32 idx = static_cast<u32>(sprites.size());
+    sprites.emplace_back(sprite);
     return idx;
 }
 
 u32 TextureAtlas::addGrid(Rect grid, u32 width, u32 height, u32 count, f32 marginX, f32 marginY)
 {
-    u32 idx = static_cast<u32>(sprites.count);
+    u32 idx = static_cast<u32>(sprites.size());
 
     Vec2 subdivSize = (grid.end - grid.begin) / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
     Vec2 spriteSize = subdivSize * (Vec2{1} - Vec2{marginX, marginY});
@@ -326,7 +326,7 @@ u32 TextureAtlas::addGrid(Rect grid, u32 width, u32 height, u32 count, f32 margi
             if (i++ == count)
                 goto done;
 
-            sprites.push({pos, pos + spriteSize});
+            sprites.emplace_back(pos, pos + spriteSize);
             pos.x += subdivSize.x;
         }
         pos.y += subdivSize.y;
@@ -356,7 +356,7 @@ bool serialize(Serializer* s, TextureAtlas* atlas)
 
 void Layer2D::clear()
 {
-    instances.count = 0;
+    instances.clear();
     changed = true;
 }
 
@@ -367,7 +367,7 @@ void Layer2D::drawRect(Vec4 color, Rect dst)
     instance.pos = dst.begin;
     instance.size = dst.end - dst.begin;
 
-    instances.push(instance);
+    instances.emplace_back(instance);
     changed = true;
 }
 
@@ -380,7 +380,7 @@ void Layer2D::drawRectRot(Vec4 color, Rect dst, Vec2 origin, f32 rotation)
     instance.origin = origin;
     instance.rotation = rotation;
 
-    instances.push(instance);
+    instances.emplace_back(instance);
     changed = true;
 }
 
@@ -394,7 +394,7 @@ void Layer2D::drawSprite(const Texture& texture, Rect src, Rect dst, Vec4 tint)
     instance.uvSize = src.end - src.begin;
     instance.texIdx = texture.view.samplerDescriptor();
 
-    instances.push(instance);
+    instances.emplace_back(instance);
     changed = true;
 }
 
@@ -410,11 +410,11 @@ void Layer2D::drawSpriteRot(const Texture& texture, Rect src, Rect dst, Vec2 ori
     instance.rotation = rotation;
     instance.texIdx = texture.view.samplerDescriptor();
 
-    instances.push(instance);
+    instances.emplace_back(instance);
     changed = true;
 }
 
-StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder2D& box)
+std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const TextBuilder2D& box)
 {
     Rect bounds{};
     f32 factor = 1.0f;
@@ -481,7 +481,7 @@ StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder2D& b
         }
     }
 
-    StringView toDraw = text;
+    std::string_view toDraw = text;
     if (box.cutoff < bounds.end.x)
     {
         const char* lastSpace = nullptr;
@@ -515,7 +515,7 @@ StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder2D& b
         if (pos.x > bounds.end.x)
             break;
 
-        Rect sprite = box.font->get((u32)c);
+        Rect sprite = box.font->get(static_cast<u32>(c));
         Vec2 spriteSize = (sprite.end - sprite.begin) * factor;
 
         Rect dst = {pos, pos + spriteSize};
@@ -524,8 +524,7 @@ StringView Layer2D::drawText(StringView text, Vec4 color, const TextBuilder2D& b
         pos.x += spriteSize.x;
     }
 
-    text.chars += toDraw.length;
-    return text;
+    return {text.begin() + toDraw.length(), text.end()};
 }
 
 struct RenderPush2D {
@@ -552,7 +551,7 @@ Renderer2D::Renderer2D(Format colorFormat)
 
 void Renderer2D::drawLayer(Layer2D& layer)
 {
-    layerQueue.push(&layer);
+    layerQueue.emplace_back(&layer);
 }
 
 void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
@@ -561,21 +560,21 @@ void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
 
     for (Layer2D* layer : layerQueue)
     {
-        if (layer->instances.count == 0)
+        if (layer->instances.size() == 0)
             continue;
 
         if (layer->changed)
         {
-            if (layer->instances.capacity > layer->instanceCapacity)
+            if (layer->instances.capacity() > layer->instanceCapacity)
             {
                 gpuWaitIdle();
 
-                layer->instanceBuffer = GpuBuffer::create(layer->instances.capacity * sizeof(Layer2D::Instance),
+                layer->instanceBuffer = GpuBuffer::create(layer->instances.capacity() * sizeof(Layer2D::Instance),
                     GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
-                layer->instanceCapacity = static_cast<u32>(layer->instances.capacity);
+                layer->instanceCapacity = static_cast<u32>(layer->instances.capacity());
             }
 
-            layer->instanceBuffer.write(layer->instances.vals, 0, layer->instances.count * sizeof(Layer2D::Instance));
+            layer->instanceBuffer.write(std::as_bytes(std::span{layer->instances}), 0);
 
             layer->changed = false;
         }
@@ -587,12 +586,12 @@ void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
         push.vpIdx = camera.vpBuffer.uniformDescriptor();
         push.instIdx = layer->instanceBuffer.storageDescriptor();
 
-        gpuPushConstants(cmd, pipeline, &push, sizeof(push));
+        gpuPushConstants(cmd, pipeline, push);
 
-        gpuDraw(cmd, 0, 6, 0, static_cast<u32>(layer->instances.count));
+        gpuDraw(cmd, 0, 6, 0, static_cast<u32>(layer->instances.size()));
     }
 
-    layerQueue.reset();
+    layerQueue.clear();
 }
 
 } // namespace hg

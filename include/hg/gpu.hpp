@@ -1,9 +1,12 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/span.hpp"
-#include "hg/smart_ptr.hpp"
 #include "hg/math.hpp"
+
+#include <concepts>
+#include <span>
+#include <memory>
+#include <type_traits>
 
 namespace hg {
 
@@ -135,7 +138,7 @@ struct GpuBuffer {
     /**
      * The implementation data
      */
-    UniquePtr<GpuBufferData> data;
+    std::unique_ptr<GpuBufferData> data;
 
     /**
      * Construct empty
@@ -179,21 +182,19 @@ struct GpuBuffer {
      * Writes to the gpu buffer
      *
      * Parameters
-     * - src The data to write, must not be nullptr
+     * - src The data to write
      * - offset The offset in bytes into the gpu buffer
-     * - size The size in bytes to write
      */
-    void write(const void* src, u64 offset, u64 size);
+    void write(std::span<const std::byte> src, u64 offset);
 
     /**
      * Reads from the gpu buffer
      *
      * Parameters
-     * - dst The location to write to, must not be nullptr
+     * - dst The location to write to
      * - offset The offset in bytes into the gpu buffer
-     * - size The size in bytes to read
      */
-    void read(void* dst, u64 offset, u64 size) const;
+    void read(std::span<std::byte> dst, u64 offset) const;
 
     /**
      * Move construct
@@ -305,7 +306,7 @@ struct GpuImage {
     /**
      * The implementation data
      */
-    UniquePtr<GpuImageData> data;
+    std::unique_ptr<GpuImageData> data;
 
     /**
      * Construct empty
@@ -474,7 +475,7 @@ struct GpuView {
     /**
      * The implementation data
      */
-    UniquePtr<GpuViewData> data;
+    std::unique_ptr<GpuViewData> data;
 
     /**
      * Construct empty
@@ -533,8 +534,11 @@ struct GpuView {
      * Write to a gpu image
      *
      * Note, only fills the base mip level
+     *
+     * Parameters
+     * - src The data to write, must match the image size
      */
-    void write(const void* src);
+    void write(std::span<const std::byte> src);
 
     /**
      * Write to a gpu image cubemap
@@ -547,15 +551,21 @@ struct GpuView {
      *  #
      * ####
      *  #
+     *
+     * Parameters
+     * - src The data to write, must match the image size times six
      */
-    void writeCubemap(const void* src);
+    void writeCubemap(std::span<const std::byte> src);
 
     /**
      * Read from a gpu image
      *
      * Note, only the base mip level is read
+     *
+     * Parameters
+     * - dst The location to write to, must match the image size
      */
-    void read(void* dst) const;
+    void read(std::span<std::byte> dst) const;
 
     /**
      * Generates mipmaps from the base level
@@ -628,11 +638,11 @@ struct GpuGraphicsPipelineCreateInfo {
     /**
      * The vertex shader code
      */
-    Span<const u8> vertexShader{};
+    std::span<const u8> vertexShader{};
     /**
      * The fragment shader code
      */
-    Span<const u8> fragmentShader{};
+    std::span<const u8> fragmentShader{};
     /**
      * The size of the push constant
      */
@@ -640,7 +650,7 @@ struct GpuGraphicsPipelineCreateInfo {
     /**
      * The format of the color attachments, none can be UNDEFINED
      */
-    Span<const Format> colorAttachmentFormats;
+    std::span<const Format> colorAttachmentFormats;
     /**
      * The format of the depth attachment, no depth attachment if UNDEFINED
      */
@@ -684,7 +694,7 @@ struct GpuGraphicsPipelineCreateInfo {
      *
      * Empty disables all blend
      */
-    Span<const bool> colorBlendEnables{};
+    std::span<const bool> colorBlendEnables{};
 };
 
 /**
@@ -694,7 +704,7 @@ struct GpuComputePipelineCreateInfo {
     /**
      * The spirv compute shader code, must not be nullptr
      */
-    Span<const u8> shaderCode{};
+    std::span<const u8> shaderCode{};
     /**
      * The size in bytes of the push constant, if any
      */
@@ -713,7 +723,7 @@ struct GpuPipeline {
     /**
      * Implementation data
      */
-    UniquePtr<GpuPipelineData> data;
+    std::unique_ptr<GpuPipelineData> data;
 
     /**
      * Construct empty
@@ -728,7 +738,7 @@ struct GpuPipeline {
     /**
      * Create a compute pipeline
      */
-    static GpuPipeline compute(Span<const u8> shaderCode, u32 pushSize = 0);
+    static GpuPipeline compute(std::span<const u8> shaderCode, u32 pushSize = 0);
 
     /**
      * Destroy a graphics or compute pipeline
@@ -781,11 +791,24 @@ void gpuBindPipeline(GpuCmd* cmd, const GpuPipeline& pipeline);
  * Parameters
  * - cmd The command buffer to record to
  * - pipeline The pipeline to push to
- * - offset The offset into the push range
- * - size The size of the data
- * - push The data to push
+ * - push The data to push, must fit the pipeline's push constant size
  */
-void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, void* push, u32 size);
+void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, std::span<const std::byte> push);
+
+/**
+ * Push constants to the shader
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ * - pipeline The pipeline to push to
+ * - push The data to push, must fit the pipeline's push constant size
+ */
+template<typename T> requires std::is_trivially_copyable_v<T>
+    && (!std::convertible_to<T, std::span<const std::byte>>)
+void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, const T& push)
+{
+    gpuPushConstants(cmd, pipeline, std::as_bytes(std::span{&push, 1}));
+}
 
 /**
  * Issue a draw call
@@ -861,8 +884,8 @@ struct GpuBufferBarrier {
  */
 void gpuMemoryBarrier(
     GpuCmd* cmd,
-    Span<const GpuBufferBarrier> bufferBarriers,
-    Span<const GpuImageBarrier> imageBarriers);
+    std::span<const GpuBufferBarrier> bufferBarriers,
+    std::span<const GpuImageBarrier> imageBarriers);
 
 /**
  * The operation to load a render attachment
@@ -927,23 +950,23 @@ struct GpuPass {
     /**
      * The uniform buffer dependencies
      */
-    Span<GpuBuffer*> uniformBuffers{};
+    std::span<GpuBuffer*> uniformBuffers{};
     /**
      * The storage buffer dependencies
      */
-    Span<GpuBuffer*> storageBuffers{};
+    std::span<GpuBuffer*> storageBuffers{};
     /**
      * The sampled image dependencies
      */
-    Span<GpuView*> sampledImages{};
+    std::span<GpuView*> sampledImages{};
     /**
      * The storage image dependencies
      */
-    Span<GpuView*> storageImages{};
+    std::span<GpuView*> storageImages{};
     /**
      * The color images to write to
      */
-    Span<const GpuAttachment> colorAttachments{};
+    std::span<const GpuAttachment> colorAttachments{};
     /**
      * The number of layers in each color attachment to write to
      */
@@ -1018,7 +1041,7 @@ struct GpuSwapchain {
     /**
      * The implementation data
      */
-    UniquePtr<GpuSwapchainData> data;
+    std::unique_ptr<GpuSwapchainData> data;
 
     /**
      * Construct empty
@@ -1090,7 +1113,7 @@ struct Window;
  * Returns
  * - The command buffer to record this frame
  */
-GpuCmd* gpuBeginFrame(Span<Window*> windows);
+GpuCmd* gpuBeginFrame(std::span<Window*> windows);
 
 /**
  * Finishes recording the command buffer and presents the window images

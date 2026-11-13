@@ -1,268 +1,131 @@
 #include "hg/serialization.hpp"
 
+#include "hg/error.hpp"
+
+#include <string_view>
+#include <cstring>
+
 namespace hg {
 
-Serializer serialWriter(Arena* arena)
+Serializer serialWriter()
 {
     Serializer s{};
-    s.arena = arena;
-    s.root = arena->alloc<SerialNode>(1);
-    s.root->parent = nullptr;
-    s.root->next = nullptr;
-    new (&s.root->data) SerialData{};
-    s.parent = nullptr;
+    s.root = std::make_unique<SerialNode>();
     s.current = nullptr;
     s.writing = true;
     return s;
 }
 
-Serializer serialReader(Arena* arena, SerialNode* begin)
+Serializer serialReader(std::unique_ptr<SerialNode> begin)
 {
     Serializer s{};
-    s.arena = arena;
-    s.root = begin;
-    s.parent = nullptr;
+    s.root = std::move(begin);
     s.current = nullptr;
     s.writing = false;
     return s;
 }
 
-void serializeNodeStart(Serializer* s)
+bool serializeBegin(Serializer* s, u32* size)
 {
     if (s->writing)
     {
-        if (s->current != nullptr)
-        {
-            s->current->next = s->arena->alloc<SerialNode>(1);
-            s->current = s->current->next;
-            s->current->parent = s->parent;
-            s->current->next = nullptr;
-            new (&s->current->data) SerialData{};
-        }
-        else
-        {
-            if (s->parent != nullptr)
-            {
-                s->current = s->arena->alloc<SerialNode>(1);
-                s->current->parent = s->parent;
-                s->current->next = nullptr;
-                new (&s->current->data) SerialData{};
-                s->parent->data.get<SerialObject>().firstChild = s->current;
-            }
-            else
-            {
-                HG_ASSERT(s->root != nullptr);
-                s->current = s->root;
-            }
-        }
+        if (s->current == nullptr)
+            s->current = s->root.get();
 
-        if (s->parent != nullptr)
-            ++s->parent->data.get<SerialObject>().childCount;
-    }
-    else
-    {
-        if (s->current != nullptr)
-        {
-            s->current = s->current->next;
-        }
-        else
-        {
-            if (s->parent != nullptr)
-            {
-                s->current = s->parent->data.get<SerialObject>().firstChild;
-            }
-            else
-            {
-                HG_ASSERT(s->root != nullptr);
-                s->current = s->root;
-            }
-        }
-    }
-}
+        std::unique_ptr next = std::make_unique<SerialNode>();
+        next->parent = s->current;
 
-void serializeBegin(Serializer* s, u32* size)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->data = SerialObject{};
-    }
-    else
-    {
+        s->current = s->current->children.emplace_back(std::move(next)).get();
         if (size != nullptr)
-            *size = s->current->data.get<SerialObject>().childCount;
+            s->current->children.reserve(*size);
     }
+    else
+    {
+        if (s->current == nullptr)
+            s->current = s->root.get();
 
-    s->parent = s->current;
-    s->current = nullptr;
+        if (s->current->currentChild >= s->current->children.size())
+        {
+            setError("Unexpected end of serial data");
+            return false;
+        }
+
+        s->current = s->current->children[s->current->currentChild++].get();
+
+        if (size != nullptr)
+            *size = static_cast<u32>(s->current->children.size());
+    }
+    return true;
 }
 
 void serializeEnd(Serializer* s)
 {
-    HG_ASSERT(s->parent != nullptr);
-
-    s->current = s->parent;
-    s->parent = s->parent->parent;
+    HG_ASSERT(s->current != nullptr);
+    s->current = s->current->parent;
 }
 
-bool serializeVoid(Serializer* s, Span<void> data)
+bool serializeVoid(Serializer* s, std::span<u8> data)
 {
-    serializeNodeStart(s);
-
     if (s->writing)
     {
-        s->current->data = StringView{StringBuilder{s->arena, {static_cast<char*>(data.data), data.size}}};
+        if (s->current == nullptr)
+            s->current = s->root.get();
+
+        std::unique_ptr next = std::make_unique<SerialNode>();
+        next->parent = s->current;
+        next->data = std::vector<u8>(data.begin(), data.end());
+
+        s->current->children.emplace_back(std::move(next));
     }
     else
     {
-        if (!s->current->data.is<StringView>())
+        if (s->current == nullptr)
+            s->current = s->root.get();
+
+        if (s->current->currentChild >= s->current->children.size())
         {
-            setError("Unexpected type while deserializing void data");
+            setError("Unexpected end of serial data");
             return false;
         }
-        if (s->current->data.get<StringView>().length != data.size)
+
+        SerialNode* leaf = s->current->children[s->current->currentChild++].get();
+        if (leaf->data.size() != data.size())
         {
-            setError("Unexpected string length while deserializing void data");
+            setError("Unexpected data length while deserializing");
             return false;
         }
-        memcpy(data.data, s->current->data.get<StringView>().chars, data.size);
+        std::memcpy(data.data(), leaf->data.data(), data.size());
     }
     return true;
 }
 
 template<>
-bool serialize(Serializer* s, bool* val)
+bool serialize(Serializer* s, std::string* val)
 {
-    serializeNodeStart(s);
-
     if (s->writing)
     {
-        s->current->data = bool{*val};
+        if (s->current == nullptr)
+            s->current = s->root.get();
+
+        std::unique_ptr next = std::make_unique<SerialNode>();
+        next->parent = s->current;
+        next->data = std::vector<u8>(val->begin(), val->end());
+
+        s->current->children.emplace_back(std::move(next));
     }
     else
     {
-        if (!s->current->data.is<bool>())
+        if (s->current == nullptr)
+            s->current = s->root.get();
+
+        if (s->current->currentChild >= s->current->children.size())
         {
-            setError("Unexpected type while deserializing bool");
+            setError("Unexpected end of serial data");
             return false;
         }
-        *val = s->current->data.get<bool>();
-    }
-    return true;
-}
 
-template<>
-bool serialize(Serializer* s, Vec2* val)
-{
-    return serializeObject(s,
-        &val->x,
-        &val->y);
-}
-
-template<>
-bool serialize(Serializer* s, Vec3* val)
-{
-    return serializeObject(s,
-        &val->x,
-        &val->y,
-        &val->z);
-}
-
-template<>
-bool serialize(Serializer* s, Vec4* val)
-{
-    return serializeObject(s,
-        &val->x,
-        &val->y,
-        &val->z,
-        &val->w);
-}
-
-template<>
-bool serialize(Serializer* s, Mat2* val)
-{
-    return serializeObject(s,
-        &val->x,
-        &val->y);
-}
-
-template<>
-bool serialize(Serializer* s, Mat3* val)
-{
-    return serializeObject(s,
-        &val->x,
-        &val->y,
-        &val->z);
-}
-
-template<>
-bool serialize(Serializer* s, Mat4* val)
-{
-    return serializeObject(s,
-        &val->x,
-        &val->y,
-        &val->z,
-        &val->w);
-}
-
-template<>
-bool serialize(Serializer* s, Complex* val)
-{
-    return serializeObject(s,
-        &val->r,
-        &val->i);
-}
-
-template<>
-bool serialize(Serializer* s, Quat* val)
-{
-    return serializeObject(s,
-        &val->r,
-        &val->i,
-        &val->j,
-        &val->k);
-}
-
-template<>
-bool serialize(Serializer* s, String* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->data = StringView{StringBuilder{s->arena, *val}};
-    }
-    else
-    {
-        if (!s->current->data.is<StringView>())
-        {
-            setError("Unexpected type while deserializing string");
-            return false;
-        }
-        *val = String{s->current->data.get<StringView>()};
-    }
-    return true;
-}
-
-template<>
-bool serialize(Serializer* s, Binary* val)
-{
-    serializeNodeStart(s);
-
-    if (s->writing)
-    {
-        s->current->data = StringView{StringBuilder{s->arena, {static_cast<char*>(val->data), val->size}}};
-    }
-    else
-    {
-        if (!s->current->data.is<StringView>())
-        {
-            setError("Unexpected type while deserializing binary data");
-            return false;
-        }
-        StringView str = s->current->data.get<StringView>();
-        *val = Binary::create({str.chars, str.length});
+        SerialNode* leaf = s->current->children[s->current->currentChild++].get();
+        val->assign(leaf->data.begin(), leaf->data.end());
     }
     return true;
 }
@@ -272,9 +135,9 @@ static constexpr u32 serialBinVersionMajor = 0;
 static constexpr u32 serialBinVersionMinor = 0;
 static constexpr u32 serialBinVersionPatch = 0;
 
-bool isSerialData(BinaryView bin)
+bool isSerialData(std::span<const u8> bin)
 {
-    return bin.size > sizeof(serialBinTag) && memcmp(bin.data, serialBinTag, sizeof(serialBinTag)) == 0;
+    return bin.size() > sizeof(serialBinTag) && std::memcmp(bin.data(), serialBinTag, sizeof(serialBinTag)) == 0;
 }
 
 struct SerialBinHeader {
@@ -286,178 +149,164 @@ struct SerialBinHeader {
     u32 nodeBegin = 0;
 };
 
-struct SerialBinObject {
-    u32 fieldCount;
-    u32 fieldsBegin;
-};
-
-struct SerialBinString {
-    u32 begin;
-    u32 length;
-};
-
 struct SerialBinNode {
-    u32 type = {};
-    union {
-        SerialBinObject object;
-        SerialBinString string;
-        i64 integer;
-        f64 floating;
-        bool boolean;
-    };
+    u32 isObject = 0;
+    /**
+     * The child count if object, the data length if leaf
+     */
+    u32 count = 0;
+    /**
+     * The child start index if object, the data start index if leaf
+     */
+    u32 begin = 0;
 };
 
-static void serialBinWriteNode(BinaryBuilder* bin, u32 idx, SerialNode* node);
-
-static void serialBinWriteString(BinaryBuilder* bin, u32 idx, StringView string)
+static void serialBinWriteNode(std::vector<u8>* bin, u32 idx, SerialNode* node)
 {
-    SerialBinNode node{};
-    node.type = SerialData::typeIdx<StringView>;
-    node.string.length = static_cast<u32>(string.length);
-    node.string.begin = static_cast<u32>(bin->size);
+    SerialBinNode out{};
+    out.isObject = node->children.empty() ? 0 : 1;
+    out.count = out.isObject
+        ? static_cast<u32>(node->children.size())
+        : static_cast<u32>(node->data.size());
+    out.begin = static_cast<u32>(bin->size());
+    bin->resize(bin->size() + (out.isObject
+        ? out.count * sizeof(SerialBinNode)
+        : out.count));
+    std::memcpy(bin->data() + idx, &out, sizeof(out));
 
-    bin->overwrite(idx, node);
-    bin->append(string.chars, string.length);
-}
-
-static void serialBinWriteInteger(BinaryBuilder* bin, u32 idx, i64 integer)
-{
-    SerialBinNode node{};
-    node.type = SerialData::typeIdx<i64>;
-    node.integer = integer;
-    bin->overwrite(idx, node);
-}
-
-static void serialBinWriteFloating(BinaryBuilder* bin, u32 idx, f64 floating)
-{
-    SerialBinNode node{};
-    node.type = SerialData::typeIdx<f64>;
-    node.floating = floating;
-    bin->overwrite(idx, node);
-}
-
-static void serialBinWriteBoolean(BinaryBuilder* bin, u32 idx, bool boolean)
-{
-    SerialBinNode node{};
-    node.type = SerialData::typeIdx<bool>;
-    node.boolean = boolean;
-    bin->overwrite(idx, node);
-}
-
-static void serialBinWriteObject(BinaryBuilder* bin, u32 idx, SerialObject object)
-{
-    SerialBinNode node{};
-    node.type = SerialData::typeIdx<SerialObject>;
-    node.object.fieldCount = object.childCount;
-
-    node.object.fieldsBegin = static_cast<u32>(bin->size);
-    bin->resize(bin->size + object.childCount * sizeof(SerialBinNode));
-
-    bin->overwrite(idx, node);
-
-    SerialNode* data = object.firstChild;
-    for (u32 i = 0; i < object.childCount; ++i)
+    if (out.isObject)
     {
-        serialBinWriteNode(bin, node.object.fieldsBegin + i * static_cast<u32>(sizeof(SerialBinNode)), data);
-        data = data->next;
+        for (u32 i = 0; i < out.count; ++i)
+        {
+            serialBinWriteNode(
+                bin, out.begin + i * static_cast<u32>(sizeof(SerialBinNode)), node->children[i].get());
+        }
+    }
+    else if (out.count > 0)
+    {
+        std::memcpy(bin->data() + out.begin, node->data.data(), out.count);
     }
 }
 
-static void serialBinWriteNode(BinaryBuilder* bin, u32 idx, SerialNode* node)
+std::vector<u8> writeSerialBinary(Serializer* serial)
 {
-    node->data.match(
-        [&](SerialObject& obj) { serialBinWriteObject(bin, idx, obj); },
-        [&](StringView& str) { serialBinWriteString(bin, idx, str); },
-        [&](i64& i) { serialBinWriteInteger(bin, idx, i); },
-        [&](f64& f) { serialBinWriteFloating(bin, idx, f); },
-        [&](bool& b) { serialBinWriteBoolean(bin, idx, b); }
-    );
-}
+    SerialNode* root = serial->current != nullptr ? serial->current : serial->root.get();
 
-BinaryView writeSerialBinary(Arena* arena, Serializer* serial)
-{
-    BinaryBuilder bin{arena, sizeof(SerialBinHeader)};
+    std::vector<u8> bin(sizeof(SerialBinHeader) + sizeof(SerialBinNode));
 
     SerialBinHeader header{};
-    memcpy(header.tag, serialBinTag, sizeof(serialBinTag));
+    std::memcpy(header.tag, serialBinTag, sizeof(serialBinTag));
     header.versionMajor = serialBinVersionMajor;
     header.versionMinor = serialBinVersionMinor;
     header.versionPatch = serialBinVersionPatch;
-    header.nodeBegin = static_cast<u32>(bin.size);
-    bin.overwrite(0, header);
+    header.nodeBegin = sizeof(SerialBinHeader);
+    std::memcpy(bin.data(), &header, sizeof(header));
 
-    bin.resize(bin.size + sizeof(SerialBinNode));
-    serialBinWriteNode(&bin, header.nodeBegin, serial->current);
+    serialBinWriteNode(&bin, header.nodeBegin, root);
     return bin;
 }
 
-static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s);
-
-static void serialBinReadObject(BinaryView bin, SerialBinObject object, Serializer* s)
+static bool serialBinReadNode(std::span<const u8> bin, u64 idx, Serializer* s)
 {
-    serializeBegin(s);
-    for (u32 i = 0; i < object.fieldCount; ++i)
+    if (bin.size() < idx + sizeof(SerialBinNode))
     {
-        serialBinReadNode(bin, object.fieldsBegin + i * static_cast<u32>(sizeof(SerialBinNode)), s);
+        setError("Serial binary is truncated");
+        return false;
     }
-    serializeEnd(s);
+
+    SerialBinNode node{};
+    std::memcpy(&node, bin.data() + idx, sizeof(node));
+
+    if (node.isObject)
+    {
+        serializeBegin(s);
+        for (u32 i = 0; i < node.count; ++i)
+        {
+            u64 childIdx = node.begin + static_cast<u64>(i) * sizeof(SerialBinNode);
+            if (!serialBinReadNode(bin, childIdx, s))
+            {
+                serializeEnd(s);
+                return false;
+            }
+        }
+        serializeEnd(s);
+    }
+    else
+    {
+        if (bin.size() < node.begin + static_cast<u64>(node.count))
+        {
+            setError("Serial binary is truncated");
+            return false;
+        }
+        serializeVoid(s, {const_cast<u8*>(bin.data()) + node.begin, node.count});
+    }
+    return true;
 }
 
-static void serialBinReadString(BinaryView bin, SerialBinString string, Serializer* s)
+std::optional<Serializer> readSerialBinary(std::span<const u8> bin)
 {
-    serializeVoid(s, {static_cast<u8*>(const_cast<void*>(bin.data)) + string.begin, string.length});
-}
-
-static void serialBinReadNode(BinaryView bin, u32 idx, Serializer* s)
-{
-    SerialBinNode node = bin.read<SerialBinNode>(idx);
-    switch (node.type)
+    if (bin.size() < sizeof(SerialBinHeader))
     {
-        case SerialData::typeIdx<SerialObject>:
-            serialBinReadObject(bin, node.object, s);
-            return;
-        case SerialData::typeIdx<StringView>:
-            serialBinReadString(bin, node.string, s);
-            return;
-        case SerialData::typeIdx<i64>:
-            serialize(s, &node.integer);
-            return;
-        case SerialData::typeIdx<f64>:
-            serialize(s, &node.floating);
-            return;
-        case SerialData::typeIdx<bool>:
-            serialize(s, &node.boolean);
-            return;
-        default:
-            HG_PANIC("Invalid SerialType: %d\n", node.type);
-    }
-}
-
-Serializer readSerialBinary(Arena* arena, BinaryView bin)
-{
-    SerialBinHeader header = bin.read<SerialBinHeader>(0);
-
-    if (memcmp(header.tag, serialBinTag, sizeof(serialBinTag)) != 0)
-    {
-        HG_WARN("Serial binary could not be read, does not have a header\n");
-        return {};
-    }
-    else if (header.versionMajor != serialBinVersionMajor)
-    {
-        HG_WARN("Serial binary has wrong major version: %d instead of %d", header.versionMajor, serialBinVersionMajor);
-    }
-    else if (header.versionMinor != serialBinVersionMinor)
-    {
-        HG_WARN("Serial binary has wrong minor version: %d instead of %d", header.versionMinor, serialBinVersionMinor);
-    }
-    else if (header.versionPatch != serialBinVersionPatch)
-    {
-        HG_WARN("Serial binary has wrong patch version: %d instead of %d", header.versionPatch, serialBinVersionPatch);
+        setError("Serial binary is too small");
+        return std::nullopt;
     }
 
-    Serializer s = serialWriter(arena);
-    serialBinReadNode(bin, header.nodeBegin, &s);
-    return serialReader(arena, s.current);
+    SerialBinHeader header{};
+    std::memcpy(&header, bin.data(), sizeof(header));
+
+    if (std::memcmp(header.tag, serialBinTag, sizeof(serialBinTag)) != 0)
+    {
+        setError("Serial binary could not be read, does not have a header");
+        return std::nullopt;
+    }
+
+    if (header.versionMajor != serialBinVersionMajor)
+    {
+        setError("Serial binary has wrong major version: {} instead of {}", header.versionMajor, serialBinVersionMajor);
+        return std::nullopt;
+    }
+
+    if (header.versionMinor != serialBinVersionMinor)
+    {
+        setError("Serial binary has wrong minor version: {} instead of {}", header.versionMinor, serialBinVersionMinor);
+        return std::nullopt;
+    }
+
+    if (header.versionPatch != serialBinVersionPatch)
+    {
+        setError("Serial binary has wrong patch version: {} instead of {}", header.versionPatch, serialBinVersionPatch);
+        return std::nullopt;
+    }
+
+    if (bin.size() < static_cast<u64>(header.nodeBegin) + sizeof(SerialBinNode))
+    {
+        setError("Serial binary is truncated");
+        return std::nullopt;
+    }
+
+    SerialBinNode rootNode{};
+    std::memcpy(&rootNode, bin.data() + header.nodeBegin, sizeof(rootNode));
+
+    Serializer writer = serialWriter();
+    if (rootNode.isObject)
+    {
+        for (u32 i = 0; i < rootNode.count; ++i)
+        {
+            u64 childIdx = rootNode.begin + static_cast<u64>(i) * sizeof(SerialBinNode);
+            if (!serialBinReadNode(bin, childIdx, &writer))
+                return std::nullopt;
+        }
+    }
+    else
+    {
+        if (bin.size() < rootNode.begin + static_cast<u64>(rootNode.count))
+        {
+            setError("Serial binary is truncated");
+            return std::nullopt;
+        }
+        serializeVoid(&writer, {const_cast<u8*>(bin.data()) + rootNode.begin, rootNode.count});
+    }
+    return serialReader(std::move(writer.root));
 }
 
 } // namespace hg

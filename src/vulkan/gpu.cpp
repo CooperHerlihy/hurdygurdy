@@ -1,7 +1,7 @@
 #include "hg/gpu.hpp"
 
 #include "vulkan_internal.hpp"
-#include "hg/utility.hpp"
+#include "hg/memory.hpp"
 #include "hg/window.hpp"
 
 #include <cmath>
@@ -20,7 +20,7 @@ GpuBuffer GpuBuffer::create(u64 size, GpuBufferUsageFlags usageFlags, GpuMemoryU
     HG_ASSERT(usageFlags != 0);
 
     GpuBuffer buf{};
-    buf.data = makeUnique<GpuBufferData>();
+    buf.data = std::make_unique<GpuBufferData>();
 
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -40,7 +40,7 @@ GpuBuffer GpuBuffer::create(u64 size, GpuBufferUsageFlags usageFlags, GpuMemoryU
         nullptr);
 
     if (result != VK_SUCCESS)
-        HG_PANIC("Could not create VkBuffer: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkBuffer: {}\n", vkResultToStr(result));
 
     buf.data->size = size;
 
@@ -70,8 +70,10 @@ GpuBufferData::~GpuBufferData()
 {
     if (buffer != nullptr)
     {
-        descriptorDestroy(storageDesc, DescriptorType_storageBuffer);
-        descriptorDestroy(uniformDesc, DescriptorType_uniformBuffer);
+        if (usage & GpuBufferUsage_storageBuffer)
+            descriptorDestroy(storageDesc, DescriptorType_storageBuffer);
+        if (usage & GpuBufferUsage_uniformBuffer)
+            descriptorDestroy(uniformDesc, DescriptorType_uniformBuffer);
         vmaDestroyBuffer(vk.vma, buffer, alloc);
     }
 }
@@ -92,36 +94,33 @@ u64 GpuBuffer::size() const
 u32 GpuBuffer::uniformDescriptor() const
 {
     HG_ASSERT(data->usage & GpuBufferUsage_uniformBuffer);
-    GpuDescriptor desc = data->uniformDesc;
-    HG_ASSERT(vk.descriptorPools[DescriptorType_uniformBuffer].alive(desc));
-    return desc.idx();
+    return data->uniformDesc;
 }
 
 u32 GpuBuffer::storageDescriptor() const
 {
     HG_ASSERT(data->usage & GpuBufferUsage_storageBuffer);
-    GpuDescriptor desc = data->storageDesc;
-    HG_ASSERT(vk.descriptorPools[DescriptorType_storageBuffer].alive(desc));
-    return desc.idx();
+    return data->storageDesc;
 }
 
-void GpuBuffer::write(const void* src, u64 offset, u64 size)
+void GpuBuffer::write(std::span<const std::byte> src, u64 offset)
 {
+    u64 size = src.size();
     if (size == 0)
         return;
 
-    HG_ASSERT(src != nullptr);
+    HG_ASSERT(offset + size <= this->size());
 
     if (data->access & GpuMemoryHostAccess_write)
     {
-        VkResult result = vmaCopyMemoryToAllocation(vk.vma, src, data->alloc, offset, size);
+        VkResult result = vmaCopyMemoryToAllocation(vk.vma, src.data(), data->alloc, offset, size);
         if (result != VK_SUCCESS)
-            HG_PANIC("Could not write gpu buffer: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not write gpu buffer: {}\n", vkResultToStr(result));
         return;
     }
 
     GpuBuffer stage = GpuBuffer::create(size, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
-    stage.write(src, 0, size);
+    stage.write(src, 0);
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -136,18 +135,19 @@ void GpuBuffer::write(const void* src, u64 offset, u64 size)
     data->lastState = GpuAccess_transferDst;
 }
 
-void GpuBuffer::read(void* dst, u64 offset, u64 size) const
+void GpuBuffer::read(std::span<std::byte> dst, u64 offset) const
 {
+    u64 size = dst.size();
     if (size == 0)
         return;
 
-    HG_ASSERT(dst != nullptr);
+    HG_ASSERT(offset + size <= this->size());
 
     if (data->access & GpuMemoryHostAccess_read)
     {
-        VkResult result = vmaCopyAllocationToMemory(vk.vma, data->alloc, offset, dst, size);
+        VkResult result = vmaCopyAllocationToMemory(vk.vma, data->alloc, offset, dst.data(), size);
         if (result != VK_SUCCESS)
-            HG_PANIC("Could not read gpu buffer: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not read gpu buffer: {}\n", vkResultToStr(result));
         return;
     }
 
@@ -163,7 +163,7 @@ void GpuBuffer::read(void* dst, u64 offset, u64 size) const
 
     gpuCmdEnd(cmd);
 
-    stage.read(dst, 0, size);
+    stage.read(dst, 0);
 
     data->lastState = GpuAccess_transferSrc;
 }
@@ -184,7 +184,7 @@ GpuImage GpuImage::createEx(const GpuImageCreateInfo& create)
     HG_ASSERT(create.usage != 0);
 
     GpuImage img{};
-    img.data = makeUnique<GpuImageData>();
+    img.data = std::make_unique<GpuImageData>();
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -212,7 +212,7 @@ GpuImage GpuImage::createEx(const GpuImageCreateInfo& create)
         nullptr);
 
     if (result != VK_SUCCESS)
-        HG_PANIC("Could not create VkImage: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkImage: {}\n", vkResultToStr(result));
 
     img.data->usage = create.usage;
     img.data->format = create.format;
@@ -277,9 +277,9 @@ GpuView GpuView::createEx(const GpuViewCreateInfo& config)
     HG_ASSERT(config.aspectFlags != 0);
 
     GpuView view{};
-    view.data = makeUnique<GpuViewData>();
+    view.data = std::make_unique<GpuViewData>();
 
-    GpuImageData* image = config.image->data;
+    GpuImageData* image = config.image->data.get();
 
     VkImageViewCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -295,7 +295,7 @@ GpuView GpuView::createEx(const GpuViewCreateInfo& config)
     [[maybe_unused]]
     VkResult result = vkCreateImageView(vk.device, &info, nullptr, &view.data->view);
     if (view.data->view == nullptr)
-        HG_PANIC("Could not create VkImageView: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkImageView: {}\n", vkResultToStr(result));
 
     if (image->usage & GpuImageUsage_sampled)
     {
@@ -329,8 +329,10 @@ GpuViewData::~GpuViewData()
 {
     if (view != nullptr)
     {
-        descriptorDestroy(storageDesc, DescriptorType_storageImage);
-        descriptorDestroy(samplerDesc, DescriptorType_combinedImageSampler);
+        if (image->usage & GpuImageUsage_storage)
+            descriptorDestroy(storageDesc, DescriptorType_storageImage);
+        if (image->usage & GpuImageUsage_sampled)
+            descriptorDestroy(samplerDesc, DescriptorType_combinedImageSampler);
         vkDestroyImageView(vk.device, view, nullptr);
     }
 }
@@ -366,30 +368,26 @@ Format GpuView::format() const
 u32 GpuView::samplerDescriptor() const
 {
     HG_ASSERT(data->image->usage & GpuImageUsage_sampled);
-    GpuDescriptor desc = data->samplerDesc;
-    HG_ASSERT(vk.descriptorPools[DescriptorType_combinedImageSampler].alive(desc));
-    return desc.idx();
+    return data->samplerDesc;
 }
 
 u32 GpuView::storageDescriptor() const
 {
     HG_ASSERT(data->image->usage & GpuImageUsage_storage);
-    GpuDescriptor desc = data->storageDesc;
-    HG_ASSERT(vk.descriptorPools[DescriptorType_storageImage].alive(desc));
-    return desc.idx();
+    return data->storageDesc;
 }
 
-void GpuView::write(const void* src)
+void GpuView::write(std::span<const std::byte> src)
 {
-    HG_ASSERT(src != nullptr);
-
-    u64 size = data->image->width
+    u64 size = static_cast<u64>(data->image->width)
              * data->image->height
              * data->image->depth
              * formatToSize(data->image->format);
 
+    HG_ASSERT(src.size() == size);
+
     GpuBuffer stage = GpuBuffer::create(size, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
-    stage.write(src, 0, size);
+    stage.write(src, 0);
 
     GpuCmd* cmd = gpuCmdBegin();
 
@@ -433,17 +431,18 @@ void GpuView::write(const void* src)
     data->lastLayout = GpuLayout_transferDst;
 }
 
-void GpuView::writeCubemap(const void* src)
+void GpuView::writeCubemap(std::span<const std::byte> src)
 {
     HG_ASSERT(data->image->depth == 1);
     HG_ASSERT(data->baseArrayLayer == 0);
     HG_ASSERT(data->layerCount >= 6);
-    HG_ASSERT(src != nullptr);
 
-    u64 size = data->image->width * data->image->height * formatToSize(data->image->format);
+    u64 size = static_cast<u64>(data->image->width) * data->image->height * formatToSize(data->image->format);
+
+    HG_ASSERT(src.size() == size * 4 * 3);
 
     GpuBuffer buffer = GpuBuffer::create(size * 4 * 3, GpuBufferUsage_transferSrc, GpuMemoryUsage_stagingWrite);
-    buffer.write(src, 0, size * 4 * 3);
+    buffer.write(src, 0);
 
     GpuImage stage = GpuImage::create(
         data->image->width * 4,
@@ -513,7 +512,7 @@ void GpuView::writeCubemap(const void* src)
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = static_cast<u32>(hg::size(transferBarriers));
+    transferDep.imageMemoryBarrierCount = static_cast<u32>(std::size(transferBarriers));
     transferDep.pImageMemoryBarriers = transferBarriers;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &transferDep);
@@ -562,7 +561,7 @@ void GpuView::writeCubemap(const void* src)
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         data->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        static_cast<u32>(hg::size(regions)),
+        static_cast<u32>(std::size(regions)),
         regions);
 
     gpuCmdEnd(cmd);
@@ -571,7 +570,7 @@ void GpuView::writeCubemap(const void* src)
     data->lastLayout = GpuLayout_transferDst;
 }
 
-void GpuView::read(void* dst) const
+void GpuView::read(std::span<std::byte> dst) const
 {
     HG_ASSERT(data->lastLayout != GpuLayout_undefined);
     HG_ASSERT(data != nullptr);
@@ -583,7 +582,9 @@ void GpuView::read(void* dst) const
     if (mipH < 1) mipH = 1;
     if (mipD < 1) mipD = 1;
 
-    u64 size = mipW * mipH * mipD * formatToSize(data->image->format);
+    u64 size = static_cast<u64>(mipW) * mipH * mipD * formatToSize(data->image->format);
+
+    HG_ASSERT(dst.size() == size);
 
     GpuBuffer stage = GpuBuffer::create(size, GpuBufferUsage_transferDst, GpuMemoryUsage_stagingRead);
 
@@ -628,7 +629,7 @@ void GpuView::read(void* dst) const
 
     gpuCmdEnd(cmd);
 
-    stage.read(dst, 0, size);
+    stage.read(dst, 0);
 
     data->lastState = GpuAccess_transferSrc;
     data->lastLayout = GpuLayout_transferSrc;
@@ -728,30 +729,29 @@ u32 getMaxMipmaps(u32 width, u32 height, u32 depth)
     return max == 0 ? 0 : static_cast<u32>(std::log2(static_cast<f32>(max))) + 1;
 }
 
-static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
+static VkShaderModule createShaderModule(std::span<const u8> spirvCode)
 {
     VkShaderModuleCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    info.codeSize = codeSize;
-    info.pCode = (const u32*)spirvCode;
+    info.codeSize = spirvCode.size();
+    info.pCode = (const u32*)spirvCode.data();
 
     VkShaderModule shader = nullptr;
     [[maybe_unused]] VkResult result = vkCreateShaderModule(vk.device, &info, nullptr, &shader);
     if (shader == nullptr)
-        HG_PANIC("Could not create VkShaderModule: %s\n", vkResultToStr(result));
+        HG_PANIC("Could not create VkShaderModule: {}\n", vkResultToStr(result));
 
     return shader;
 }
 
 GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
 {
-    HG_ASSERT(config.vertexShader.data != nullptr);
-    HG_ASSERT(config.fragmentShader.data != nullptr);
-    if (config.colorAttachmentFormats.count > 0)
-        HG_ASSERT(config.colorAttachmentFormats.data != nullptr);
+    HG_ASSERT(config.vertexShader.size() > 0);
+    HG_ASSERT(config.fragmentShader.size() > 0);
 
     GpuPipeline pipe{};
-    pipe.data = makeUnique<GpuPipelineData>();
+    pipe.data = std::make_unique<GpuPipelineData>();
+    pipe.data->pushSize = config.pushConstantSize;
 
     ArenaScope scratch = getScratch();
 
@@ -769,10 +769,10 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     [[maybe_unused]]
     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipe.data->layout);
     if (pipe.data->layout == nullptr)
-        HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
+        HG_PANIC("Could not create VkPipelineLayout: {}\n", vkResultToStr(layoutResult));
 
-    VkShaderModule vertexShader = createShaderModule(config.vertexShader.data, config.vertexShader.count);
-    VkShaderModule fragmentShader = createShaderModule(config.fragmentShader.data, config.fragmentShader.count);
+    VkShaderModule vertexShader = createShaderModule(config.vertexShader);
+    VkShaderModule fragmentShader = createShaderModule(config.fragmentShader);
     HG_DEFER(vkDestroyShaderModule(vk.device, vertexShader, nullptr));
     HG_DEFER(vkDestroyShaderModule(vk.device, fragmentShader, nullptr));
 
@@ -837,13 +837,13 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     depthStencilState.minDepthBounds = 0.0f;
     depthStencilState.maxDepthBounds = 1.0f;
 
-    ArrayTemp<VkPipelineColorBlendAttachmentState> colorBlendAttachments{
-        scratch, 0, static_cast<u32>(config.colorAttachmentFormats.count)};
+    vector_temp<VkPipelineColorBlendAttachmentState> colorBlendAttachments{scratch};
+    colorBlendAttachments.reserve(config.colorAttachmentFormats.size());
 
-    for (u32 i = 0; i < config.colorAttachmentFormats.count; ++i)
+    for (u32 i = 0; i < config.colorAttachmentFormats.size(); ++i)
     {
-        VkPipelineColorBlendAttachmentState& attachment = colorBlendAttachments.push();
-        attachment.blendEnable = config.colorBlendEnables.data != nullptr
+        VkPipelineColorBlendAttachmentState& attachment = colorBlendAttachments.emplace_back();
+        attachment.blendEnable = config.colorBlendEnables.data() != nullptr
             ? config.colorBlendEnables[i]
             : VK_FALSE;
         attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
@@ -863,8 +863,8 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlendState.logicOpEnable = VK_FALSE;
     colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    colorBlendState.attachmentCount = static_cast<u32>(colorBlendAttachments.count);
-    colorBlendState.pAttachments = colorBlendAttachments.vals;
+    colorBlendState.attachmentCount = static_cast<u32>(colorBlendAttachments.size());
+    colorBlendState.pAttachments = colorBlendAttachments.data();
     for (float& blendConstant : colorBlendState.blendConstants)
     {
         blendConstant = 1.0f;
@@ -873,28 +873,29 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = static_cast<u32>(size(dynamicStates));
+    dynamicState.dynamicStateCount = static_cast<u32>(std::size(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
-    ArrayTemp<VkFormat> colorFormats{scratch, 0, static_cast<u32>(config.colorAttachmentFormats.count)};
-    for (u32 i = 0; i < config.colorAttachmentFormats.count; ++i)
+    vector_temp<VkFormat> colorFormats{scratch};
+    colorFormats.reserve(static_cast<u32>(config.colorAttachmentFormats.size()));
+    for (u32 i = 0; i < config.colorAttachmentFormats.size(); ++i)
     {
-        colorFormats.push(formatToVk(config.colorAttachmentFormats[i]));
+        colorFormats.push_back(formatToVk(config.colorAttachmentFormats[i]));
     }
     VkFormat depthFormat = formatToVk(config.depthAttachmentFormat);
     VkFormat stencilFormat = formatToVk(config.stencilAttachmentFormat);
 
     VkPipelineRenderingCreateInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    renderingInfo.colorAttachmentCount = static_cast<u32>(colorFormats.count);
-    renderingInfo.pColorAttachmentFormats = colorFormats.vals;
+    renderingInfo.colorAttachmentCount = static_cast<u32>(colorFormats.size());
+    renderingInfo.pColorAttachmentFormats = colorFormats.data();
     renderingInfo.depthAttachmentFormat = depthFormat;
     renderingInfo.stencilAttachmentFormat = stencilFormat;
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = static_cast<u32>(size(shaderStages));
+    pipelineInfo.stageCount = static_cast<u32>(std::size(shaderStages));
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputState;
     pipelineInfo.pInputAssemblyState = &inputAssemblyState;
@@ -913,20 +914,21 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     VkResult pipelineResult = vkCreateGraphicsPipelines(
         vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipe.data->pipeline);
     if (pipe.data->pipeline == nullptr)
-        HG_PANIC("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
+        HG_PANIC("Failed to create Vulkan graphics pipeline: {}\n", vkResultToStr(pipelineResult));
 
     pipe.data->bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     return pipe;
 }
 
-GpuPipeline GpuPipeline::compute(Span<const u8> shaderCode, u32 pushSize)
+GpuPipeline GpuPipeline::compute(std::span<const u8> shaderCode, u32 pushSize)
 {
-    HG_ASSERT(shaderCode.data != nullptr);
-    HG_ASSERT(shaderCode.count > 0);
+    HG_ASSERT(shaderCode.data() != nullptr);
+    HG_ASSERT(shaderCode.size() > 0);
 
     GpuPipeline pipe{};
-    pipe.data = makeUnique<GpuPipelineData>();
+    pipe.data = std::make_unique<GpuPipelineData>();
+    pipe.data->pushSize = pushSize;
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -940,9 +942,9 @@ GpuPipeline GpuPipeline::compute(Span<const u8> shaderCode, u32 pushSize)
     [[maybe_unused]]
     VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipe.data->layout);
     if (pipe.data->layout == nullptr)
-        HG_PANIC("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
+        HG_PANIC("Could not create VkPipelineLayout: {}\n", vkResultToStr(layoutResult));
 
-    VkShaderModule computeShader = createShaderModule(shaderCode.data, static_cast<u32>(shaderCode.count));
+    VkShaderModule computeShader = createShaderModule(shaderCode);
     HG_DEFER(vkDestroyShaderModule(vk.device, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
@@ -959,7 +961,7 @@ GpuPipeline GpuPipeline::compute(Span<const u8> shaderCode, u32 pushSize)
     VkResult pipelineResult = vkCreateComputePipelines(
         vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipe.data->pipeline);
     if (pipe.data->pipeline == nullptr)
-        HG_PANIC("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
+        HG_PANIC("Failed to create Vulkan compute pipeline: {}\n", vkResultToStr(pipelineResult));
 
     pipe.data->bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
 
@@ -1044,8 +1046,10 @@ void gpuBindPipeline(GpuCmd* cmd, const GpuPipeline& pipeline)
         nullptr);
 }
 
-void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, void* push, u32 size)
+void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, std::span<const std::byte> push)
 {
+    HG_ASSERT(push.size() <= pipeline.data->pushSize);
+
     vkCmdPushConstants(
         reinterpret_cast<VkCommandBuffer>(cmd),
         pipeline.data->layout,
@@ -1053,8 +1057,8 @@ void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, void* push, u32 
             ? VK_SHADER_STAGE_COMPUTE_BIT
             : VK_SHADER_STAGE_ALL,
         0,
-        size,
-        push);
+        static_cast<u32>(push.size()),
+        push.data());
 }
 
 void gpuDraw(GpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount)
@@ -1069,17 +1073,19 @@ void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
 
 void gpuMemoryBarrier(
     GpuCmd* cmd,
-    Span<const GpuBufferBarrier> bufferBarriers,
-    Span<const GpuImageBarrier> imageBarriers)
+    std::span<const GpuBufferBarrier> bufferBarriers,
+    std::span<const GpuImageBarrier> imageBarriers)
 {
     ArenaScope scratch = getScratch();
 
-    ArrayTemp<VkBufferMemoryBarrier2> vkBufferBarriers{scratch, 0, static_cast<u32>(bufferBarriers.count)};
-    ArrayTemp<VkImageMemoryBarrier2> vkImageBarriers{scratch, 0, static_cast<u32>(imageBarriers.count)};
+    vector_temp<VkBufferMemoryBarrier2> vkBufferBarriers{scratch};
+    vkBufferBarriers.reserve(static_cast<u32>(bufferBarriers.size()));
+    vector_temp<VkImageMemoryBarrier2> vkImageBarriers{scratch};
+    vkImageBarriers.reserve(static_cast<u32>(imageBarriers.size()));
 
     for (const GpuBufferBarrier& barrier : bufferBarriers)
     {
-        VkBufferMemoryBarrier2& vkBarrier = vkBufferBarriers.push();
+        VkBufferMemoryBarrier2& vkBarrier = vkBufferBarriers.emplace_back();
 
         vkBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
         vkBarrier.srcStageMask = gpuStateToVkStage(barrier.buffer->data->lastState);
@@ -1094,7 +1100,7 @@ void gpuMemoryBarrier(
 
     for (const GpuImageBarrier& barrier : imageBarriers)
     {
-        VkImageMemoryBarrier2& vkBarrier = vkImageBarriers.push();
+        VkImageMemoryBarrier2& vkBarrier = vkImageBarriers.emplace_back();
 
         vkBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         vkBarrier.srcStageMask = gpuStateToVkStage(barrier.image->data->lastState);
@@ -1118,10 +1124,10 @@ void gpuMemoryBarrier(
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = static_cast<u32>(vkBufferBarriers.count);
-    dep.pBufferMemoryBarriers = vkBufferBarriers.vals;
-    dep.imageMemoryBarrierCount = static_cast<u32>(vkImageBarriers.count);
-    dep.pImageMemoryBarriers = vkImageBarriers.vals;
+    dep.bufferMemoryBarrierCount = static_cast<u32>(vkBufferBarriers.size());
+    dep.pBufferMemoryBarriers = vkBufferBarriers.data();
+    dep.imageMemoryBarrierCount = static_cast<u32>(vkImageBarriers.size());
+    dep.pImageMemoryBarriers = vkImageBarriers.data();
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 }
@@ -1130,13 +1136,15 @@ void gpuComputePass(GpuCmd* cmd, const GpuPass& pass)
 {
     ArenaScope scratch = getScratch();
 
-    ArrayTemp<VkBufferMemoryBarrier2> bufferBarriers{scratch, 0, 32};
-    ArrayTemp<VkImageMemoryBarrier2> imageBarriers{scratch, 0, 32};
+    vector_temp<VkBufferMemoryBarrier2> bufferBarriers{scratch};
+    bufferBarriers.reserve(32);
+    vector_temp<VkImageMemoryBarrier2> imageBarriers{scratch};
+    imageBarriers.reserve(32);
 
-    for (u32 i = 0; i < pass.uniformBuffers.count; ++i)
+    for (u32 i = 0; i < pass.uniformBuffers.size(); ++i)
     {
-        VkBufferMemoryBarrier2& barrier = bufferBarriers.push();
-        GpuBufferData* buffer = pass.uniformBuffers[i]->data;
+        VkBufferMemoryBarrier2& barrier = bufferBarriers.emplace_back();
+        GpuBufferData* buffer = pass.uniformBuffers[i]->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(buffer->lastState);
@@ -1149,10 +1157,10 @@ void gpuComputePass(GpuCmd* cmd, const GpuPass& pass)
         buffer->lastState = GpuAccess_uniformBufferCompute;
     }
 
-    for (u32 i = 0; i < pass.storageBuffers.count; ++i)
+    for (u32 i = 0; i < pass.storageBuffers.size(); ++i)
     {
-        VkBufferMemoryBarrier2& barrier = bufferBarriers.push();
-        GpuBufferData* buffer = pass.storageBuffers[i]->data;
+        VkBufferMemoryBarrier2& barrier = bufferBarriers.emplace_back();
+        GpuBufferData* buffer = pass.storageBuffers[i]->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(buffer->lastState);
@@ -1165,10 +1173,10 @@ void gpuComputePass(GpuCmd* cmd, const GpuPass& pass)
         buffer->lastState = GpuAccess_storageBufferCompute;
     }
 
-    for (u32 i = 0; i < pass.sampledImages.count; ++i)
+    for (u32 i = 0; i < pass.sampledImages.size(); ++i)
     {
-        VkImageMemoryBarrier2& barrier = imageBarriers.push();
-        GpuViewData* image = pass.sampledImages[i]->data;
+        VkImageMemoryBarrier2& barrier = imageBarriers.emplace_back();
+        GpuViewData* image = pass.sampledImages[i]->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(image->lastState);
@@ -1190,10 +1198,10 @@ void gpuComputePass(GpuCmd* cmd, const GpuPass& pass)
         image->lastLayout = GpuLayout_shaderReadOnly;
     }
 
-    for (u32 i = 0; i < pass.storageImages.count; ++i)
+    for (u32 i = 0; i < pass.storageImages.size(); ++i)
     {
-        VkImageMemoryBarrier2& barrier = imageBarriers.push();
-        GpuViewData* image = pass.storageImages[i]->data;
+        VkImageMemoryBarrier2& barrier = imageBarriers.emplace_back();
+        GpuViewData* image = pass.storageImages[i]->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(image->lastState);
@@ -1217,10 +1225,10 @@ void gpuComputePass(GpuCmd* cmd, const GpuPass& pass)
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.count);
-    dep.pBufferMemoryBarriers = bufferBarriers.vals;
-    dep.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.count);
-    dep.pImageMemoryBarriers = imageBarriers.vals;
+    dep.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.size());
+    dep.pBufferMemoryBarriers = bufferBarriers.data();
+    dep.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.size());
+    dep.pImageMemoryBarriers = imageBarriers.data();
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 }
@@ -1229,13 +1237,15 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 {
     ArenaScope scratch = getScratch();
 
-    ArrayTemp<VkBufferMemoryBarrier2> bufferBarriers{scratch, 0, 32};
-    ArrayTemp<VkImageMemoryBarrier2> imageBarriers{scratch, 0, 32};
+    vector_temp<VkBufferMemoryBarrier2> bufferBarriers{scratch};
+    bufferBarriers.reserve(32);
+    vector_temp<VkImageMemoryBarrier2> imageBarriers{scratch};
+    imageBarriers.reserve(32);
 
-    for (u32 i = 0; i < pass.uniformBuffers.count; ++i)
+    for (u32 i = 0; i < pass.uniformBuffers.size(); ++i)
     {
-        VkBufferMemoryBarrier2& barrier = bufferBarriers.push();
-        GpuBufferData* buffer = pass.uniformBuffers[i]->data;
+        VkBufferMemoryBarrier2& barrier = bufferBarriers.emplace_back();
+        GpuBufferData* buffer = pass.uniformBuffers[i]->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(buffer->lastState);
@@ -1248,10 +1258,10 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         buffer->lastState = GpuAccess_uniformBufferAllGraphics;
     }
 
-    for (u32 i = 0; i < pass.storageBuffers.count; ++i)
+    for (u32 i = 0; i < pass.storageBuffers.size(); ++i)
     {
-        VkBufferMemoryBarrier2& barrier = bufferBarriers.push();
-        GpuBufferData* buffer = pass.storageBuffers[i]->data;
+        VkBufferMemoryBarrier2& barrier = bufferBarriers.emplace_back();
+        GpuBufferData* buffer = pass.storageBuffers[i]->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(buffer->lastState);
@@ -1264,10 +1274,10 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         buffer->lastState = GpuAccess_storageBufferAllGraphics;
     }
 
-    for (u32 i = 0; i < pass.sampledImages.count; ++i)
+    for (u32 i = 0; i < pass.sampledImages.size(); ++i)
     {
-        VkImageMemoryBarrier2& barrier = imageBarriers.push();
-        GpuViewData* image = pass.sampledImages[i]->data;
+        VkImageMemoryBarrier2& barrier = imageBarriers.emplace_back();
+        GpuViewData* image = pass.sampledImages[i]->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(image->lastState);
@@ -1289,10 +1299,10 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         image->lastLayout = GpuLayout_shaderReadOnly;
     }
 
-    for (u32 i = 0; i < pass.storageImages.count; ++i)
+    for (u32 i = 0; i < pass.storageImages.size(); ++i)
     {
-        VkImageMemoryBarrier2& barrier = imageBarriers.push();
-        GpuViewData* image = pass.storageImages[i]->data;
+        VkImageMemoryBarrier2& barrier = imageBarriers.emplace_back();
+        GpuViewData* image = pass.storageImages[i]->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(image->lastState);
@@ -1314,10 +1324,10 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         image->lastLayout = GpuLayout_general;
     }
 
-    for (u32 i = 0; i < pass.colorAttachments.count; ++i)
+    for (u32 i = 0; i < pass.colorAttachments.size(); ++i)
     {
-        VkImageMemoryBarrier2& barrier = imageBarriers.push();
-        GpuViewData* image = pass.colorAttachments[i].image->data;
+        VkImageMemoryBarrier2& barrier = imageBarriers.emplace_back();
+        GpuViewData* image = pass.colorAttachments[i].image->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(image->lastState);
@@ -1342,8 +1352,8 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 
     if (pass.depthAttachment != nullptr)
     {
-        VkImageMemoryBarrier2& barrier = imageBarriers.push();
-        GpuViewData* image = pass.depthAttachment->image->data;
+        VkImageMemoryBarrier2& barrier = imageBarriers.emplace_back();
+        GpuViewData* image = pass.depthAttachment->image->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(image->lastState);
@@ -1370,8 +1380,8 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 
     if (pass.stencilAttachment != nullptr)
     {
-        VkImageMemoryBarrier2& barrier = imageBarriers.push();
-        GpuViewData* image = pass.stencilAttachment->image->data;
+        VkImageMemoryBarrier2& barrier = imageBarriers.emplace_back();
+        GpuViewData* image = pass.stencilAttachment->image->data.get();
 
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = gpuStateToVkStage(image->lastState);
@@ -1398,25 +1408,25 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.count);
-    dep.pBufferMemoryBarriers = bufferBarriers.vals;
-    dep.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.count);
-    dep.pImageMemoryBarriers = imageBarriers.vals;
+    dep.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.size());
+    dep.pBufferMemoryBarriers = bufferBarriers.data();
+    dep.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.size());
+    dep.pImageMemoryBarriers = imageBarriers.data();
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 
-    ArrayTemp<VkRenderingAttachmentInfo> colorAttachments{
-        scratch, 0, static_cast<u32>(pass.colorAttachments.count)};
+    vector_temp<VkRenderingAttachmentInfo> colorAttachments{scratch};
+    colorAttachments.reserve(static_cast<u32>(pass.colorAttachments.size()));
 
-    for (u32 i = 0; i < pass.colorAttachments.count; ++i)
+    for (u32 i = 0; i < pass.colorAttachments.size(); ++i)
     {
-        VkRenderingAttachmentInfo& attachment = colorAttachments.push();
+        VkRenderingAttachmentInfo& attachment = colorAttachments.emplace_back();
         attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         attachment.imageView = pass.colorAttachments[i].image->data->view;
         attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachment.loadOp = gpuLoadOpToVk(pass.colorAttachments[i].loadOp);
         attachment.storeOp = gpuStoreOpToVk(pass.colorAttachments[i].storeOp);
-        memcpy(&attachment.clearValue, &pass.colorAttachments[i].clearColor, sizeof(VkClearValue));
+        std::memcpy(&attachment.clearValue, &pass.colorAttachments[i].clearColor, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo depthAttachment{};
@@ -1427,7 +1437,7 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = gpuLoadOpToVk(pass.depthAttachment->loadOp);
         depthAttachment.storeOp = gpuStoreOpToVk(pass.depthAttachment->storeOp);
-        memcpy(&depthAttachment.clearValue, &pass.depthAttachment->clearColor, sizeof(VkClearValue));
+        std::memcpy(&depthAttachment.clearValue, &pass.depthAttachment->clearColor, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo stencilAttachment{};
@@ -1438,11 +1448,11 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
         stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         stencilAttachment.loadOp = gpuLoadOpToVk(pass.stencilAttachment->loadOp);
         stencilAttachment.storeOp = gpuStoreOpToVk(pass.stencilAttachment->storeOp);
-        memcpy(&stencilAttachment.clearValue, &pass.stencilAttachment->clearColor, sizeof(VkClearValue));
+        std::memcpy(&stencilAttachment.clearValue, &pass.stencilAttachment->clearColor, sizeof(VkClearValue));
     }
 
     u32 width, height;
-    if (pass.colorAttachments.count > 0)
+    if (pass.colorAttachments.size() > 0)
     {
         width = pass.colorAttachments[0].image->data->image->width;
         height = pass.colorAttachments[0].image->data->image->height;
@@ -1463,8 +1473,8 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderingInfo.renderArea.extent = {width, height};
     renderingInfo.layerCount = pass.layerCount;
-    renderingInfo.colorAttachmentCount = static_cast<u32>(pass.colorAttachments.count);
-    renderingInfo.pColorAttachments = colorAttachments.vals;
+    renderingInfo.colorAttachmentCount = static_cast<u32>(pass.colorAttachments.size());
+    renderingInfo.pColorAttachments = colorAttachments.data();
     renderingInfo.pDepthAttachment = pass.depthAttachment != nullptr
         ? &depthAttachment
         : nullptr;
@@ -1531,9 +1541,10 @@ static Format findSwapchainFormat(VkSurfaceKHR surface)
     u32 formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(
         vk.physicalDevice, surface, &formatCount, nullptr);
-    VkSurfaceFormatKHR* formats = scratch.alloc<VkSurfaceFormatKHR>(formatCount);
+    vector_temp<VkSurfaceFormatKHR> formats{scratch};
+    formats.resize(formatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(
-        vk.physicalDevice, surface, &formatCount, formats);
+        vk.physicalDevice, surface, &formatCount, formats.data());
 
     for (u32 i = 0; i < formatCount; ++i)
     {
@@ -1559,9 +1570,10 @@ static GpuPresentMode findSwapchainPresentMode(
     u32 modeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(
         vk.physicalDevice, surface, &modeCount, nullptr);
-    VkPresentModeKHR* presentModes = scratch.alloc<VkPresentModeKHR>(modeCount);
+    vector_temp<VkPresentModeKHR> presentModes{scratch};
+    presentModes.resize(modeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(
-        vk.physicalDevice, surface, &modeCount, presentModes);
+        vk.physicalDevice, surface, &modeCount, presentModes.data());
 
     for (u32 i = 0; i < modeCount; ++i)
     {
@@ -1579,7 +1591,7 @@ void GpuSwapchain::resize(u32 newWidth, u32 newHeight)
 
     vkQueueWaitIdle(vk.queue);
 
-    for (u32 i = 0; i < data->images.count; ++i)
+    for (u32 i = 0; i < data->images.size(); ++i)
     {
         if (data->views[i].data != nullptr)
             vkDestroyImageView(vk.device, data->views[i].data->view, nullptr);
@@ -1591,7 +1603,7 @@ void GpuSwapchain::resize(u32 newWidth, u32 newHeight)
         }
     }
 
-    for (u32 i = 0; i < vk.frameCount; ++i)
+    for (u32 i = 0; i < vk.frames.size(); ++i)
     {
         if (data->imageAvailable[i] != nullptr)
         {
@@ -1635,28 +1647,29 @@ void GpuSwapchain::resize(u32 newWidth, u32 newHeight)
         VkResult result = vkCreateSwapchainKHR(
             vk.device, &swapchainInfo, nullptr, &data->swapchain);
         if (data->swapchain == nullptr)
-            HG_PANIC("Failed to create swapchain: %s\n",
+            HG_PANIC("Failed to create swapchain: {}\n",
                 vkResultToStr(result));
 
         u32 swapImageCount;
         vkGetSwapchainImagesKHR(
             vk.device, data->swapchain, &swapImageCount, nullptr);
 
-        if (data->images.count != swapImageCount)
+        if (data->images.size() != swapImageCount)
         {
             data->images.resize(swapImageCount);
             data->views.resize(swapImageCount);
             data->readyToPresent.resize(swapImageCount);
         }
 
-        VkImage* swapImages = scratch.alloc<VkImage>(swapImageCount);
+        vector_temp<VkImage> swapImages{scratch};
+        swapImages.resize(swapImageCount);
         vkGetSwapchainImagesKHR(
-            vk.device, data->swapchain, &swapImageCount, swapImages);
+            vk.device, data->swapchain, &swapImageCount, swapImages.data());
 
-        for (u32 i = 0; i < data->images.count; ++i)
+        for (u32 i = 0; i < data->images.size(); ++i)
         {
             if (data->images[i].data == nullptr)
-                data->images[i].data = makeUnique<GpuImageData>();
+                data->images[i].data = std::make_unique<GpuImageData>();
             data->images[i].data->image = swapImages[i];
             data->images[i].data->dimensions = 2;
             data->images[i].data->format = data->format;
@@ -1675,16 +1688,16 @@ void GpuSwapchain::resize(u32 newWidth, u32 newHeight)
             viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
             if (data->views[i].data == nullptr)
-                data->views[i].data = makeUnique<GpuViewData>();
+                data->views[i].data = std::make_unique<GpuViewData>();
 
             [[maybe_unused]]
             VkResult viewResult = vkCreateImageView(
                 vk.device, &viewInfo, nullptr, &data->views[i].data->view);
             if (data->views[i].data->view == nullptr)
-                HG_PANIC("Could not create VkImageView: %s\n",
+                HG_PANIC("Could not create VkImageView: {}\n",
                     vkResultToStr(viewResult));
 
-            data->views[i].data->image = data->images[i].data;
+            data->views[i].data->image = data->images[i].data.get();
             data->views[i].data->type = GpuViewType_2D;
             data->views[i].data->aspectFlags = GpuAspect_color;
             data->views[i].data->baseMipLevel = 0;
@@ -1699,11 +1712,11 @@ void GpuSwapchain::resize(u32 newWidth, u32 newHeight)
             VkResult readyResult = vkCreateSemaphore(
                 vk.device, &semaphoreInfo, nullptr, &data->readyToPresent[i]);
             if (data->readyToPresent[i] == nullptr)
-                HG_PANIC("Could not create VkSemaphore: %s\n",
+                HG_PANIC("Could not create VkSemaphore: {}\n",
                     vkResultToStr(readyResult));
         }
 
-        for (u32 i = 0; i < vk.frameCount; ++i)
+        for (u32 i = 0; i < vk.frames.size(); ++i)
         {
             VkSemaphoreCreateInfo semaphoreInfo{};
             semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1712,7 +1725,7 @@ void GpuSwapchain::resize(u32 newWidth, u32 newHeight)
             VkResult availableResult = vkCreateSemaphore(
                 vk.device, &semaphoreInfo, nullptr, &data->imageAvailable[i]);
             if (data->imageAvailable[i] == nullptr)
-                HG_PANIC("Could not create VkSemaphore: %s\n",
+                HG_PANIC("Could not create VkSemaphore: {}\n",
                     vkResultToStr(availableResult));
         }
     }
@@ -1734,14 +1747,14 @@ GpuSwapchain GpuSwapchain::create(
     GpuImageUsageFlags imageUsage)
 {
     GpuSwapchain swap{};
-    swap.data = makeUnique<GpuSwapchainData>();
+    swap.data = std::make_unique<GpuSwapchainData>();
     swap.data->surface = static_cast<VkSurfaceKHR>(surface);
     swap.data->format = findSwapchainFormat(swap.data->surface);
     swap.data->presentMode = findSwapchainPresentMode(swap.data->surface, preferredPresentMode);
     swap.data->imageUsage = imageUsage;
-    swap.data->imageAvailable = Array<VkSemaphore>{vk.frameCount, vk.frameCount};
+    swap.data->imageAvailable = std::vector<VkSemaphore>(vk.frames.size());
 
-    for (u32 i = 0; i < vk.frameCount; ++i)
+    for (u32 i = 0; i < vk.frames.size(); ++i)
     {
         swap.data->imageAvailable[i] = nullptr;
     }
@@ -1760,12 +1773,12 @@ void GpuSwapchain::size(u32* width, u32* height) const
 
 u32 GpuSwapchain::imageCount() const
 {
-    return data != nullptr ? static_cast<u32>(data->images.count) : 0;
+    return data != nullptr ? static_cast<u32>(data->images.size()) : 0;
 }
 
 GpuView* GpuSwapchain::renderTarget() const
 {
-    return (data != nullptr && data->imageIdx < data->images.count) ? &data->views[data->imageIdx] : nullptr;
+    return (data != nullptr && data->imageIdx < data->images.size()) ? &data->views[data->imageIdx] : nullptr;
 }
 
 Format GpuSwapchain::format() const
@@ -1773,15 +1786,15 @@ Format GpuSwapchain::format() const
     return data != nullptr ? data->format : Format_undefined;
 }
 
-GpuCmd* gpuBeginFrame(Span<Window*> windows)
+GpuCmd* gpuBeginFrame(std::span<Window*> windows)
 {
     Frame* frame = &vk.frames[vk.currentFrame];
 
     vkWaitForFences(vk.device, 1, &frame->fence, VK_TRUE, UINT64_MAX);
     vkResetFences(vk.device, 1, &frame->fence);
 
-    frame->swapchains.reset();
-    for (u32 i = 0; i < windows.count; ++i)
+    frame->swapchains.clear();
+    for (u32 i = 0; i < windows.size(); ++i)
     {
         GpuSwapchain& swap = windows[i]->swapchain();
         if (swap.data->swapchain == nullptr)
@@ -1797,7 +1810,7 @@ GpuCmd* gpuBeginFrame(Span<Window*> windows)
 
         if (result == VK_SUCCESS)
         {
-            frame->swapchains.push(&swap);
+            frame->swapchains.push_back(&swap);
         }
         else if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         {
@@ -1806,7 +1819,7 @@ GpuCmd* gpuBeginFrame(Span<Window*> windows)
         }
         else
         {
-            HG_PANIC("Could not acquire next image: %s\n", vkResultToStr(result));
+            HG_PANIC("Could not acquire next image: {}\n", vkResultToStr(result));
         }
     }
 
@@ -1828,11 +1841,11 @@ void gpuEndFrame(GpuCmd* cmd)
 
     Frame* frame = &vk.frames[vk.currentFrame];
 
-    ArrayTemp<GpuImageBarrier> presentBarriers = ArrayTemp<GpuImageBarrier>{
-        scratch, 0, frame->swapchains.count};
+    vector_temp<GpuImageBarrier> presentBarriers{scratch};
+    presentBarriers.reserve(frame->swapchains.size());
     for (GpuSwapchain* swap : frame->swapchains)
     {
-        GpuImageBarrier& barrier = presentBarriers.push();
+        GpuImageBarrier& barrier = presentBarriers.emplace_back();
         barrier.image = &swap->data->views[swap->data->imageIdx];
         barrier.nextLayout = GpuLayout_presentSrc;
     }
@@ -1840,49 +1853,54 @@ void gpuEndFrame(GpuCmd* cmd)
 
     vkEndCommandBuffer(reinterpret_cast<VkCommandBuffer>(cmd));
 
-    ArrayTemp<VkPipelineStageFlags> waitStages{scratch, 0, frame->swapchains.count};
-    ArrayTemp<VkSemaphore> imageAvailableSemaphores{scratch, 0, frame->swapchains.count};
-    ArrayTemp<VkSemaphore> readyToPresentSemaphores{scratch, 0, frame->swapchains.count};
+    vector_temp<VkPipelineStageFlags> waitStages{scratch};
+    waitStages.reserve(frame->swapchains.size());
+    vector_temp<VkSemaphore> imageAvailableSemaphores{scratch};
+    imageAvailableSemaphores.reserve(frame->swapchains.size());
+    vector_temp<VkSemaphore> readyToPresentSemaphores{scratch};
+    readyToPresentSemaphores.reserve(frame->swapchains.size());
 
-    ArrayTemp<VkSwapchainKHR> swapchains{scratch, 0, frame->swapchains.count};
-    ArrayTemp<u32> imageIndices{scratch, 0, frame->swapchains.count};
+    vector_temp<VkSwapchainKHR> swapchains{scratch};
+    swapchains.reserve(frame->swapchains.size());
+    vector_temp<u32> imageIndices{scratch};
+    imageIndices.reserve(frame->swapchains.size());
 
     for (GpuSwapchain* swap : frame->swapchains)
     {
-        waitStages.push(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-        imageAvailableSemaphores.push(swap->data->imageAvailable[vk.currentFrame]);
-        readyToPresentSemaphores.push(swap->data->readyToPresent[swap->data->imageIdx]);
-        swapchains.push(swap->data->swapchain);
-        imageIndices.push(swap->data->imageIdx);
+        waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+        imageAvailableSemaphores.push_back(swap->data->imageAvailable[vk.currentFrame]);
+        readyToPresentSemaphores.push_back(swap->data->readyToPresent[swap->data->imageIdx]);
+        swapchains.push_back(swap->data->swapchain);
+        imageIndices.push_back(swap->data->imageIdx);
         swap->data->imageIdx = (u32)-1;
     }
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.waitSemaphoreCount = static_cast<u32>(imageAvailableSemaphores.count);
-    submit.pWaitSemaphores = imageAvailableSemaphores.vals;
-    submit.pWaitDstStageMask = waitStages.vals;
+    submit.waitSemaphoreCount = static_cast<u32>(imageAvailableSemaphores.size());
+    submit.pWaitSemaphores = imageAvailableSemaphores.data();
+    submit.pWaitDstStageMask = waitStages.data();
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = reinterpret_cast<VkCommandBuffer*>(&cmd);
-    submit.signalSemaphoreCount = static_cast<u32>(readyToPresentSemaphores.count);
-    submit.pSignalSemaphores = readyToPresentSemaphores.vals;
+    submit.signalSemaphoreCount = static_cast<u32>(readyToPresentSemaphores.size());
+    submit.pSignalSemaphores = readyToPresentSemaphores.data();
 
     vkQueueSubmit(vk.queue, 1, &submit, frame->fence);
 
-    if (frame->swapchains.count > 0)
+    if (frame->swapchains.size() > 0)
     {
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.waitSemaphoreCount = static_cast<u32>(readyToPresentSemaphores.count);
-        presentInfo.pWaitSemaphores = readyToPresentSemaphores.vals;
-        presentInfo.swapchainCount = static_cast<u32>(swapchains.count);
-        presentInfo.pSwapchains = swapchains.vals;
-        presentInfo.pImageIndices = imageIndices.vals;
+        presentInfo.waitSemaphoreCount = static_cast<u32>(readyToPresentSemaphores.size());
+        presentInfo.pWaitSemaphores = readyToPresentSemaphores.data();
+        presentInfo.swapchainCount = static_cast<u32>(swapchains.size());
+        presentInfo.pSwapchains = swapchains.data();
+        presentInfo.pImageIndices = imageIndices.data();
 
         vkQueuePresentKHR(vk.queue, &presentInfo);
     }
 
-    vk.currentFrame = (vk.currentFrame + 1) % vk.frameCount;
+    vk.currentFrame = (vk.currentFrame + 1) % vk.frames.size();
 }
 
 } // namespace hg

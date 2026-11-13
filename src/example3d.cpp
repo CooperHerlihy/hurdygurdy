@@ -6,7 +6,9 @@ static volatile bool quit = false;
 
 int main()
 {
-    HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
+    std::optional<HurdyGurdy> hg = init();
+    if (!hg.has_value())
+        HG_PANIC("Could not initialize Hurdy Gurdy\n");
 
     Window window = Window::create({});
     window.setTitle("Hurdy Gurdy 3D Example");
@@ -69,11 +71,11 @@ int main()
         sizeof(vertices), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
     mesh.indexBuffer = GpuBuffer::create(
         sizeof(indices), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
-    mesh.vertexBuffer.write(vertices, 0, sizeof(vertices));
-    mesh.indexBuffer.write(indices, 0, sizeof(indices));
-    mesh.vertexCount = size(vertices);
+    mesh.vertexBuffer.write(std::as_bytes(std::span{vertices}), 0);
+    mesh.indexBuffer.write(std::as_bytes(std::span{indices}), 0);
+    mesh.vertexCount = std::size(vertices);
     mesh.vertexWidth = sizeof(MeshVertex);
-    mesh.indexCount = size(indices);
+    mesh.indexCount = std::size(indices);
 
     Texture normalTex{};
     {
@@ -82,7 +84,7 @@ int main()
         normalTex.view = GpuView::create(normalTex.image, GpuAspect_color, GpuFilter_linear);
 
         Vec4 normalVals[1] = {{0, 0, 1, 0}};
-        normalTex.view.write(normalVals);
+        normalTex.view.write(std::as_bytes(std::span{normalVals}));
     }
 
     Texture whiteTex{};
@@ -92,7 +94,7 @@ int main()
         whiteTex.view = GpuView::create(whiteTex.image, GpuAspect_color, GpuFilter_nearest);
 
         u8 whitePixel[4] = {255, 255, 255, 255};
-        whiteTex.view.write(&whitePixel);
+        whiteTex.view.write(std::as_bytes(std::span{&whitePixel, 1}));
     }
 
     GpuImage depthImg = GpuImage::create(width, height, Format_d32_sfloat,

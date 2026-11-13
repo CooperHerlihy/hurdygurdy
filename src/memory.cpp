@@ -1,48 +1,25 @@
 #include "hg/memory.hpp"
 #include "hg/error.hpp"
 #include "hg/utility.hpp"
-#include "hg/array.hpp"
-
-#include <cstddef>
 
 #ifdef HG_PLATFORM_WINDOWS
 #include <malloc.h>
 #endif
 
+#include <vector>
+#include <memory>
+
 namespace hg {
 
-void* heapAlloc(u64 size, u64 align)
-{
-#ifdef HG_PLATFORM_WINDOWS
-    void* alloc = _aligned_malloc(size, align);
-#else
-    void* alloc = align <= 16 ? malloc(size) : aligned_alloc(align, size);
-#endif
-    if (alloc == nullptr)
-        HG_PANIC("malloc out of memory");
-    return alloc;
-}
-
-void heapFree(void* allocation, u64 size)
-{
-    static_cast<void>(size);
-#ifdef HG_PLATFORM_WINDOWS
-    _aligned_free(allocation);
-#else
-    free(allocation);
-#endif
-}
-
 Arena::Arena(u64 capacityVal)
-    : memory{heapAlloc(capacityVal, alignof(std::max_align_t))}
+    : memory{std::malloc(capacityVal)}
     , capacity{capacityVal}
     , head{0}
 {}
 
 Arena::~Arena() noexcept
 {
-    if (memory != nullptr)
-        heapFree(memory, capacity);
+    std::free(memory);
 }
 
 void* Arena::alloc(u64 size, u64 alignment)
@@ -73,7 +50,7 @@ bool Arena::extend(void* allocation, u64 oldSize, u64 newSize)
     return true;
 }
 
-static thread_local Array<Arena> scratchArenas{};
+static thread_local std::vector<std::unique_ptr<Arena>> scratchArenas{};
 
 ArenaScope getScratch()
 {
@@ -85,21 +62,21 @@ ArenaScope getScratch(const Arena* conflict)
     return getScratch({&conflict, 1});
 }
 
-ArenaScope getScratch(Span<const Arena*> conflicts)
+ArenaScope getScratch(std::span<const Arena*> conflicts)
 {
-    for (Arena& arena : scratchArenas)
+    for (std::unique_ptr<Arena>& arena : scratchArenas)
     {
         for (const Arena* conflict : conflicts)
         {
-            if (&arena == conflict)
+            if (arena.get() == conflict)
                 goto next;
         }
-        return &arena;
+        return arena.get();
 next:
         continue;
     }
 
-    return &scratchArenas.push(Arena{(static_cast<u64>(1) << 28) - 1});
+    return scratchArenas.emplace_back(std::make_unique<Arena>((static_cast<u64>(1) << 28) - 1)).get();
 }
 
 } // namespace hg

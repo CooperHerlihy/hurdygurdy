@@ -1,8 +1,9 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/maybe.hpp"
 #include "hg/math.hpp"
+
+#include <optional>
 
 namespace hg {
 
@@ -141,42 +142,42 @@ struct Line2D {
 /**
  * Intersect two rays
  */
-Maybe<Hit2D> intersectRays2D(Ray2D ray, Ray2D other);
+std::optional<Hit2D> intersectRays2D(Ray2D ray, Ray2D other);
 
 /**
  * Intersect a ray and a line
  */
-Maybe<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line);
+std::optional<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line);
 
 /**
  * Intersect a ray and a circle
  */
-Maybe<Hit2D> intersectRayCircle(Ray2D ray, Circle circle);
+std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle);
 
 /**
  * Intersect a ray and a rect
  */
-Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect);
+std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect);
 
 /**
  * Intersect two lines
  */
-Maybe<Hit2D> intersectLines2D(Line2D line, Line2D other);
+std::optional<Hit2D> intersectLines2D(Line2D line, Line2D other);
 
 /**
  * Intersect a line and a ray
  */
-Maybe<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray);
+std::optional<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray);
 
 /**
  * Intersect a line and a circle
  */
-Maybe<Hit2D> intersectLineCircle(Line2D line, Circle circle);
+std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle);
 
 /**
  * Intersect a line and a rect
  */
-Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect);
+std::optional<Hit2D> intersectLineRect(Line2D line, Rect rect);
 
 } // namespace hg
 

@@ -3,8 +3,11 @@
 #include "internal.hpp"
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"
-#include "hg/array.hpp"
-#include "hg/map.hpp"
+#include "hg/hash.hpp"
+
+#include <vector>
+#include <string_view>
+#include <memory>
 
 #include <math.h>
 #include <string.h>
@@ -98,8 +101,8 @@ XkbFuncs xkbFuncs{};
 
 static bool loadXlib()
 {
-    Maybe<Library> lib = Library::load("libX11.so.6");
-    if (!lib.has)
+    std::optional<Library> lib = Library::load("libX11.so.6");
+    if (!lib.has_value())
     {
         setError("Could not load libX11");
         return false;
@@ -107,7 +110,7 @@ static bool loadXlib()
     libX11 = std::move(*lib);
 
 #define HG_LOAD_XLIB(name) \
-    *(void**)&xlibFuncs.name = libX11.loadSymbol(#name).orElse(nullptr); \
+    *(void**)&xlibFuncs.name = libX11.loadSymbol(#name).value_or(nullptr); \
     if (xlibFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_XLIB(XOpenDisplay);
@@ -151,8 +154,8 @@ static bool loadXlib()
 
 static bool loadXrandr()
 {
-    Maybe<Library> lib = Library::load("libXrandr.so.2");
-    if (!lib.has)
+    std::optional<Library> lib = Library::load("libXrandr.so.2");
+    if (!lib.has_value())
     {
         setError("Could not load libXrandr");
         return false;
@@ -160,7 +163,7 @@ static bool loadXrandr()
     libXrandr = std::move(*lib);
 
 #define HG_LOAD_XRANDR(name) \
-    *(void**)&xrandrFuncs.name = libXrandr.loadSymbol(#name).orElse(nullptr); \
+    *(void**)&xrandrFuncs.name = libXrandr.loadSymbol(#name).value_or(nullptr); \
     if (xrandrFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_XRANDR(XRRGetScreenResourcesCurrent);
@@ -175,8 +178,8 @@ static bool loadXrandr()
 
 static bool loadXkb()
 {
-    Maybe<Library> lib = Library::load("libxkbcommon.so.0");
-    if (!lib.has)
+    std::optional<Library> lib = Library::load("libxkbcommon.so.0");
+    if (!lib.has_value())
     {
         setError("Could not load libxkbcommon");
         return false;
@@ -184,7 +187,7 @@ static bool loadXkb()
     libxkb = std::move(*lib);
 
 #define HG_LOAD_XKB(name) \
-    *(void**)&xkbFuncs.name = libxkb.loadSymbol(#name).orElse(nullptr); \
+    *(void**)&xkbFuncs.name = libxkb.loadSymbol(#name).value_or(nullptr); \
     if (xkbFuncs.name == nullptr) { setError("Could not load " #name); return false; }
 
     HG_LOAD_XKB(xkb_context_new);
@@ -215,12 +218,13 @@ bool loadX11()
     return true;
 }
 
-Span<StringView> getPlatformVulkanExtensions(Arena* arena)
+std::span<std::string_view> getPlatformVulkanExtensions()
 {
-    Span<StringView> extBuffer{arena->alloc<StringView>(2), 2};
-    extBuffer[0] = "VK_KHR_surface";
-    extBuffer[1] = "VK_KHR_xlib_surface";
-    return extBuffer;
+    static std::string_view exts[] = {
+        "VK_KHR_surface",
+        "VK_KHR_xlib_surface",
+    };
+    return exts;
 }
 
 struct WindowData {
@@ -228,7 +232,7 @@ struct WindowData {
 
     ::Window x11Window = 0;
 
-    Array<Event> events{};
+    std::vector<Event> events{};
     Vec2 mouse{};
     u32 width = 0;
     u32 height = 0;
@@ -261,22 +265,22 @@ struct WindowState {
     Atom targetsAtom = 0;
     Atom utf8StringAtom = 0;
 
-    Array<DisplayInfo> displays{};
+    std::vector<DisplayInfo> displays{};
 
     Cursor cursors[CursorType_count]{};
     Cursor currentCursor = 0;
 
-    Array<Event> events{};
+    std::vector<Event> events{};
     bool wasQuit = false;
     bool isKeyDown[Button_count]{};
     bool wasKeyDown[Button_count]{};
     Vec2 mouseDelta{};
     Vec2 wheelDelta{};
 
-    Map<::Window, WindowData*> windows{};
+    HashMap<::Window, WindowData*> windows{};
     WindowData* activeWindow = nullptr;
 
-    Array<char> clipboard{};
+    std::vector<char> clipboard{};
     ::Window clipboardRequestor = 0;
     Atom clipboardProperty = 0;
 
@@ -571,7 +575,7 @@ WindowData::~WindowData() noexcept
 WindowData::WindowData(WindowData&& other) noexcept
     : swap{std::exchange(other.swap, GpuSwapchain{})}
     , x11Window{std::exchange(other.x11Window, 0)}
-    , events{std::exchange(other.events, Array<Event>{})}
+    , events{std::exchange(other.events, std::vector<Event>{})}
     , mouse{other.mouse}
     , width{other.width}
     , height{other.height}
@@ -594,7 +598,7 @@ WindowData& WindowData::operator=(WindowData&& other) noexcept
 
         swap = std::exchange(other.swap, GpuSwapchain{});
         x11Window = std::exchange(other.x11Window, 0);
-        events = std::exchange(other.events, Array<Event>{});
+        events = std::exchange(other.events, std::vector<Event>{});
         mouse = other.mouse;
         width = other.width;
         height = other.height;
@@ -609,13 +613,13 @@ WindowData& WindowData::operator=(WindowData&& other) noexcept
 
 Window windowCreate(const WindowConfig& config)
 {
-    ArenaScope scratch = getScratch();
-
     u32 width = config.width != 0 ? config.width : 800;
     u32 height = config.height != 0 ? config.height : 600;
-    const char* title = config.title.length != 0 ? cString(scratch, config.title) : "Hurdy Gurdy";
+    std::string titleStr = config.title.length() != 0 ? std::string{config.title} : "Hurdy Gurdy";
+    const char* title = titleStr.c_str();
 
-    WindowData* window = new (heapAlloc(sizeof(WindowData), alignof(WindowData))) WindowData{};
+    std::unique_ptr<WindowData> windowData = std::make_unique<WindowData>();
+    WindowData* window = windowData.get();
 
     XWindowAttributes attrs;
     xlibFuncs.XGetWindowAttributes(windowState.display,windowState.root, &attrs);
@@ -635,8 +639,6 @@ Window windowCreate(const WindowConfig& config)
 
     if (window->x11Window == 0)
     {
-        window->~WindowData();
-        heapFree(window, 1);
         setError("Could not create X11 window");
         return Window{};
     }
@@ -679,8 +681,6 @@ Window windowCreate(const WindowConfig& config)
     if (result != VK_SUCCESS)
     {
         xlibFuncs.XDestroyWindow(windowState.display,window->x11Window);
-        window->~WindowData();
-        heapFree(window, 1);
         setError("Could not create Vulkan surface");
         return Window{};
     }
@@ -701,15 +701,14 @@ Window windowCreate(const WindowConfig& config)
     xlibFuncs.XMapWindow(windowState.display,window->x11Window);
 
     Window w{};
-    w.data = window;
+    w.data = windowData.release();
     return w;
 }
 
 void windowDestroy(void* data)
 {
     WindowData* window = static_cast<WindowData*>(data);
-    window->~WindowData();
-    heapFree(window, 1);
+    delete window;
 }
 
 GpuSwapchain& windowSwapchain(void* data)
@@ -718,17 +717,17 @@ GpuSwapchain& windowSwapchain(void* data)
     return window->swap;
 }
 
-void windowSetTitle(void* data, StringView title)
+void windowSetTitle(void* data, std::string_view title)
 {
     WindowData* window = static_cast<WindowData*>(data);
     char buf[256];
-    u64 len = title.length < sizeof(buf) - 1 ? title.length : sizeof(buf) - 1;
-    memcpy(buf, title.chars, len);
+    u64 len = title.length() < sizeof(buf) - 1 ? title.length() : sizeof(buf) - 1;
+    std::memcpy(buf, title.data(), len);
     buf[len] = '\0';
     xlibFuncs.XStoreName(windowState.display,window->x11Window, buf);
 }
 
-Span<Event> windowEvents(void* data)
+std::span<Event> windowEvents(void* data)
 {
     WindowData* window = static_cast<WindowData*>(data);
     return window->events;
@@ -801,7 +800,7 @@ Vec2 windowMouseDelta(void* data)
 }
 
 // Global functions
-Span<DisplayInfo> displayInfo()
+std::span<DisplayInfo> displayInfo()
 {
     return windowState.displays;
 }
@@ -850,7 +849,7 @@ void showCursor(bool show)
 void processEvents()
 {
     // Copy previous key state
-    memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
+    std::memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
 
     // Reset deltas
     windowState.mouseDelta = Vec2{};
@@ -911,7 +910,7 @@ void processEvents()
                     Event e{};
                     e.type = pressed ? EventType_keyPress : EventType_keyRelease;
                     e.button = button;
-                    windowState.events.push(e);
+                    windowState.events.push_back(e);
                 }
 
                 // Text input
@@ -924,9 +923,9 @@ void processEvents()
                         buf[len] = '\0';
                         Event e{};
                         e.type = EventType_text;
-                        memset(e.text, 0, sizeof(e.text));
-                        memcpy(e.text, buf, static_cast<u64>(len));
-                        windowState.events.push(e);
+                        std::memset(e.text, 0, sizeof(e.text));
+                        std::memcpy(e.text, buf, static_cast<u64>(len));
+                        windowState.events.push_back(e);
                     }
                 }
                 break;
@@ -953,7 +952,7 @@ void processEvents()
                         Event e{};
                         e.type = EventType_wheelMoved;
                         e.wheel.delta = delta;
-                        windowState.events.push(e);
+                        windowState.events.push_back(e);
                     }
                     break;
                 }
@@ -967,7 +966,7 @@ void processEvents()
                     Event e{};
                     e.type = pressed ? EventType_keyPress : EventType_keyRelease;
                     e.button = button;
-                    windowState.events.push(e);
+                    windowState.events.push_back(e);
                 }
 
                 break;
@@ -989,7 +988,7 @@ void processEvents()
                     e.mouse.delta = delta;
                     e.mouse.pos = newPos;
                     e.mouse.globalPos = Vec2{static_cast<f32>(event.xmotion.x_root), static_cast<f32>(event.xmotion.y_root)};
-                    windowState.events.push(e);
+                    windowState.events.push_back(e);
                 }
                 break;
             }
@@ -1019,7 +1018,7 @@ void processEvents()
 
                         Event e{};
                         e.type = focused ? EventType_windowFocused : EventType_windowUnfocused;
-                        windowState.events.push(e);
+                        windowState.events.push_back(e);
                     }
                 }
                 break;
@@ -1052,7 +1051,7 @@ void processEvents()
                     windowState.wasQuit = true;
                     Event e{};
                     e.type = EventType_quit;
-                    windowState.events.push(e);
+                    windowState.events.push_back(e);
 
                     WindowData** found = windowState.windows.get(event.xclient.window);
                     if (found != nullptr)
@@ -1060,7 +1059,7 @@ void processEvents()
                         (*found)->wasClosed = true;
                         Event e2{};
                         e2.type = EventType_windowClosed;
-                        windowState.events.push(e2);
+                        windowState.events.push_back(e2);
                     }
                 }
                 break;
@@ -1093,7 +1092,7 @@ void processEvents()
                     if (data != nullptr && nitems > 0)
                     {
                         windowState.clipboard.resize(nitems);
-                        memcpy(windowState.clipboard.vals, data, nitems);
+                        std::memcpy(windowState.clipboard.data(), data, nitems);
                         xlibFuncs.XFree(data);
                     }
                 }
@@ -1130,7 +1129,7 @@ void processEvents()
                     else if (event.xselectionrequest.target == windowState.utf8StringAtom)
                     {
                         // Send clipboard content
-                        if (windowState.clipboard.count > 0)
+                        if (windowState.clipboard.size() > 0)
                         {
                             xlibFuncs.XChangeProperty(windowState.display,
                                 event.xselectionrequest.requestor,
@@ -1138,8 +1137,8 @@ void processEvents()
                                 windowState.utf8StringAtom,
                                 8,
                                 PropModeReplace,
-                                reinterpret_cast<const unsigned char*>(windowState.clipboard.vals),
-                                static_cast<int>(windowState.clipboard.count)
+                                reinterpret_cast<const unsigned char*>(windowState.clipboard.data()),
+                                static_cast<int>(windowState.clipboard.size())
                             );
                             reply.xselection.property = event.xselectionrequest.property;
                         }
@@ -1161,13 +1160,13 @@ void processEvents()
     // Forward events to windows
     windowState.windows.forEach([](::Window, WindowData* window)
     {
-        window->events.count = 0;
-        for (u64 i = 0; i < windowState.events.count; ++i)
-            window->events.push(windowState.events[i]);
+        window->events.clear();
+        for (u64 i = 0; i < windowState.events.size(); ++i)
+            window->events.push_back(windowState.events[i]);
     });
 }
 
-Span<Event> getEvents()
+std::span<Event> getEvents()
 {
     return windowState.events;
 }
@@ -1231,29 +1230,29 @@ Vec2 wheelDelta()
     return windowState.wheelDelta;
 }
 
-StringView getClipboardText()
+std::string_view getClipboardText()
 {
-    if (windowState.clipboard.count == 0)
-        return StringView{};
+    if (windowState.clipboard.size() == 0)
+        return std::string_view{};
 
-    return StringView{windowState.clipboard.vals, windowState.clipboard.count};
+    return std::string_view{windowState.clipboard.data(), windowState.clipboard.size()};
 }
 
-void setClipboardText(StringView text)
+void setClipboardText(std::string_view text)
 {
-    windowState.clipboard.resize(text.length);
-    memcpy(windowState.clipboard.vals, text.chars, text.length);
+    windowState.clipboard.resize(text.length());
+    std::memcpy(windowState.clipboard.data(), text.data(), text.length());
 
     // Claim clipboard ownership
     xlibFuncs.XSetSelectionOwner(windowState.display,windowState.clipboardAtom, windowState.root, CurrentTime);
 }
 
-void openURL(StringView url)
+void openURL(std::string_view url)
 {
     // Use xdg-open for URL opening
     char cmd[1024];
-    u64 len = url.length < sizeof(cmd) - 16 ? url.length : sizeof(cmd) - 16;
-    memcpy(cmd, url.chars, len);
+    u64 len = url.length() < sizeof(cmd) - 16 ? url.length() : sizeof(cmd) - 16;
+    std::memcpy(cmd, url.data(), len);
     cmd[len] = '\0';
 
     char fullCmd[1024];

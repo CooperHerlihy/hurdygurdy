@@ -1,9 +1,12 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/array.hpp"
 #include "hg/assets.hpp"
 #include "hg/concurrency.hpp"
+
+#include <span>
+#include <string_view>
+#include <vector>
 
 namespace hg {
 
@@ -32,7 +35,7 @@ struct AudioConfig {
  * - config The configuration for the audio stream, should be but may not be the
  *   same as preferredConfig from setCallback
  */
-using AudioCallback = void (*)(void* userData, Span<f32> audioBuffer, AudioConfig config);
+using AudioCallback = void (*)(void* userData, std::span<f32> audioBuffer, AudioConfig config);
 
 /**
  * Set the current audio callback and start the device
@@ -53,7 +56,7 @@ struct Sound {
     /**
      * The sound data
      */
-    Array<f32> data{};
+    std::vector<f32> data{};
     /**
      * The floats per second
      */
@@ -79,7 +82,7 @@ bool assetLoadImpl(AssetData<Sound>* data);
 /**
  * Store a sound to disc in wav format
  */
-bool storeSoundWav(const Sound& sound, StringView path);
+bool storeSoundWav(const Sound& sound, std::string_view path);
 
 /**
  * A music track in the audio player
@@ -114,11 +117,11 @@ struct AudioPlayer {
     /**
      * The temporary sounds
      */
-    Array<AudioPlayerSound> sounds{};
+    std::vector<AudioPlayerSound> sounds{};
     /**
      * The repeating music
      */
-    Array<AudioPlayerSound> music{};
+    std::vector<AudioPlayerSound> music{};
 
     /**
      * Ensure sounds and music are removed on destruction safely
@@ -126,19 +129,19 @@ struct AudioPlayer {
     ~AudioPlayer() noexcept
     {
         SpinLockScope scope{lock};
-        sounds.reset();
-        music.reset();
+        sounds.clear();
+        music.clear();
     }
 
     /**
      * Update the music and sounds
      */
-    void update(Span<f32> buf, AudioConfig config);
+    void update(std::span<f32> buf, AudioConfig config);
 
     /**
      * Update the music and sounds
      */
-    static void callback(void* player, Span<f32> buf, AudioConfig config)
+    static void callback(void* player, std::span<f32> buf, AudioConfig config)
     {
         (*static_cast<AudioPlayer*>(player)).update(buf, config);
     }

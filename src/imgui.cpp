@@ -15,7 +15,7 @@ struct ImGuiState {
     Clock clock{};
     CursorType cursors[ImGuiMouseCursor_COUNT]{};
     CursorType lastCursor = CursorType_count;
-    StringView clipboardText;
+    std::string_view clipboardText;
 };
 
 static ImGuiState state;
@@ -152,7 +152,7 @@ void initImGui(
     pio.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char*
     {
         state.clipboardText = getClipboardText();
-        return state.clipboardText.chars;
+        return state.clipboardText.data();
     };
     pio.Platform_OpenInShellFn = [](ImGuiContext*, const char* url) -> bool
     {
@@ -161,8 +161,8 @@ void initImGui(
     };
 
     pio.Monitors.resize(0);
-    Span<DisplayInfo> displays = displayInfo();
-    for (u32 i = 0; i < displays.count; i++)
+    std::span<DisplayInfo> displays = displayInfo();
+    for (u32 i = 0; i < displays.size(); i++)
     {
         ImGuiPlatformMonitor monitor;
 

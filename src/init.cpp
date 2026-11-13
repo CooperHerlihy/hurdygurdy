@@ -23,17 +23,17 @@
 namespace hg {
 
 struct PlatformApi {
-    Span<StringView> (*getPlatformVulkanExtensions)(Arena* arena);
+    std::span<std::string_view> (*getPlatformVulkanExtensions)();
 
-    Span<DisplayInfo> (*displayInfo)();
+    std::span<DisplayInfo> (*displayInfo)();
     void (*setCursor)(CursorType type);
     void (*showCursor)(bool show);
-    StringView (*getClipboardText)();
-    void (*setClipboardText)(StringView text);
-    void (*openURL)(StringView url);
+    std::string_view (*getClipboardText)();
+    void (*setClipboardText)(std::string_view text);
+    void (*openURL)(std::string_view url);
 
     void (*processEvents)();
-    Span<Event> (*getEvents)();
+    std::span<Event> (*getEvents)();
     bool (*wasQuit)();
     bool (*isButtonDown)(Button key);
     bool (*wasButtonPressed)(Button key);
@@ -45,8 +45,8 @@ struct PlatformApi {
     Window (*windowCreate)(const WindowConfig& config);
     void (*windowDestroy)(void* data);
     GpuSwapchain& (*windowSwapchain)(void* data);
-    void (*windowSetTitle)(void* data, StringView title);
-    Span<Event> (*windowEvents)(void* data);
+    void (*windowSetTitle)(void* data, std::string_view title);
+    std::span<Event> (*windowEvents)(void* data);
     bool (*windowWasClosed)(void* data);
     bool (*windowIsFocused)(void* data);
     bool (*windowWasFocusGained)(void* data);
@@ -362,10 +362,10 @@ namespace internal {
     void convertPixelFont();
 }
 
-Maybe<HurdyGurdy> init()
+std::optional<HurdyGurdy> init()
 {
     if (initialized)
-        return some<HurdyGurdy>();
+        return std::make_optional<HurdyGurdy>();
 
     if (!initPlatform())
         goto platformFailed;
@@ -378,7 +378,7 @@ Maybe<HurdyGurdy> init()
     internal::initPixelFont();
 
     initialized = true;
-    return some<HurdyGurdy>();
+    return std::make_optional<HurdyGurdy>();
 
 gpuFailed:
     deinitPlatform();
@@ -427,12 +427,12 @@ HurdyGurdy::~HurdyGurdy() noexcept
     }
 }
 
-Span<StringView> internal::getPlatformVulkanExtensions(Arena* arena)
+std::span<std::string_view> internal::getPlatformVulkanExtensions()
 {
-    return platform.getPlatformVulkanExtensions(arena);
+    return platform.getPlatformVulkanExtensions();
 }
 
-Span<DisplayInfo> displayInfo()
+std::span<DisplayInfo> displayInfo()
 {
     return platform.displayInfo();
 }
@@ -447,17 +447,17 @@ void showCursor(bool show)
     platform.showCursor(show);
 }
 
-StringView getClipboardText()
+std::string_view getClipboardText()
 {
     return platform.getClipboardText();
 }
 
-void setClipboardText(StringView text)
+void setClipboardText(std::string_view text)
 {
     platform.setClipboardText(text);
 }
 
-void openURL(StringView url)
+void openURL(std::string_view url)
 {
     platform.openURL(url);
 }
@@ -467,7 +467,7 @@ void processEvents()
     platform.processEvents();
 }
 
-Span<Event> getEvents()
+std::span<Event> getEvents()
 {
     return platform.getEvents();
 }
@@ -542,12 +542,12 @@ GpuSwapchain& Window::swapchain() const
     return platform.windowSwapchain(data);
 }
 
-void Window::setTitle(StringView title)
+void Window::setTitle(std::string_view title)
 {
     platform.windowSetTitle(data, title);
 }
 
-Span<Event> Window::events() const
+std::span<Event> Window::events() const
 {
     return platform.windowEvents(data);
 }

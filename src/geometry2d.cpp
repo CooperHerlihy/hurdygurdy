@@ -1,10 +1,13 @@
 #include "hg/geometry2d.hpp"
 
-#include "hg/utility.hpp"
+// #include "hg/utility.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <cfloat>
+
+#include <algorithm>
+#include <optional>
+#include <array>
 
 namespace hg {
 
@@ -76,7 +79,7 @@ bool intersectRectCircle(Rect rect, Circle circle)
     return containsPointCircle(closestPointRect(circle.pos, rect), circle);
 }
 
-Maybe<Hit2D> intersectRays2D(Ray2D ray, Ray2D other)
+std::optional<Hit2D> intersectRays2D(Ray2D ray, Ray2D other)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     HG_ASSERT(other.dir != Vec2{0});
@@ -95,12 +98,12 @@ Maybe<Hit2D> intersectRays2D(Ray2D ray, Ray2D other)
     if (tOther < -FLT_EPSILON)
         return {};
 
-    return some<Hit2D>(t, denom < 0
+    return std::make_optional<Hit2D>(t, denom < 0
         ? vecNorm2({other.dir.y, -other.dir.x})
         : vecNorm2({-other.dir.y, other.dir.x}));
 }
 
-Maybe<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line)
+std::optional<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     if (vecEq2(line.begin, line.end))
@@ -122,12 +125,12 @@ Maybe<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line)
     if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
         return {};
 
-    return some<Hit2D>(t, denom < 0
+    return std::make_optional<Hit2D>(t, denom < 0
         ? vecNorm2({lineDir.y, -lineDir.x})
         : vecNorm2({-lineDir.y, lineDir.x}));
 }
 
-Maybe<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
+std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
 {
     HG_ASSERT(ray.dir != Vec2{0});
 
@@ -147,10 +150,10 @@ Maybe<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
     if (t < -FLT_EPSILON)
         return {};
 
-    return some<Hit2D>(t, (ray.pos + t * ray.dir - circle.pos) / circle.radius);
+    return std::make_optional<Hit2D>(t, (ray.pos + t * ray.dir - circle.pos) / circle.radius);
 }
 
-Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
+std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     if (vecEq2(rect.begin, rect.end))
@@ -158,7 +161,7 @@ Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 
     if (containsPointRect(ray.pos, rect))
     {
-        return some<Hit2D>(0.0f, -ray.dir);
+        return std::make_optional<Hit2D>(0.0f, -ray.dir);
     }
 
     f32 hits[4] = {
@@ -177,7 +180,7 @@ Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 
     f32 t = INFINITY;
     Vec2 norm;
-    for (u32 i = 0; i < size(hits); ++i)
+    for (u32 i = 0; i < std::size(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON)
             continue;
@@ -194,10 +197,10 @@ Maybe<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
     if (t == INFINITY)
         return {};
 
-    return some<Hit2D>(t, norm);
+    return std::make_optional<Hit2D>(t, norm);
 }
 
-Maybe<Hit2D> intersectLines2D(Line2D line, Line2D other)
+std::optional<Hit2D> intersectLines2D(Line2D line, Line2D other)
 {
     if (vecEq2(line.begin, line.end) || vecEq2(other.begin, other.end))
         return {};
@@ -219,12 +222,12 @@ Maybe<Hit2D> intersectLines2D(Line2D line, Line2D other)
     if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
         return {};
 
-    return some<Hit2D>(t, denom < 0
+    return std::make_optional<Hit2D>(t, denom < 0
         ? vecNorm2({otherDir.y, -otherDir.x})
         : vecNorm2({-otherDir.y, otherDir.x}));
 }
 
-Maybe<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray)
+std::optional<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray)
 {
     if (vecEq2(line.begin, line.end))
         return {};
@@ -246,12 +249,12 @@ Maybe<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray)
     if (tRay < -FLT_EPSILON)
         return {};
 
-    return some<Hit2D>(t, denom < 0
+    return std::make_optional<Hit2D>(t, denom < 0
         ? vecNorm2({ray.dir.y, -ray.dir.x})
         : vecNorm2({-ray.dir.y, ray.dir.x}));
 }
 
-Maybe<Hit2D> intersectLineCircle(Line2D line, Circle circle)
+std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle)
 {
     Vec2 dir = line.end - line.begin;
 
@@ -273,10 +276,10 @@ Maybe<Hit2D> intersectLineCircle(Line2D line, Circle circle)
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return {};
 
-    return some<Hit2D>(t, (line.begin + t * dir - circle.pos) / circle.radius);
+    return std::make_optional<Hit2D>(t, (line.begin + t * dir - circle.pos) / circle.radius);
 }
 
-Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect)
+std::optional<Hit2D> intersectLineRect(Line2D line, Rect rect)
 {
     if (vecEq2(line.begin, line.end) || vecEq2(rect.begin, rect.end))
         return {};
@@ -297,7 +300,7 @@ Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect)
 
     f32 t = INFINITY;
     Vec2 norm;
-    for (u32 i = 0; i < size(hits); ++i)
+    for (u32 i = 0; i < std::size(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON || hits[i] > 1 + FLT_EPSILON)
             continue;
@@ -314,7 +317,7 @@ Maybe<Hit2D> intersectLineRect(Line2D line, Rect rect)
     if (t == INFINITY)
         return {};
 
-    return some<Hit2D>(t, norm);
+    return std::make_optional<Hit2D>(t, norm);
 }
 
 } // namespace hg

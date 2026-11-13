@@ -1,9 +1,9 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/strings.hpp"
-#include "hg/memory.hpp"
-#include "hg/map.hpp"
+#include "hg/macros.hpp"
+#include "hg/hash.hpp"
+// #include "hg/memory.hpp"
 
 namespace hg {
 
@@ -45,16 +45,16 @@ struct Profiler {
     /**
      * The timer registry
      */
-    static inline Map<String, f64> timers{};
+    static inline HashMap<std::string, f64> timers{};
     /**
      * The counter registry
      */
-    static inline Map<String, u32> counters{};
+    static inline HashMap<std::string, u32> counters{};
 
     /**
      * Iterate over timers
      */
-    template<typename F> requires std::is_invocable_r_v<void, F, const String&, f64>
+    template<typename F> requires std::is_invocable_r_v<void, F, const std::string&, f64>
     static void forEachTimer(F fn)
     {
         timers.forEach(fn);
@@ -63,7 +63,7 @@ struct Profiler {
     /**
      * Iterate over timers
      */
-    template<typename F> requires std::is_invocable_r_v<void, F, const String&, u32>
+    template<typename F> requires std::is_invocable_r_v<void, F, const std::string&, u32>
     static void forEachCounter(F fn)
     {
         counters.forEach(fn);
@@ -74,18 +74,18 @@ struct Profiler {
      */
     static void clear()
     {
-        timers.reset();
-        counters.reset();
+        timers.clear();
+        counters.clear();
     }
 
     /**
      * Add to a counter
      */
-    static void event(StringView name)
+    static void event(std::string_view name)
     {
         u32* counter = counters.get(name);
         if (counter == nullptr)
-            counter = counters.add(String{name}, 0);
+            counter = counters.add(std::string{name}, 0);
 
         ++*counter;
     }
@@ -133,11 +133,11 @@ struct ProfilerScopeTimer : public ScopeTimer {
     /**
      * Add a new timer to the name in the registry
      */
-    ProfilerScopeTimer(StringView name)
+    ProfilerScopeTimer(std::string_view name)
         : ScopeTimer{Profiler::timers.get(name)}
     {
         if (out == nullptr)
-            out = Profiler::timers.add(String{name}, 0.0f);
+            out = Profiler::timers.add(std::string{name}, 0.0f);
     }
 };
 
@@ -152,14 +152,14 @@ struct ScopeTimerLog {
     /**
      * Where to store the result
      */
-    StringView name{};
+    std::string_view name{};
 
     /**
      * Begin a scope timer
      *
      * Note, the name should be alive for the whole scope
      */
-    ScopeTimerLog(StringView nameVal)
+    ScopeTimerLog(std::string_view nameVal)
         : timer{}, name{nameVal}
     {}
 
@@ -168,7 +168,7 @@ struct ScopeTimerLog {
      */
     ~ScopeTimerLog()
     {
-        HG_LOG("Scope \"%.*s\": %fms\n", (int)name.length, name.chars, timer.tick() * 1.e3f);
+        HG_LOG("Scope \"{}\": {}ms\n", name, timer.tick() * 1.e3f);
     }
 
     ScopeTimerLog(const ScopeTimerLog& other) = delete;
@@ -176,84 +176,6 @@ struct ScopeTimerLog {
     ScopeTimerLog(ScopeTimerLog&&) = delete;
     ScopeTimerLog& operator=(ScopeTimerLog&&) = delete;
 };
-
-/**
- * A simple performance measurement tool
- */
-struct Perf {
-    /**
-     * The clock to keep track of each time
-     */
-    Clock clock = {};
-    /**
-     * The measured time for each iteration
-     */
-    f64* times = nullptr;
-    /**
-     * The max number of measurements
-     */
-    u32 count = 0;
-    /**
-     * The current measurement
-     */
-    u32 current = 0;
-};
-
-/**
- * Create a performance measurer
- */
-Perf perfCreate(Arena* arena, u32 count);
-
-/**
- * Begin the timer for a measurement
- */
-void perfBegin(Perf* perf);
-
-/**
- * End the timer for a measurement
- *
- * Returns
- * - The time this measurement took
- */
-f64 perfEnd(Perf* perf);
-
-/**
- * A set of statistics from performance measurements
- */
-struct PerfStats {
-    /**
-     * The average time of all measurements
-     */
-    f64 avg = 0.0;
-    /**
-     * The best case (the shortest time)
-     */
-    f64 best = 0.0;
-    /**
-     * The worst case (the longest time)
-     */
-    f64 worst = 0.0;
-};
-
-/**
- * Analyzes the performance measurements for statistics
- */
-PerfStats perfAnalyze(const Perf* perf);
-
-/**
- * The scale to log performance metrics at
- */
-enum PerfScale : u32 {
-    PerfScale_seconds,
-    PerfScale_milli,
-    PerfScale_micro,
-    PerfScale_nano,
-};
-
-/**
- * Logs performance statistics to stdout
- */
-void perfLog(StringView title, const PerfStats* stats, PerfScale scale);
 
 } // namespace hg
 

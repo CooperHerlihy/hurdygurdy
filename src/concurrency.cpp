@@ -1,10 +1,11 @@
 #include "hg/concurrency.hpp"
-#include "hg/array.hpp"
+#include "hg/memory.hpp"
 #include "hg/time.hpp"
 
 #include <cmath>
-#include <condition_variable>
+#include <vector>
 #include <mutex>
+#include <condition_variable>
 
 namespace hg {
 
@@ -55,8 +56,8 @@ struct ThreadWork {
 
 namespace {
 struct ThreadPoolState {
-    Array<ThreadWork> work{};
-    Array<std::atomic_bool> hasWork{};
+    std::vector<ThreadWork> work{};
+    std::vector<std::atomic_bool> hasWork{};
 
     std::atomic<u32> workCount = 0;
     std::atomic<u32> tail = 0;
@@ -66,14 +67,14 @@ struct ThreadPoolState {
 
     std::mutex mtx{};
     std::condition_variable_any cv{};
-    Array<std::jthread> threads{};
+    std::vector<std::jthread> threads{};
 
     ThreadPoolState() noexcept = default;
 
     ThreadPoolState(u64 workCapacity, u32 threadCount)
     {
-        work = {workCapacity, workCapacity};
-        hasWork = {workCapacity, workCapacity};
+        work = std::vector<ThreadWork>(workCapacity);
+        hasWork = std::vector<std::atomic_bool>(workCapacity);
         for (std::atomic_bool& hw : hasWork)
             hw.store(false);
 
@@ -102,7 +103,7 @@ struct ThreadPoolState {
 
         threads.reserve(threadCount);
         for (u32 i = 0; i < threadCount; ++i)
-            threads.push(std::jthread{threadFn});
+            threads.emplace_back(threadFn);
     }
 
     ThreadPoolState(ThreadPoolState&&) = delete;
@@ -116,7 +117,7 @@ struct ThreadPoolState {
         do {
             if (idx == head.load())
                 return false;
-        } while (!workingTail.compare_exchange_weak(idx, (idx + 1) & (static_cast<u32>(work.count) - 1)));
+        } while (!workingTail.compare_exchange_weak(idx, (idx + 1) & (static_cast<u32>(work.size()) - 1)));
 
         ThreadWork w = work[idx];
         hasWork[idx].store(false);
@@ -124,7 +125,7 @@ struct ThreadPoolState {
         u32 t = tail.load();
         while (t != head.load() && !hasWork[t].load())
         {
-            u32 next = (t + 1) & (static_cast<u32>(work.count) - 1);
+            u32 next = (t + 1) & (static_cast<u32>(work.size()) - 1);
             tail.compare_exchange_strong(t, next);
             t = next;
         }
@@ -176,7 +177,7 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     if (fence != nullptr)
         fence->add();
 
-    u32 idx = pool.workingHead.fetch_add(1) & (static_cast<u32>(pool.work.count) - 1);
+    u32 idx = pool.workingHead.fetch_add(1) & (static_cast<u32>(pool.work.size()) - 1);
 
     pool.work[idx].fence = fence;
     pool.work[idx].data = data;
@@ -186,7 +187,7 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     u32 h = pool.head.load();
     while (pool.hasWork[h].load())
     {
-        u32 next = (h + 1) & (static_cast<u32>(pool.work.count) - 1);
+        u32 next = (h + 1) & (static_cast<u32>(pool.work.size()) - 1);
         pool.head.compare_exchange_strong(h, next);
         h = next;
     }
@@ -202,19 +203,18 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
 
     ArenaScope scratch = getScratch();
 
-    u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f64>(end - begin) / (8.0 * static_cast<f64>(threadPool().threads.count))));
+    u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f64>(end - begin) / (8.0 * static_cast<f64>(threadPool().threads.size()))));
 
     Fence fence{};
     for (u64 i = begin; i < end; i += chunkSize)
     {
         struct Capture {
-            void* data = nullptr;
-            void (*fn)(void* data, u64 idx) = nullptr;
-            u64 begin = 0;
-            u64 end = 0;
+            void* data;
+            void (*fn)(void* data, u64 idx);
+            u64 begin;
+            u64 end;
         };
-
-        Capture* capture = scratch.alloc<Capture>(1);
+        Capture* capture = static_cast<Capture*>(scratch.arena->alloc(sizeof(Capture), alignof(Capture)));
         capture->data = data;
         capture->fn = fn;
         capture->begin = i;

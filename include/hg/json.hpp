@@ -1,14 +1,15 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/strings.hpp"
-#include "hg/memory.hpp"
-#include "hg/sum.hpp"
-#include "hg/maybe.hpp"
-#include "hg/array.hpp"
-#include "hg/map.hpp"
+#include "hg/utility.hpp"
+#include "hg/hash.hpp"
 
 #include <type_traits>
+#include <optional>
+#include <variant>
+#include <string_view>
+#include <string>
+#include <vector>
 
 namespace hg {
 
@@ -19,8 +20,8 @@ struct JsonArray;
 /**
  * Make a JsonValue from a string, number, bool, object or array
  */
-template<typename T> requires (std::is_convertible_v<T&&, StringView> || std::is_constructible_v<JsonValue, T&&>)
-JsonValue makeJsonValue(Arena* arena, T&& val);
+template<typename T> requires (std::is_convertible_v<T&&, std::string> || std::is_constructible_v<JsonValue, T&&>)
+JsonValue makeJsonValue(T&& val);
 
 /**
  * A json object
@@ -29,40 +30,31 @@ struct JsonObject {
     /**
      * The named values
      */
-    MapTemp<StringBuilder, JsonValue> values;
-
-    /**
-     * Construct empty
-     */
-    JsonObject() noexcept = default;
-
-    /**
-     * Construct with an arena
-     */
-    JsonObject(Arena* arena)
-        : values{arena, 16}
-    {};
+    HashMap<std::string, JsonValue> values{};
 
     /**
      * Construct with an arena and alternating name-value pairs
      */
     template<typename... Ts> requires (sizeof...(Ts) % 2 == 0)
-    JsonObject(Arena* arena, Ts&&... list)
-        : values{arena, 16}
+    JsonObject(Ts&&... list)
     {
-        addValues(arena, std::forward<Ts>(list)...);
+        addValues(std::forward<Ts>(list)...);
     }
 
     /**
      * Add alternating name-value pairs recursively
      */
-    template<typename N, typename V, typename... Rest>
-    void addValues(Arena* arena, N&& name, V&& val, Rest&&... rest)
+    void addValues()
     {
-        values.add(StringBuilder{arena, std::forward<N>(name)}, makeJsonValue(arena, std::forward<V>(val)));
+    }
+
+    template<typename N, typename V, typename... Rest> requires (sizeof...(Rest) % 2 == 0)
+    void addValues(N&& name, V&& val, Rest&&... rest)
+    {
+        values.add(std::forward<N>(name), makeJsonValue(std::forward<V>(val)));
         if constexpr (sizeof...(Rest) != 0)
         {
-            addValues(arena, std::forward<Rest>(rest)...);
+            addValues(std::forward<Rest>(rest)...);
         }
     }
 
@@ -77,67 +69,67 @@ struct JsonObject {
     /**
      * Get a value by name, panics if missing or wrong type
      */
-    JsonValue& getValue(StringView name);
+    JsonValue& getValue(std::string_view name);
 
     /**
      * Get an object by name, panics if missing or wrong type
      */
-    JsonObject& getObject(StringView name);
+    JsonObject& getObject(std::string_view name);
 
     /**
      * Get an array by name, panics if missing or wrong type
      */
-    JsonArray& getArray(StringView name);
+    JsonArray& getArray(std::string_view name);
 
     /**
      * Get a string by name, panics if missing or wrong type
      */
-    StringBuilder& getString(StringView name);
+    std::string& getString(std::string_view name);
 
     /**
      * Get a number by name, panics if missing or wrong type
      */
-    f64& getNumber(StringView name);
+    f64& getNumber(std::string_view name);
 
     /**
      * Get a boolean by name, panics if missing or wrong type
      */
-    bool& getBoolean(StringView name);
+    bool& getBoolean(std::string_view name);
 
     /**
      * Set a value by name, replacing any existing value
      */
-    JsonValue& setValue(StringView name, JsonValue&& val);
+    JsonValue& setValue(std::string_view name, JsonValue&& val);
 
     /**
      * Set an object by name, replacing any existing value
      */
-    JsonObject& setObject(StringView name, JsonObject&& val);
+    JsonObject& setObject(std::string_view name, JsonObject&& val);
 
     /**
      * Set an array by name, replacing any existing value
      */
-    JsonArray& setArray(StringView name, JsonArray&& val);
+    JsonArray& setArray(std::string_view name, JsonArray&& val);
 
     /**
      * Set a string by name, replacing any existing value
      */
-    StringBuilder& setString(StringView name, StringView val);
+    std::string& setString(std::string_view name, std::string_view val);
 
     /**
      * Set a number by name, replacing any existing value
      */
-    f64& setNumber(StringView name, f64 val);
+    f64& setNumber(std::string_view name, f64 val);
 
     /**
      * Set a boolean by name, replacing any existing value
      */
-    bool& setBoolean(StringView name, bool val);
+    bool& setBoolean(std::string_view name, bool val);
 
     /**
      * Call fn for each name and value
      */
-    template<typename F> requires std::is_invocable_r_v<void, F, StringView, JsonValue&>
+    template<typename F> requires std::is_invocable_r_v<void, F, std::string_view, JsonValue&>
     void forEach(F fn)
     {
         values.forEach(fn);
@@ -146,7 +138,7 @@ struct JsonObject {
     /**
      * Call fn for each name and value
      */
-    template<typename F> requires std::is_invocable_r_v<void, F, StringView, const JsonValue&>
+    template<typename F> requires std::is_invocable_r_v<void, F, std::string_view, const JsonValue&>
     void forEach(F fn) const
     {
         values.forEach(fn);
@@ -160,7 +152,7 @@ struct JsonArray {
     /**
      * The values
      */
-    ArrayTemp<JsonValue> values;
+    std::vector<JsonValue> values;
 
     /**
      * Construct empty
@@ -168,29 +160,28 @@ struct JsonArray {
     JsonArray() noexcept = default;
 
     /**
-     * Construct with an arena
+     * Move construct
      */
-    JsonArray(Arena* arena)
-        : values{arena, 0, 16}
-    {}
+    JsonArray(JsonArray&& other) noexcept = default;
 
     /**
-     * Construct with an arena and values
+     * Move assign
+     */
+    JsonArray& operator=(JsonArray&& other) noexcept = default;
+
+    /**
+     * Construct with values
      */
     template<typename... Ts>
-    JsonArray(Arena* arena, Ts&&... list)
-        : values{arena, 0, sizeof...(Ts)}
+    JsonArray(Ts&&... list)
     {
-        (this->values.push(makeJsonValue(arena, std::forward<Ts>(list))), ...);
+        (this->values.emplace_back(makeJsonValue(std::forward<Ts>(list))), ...);
     }
 
     /**
      * The number of values
      */
-    u64 count() const
-    {
-        return values.count;
-    }
+    u64 count() const;
 
     /**
      * Push a value to the end
@@ -210,7 +201,7 @@ struct JsonArray {
     /**
      * Push a string to the end
      */
-    StringBuilder& pushString(StringView val);
+    std::string& pushString(std::string_view val);
 
     /**
      * Push a number to the end
@@ -240,7 +231,7 @@ struct JsonArray {
     /**
      * Remove the string at idx, shifting later values down
      */
-    StringBuilder removeString(u64 idx);
+    std::string removeString(u64 idx);
 
     /**
      * Remove the number at idx, shifting later values down
@@ -270,7 +261,7 @@ struct JsonArray {
     /**
      * Get a string by index, asserts if out of bounds or wrong type
      */
-    StringBuilder& getString(u64 idx);
+    std::string& getString(u64 idx);
 
     /**
      * Get a number by index, asserts if out of bounds or wrong type
@@ -310,7 +301,7 @@ struct JsonValue {
     /**
      * The value
      */
-    Sum<JsonObject, JsonArray, StringBuilder, f64, bool> val;
+    std::variant<JsonObject, JsonArray, std::string, f64, bool> val;
 
     /**
      * Construct empty
@@ -334,7 +325,7 @@ struct JsonValue {
     /**
      * Construct a string value
      */
-    JsonValue(StringBuilder&& string)
+    JsonValue(std::string&& string)
         : val{std::move(string)}
     {}
 
@@ -357,7 +348,7 @@ struct JsonValue {
      */
     JsonObject& object()
     {
-        return val.get<JsonObject>();
+        return std::get<JsonObject>(val);
     }
 
     /**
@@ -365,15 +356,15 @@ struct JsonValue {
      */
     JsonArray& array()
     {
-        return val.get<JsonArray>();
+        return std::get<JsonArray>(val);
     }
 
     /**
      * Get the value as a string, asserts if wrong type
      */
-    StringBuilder& string()
+    std::string& string()
     {
-        return val.get<StringBuilder>();
+        return std::get<std::string>(val);
     }
 
     /**
@@ -381,7 +372,7 @@ struct JsonValue {
      */
     f64& number()
     {
-        return val.get<f64>();
+        return std::get<f64>(val);
     }
 
     /**
@@ -389,47 +380,47 @@ struct JsonValue {
      */
     bool& boolean()
     {
-        return val.get<bool>();
+        return std::get<bool>(val);
     }
 
     /**
      * Call the function matching the value type
      */
     template<typename... Fs>
-    void match(Fs&&... fns)
+    auto match(Fs&&... fns)
     {
-        val.match(std::forward<Fs>(fns)...);
+        return hg::match(val, std::forward<Fs>(fns)...);
     }
 
     /**
      * Call the function matching the value type
      */
     template<typename... Fs>
-    void match(Fs&&... fns) const
+    auto match(Fs&&... fns) const
     {
-        val.match(std::forward<Fs>(fns)...);
+        return hg::match(val, std::forward<Fs>(fns)...);
     }
 };
 
 /**
  * Write out a json object to a string
  */
-StringView writeJson(Arena* arena, const JsonObject& json);
+std::string writeJson(const JsonObject& json);
 
 /**
  * Read a json string to an object
  */
-Maybe<JsonObject> readJson(Arena* arena, StringView json);
+std::optional<JsonObject> readJson(std::string_view json);
 
 /**
  * Make a JsonValue from a string, number, bool, object or array
  */
-template<typename T> requires (std::is_convertible_v<T&&, StringView> || std::is_constructible_v<JsonValue, T&&>)
-JsonValue makeJsonValue(Arena* arena, T&& val)
+template<typename T> requires (std::is_convertible_v<T&&, std::string> || std::is_constructible_v<JsonValue, T&&>)
+JsonValue makeJsonValue(T&& val)
 {
-    if constexpr (std::is_convertible_v<T&&, StringView>)
+    if constexpr (std::is_convertible_v<T&&, std::string>)
     {
-        return JsonValue{StringBuilder{arena, StringView{std::forward<T>(val)}}};
+        return JsonValue{std::string{std::forward<T>(val)}};
     }
     else
     {

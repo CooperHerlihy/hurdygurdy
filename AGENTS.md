@@ -52,10 +52,10 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - 4-space indent
 - Braces: next line for code blocks, same line for struct/initialization
 - `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros
-- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`. No `int`/`float`/`size_t`
-- RAII, no failing constructors, use static create() with Maybe, generally delete copy ctors
-- Assertions: `HG_ASSERT`, Recoverable errors: `setError()` and `Maybe<T>`, Unrecoverable: `HG_PANIC`
-- Memory: hg temp containers > scratch arena > hg containers > heapAlloc/heapFree; Never std containers
+- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`, `usize`. No `int`/`float`/`size_t`
+- RAII, no failing constructors, use static create() with std::optional, generally delete copy ctors
+- Assertions: `HG_ASSERT`, Recoverable errors: `setError()` and `std::optional`, Unrecoverable: `HG_PANIC`
+- Memory: temp containers with scratch arena (`vector_temp`, `string_temp`) > std containers (`std::vector`, `std::string`, `std::span`)
 - Concurrency: forPar() > callPar() > std:: primitives
 
 ## Contents
@@ -65,34 +65,22 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - `hurdygurdy.glsl`
 - `hg/macros.hpp` - HG_DEFER, HG_LOG, HG_WARN
 - `hg/inttypes.hpp`
-- `hg/span.hpp`
-- `hg/product.hpp`
-- `hg/sum.hpp`
-- `hg/maybe.hpp`
 - `hg/error.hpp` - setError
 - `hg/init.hpp`
 - `hg/utility.hpp`
-- `hg/memory.hpp` - Arena, ArenaScope
+- `hg/strings.hpp`
+- `hg/memory.hpp` - Arena, ArenaScope, ArenaAllocator, vector_temp, string_temp
 - `hg/concurrency.hpp`
 - `hg/math.hpp`
 - `hg/geometry2d.hpp`
 - `hg/geometry3d.hpp`
 - `hg/noise.hpp`
-- `hg/strings.hpp`
-- `hg/binary.hpp`
-- `hg/smart_ptr.hpp`
-- `hg/array.hpp`
-- `hg/queue.hpp`
-- `hg/hash.hpp`
-- `hg/set.hpp`
-- `hg/map.hpp`
-- `hg/pool.hpp`
+- `hg/hash.hpp` - HashSet, HashMap
 - `hg/serialization.hpp`
 - `hg/json.hpp`
 - `hg/assets.hpp`
 - `hg/time.hpp`
 - `hg/dynlib.hpp`
-- `hg/filesystem.hpp`
 - `hg/gpu.hpp`
 - `hg/window.hpp`
 - `hg/audio.hpp`

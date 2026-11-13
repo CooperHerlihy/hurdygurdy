@@ -249,4 +249,3 @@ void forPar(u64 begin, u64 end, F fn)
 }
 
 } // namespace hg
-

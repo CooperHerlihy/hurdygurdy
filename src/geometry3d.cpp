@@ -1,10 +1,10 @@
 #include "hg/geometry3d.hpp"
 
-#include "hg/utility.hpp"
-
-#include <algorithm>
 #include <cmath>
 #include <cfloat>
+
+#include <algorithm>
+#include <array>
 
 namespace hg {
 
@@ -100,7 +100,7 @@ Plane planeFromTri(Tri tri)
     return plane;
 }
 
-Maybe<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere)
+std::optional<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere)
 {
     HG_ASSERT(ray.dir != Vec3{0});
 
@@ -120,10 +120,10 @@ Maybe<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere)
     if (t < -FLT_EPSILON)
         return {};
 
-    return some<Hit3D>(t, (ray.pos + t * ray.dir - sphere.pos) / sphere.radius);
+    return std::make_optional<Hit3D>(t, (ray.pos + t * ray.dir - sphere.pos) / sphere.radius);
 }
 
-Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box)
+std::optional<Hit3D> intersectRayBox(Ray3D ray, Box box)
 {
     HG_ASSERT(ray.dir != Vec3{0});
     if (vecEq3(box.begin, box.end))
@@ -131,7 +131,7 @@ Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box)
 
     if (containsPointBox(ray.pos, box))
     {
-        return some<Hit3D>(0.0f, -ray.dir);
+        return std::make_optional<Hit3D>(0.0f, -ray.dir);
     }
 
     f32 hits[6] = {
@@ -154,7 +154,7 @@ Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box)
 
     f32 t = INFINITY;
     Vec3 norm;
-    for (u32 i = 0; i < size(hits); ++i)
+    for (u32 i = 0; i < std::size(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON)
             continue;
@@ -171,11 +171,11 @@ Maybe<Hit3D> intersectRayBox(Ray3D ray, Box box)
     if (t == INFINITY)
         return {};
 
-    return some<Hit3D>(t, norm);
+    return std::make_optional<Hit3D>(t, norm);
 }
 
 // Moller-Trumbore, Real Time Rendering 4th Edition
-Maybe<Hit3D> intersectRayTri(Ray3D ray, Tri tri)
+std::optional<Hit3D> intersectRayTri(Ray3D ray, Tri tri)
 {
     HG_ASSERT(ray.dir != Vec3{0});
 
@@ -206,12 +206,12 @@ Maybe<Hit3D> intersectRayTri(Ray3D ray, Tri tri)
     if (t < -FLT_EPSILON)
         return {};
 
-    return some<Hit3D>(t, a < 0
+    return std::make_optional<Hit3D>(t, a < 0
         ? vecNorm3(vecCross3(e2, e1))
         : vecNorm3(vecCross3(e1, e2)));
 }
 
-Maybe<Hit3D> intersectRayPlane(Ray3D ray, Plane plane)
+std::optional<Hit3D> intersectRayPlane(Ray3D ray, Plane plane)
 {
     HG_ASSERT(ray.dir != Vec3{0});
     HG_ASSERT(plane.normal != Vec3{0});
@@ -224,12 +224,12 @@ Maybe<Hit3D> intersectRayPlane(Ray3D ray, Plane plane)
     if (t < -FLT_EPSILON)
         return {};
 
-    return some<Hit3D>(t, denom < 0
+    return std::make_optional<Hit3D>(t, denom < 0
         ? plane.normal
         : -plane.normal);
 }
 
-Maybe<Hit3D> intersectLineSphere(Line3D line, Sphere sphere)
+std::optional<Hit3D> intersectLineSphere(Line3D line, Sphere sphere)
 {
     Vec3 dir = line.end - line.begin;
 
@@ -251,10 +251,10 @@ Maybe<Hit3D> intersectLineSphere(Line3D line, Sphere sphere)
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return {};
 
-    return some<Hit3D>(t, (line.begin + t * dir - sphere.pos) / sphere.radius);
+    return std::make_optional<Hit3D>(t, (line.begin + t * dir - sphere.pos) / sphere.radius);
 }
 
-Maybe<Hit3D> intersectLineBox(Line3D line, Box box)
+std::optional<Hit3D> intersectLineBox(Line3D line, Box box)
 {
     if (vecEq3(line.begin, line.end) || vecEq3(box.begin, box.end))
         return {};
@@ -279,7 +279,7 @@ Maybe<Hit3D> intersectLineBox(Line3D line, Box box)
 
     f32 t = INFINITY;
     Vec3 norm;
-    for (u32 i = 0; i < size(hits); ++i)
+    for (u32 i = 0; i < std::size(hits); ++i)
     {
         if (hits[i] < -FLT_EPSILON || hits[i] > 1 + FLT_EPSILON)
             continue;
@@ -296,11 +296,11 @@ Maybe<Hit3D> intersectLineBox(Line3D line, Box box)
     if (t == INFINITY)
         return {};
 
-    return some<Hit3D>(t, norm);
+    return std::make_optional<Hit3D>(t, norm);
 }
 
 // Moller-Trumbore, Real Time Rendering 4th Edition
-Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri)
+std::optional<Hit3D> intersectLineTri(Line3D line, Tri tri)
 {
     if (vecEq3(line.begin, line.end))
         return {};
@@ -334,12 +334,12 @@ Maybe<Hit3D> intersectLineTri(Line3D line, Tri tri)
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return {};
 
-    return some<Hit3D>(t, a < 0
+    return std::make_optional<Hit3D>(t, a < 0
         ? vecNorm3(vecCross3(e2, e1))
         : vecNorm3(vecCross3(e1, e2)));
 }
 
-Maybe<Hit3D> intersectLinePlane(Line3D line, Plane plane)
+std::optional<Hit3D> intersectLinePlane(Line3D line, Plane plane)
 {
     if (line.begin == line.end)
         return {};
@@ -356,7 +356,7 @@ Maybe<Hit3D> intersectLinePlane(Line3D line, Plane plane)
     if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
         return {};
 
-    return some<Hit3D>(t, denom < 0
+    return std::make_optional<Hit3D>(t, denom < 0
         ? plane.normal
         : -plane.normal);
 }

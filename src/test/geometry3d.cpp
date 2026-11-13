@@ -96,83 +96,83 @@ TEST(testIntersectRaySphere)
 {
     Ray3D ray{{0, 0, 0}, {0, 0, 1}};
     Sphere s{{0, 0, 10}, 3};
-    Maybe<Hit3D> hit = intersectRaySphere(ray, s);
-    ASSERT(hit.has);
-    if (hit.has)
-        ASSERT(std::abs(hit.val.dist - 7.0f) < FLT_EPSILON);
+    std::optional<Hit3D> hit = intersectRaySphere(ray, s);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+        ASSERT(std::abs(hit->dist - 7.0f) < FLT_EPSILON);
 }
 
 TEST(testIntersectRayBox)
 {
     Ray3D ray{{-5, 5, 5}, {1, 0, 0}};
     Box b{{0, 0, 0}, {10, 10, 10}};
-    Maybe<Hit3D> hit = intersectRayBox(ray, b);
-    ASSERT(hit.has);
+    std::optional<Hit3D> hit = intersectRayBox(ray, b);
+    ASSERT(hit.has_value());
 }
 
 TEST(testIntersectRayTri)
 {
     Ray3D ray{{0, 0, -5}, {0, 0, 1}};
     Tri tri{{-1, -1, 0}, {1, -1, 0}, {0, 1, 0}};
-    Maybe<Hit3D> hit = intersectRayTri(ray, tri);
-    ASSERT(hit.has);
-    if (hit.has)
-        ASSERT(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
+    std::optional<Hit3D> hit = intersectRayTri(ray, tri);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+        ASSERT(std::abs(hit->dist - 5.0f) < FLT_EPSILON);
 }
 
 TEST(testIntersectRayPlane)
 {
     Ray3D ray{{0, 0, -5}, {0, 0, 1}};
     Plane p{{0, 0, 1}, 0};
-    Maybe<Hit3D> hit = intersectRayPlane(ray, p);
-    ASSERT(hit.has);
-    if (hit.has)
-        ASSERT(std::abs(hit.val.dist - 5.0f) < FLT_EPSILON);
+    std::optional<Hit3D> hit = intersectRayPlane(ray, p);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+        ASSERT(std::abs(hit->dist - 5.0f) < FLT_EPSILON);
 }
 
 TEST(testIntersectRayPlaneParallel)
 {
     Ray3D ray{{0, 0, 0}, {1, 0, 0}};
     Plane p{{0, 0, 1}, 10};
-    ASSERT(!intersectRayPlane(ray, p).has);
+    ASSERT(!intersectRayPlane(ray, p).has_value());
 }
 
 TEST(testIntersectLineSphere)
 {
     Line3D line{{-10, 3, 0}, {10, 3, 0}};
     Sphere s{{0, 5, 0}, 3};
-    ASSERT(intersectLineSphere(line, s).has);
+    ASSERT(intersectLineSphere(line, s).has_value());
 }
 
 TEST(testIntersectLineBox)
 {
     Line3D line{{-5, 5, 5}, {15, 5, 5}};
     Box b{{0, 0, 0}, {10, 10, 10}};
-    ASSERT(intersectLineBox(line, b).has);
+    ASSERT(intersectLineBox(line, b).has_value());
 }
 
 TEST(testIntersectLineTri)
 {
     Line3D line{{0, 0, -5}, {0, 0, 5}};
     Tri tri{{-1, -1, 0}, {1, -1, 0}, {0, 1, 0}};
-    ASSERT(intersectLineTri(line, tri).has);
+    ASSERT(intersectLineTri(line, tri).has_value());
 }
 
 TEST(testIntersectLinePlane)
 {
     Line3D line{{0, 0, -5}, {0, 0, 5}};
     Plane p{{0, 0, 1}, 0};
-    Maybe<Hit3D> hit = intersectLinePlane(line, p);
-    ASSERT(hit.has);
-    if (hit.has)
-        ASSERT(std::abs(hit.val.dist - 0.5f) < FLT_EPSILON);
+    std::optional<Hit3D> hit = intersectLinePlane(line, p);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+        ASSERT(std::abs(hit->dist - 0.5f) < FLT_EPSILON);
 }
 
 TEST(testIntersectLinePlaneParallel)
 {
     Line3D line{{0, 0, -5}, {1, 0, -5}};
     Plane p{{0, 0, 1}, 0};
-    ASSERT(!intersectLinePlane(line, p).has);
+    ASSERT(!intersectLinePlane(line, p).has_value());
 }
 
 TEST(testSphereContainment)
@@ -209,35 +209,35 @@ TEST(testRay3DMissSphere)
 {
     Ray3D ray{{0, 0, 0}, {1, 0, 0}};
     Sphere s{{0, 20, 0}, 3};
-    ASSERT(!intersectRaySphere(ray, s).has);
+    ASSERT(!intersectRaySphere(ray, s).has_value());
 }
 
 TEST(testRay3DMissBox)
 {
     Ray3D ray{{0, 0, 0}, {0, 0, 1}};
     Box b{{5, 5, 5}, {10, 10, 10}};
-    ASSERT(!intersectRayBox(ray, b).has);
+    ASSERT(!intersectRayBox(ray, b).has_value());
 }
 
 TEST(testIntersectLineSphereMiss)
 {
     Line3D line{{0, 0, 0}, {0, 100, 0}};
     Sphere s{{20, 0, 0}, 3};
-    ASSERT(!intersectLineSphere(line, s).has);
+    ASSERT(!intersectLineSphere(line, s).has_value());
 }
 
 TEST(testIntersectLineBoxMiss)
 {
     Line3D line{{0, 0, 0}, {0, 100, 0}};
     Box b{{5, 20, 0}, {10, 25, 5}};
-    ASSERT(!intersectLineBox(line, b).has);
+    ASSERT(!intersectLineBox(line, b).has_value());
 }
 
 TEST(testIntersectLineTriMiss)
 {
     Line3D line{{0, 0, 0}, {0, 100, 0}};
     Tri tri{{5, 0, 0}, {10, 0, 0}, {7, 0, 10}};
-    ASSERT(!intersectLineTri(line, tri).has);
+    ASSERT(!intersectLineTri(line, tri).has_value());
 }
 
 TEST(testSphereDistPointOutside)
@@ -258,7 +258,7 @@ TEST(testIntersectRayTriMiss)
 {
     Ray3D ray{{0, 0, 0}, {0, 0, 1}};
     Tri tri{{5, 0, 0}, {10, 0, 0}, {7, 0, 10}};
-    ASSERT(!intersectRayTri(ray, tri).has);
+    ASSERT(!intersectRayTri(ray, tri).has_value());
 }
 
 TEST(testPlaneFromPointNormal)

@@ -193,7 +193,7 @@ TEST(testNoiseGLSL)
 
         Push push{imgView.storageDescriptor()};
         gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, &push, sizeof(push));
+        gpuPushConstants(cmd, pipe, push);
         gpuDispatch(cmd, imgWidth, imgHeight, 1);
     }
 
@@ -204,7 +204,7 @@ TEST(testNoiseGLSL)
     gpuCmdEnd(cmd);
 
     u32 result[imgWidth * imgHeight] = {};
-    imgView.read(result);
+    imgView.read(std::as_writable_bytes(std::span{result}));
 
     const u32 passPixel = 0xFF00FF00; // green
     for (u32 row = 0; row < imgHeight; ++row)

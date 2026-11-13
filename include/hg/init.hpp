@@ -1,6 +1,6 @@
 #pragma once
 
-#include "hg/maybe.hpp"
+#include <optional>
 
 namespace hg {
 
@@ -19,6 +19,6 @@ struct HurdyGurdy {
 /**
  * Initialize the HurdyGurdy library
  */
-Maybe<HurdyGurdy> init();
+std::optional<HurdyGurdy> init();
 
 } // namespace hg

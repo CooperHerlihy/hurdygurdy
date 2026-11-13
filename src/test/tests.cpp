@@ -29,7 +29,13 @@ static i32 failCount = 0;
 
 int main()
 {
-    HurdyGurdy hg = init().expect("Could not initialize Hurdy Gurdy\n");
+    std::optional<HurdyGurdy> maybeHg = init();
+    if (!maybeHg.has_value())
+    {
+        std::printf("Could not initialize Hurdy Gurdy\n");
+        return 1;
+    }
+    HurdyGurdy hg = *maybeHg;
 
     std::printf("HurdyGurdy: Tests begun\n");
 

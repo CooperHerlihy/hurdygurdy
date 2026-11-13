@@ -1,9 +1,10 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/span.hpp"
-#include "hg/strings.hpp"
 #include "hg/gpu.hpp"
+
+#include <span>
+#include <string_view>
 
 namespace hg {
 
@@ -25,7 +26,7 @@ struct DisplayInfo {
 /**
  * Returns the display info
  */
-Span<DisplayInfo> displayInfo();
+std::span<DisplayInfo> displayInfo();
 
 /**
  * The types of cursors
@@ -58,17 +59,17 @@ void showCursor(bool show = true);
 /**
  * Returns the platform clipboard text
  */
-StringView getClipboardText();
+std::string_view getClipboardText();
 
 /**
  * Set the platform clipboard text
  */
-void setClipboardText(StringView text);
+void setClipboardText(std::string_view text);
 
 /**
  * Open a URL in the platform's default handler
  */
-void openURL(StringView url);
+void openURL(std::string_view url);
 
 /**
  * The event types
@@ -313,7 +314,7 @@ void processEvents();
 /**
  * Returns the events processed by processEvents
  */
-Span<Event> getEvents();
+std::span<Event> getEvents();
 
 /**
  * Returns whether the application was quit
@@ -363,7 +364,7 @@ struct WindowConfig {
      *
      * An empty title uses the platform default
      */
-    StringView title = "";
+    std::string_view title = "";
     /**
      * The width of the window in pixels
      *
@@ -424,12 +425,12 @@ struct Window {
     /**
      * Set the window title
      */
-    void setTitle(StringView title);
+    void setTitle(std::string_view title);
 
     /**
      * Get events relevant to this window
      */
-    Span<Event> events() const;
+    std::span<Event> events() const;
 
     /**
      * Returns whether the window was closed

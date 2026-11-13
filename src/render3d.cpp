@@ -1,5 +1,7 @@
 #include "hg/render3d.hpp"
+
 #include "hg/gpu.hpp"
+#include "hg/memory.hpp"
 
 namespace hg {
 
@@ -15,9 +17,9 @@ Mesh uploadMeshToGpu(const MeshData& data)
 {
     Mesh mesh{};
 
-    mesh.vertexCount = static_cast<u32>(data.vertices.count);
+    mesh.vertexCount = static_cast<u32>(data.vertices.size());
     mesh.vertexWidth = sizeof(MeshVertex);
-    mesh.indexCount = static_cast<u32>(data.indices.count);
+    mesh.indexCount = static_cast<u32>(data.indices.size());
 
     mesh.vertexBuffer = GpuBuffer::create(
         mesh.vertexCount * mesh.vertexWidth, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
@@ -25,8 +27,8 @@ Mesh uploadMeshToGpu(const MeshData& data)
     mesh.indexBuffer = GpuBuffer::create(
         mesh.indexCount * sizeof(u32), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
 
-    mesh.vertexBuffer.write(data.vertices.vals, 0, mesh.vertexCount * mesh.vertexWidth);
-    mesh.indexBuffer.write(data.indices.vals, 0, mesh.indexCount * sizeof(u32));
+    mesh.vertexBuffer.write(std::as_bytes(std::span{data.vertices}), 0);
+    mesh.indexBuffer.write(std::as_bytes(std::span{data.indices}), 0);
 
     return mesh;
 }
@@ -36,13 +38,13 @@ MeshData downloadMeshFromGpu(const Mesh& mesh)
     MeshData data{};
 
     u64 vCount = mesh.vertexBuffer.size() / sizeof(MeshVertex);
-    data.vertices = Array<MeshVertex>{vCount, vCount};
+    data.vertices.resize(vCount);
 
     u64 iCount = mesh.indexBuffer.size() / sizeof(u32);
-    data.indices = Array<u32>{iCount, iCount};
+    data.indices.resize(iCount);
 
-    mesh.vertexBuffer.read(data.vertices.vals, 0, mesh.vertexBuffer.size());
-    mesh.indexBuffer.read(data.indices.vals, 0, mesh.indexBuffer.size());
+    mesh.vertexBuffer.read(std::as_writable_bytes(std::span{data.vertices}), 0);
+    mesh.indexBuffer.read(std::as_writable_bytes(std::span{data.indices}), 0);
 
     return data;
 }
@@ -102,12 +104,12 @@ Renderer3D::Renderer3D(Format colorFormat, Format depthFormat)
 
 void Renderer3D::drawDirectionalLight(Vec3 color, Vec3 dir)
 {
-    dirLights.push(LightData{{dir.x, dir.y, dir.z}, {color.x, color.y, color.z}});
+    dirLights.emplace_back(dir, color);
 }
 
 void Renderer3D::drawPointLight(Vec3 color, Vec3 pos)
 {
-    pointLights.push(LightData{{pos.x, pos.y, pos.z}, {color.x, color.y, color.z}});
+    pointLights.emplace_back(pos, color);
 }
 
 void Renderer3D::drawModel(
@@ -118,14 +120,13 @@ void Renderer3D::drawModel(
         f32 shininess,
         const Mat4& transform)
 {
-    models.push({
+    models.emplace_back(
         transform,
         &mesh,
         &colorMap,
         &normalMap,
         diffuse,
-        shininess,
-    });
+        shininess);
 }
 
 void Renderer3D::drawModelMaterial(const Material3D& material, const Mat4& transform)
@@ -141,20 +142,20 @@ void Renderer3D::drawModelMaterial(const Material3D& material, const Mat4& trans
 
 void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
 {
-    if (dirLightBuffer.size() < dirLights.count * sizeof(LightData))
+    if (dirLightBuffer.size() < dirLights.size() * sizeof(LightData))
     {
         gpuWaitIdle();
         dirLightBuffer = GpuBuffer::create(
-                2 * dirLights.count * sizeof(LightData),
+                2 * dirLights.size() * sizeof(LightData),
                 GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer,
                 GpuMemoryUsage_frequentUpdate);
     }
 
-    if (pointLightBuffer.size() < pointLights.count * sizeof(LightData))
+    if (pointLightBuffer.size() < pointLights.size() * sizeof(LightData))
     {
         gpuWaitIdle();
         pointLightBuffer = GpuBuffer::create(
-                2 * pointLights.count * sizeof(LightData),
+                2 * pointLights.size() * sizeof(LightData),
                 GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer,
                 GpuMemoryUsage_frequentUpdate);
     }
@@ -166,29 +167,31 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
 
     Mat4 view = matView(camera.position, Vec3{1.0f}, camera.rotation);
 
-    if (dirLights.count > 0)
+    if (dirLights.size() > 0)
     {
         ArenaScope scratch = getScratch();
-        ArrayTemp<Light> dirBuf{scratch, 0, dirLights.count};
+        vector_temp<Light> dirBuf{scratch};
+        dirBuf.reserve(dirLights.size());
 
         for (LightData& light : dirLights)
         {
-            dirBuf.push({view * Vec4{light.pos, 0}, Vec4{light.color, 1}});
+            dirBuf.emplace_back(view * Vec4{light.pos, 0}, Vec4{light.color, 1});
         }
-        dirLightBuffer.write(dirBuf.vals, 0, dirBuf.count * sizeof(Light));
+        dirLightBuffer.write(std::as_bytes(std::span{dirBuf}), 0);
     }
 
-    if (pointLights.count > 0)
+    if (pointLights.size() > 0)
     {
         ArenaScope scratch = getScratch();
-        ArrayTemp<Light> pointBuf{scratch, 0, pointLights.count};
+        vector_temp<Light> pointBuf{scratch};
+        pointBuf.reserve(pointLights.size());
 
         for (LightData& light : pointLights)
         {
-            pointBuf.push({view * Vec4{light.pos, 1}, Vec4{light.color, 1}});
+            pointBuf.emplace_back(view * Vec4{light.pos, 1}, Vec4{light.color, 1});
         }
 
-        pointLightBuffer.write(pointBuf.vals, 0, pointBuf.count * sizeof(Light));
+        pointLightBuffer.write(std::as_bytes(std::span{pointBuf}), 0);
     }
 
     gpuBindPipeline(cmd, pipeline);
@@ -197,15 +200,15 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
     {
         Push push{};
         push.model = model.transform;
-        if (dirLights.count > 0)
+        if (dirLights.size() > 0)
         {
             push.dirLights = dirLightBuffer.storageDescriptor();
-            push.dirLightCount = static_cast<u32>(dirLights.count);
+            push.dirLightCount = static_cast<u32>(dirLights.size());
         }
-        if (pointLights.count > 0)
+        if (pointLights.size() > 0)
         {
             push.pointLights = pointLightBuffer.storageDescriptor();
-            push.pointLightCount = static_cast<u32>(pointLights.count);
+            push.pointLightCount = static_cast<u32>(pointLights.size());
         }
         push.colorMap = model.colorMap->view.samplerDescriptor();
         push.normalMap = model.normalMap->view.samplerDescriptor();
@@ -215,13 +218,13 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
         push.inds = model.mesh->indexBuffer.storageDescriptor();
         push.vp = camera.vpBuffer.uniformDescriptor();
 
-        gpuPushConstants(cmd, pipeline, &push, sizeof(push));
+        gpuPushConstants(cmd, pipeline, push);
         gpuDraw(cmd, 0, model.mesh->indexCount, 0, 1);
     }
 
-    dirLights.reset();
-    pointLights.reset();
-    models.reset();
+    dirLights.clear();
+    pointLights.clear();
+    models.clear();
 }
 
 } // namespace hg

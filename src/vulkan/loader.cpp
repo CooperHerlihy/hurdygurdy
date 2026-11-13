@@ -126,7 +126,7 @@ VulkanFuncs vulkanFuncs{};
 
 bool loadVulkan()
 {
-    Maybe<Library> lib = Library::load(
+    std::optional<Library> lib = Library::load(
 #if defined(HG_PLATFORM_LINUX)
         "libvulkan.so.1"
 #elif defined(HG_PLATFORM_WINDOWS)
@@ -136,20 +136,20 @@ bool loadVulkan()
 	"libMoltenVK.dylib"
 #endif
     );
-    if (!lib.has)
+    if (!lib.has_value())
     {
         setError("Could not load vulkan");
         return false;
     }
     libvulkan = std::move(*lib);
 
-    *(void**)&vulkanFuncs.vkGetInstanceProcAddr =
-        libvulkan.loadSymbol("vkGetInstanceProcAddr").orElse(nullptr);
-    if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
+    auto sym = libvulkan.loadSymbol("vkGetInstanceProcAddr");
+    if (!sym.has_value())
     {
         setError("Could not load vkGetInstanceProcAddr\n");
         return false;
     }
+    *(void**)&vulkanFuncs.vkGetInstanceProcAddr = *sym;
 
 #define HG_LOAD_VK_FUNC(name) \
     vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
