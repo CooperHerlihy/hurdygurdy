@@ -26,19 +26,11 @@
 
 #pragma once
 
-#include <cfloat>
-#include <cmath>
-#include <cstdarg>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-
 #include <hg/macros.hpp>
 #include <hg/inttypes.hpp>
 #include <hg/error.hpp>
 #include <hg/init.hpp>
 #include <hg/utility.hpp>
-#include <hg/strings.hpp>
 #include <hg/memory.hpp>
 #include <hg/concurrency.hpp>
 #include <hg/math.hpp>
@@ -58,4 +50,3 @@
 #include <hg/render3d.hpp>
 #include <hg/ecs.hpp>
 #include <hg/imgui.hpp>
-

@@ -11,43 +11,24 @@
 
 namespace hg {
 
-Arena::Arena(u64 capacityVal)
-    : memory{std::malloc(capacityVal)}
+Arena::Arena(usize capacityVal)
+    : memory{std::make_unique_for_overwrite<u8[]>(capacityVal)}
     , capacity{capacityVal}
     , head{0}
 {}
 
-Arena::~Arena() noexcept
+void* Arena::alloc(usize size, usize alignment)
 {
-    std::free(memory);
-}
-
-void* Arena::alloc(u64 size, u64 alignment)
-{
-    u64 newHead = alignUp(static_cast<u64>(head), alignment) + size;
+    u64 newHead = alignUp(head, alignment) + size;
     if (newHead > capacity)
     {
+        HG_WARN("Arena out of memory");
         setError("Arena out of memory");
         return nullptr;
     }
 
     head = newHead;
-    return reinterpret_cast<void*>(reinterpret_cast<uptr>(memory) + head - size);
-}
-
-bool Arena::extend(void* allocation, u64 oldSize, u64 newSize)
-{
-    if (reinterpret_cast<uptr>(allocation) + oldSize - reinterpret_cast<uptr>(memory) != static_cast<uptr>(head))
-        return false;
-
-    u64 newHead = reinterpret_cast<uptr>(allocation) + newSize - reinterpret_cast<uptr>(memory);
-    if (newHead > capacity)
-    {
-        return false;
-    }
-
-    head = newHead;
-    return true;
+    return memory.get() + head - size;
 }
 
 static thread_local std::vector<std::unique_ptr<Arena>> scratchArenas{};
@@ -76,7 +57,7 @@ next:
         continue;
     }
 
-    return scratchArenas.emplace_back(std::make_unique<Arena>((static_cast<u64>(1) << 28) - 1)).get();
+    return scratchArenas.emplace_back(std::make_unique<Arena>((u64{1} << 28) - 1)).get();
 }
 
 } // namespace hg

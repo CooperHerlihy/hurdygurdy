@@ -6,7 +6,7 @@
 namespace hg {
 
 thread_local static char errorData[4096];
-thread_local static u64 errorLength = 0;
+thread_local static u32 errorLength = 0;
 
 std::string_view getError()
 {
@@ -15,7 +15,7 @@ std::string_view getError()
 
 void setError(std::string_view error)
 {
-    u64 newLength = std::min(error.length(), static_cast<u64>(sizeof(errorData) - 1));
+    u32 newLength = static_cast<u32>(std::min(error.length(), (sizeof(errorData) - 1)));
     std::memcpy(errorData, error.data(), newLength);
     errorData[newLength] = '\0';
     errorLength = newLength;
@@ -23,7 +23,7 @@ void setError(std::string_view error)
 
 void logError()
 {
-    std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", static_cast<int>(errorLength), errorData);
+    std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", errorLength, errorData);
 }
 
 } // namespace hg

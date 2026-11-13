@@ -1,6 +1,4 @@
-#include "hg/strings.hpp"
-
-#include "hg/macros.hpp"
+#include "hg/utility.hpp"
 
 #include <charconv>
 #include <string>
@@ -114,7 +112,6 @@ i64 stringToInteger(std::string_view str)
 {
     HG_ASSERT(isInteger(str));
 
-    // Note, from_chars does not accept a leading +
     if (str.starts_with('+'))
         str.remove_prefix(1);
 

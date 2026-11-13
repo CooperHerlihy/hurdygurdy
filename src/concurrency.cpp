@@ -214,7 +214,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
             u64 begin;
             u64 end;
         };
-        Capture* capture = static_cast<Capture*>(scratch.arena->alloc(sizeof(Capture), alignof(Capture)));
+        Capture* capture = static_cast<Capture*>(scratch.alloc(sizeof(Capture), alignof(Capture)));
         capture->data = data;
         capture->fn = fn;
         capture->begin = i;

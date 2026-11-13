@@ -6,7 +6,7 @@
 #include <utility>
 #include <span>
 #include <new>
-
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -15,19 +15,26 @@ namespace hg {
 /**
  * An arena allocator
  */
-struct Arena {
+class Arena {
+private:
     /**
      * A pointer to the memory being allocated
      */
-    void* memory = nullptr;
+    std::unique_ptr<u8[]> memory = nullptr;
     /**
      * The capacity of the memory being allocated
      */
-    u64 capacity = 0;
+    usize capacity = 0;
     /**
      * The next allocation to be given out
      */
-    u64 head = 0;
+    usize head = 0;
+
+public:
+    /**
+     * An arena scope guard to dealloc
+     */
+    friend class ArenaScope;
 
     /**
      * Construct empty
@@ -37,12 +44,7 @@ struct Arena {
     /**
      * Construct with capacity
      */
-    Arena(u64 capacityVal);
-
-    /**
-     * Free the arena
-     */
-    ~Arena() noexcept;
+    Arena(usize capacityVal);
 
     /**
      * Allocates memory
@@ -54,21 +56,13 @@ struct Arena {
      * Returns
      * - The allocation, or nullptr if out of memory
      */
-    void* alloc(u64 size, u64 alignment);
-
-    /**
-     * Extends the allocation from oldSize to newSize if possible
-     *
-     * Returns
-     * - Whether it could be extended
-     */
-    bool extend(void* allocation, u64 oldSize, u64 newSize);
+    void* alloc(usize size, usize alignment);
 
     /**
      * Move construct
      */
     Arena(Arena&& other) noexcept
-        : memory{std::exchange(other.memory, nullptr)}
+        : memory{std::move(other.memory)}
         , capacity{std::exchange(other.capacity, 0)}
         , head{std::exchange(other.head, 0)}
     {}
@@ -85,15 +79,13 @@ struct Arena {
         }
         return *this;
     }
-
-    Arena(const Arena&) = delete;
-    Arena& operator=(const Arena&) = delete;
 };
 
 /**
  * An arena allocator
  */
-struct ArenaScope {
+class ArenaScope {
+private:
     /**
      * The arena to allocate from
      */
@@ -101,8 +93,9 @@ struct ArenaScope {
     /**
      * Where to restore head at end of scope
      */
-    u64 head = 0;
+    usize head = 0;
 
+public:
     /**
      * Construct empty
      */
@@ -127,105 +120,31 @@ struct ArenaScope {
     /**
      * Implicit convert to underlying arena
      */
-    operator Arena*()
+    operator Arena*() const
     {
         return arena;
     }
 
     /**
-     * Move construct
+     * Allocates memory using the underlying arena
+     *
+     * Parameters
+     * - size The size in bytes to allocate
+     * - alignment The required alignment of the allocation in bytes
+     *
+     * Returns
+     * - The allocation, or nullptr if out of memory
      */
-    ArenaScope(ArenaScope&& other) noexcept
-        : arena{std::exchange(other.arena, nullptr)}
-        , head{std::exchange(other.head, 0)}
-    {}
-
-    /**
-     * Move assign
-     */
-    ArenaScope& operator=(ArenaScope&& other) noexcept
+    void* alloc(usize size, usize alignment)
     {
-        if (this != &other)
-        {
-            this->~ArenaScope();
-            new (this) ArenaScope{std::move(other)};
-        }
-        return *this;
+        return arena->alloc(size, alignment);
     }
 
+    ArenaScope(ArenaScope&&) = delete;
+    ArenaScope& operator=(ArenaScope&&) = delete;
     ArenaScope(const ArenaScope&) = delete;
     ArenaScope& operator=(const ArenaScope&) = delete;
 };
-
-/**
- * An arena allocator for std containers
- */
-template<typename T>
-struct ArenaAllocator {
-    /**
-     * The type to be allocated
-     */
-    using value_type = T;
-
-    /**
-     * The arena to allocate from
-     */
-    Arena* arena = nullptr;
-
-    /**
-     * Construct empty
-     */
-    ArenaAllocator() noexcept = default;
-
-    /**
-     * Construct with an arena
-     */
-    ArenaAllocator(Arena* arenaVal)
-        : arena{arenaVal}
-    {}
-
-    /**
-     * Construct with an arena scope
-     */
-    ArenaAllocator(const ArenaScope& scope)
-        : arena{scope.arena}
-    {}
-
-    /**
-     * Allocate from the arena
-     */
-    T* allocate(std::size_t size)
-    {
-        HG_ASSERT(arena != nullptr);
-        return new (static_cast<T*>(arena->alloc(size * sizeof(T), alignof(T)))) T;
-    }
-
-    /**
-     * Deallocate from the arena
-     */
-    void deallocate(T*, std::size_t)
-    {
-    }
-};
-
-/**
- * Compare arena allocators
- */
-template <typename T, typename U>
-bool operator==(const ArenaAllocator<T>& lhs, const ArenaAllocator<U>& rhs) noexcept {
-    return lhs.arena == rhs.arena;
-}
-
-/**
- * A string using an arena allocator
- */
-using string_temp = std::basic_string<char, std::char_traits<char>, ArenaAllocator<char>>;
-
-/**
- * A vector using an arena allocator
- */
-template<typename T>
-using vector_temp = std::vector<T, ArenaAllocator<T>>;
 
 /**
  * Get a scratch arena for temporary allocations
@@ -257,5 +176,83 @@ ArenaScope getScratch(const Arena* conflict);
  * - A scratch arena, never nullptr
  */
 ArenaScope getScratch(std::span<const Arena*> conflicts);
+
+/**
+ * An arena allocator for std containers
+ */
+template<typename T>
+class ArenaAllocator {
+private:
+    /**
+     * The arena to allocate from
+     */
+    Arena* arena = nullptr;
+
+public:
+    /**
+     * The type to be allocated
+     */
+    using value_type = T;
+
+    /**
+     * Construct empty
+     */
+    ArenaAllocator() noexcept = default;
+
+    /**
+     * Construct with an arena
+     */
+    ArenaAllocator(Arena* arenaVal)
+        : arena{arenaVal}
+    {}
+
+    /**
+     * Construct with an arena scope
+     */
+    ArenaAllocator(const ArenaScope& arenaScope)
+        : arena{arenaScope}
+    {}
+
+    /**
+     * Allocate from the arena
+     */
+    T* allocate(std::size_t size)
+    {
+        HG_ASSERT(arena != nullptr);
+        return new (static_cast<T*>(arena->alloc(size * sizeof(T), alignof(T)))) T;
+    }
+
+    /**
+     * Deallocate from the arena
+     */
+    void deallocate(T*, std::size_t)
+    {
+    }
+
+    /**
+     * Compare arena allocators
+     */
+    template <typename U, typename V>
+    friend bool operator==(const ArenaAllocator<U>& lhs, const ArenaAllocator<V>& rhs) noexcept;
+};
+
+/**
+ * Compare arena allocators
+ */
+template <typename T, typename U>
+bool operator==(const ArenaAllocator<T>& lhs, const ArenaAllocator<U>& rhs) noexcept {
+    return lhs.arena == rhs.arena;
+}
+
+/**
+ * A string using an arena allocator
+ */
+using string_temp = std::basic_string<char, std::char_traits<char>, ArenaAllocator<char>>;
+
+/**
+ * A vector using an arena allocator
+ */
+template<typename T>
+using vector_temp = std::vector<T, ArenaAllocator<T>>;
 
 } // namespace hg

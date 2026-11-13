@@ -25,7 +25,7 @@ template<typename... Ts> requires (sizeof...(Ts) > 0)
 void setError(std::format_string<Ts...> fmt, Ts&&... args)
 {
     char buf[4096];
-    u64 len = internal::formatStack(buf, fmt, std::forward<Ts>(args)...);
+    u64 len = formatBuffer(buf, fmt, std::forward<Ts>(args)...);
     setError(std::string_view{buf, len});
 }
 

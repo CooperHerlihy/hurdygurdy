@@ -257,7 +257,7 @@ struct Ecs {
     template<typename T>
     EcsComponent<T>& getComponentSystem()
     {
-        return std::get<idxOfInPack<T, Ts...>()>(systems);
+        return std::get<idxInPack<T, Ts...>()>(systems);
     }
 
     /**
@@ -266,7 +266,7 @@ struct Ecs {
     template<typename T>
     const EcsComponent<T>& getComponentSystem() const
     {
-        return std::get<idxOfInPack<T, Ts...>()>(systems);
+        return std::get<idxInPack<T, Ts...>()>(systems);
     }
 
     /**

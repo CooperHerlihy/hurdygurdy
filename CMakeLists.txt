@@ -188,19 +188,19 @@ endif()
 set(CORE_SOURCES
     src/error.cpp
     src/init.cpp
+    src/utility.cpp
     src/memory.cpp
-    src/strings.cpp
     src/concurrency.cpp
     src/math.cpp
     src/geometry2d.cpp
     src/geometry3d.cpp
     src/noise.cpp
     src/serialization.cpp
-    src/assets.cpp
     src/json.cpp
+    src/assets.cpp
     src/time.cpp
-    src/audio.cpp
     src/dynlib.cpp
+    src/audio.cpp
     src/render2d.cpp
     src/render3d.cpp
     src/imgui.cpp
@@ -291,7 +291,6 @@ add_executable(tests
     src/test/geometry2d.cpp
     src/test/geometry3d.cpp
     src/test/noise.cpp
-    src/test/strings.cpp
     src/test/filesystem.cpp
     src/test/hash.cpp
     src/test/assets.cpp

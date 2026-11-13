@@ -96,6 +96,8 @@ struct Defer {
     }
 };
 
+} // namespace internal
+
 /**
  * Format a message into a stack buffer
  *
@@ -104,8 +106,8 @@ struct Defer {
  * Returns
  * - The number of characters written
  */
-template<typename... Ts>
-inline u64 formatStack(char (&buf)[4096], std::format_string<Ts...> fmt, Ts&&... args)
+template<usize N, typename... Ts>
+inline u64 formatBuffer(char (&buf)[N], std::format_string<Ts...> fmt, Ts&&... args)
 {
     auto res = std::format_to_n(buf, sizeof(buf) - 1, fmt, std::forward<Ts>(args)...);
     *res.out = '\0';
@@ -114,16 +116,14 @@ inline u64 formatStack(char (&buf)[4096], std::format_string<Ts...> fmt, Ts&&...
         : sizeof(buf) - 1;
 }
 
-} // namespace internal
-
 /**
  * Format a log message to stderr
  */
 template<typename... Ts>
-inline void logFormat(std::format_string<Ts...> fmt, Ts&&... args)
+inline void printLog(std::format_string<Ts...> fmt, Ts&&... args)
 {
     char buf[4096];
-    internal::formatStack(buf, fmt, std::forward<Ts>(args)...);
+    formatBuffer(buf, fmt, std::forward<Ts>(args)...);
     std::fprintf(stderr, "HurdyGurdy Log: %s", buf);
 }
 
@@ -131,10 +131,10 @@ inline void logFormat(std::format_string<Ts...> fmt, Ts&&... args)
  * Format a warning to stderr
  */
 template<typename... Ts>
-inline void warnFormat(std::format_string<Ts...> fmt, Ts&&... args)
+inline void printWarning(std::format_string<Ts...> fmt, Ts&&... args)
 {
     char buf[4096];
-    internal::formatStack(buf, fmt, std::forward<Ts>(args)...);
+    formatBuffer(buf, fmt, std::forward<Ts>(args)...);
     std::fprintf(stderr, "HurdyGurdy Warn: %s", buf);
 }
 
@@ -142,10 +142,10 @@ inline void warnFormat(std::format_string<Ts...> fmt, Ts&&... args)
  * Format a panic message to stderr and abort the program
  */
 template<typename... Ts>
-[[noreturn]] inline void panicFormat(std::format_string<Ts...> fmt, Ts&&... args)
+[[noreturn]] inline void printPanic(std::format_string<Ts...> fmt, Ts&&... args)
 {
     char buf[4096];
-    internal::formatStack(buf, fmt, std::forward<Ts>(args)...);
+    formatBuffer(buf, fmt, std::forward<Ts>(args)...);
     std::fprintf(stderr, "HurdyGurdy Panic: %s", buf);
     std::abort();
 }
@@ -166,17 +166,17 @@ template<typename... Ts>
 /**
  * Log to stderr
  */
-#define HG_LOG(...) do { ::hg::logFormat(__VA_ARGS__); } while(0)
+#define HG_LOG(...) do { ::hg::printLog(__VA_ARGS__); } while(0)
 
 /**
  * Log a warning to stderr
  */
-#define HG_WARN(...) do { ::hg::warnFormat(__VA_ARGS__); } while(0)
+#define HG_WARN(...) do { ::hg::printWarning(__VA_ARGS__); } while(0)
 
 /**
  * Log the last error, a message, and abort the program
  */
-#define HG_PANIC(...) do { ::hg::logError(); ::hg::panicFormat(__VA_ARGS__); } while(0)
+#define HG_PANIC(...) do { ::hg::logError(); ::hg::printPanic(__VA_ARGS__); } while(0)
 
 #else
 
