@@ -5,7 +5,7 @@ Modern C++20 game development library
 ## Hard Rules
 
 **Always inform. Never act without approval.**
-- Never run scripts without backups and tests
+- Never run scripts without backups
 - No exceptions, RTTI, third-party code, or reformatting
 
 ## Build
@@ -52,10 +52,10 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 - 4-space indent
 - Braces: next line for code blocks, same line for struct/initialization
 - `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros
-- Integer types: `u8`..`u64`, `i8`..`i64`, `f32`, `f64`, `usize`. No `int`/`float`/`size_t`
+- Integer types: use `inttypes.hpp`, not `int`, `float`, `std::size_t`, etc.
 - RAII, no failing constructors, use static create() with std::optional, generally delete copy ctors
-- Assertions: `HG_ASSERT`, Recoverable errors: `setError()` and `std::optional`, Unrecoverable: `HG_PANIC`
-- Memory: temp containers with scratch arena (`vector_temp`, `string_temp`) > std containers (`std::vector`, `std::string`, `std::span`)
+- Assertions: `HG_ASSERT`, Recoverable errors: `setError()` and `std::optional`, Unrecoverable errors: `HG_PANIC`
+- Memory: prefer `ArenaScope scratch = getScratch()` and `string_temp`/`vector_temp` > std:: containers
 - Concurrency: forPar() > callPar() > std:: primitives
 
 ## Contents
@@ -63,19 +63,19 @@ Open a **Visual Studio 2022 x64 developer shell** first, then cmake
 `include/` - public headers:
 - `hurdygurdy.hpp`
 - `hurdygurdy.glsl`
+- `hg/inttypes.hpp` - `i8`, `u32`, `f64`, `usize`, etc.
 - `hg/macros.hpp` - HG_DEFER, HG_LOG, HG_WARN
-- `hg/inttypes.hpp`
-- `hg/error.hpp` - setError
+- `hg/error.hpp`
 - `hg/init.hpp`
 - `hg/utility.hpp`
 - `hg/strings.hpp`
-- `hg/memory.hpp` - Arena, ArenaScope, ArenaAllocator, vector_temp, string_temp
+- `hg/memory.hpp` - ArenaScope, getScratch(), string_temp, vector_temp
 - `hg/concurrency.hpp`
 - `hg/math.hpp`
 - `hg/geometry2d.hpp`
 - `hg/geometry3d.hpp`
 - `hg/noise.hpp`
-- `hg/hash.hpp` - HashSet, HashMap
+- `hg/hash.hpp`
 - `hg/serialization.hpp`
 - `hg/json.hpp`
 - `hg/assets.hpp`
@@ -141,4 +141,3 @@ Note: the protocol functions in `wayland.cpp` call through the `wlFuncs` functio
 - `tests.cpp` - runs all tests
 - `*.cpp` - remaining tests, named like headers
 - `shaders/` - `.vert`/`.frag`/`.comp` test shaders
-

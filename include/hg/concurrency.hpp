@@ -3,7 +3,6 @@
 #include <atomic>
 #include <thread>
 #include <type_traits>
-#include <utility>
 
 #include "hg/inttypes.hpp"
 #include "hg/macros.hpp"
@@ -13,16 +12,26 @@ namespace hg {
 /**
  * A spinlock mutex for basic thread synchronization
  */
-struct SpinLock {
+class SpinLock {
+private:
     /**
      * Whether the lock is currently acquired
      */
     std::atomic_bool acquired{false};
 
+public:
     /**
      * Wait until the mutex is acquired
      */
-    void acquire();
+    void acquire()
+    {
+        bool acquiredLocal = false;
+        while (!acquired.compare_exchange_weak(acquiredLocal, true))
+        {
+            std::this_thread::yield();
+            acquiredLocal = false;
+        }
+    }
 
     /**
      * Try to acquire the mutex
@@ -31,12 +40,19 @@ struct SpinLock {
      * - true if acquisition succeeded
      * - false if the mutex was already in use
      */
-    bool tryAcquire();
+    bool tryAcquire()
+    {
+        bool acquiredLocal = false;
+        return acquired.compare_exchange_weak(acquiredLocal, true);
+    }
 
     /**
      * Release the mutex lock
      */
-    void release();
+    void release()
+    {
+        acquired.store(false);
+    }
 };
 
 /**
@@ -44,12 +60,14 @@ struct SpinLock {
  *
  * Acquires the lock on construction, releases on destruction.
  */
-struct SpinLockScope {
+class SpinLockScope {
+private:
     /**
      * The spinlock to manage
      */
     SpinLock* lock = nullptr;
 
+public:
     /**
      * Construct empty
      */
@@ -77,26 +95,8 @@ struct SpinLockScope {
             lock->release();
     }
 
-    /**
-     * Move construct
-     */
-    SpinLockScope(SpinLockScope&& other) noexcept
-        : lock{std::exchange(other.lock, nullptr)}
-    {}
-
-    /**
-     * Move assign
-     */
-    SpinLockScope& operator=(SpinLockScope&& other) noexcept
-    {
-        if (this != &other)
-        {
-            this->~SpinLockScope();
-            new (this) SpinLockScope{std::move(other)};
-        }
-        return *this;
-    }
-
+    SpinLockScope(SpinLockScope&& other) = delete;
+    SpinLockScope& operator=(SpinLockScope&& other) = delete;
     SpinLockScope(const SpinLockScope&) = delete;
     SpinLockScope& operator=(const SpinLockScope&) = delete;
 };
@@ -104,12 +104,14 @@ struct SpinLockScope {
 /**
  * A spinlock fence for basic thread synchronization
  */
-struct Fence {
+class Fence {
+private:
     /**
      * How many events are being waited on
      */
     std::atomic<u32> counter{0};
 
+public:
     /**
      * Add more events for the fence to wait on
      *

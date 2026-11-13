@@ -1,4 +1,5 @@
 #include "hg/concurrency.hpp"
+
 #include "hg/memory.hpp"
 #include "hg/time.hpp"
 
@@ -8,27 +9,6 @@
 #include <condition_variable>
 
 namespace hg {
-
-void SpinLock::acquire()
-{
-    bool acquiredLocal = false;
-    while (!acquired.compare_exchange_weak(acquiredLocal, true))
-    {
-        std::this_thread::yield();
-        acquiredLocal = false;
-    }
-}
-
-bool SpinLock::tryAcquire()
-{
-    bool acquiredLocal = false;
-    return acquired.compare_exchange_weak(acquiredLocal, true);
-}
-
-void SpinLock::release()
-{
-    acquired.store(false);
-}
 
 bool Fence::wait(f64 timeout)
 {

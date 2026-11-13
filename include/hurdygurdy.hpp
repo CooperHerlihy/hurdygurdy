@@ -26,8 +26,8 @@
 
 #pragma once
 
-#include <hg/macros.hpp>
 #include <hg/inttypes.hpp>
+#include <hg/macros.hpp>
 #include <hg/error.hpp>
 #include <hg/init.hpp>
 #include <hg/utility.hpp>

@@ -98,31 +98,6 @@ TEST(testSpinLockScopeRAII)
     lock.release();
 }
 
-TEST(testSpinLockScopeNull)
-{
-    SpinLockScope scope{};
-    ASSERT(scope.lock == nullptr);
-}
-
-TEST(testSpinLockScopeMoveConstruct)
-{
-    SpinLock lock{};
-    SpinLockScope inner{lock};
-    SpinLockScope moved{std::move(inner)};
-    ASSERT(inner.lock == nullptr);
-    ASSERT(moved.lock == &lock);
-}
-
-TEST(testSpinLockScopeMoveAssign)
-{
-    SpinLock lock{};
-    SpinLockScope a{lock};
-    SpinLockScope b{};
-    b = std::move(a);
-    ASSERT(a.lock == nullptr);
-    ASSERT(b.lock == &lock);
-}
-
 TEST(testCallParSingleAndMultiple)
 {
     Fence fence{};
