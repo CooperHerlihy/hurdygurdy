@@ -95,7 +95,7 @@ Renderer3D::Renderer3D(Format colorFormat, Format depthFormat)
     Format colorFormats[] = {colorFormat};
     conf.colorAttachmentFormats = colorFormats;
     conf.depthAttachmentFormat = depthFormat;
-    conf.cullMode = GpuCull_none;
+    conf.cullMode = GpuCull_back;
     conf.enableDepthRead = true;
     conf.enableDepthWrite = true;
 

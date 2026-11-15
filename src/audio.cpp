@@ -227,7 +227,8 @@ AudioPlayer::AudioPlayer(AudioDevice* device)
 AudioPlayer::~AudioPlayer() noexcept
 {
     SpinLockScope scope{lock};
-    device->unsetCallback();
+    if (device != nullptr)
+        device->unsetCallback();
 }
 
 void AudioPlayer::update(std::span<f32> buf, AudioConfig config)
