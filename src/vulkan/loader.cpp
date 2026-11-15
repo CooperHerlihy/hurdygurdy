@@ -196,11 +196,14 @@ bool loadVulkanInstanceFuncs(VkInstance instance)
     HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceQueueFamilyProperties);
     HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceMemoryProperties);
     HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceMemoryProperties2);
-    HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceSupportKHR);
-    HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceFormatsKHR);
-    HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfacePresentModesKHR);
-    HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
-    HG_LOAD_VK_INSTANCE_FUNC(vkDestroySurfaceKHR);
+    if (vk.surfaceExtensions)
+    {
+        HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceSupportKHR);
+        HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceFormatsKHR);
+        HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfacePresentModesKHR);
+        HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
+        HG_LOAD_VK_INSTANCE_FUNC(vkDestroySurfaceKHR);
+    }
     HG_LOAD_VK_INSTANCE_FUNC(vkCreateDevice);
 
     return true;
@@ -221,10 +224,13 @@ bool loadVulkanDeviceFuncs(VkDevice device)
 
     HG_LOAD_VK_DEVICE_FUNC(vkDestroyDevice);
     HG_LOAD_VK_DEVICE_FUNC(vkDeviceWaitIdle);
-    HG_LOAD_VK_DEVICE_FUNC(vkCreateSwapchainKHR);
-    HG_LOAD_VK_DEVICE_FUNC(vkDestroySwapchainKHR);
-    HG_LOAD_VK_DEVICE_FUNC(vkGetSwapchainImagesKHR);
-    HG_LOAD_VK_DEVICE_FUNC(vkAcquireNextImageKHR);
+    if (vk.surfaceExtensions)
+    {
+        HG_LOAD_VK_DEVICE_FUNC(vkCreateSwapchainKHR);
+        HG_LOAD_VK_DEVICE_FUNC(vkDestroySwapchainKHR);
+        HG_LOAD_VK_DEVICE_FUNC(vkGetSwapchainImagesKHR);
+        HG_LOAD_VK_DEVICE_FUNC(vkAcquireNextImageKHR);
+    }
     HG_LOAD_VK_DEVICE_FUNC(vkCreateSemaphore);
     HG_LOAD_VK_DEVICE_FUNC(vkDestroySemaphore);
     HG_LOAD_VK_DEVICE_FUNC(vkCreateFence);
@@ -234,7 +240,10 @@ bool loadVulkanDeviceFuncs(VkDevice device)
     HG_LOAD_VK_DEVICE_FUNC(vkGetDeviceQueue);
     HG_LOAD_VK_DEVICE_FUNC(vkQueueWaitIdle);
     HG_LOAD_VK_DEVICE_FUNC(vkQueueSubmit);
-    HG_LOAD_VK_DEVICE_FUNC(vkQueuePresentKHR);
+    if (vk.surfaceExtensions)
+    {
+        HG_LOAD_VK_DEVICE_FUNC(vkQueuePresentKHR);
+    }
     HG_LOAD_VK_DEVICE_FUNC(vkCreateCommandPool);
     HG_LOAD_VK_DEVICE_FUNC(vkDestroyCommandPool);
     HG_LOAD_VK_DEVICE_FUNC(vkResetCommandPool);

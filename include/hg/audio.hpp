@@ -7,8 +7,31 @@
 #include <span>
 #include <string_view>
 #include <vector>
+#include <functional>
 
 namespace hg {
+
+/**
+ * The supported audio backends
+ */
+enum class AudioBackend {
+    /**
+     * A dummy backend for headless or audioless setups
+     */
+    none,
+    /**
+     * Pipewire for Unix systems
+     */
+    pipewire,
+    /**
+     * WASAPI for Windows
+     */
+    wasapi,
+    /**
+     * SDL3 for other platforms
+     */
+    sdl3,
+};
 
 /**
  * The config for the audio stream
@@ -30,24 +53,85 @@ struct AudioConfig {
  * Note, the audio buffer is interleaved
  *
  * Parameters
- * - userData The custom user data
  * - audioBuffer The buffer that needs to be filled by the implementation
- * - config The configuration for the audio stream, should be but may not be the
- *   same as preferredConfig from setCallback
+ * - config The configuration for the audio stream
  */
-using AudioCallback = void (*)(void* userData, std::span<f32> audioBuffer, AudioConfig config);
+using AudioCallback = std::function<void(std::span<f32> audioBuffer, AudioConfig config)>;
 
 /**
- * Set the current audio callback and start the device
+ * The low level audio device
  */
-void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig = {});
+class AudioDevice {
+public:
+    /**
+     * Hint to create to use a specific backend
+     *
+     * Note, it is not guarunteed that this backend will be used
+     */
+    static void hintBackend(AudioBackend preferredBackend);
 
-/**
- * Remove the callback and stop the device
- */
-void unsetAudioCallback();
+    /**
+     * Create a new audio device
+     *
+     * Note, the backend should be checked to make sure it is not the dummy
+     */
+    static std::unique_ptr<AudioDevice> create();
 
-// audio input : TODO
+    /**
+     * Destroy the audio device
+     */
+    virtual ~AudioDevice() = default;
+
+    /**
+     * Set the current audio callback and start the device
+     */
+    virtual void setCallback(AudioCallback callback, const AudioConfig& preferredConfig = {}) = 0;
+
+    /**
+     * Remove the callback and stop the device
+     */
+    virtual void unsetCallback() = 0;
+
+    // audio input : TODO
+
+    /**
+     * Get the device's audio backend
+     */
+    virtual AudioBackend getBackend() = 0;
+};
+
+class AudioDeviceDummy : public AudioDevice {
+public:
+    /**
+     * Create a new audio device
+     */
+    static std::unique_ptr<AudioDeviceDummy> create()
+    {
+        return std::make_unique<AudioDeviceDummy>();
+    }
+
+    /**
+     * Set the current audio callback and start the device
+     */
+    virtual void setCallback(AudioCallback, const AudioConfig&) override
+    {
+    }
+
+    /**
+     * Remove the callback and stop the device
+     */
+    virtual void unsetCallback() override
+    {
+    }
+
+    /**
+     * Get the device's audio backend
+     */
+    virtual AudioBackend getBackend() override
+    {
+        return AudioBackend::none;
+    }
+};
 
 /**
  * Audio data asset
@@ -109,7 +193,12 @@ struct AudioPlayerSound {
 /**
  * An audio player system
  */
-struct AudioPlayer {
+class AudioPlayer {
+private:
+    /**
+     * The audio device
+     */
+    AudioDevice* device = nullptr;
     /**
      * The mutex
      */
@@ -123,28 +212,26 @@ struct AudioPlayer {
      */
     std::vector<AudioPlayerSound> music{};
 
+public:
     /**
-     * Ensure sounds and music are removed on destruction safely
+     * Construct empty
      */
-    ~AudioPlayer() noexcept
-    {
-        SpinLockScope scope{lock};
-        sounds.clear();
-        music.clear();
-    }
+    AudioPlayer() noexcept = default;
 
     /**
-     * Update the music and sounds
+     * Construct with device and start callback
+     */
+    AudioPlayer(AudioDevice* device);
+
+    /**
+     * Destroy audio player and remove callback
+     */
+    ~AudioPlayer() noexcept;
+
+    /**
+     * Update the music and sounds, the callback
      */
     void update(std::span<f32> buf, AudioConfig config);
-
-    /**
-     * Update the music and sounds
-     */
-    static void callback(void* player, std::span<f32> buf, AudioConfig config)
-    {
-        (*static_cast<AudioPlayer*>(player)).update(buf, config);
-    }
 
     /**
      * Play a sound once

@@ -1,243 +1,24 @@
-#include "sdl_platform.hpp"
+#include "sdl_audio.hpp"
+
+#include "sdl_window.hpp"
+
+#include "internal.hpp"
 
 #include "hg/error.hpp"
+#include "hg/memory.hpp"
 #include "hg/hash.hpp"
 
+#include <span>
+#include <string_view>
 #include <string>
 #include <vector>
-#include <string_view>
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 
-namespace hg::sdl {
+#include <vulkan/vulkan.h>
 
-static bool windowInit();
-static void windowDeinit();
-static bool initAudio();
-static void deinitAudio();
-
-bool initSdl()
-{
-    if (!SDL_Init(
-        SDL_INIT_AUDIO |
-        SDL_INIT_VIDEO |
-        SDL_INIT_EVENTS))
-    {
-        setError(SDL_GetError());
-        goto sdlFailed;
-    }
-
-    if (!windowInit())
-        goto windowFailed;
-
-    if (!initAudio())
-        goto audioFailed;
-
-    return true;
-
-audioFailed:
-    windowDeinit();
-windowFailed:
-    SDL_Quit();
-sdlFailed:
-    return false;
-}
-
-void deinitSdl()
-{
-    deinitAudio();
-    windowDeinit();
-    SDL_Quit();
-}
-
-std::span<std::string_view> getPlatformVulkanExtensions()
-{
-    u32 extCount = 0;
-    const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);
-    if (exts == nullptr)
-        HG_PANIC("SDL could not get Vulkan instance extensions: {}\n", SDL_GetError());
-
-    static std::vector<std::string_view> extBuffer{};
-    extBuffer.resize(extCount);
-    for (u32 i = 0; i < extCount; ++i)
-    {
-        extBuffer[i] = exts[i];
-    }
-
-    return extBuffer;
-}
-
-struct WindowData {
-    GpuSwapchain swap{};
-
-    SDL_Window* sdlWindow = nullptr;
-
-    std::vector<Event> events{};
-    Vec2 mouse{};
-    u32 width = 0;
-    u32 height = 0;
-    bool wasClosed = false;
-    bool isFocused = false;
-    bool wasFocusGained = false;
-    bool wasFocusLost = false;
-    bool wasResized = false;
-
-    WindowData() noexcept = default;
-    ~WindowData() noexcept;
-
-    WindowData(WindowData&& other) noexcept;
-    WindowData& operator=(WindowData&& other) noexcept;
-
-    WindowData(const WindowData&) = delete;
-    WindowData& operator=(const WindowData&) = delete;
-};
-
-struct WindowState {
-    std::vector<DisplayInfo> displays{};
-
-    SDL_Cursor* cursors[CursorType_count]{};
-    SDL_Cursor* currentCursor = nullptr;
-
-    std::vector<Event> events{};
-    bool wasQuit = false;
-    bool isKeyDown[Button_count]{};
-    bool wasKeyDown[Button_count]{};
-    Vec2 mouseDelta{};
-    Vec2 wheelDelta{};
-
-    HashMap<SDL_WindowID, WindowData*> windows{};
-    WindowData* activeWindow = nullptr;
-
-    std::vector<char> clipboard{};
-};
-
-static WindowState windowState{};
-
-static bool windowInit()
-{
-    windowState = WindowState{};
-
-    int count = 0;
-    SDL_DisplayID* ids = SDL_GetDisplays(&count);
-    if (ids == nullptr)
-    {
-        setError(SDL_GetError());
-        return false;
-    }
-    HG_DEFER(SDL_free(ids));
-
-    windowState.displays.resize(static_cast<u64>(count));
-    for (u32 i = 0; i < windowState.displays.size(); i++)
-    {
-        DisplayInfo& info = windowState.displays[i];
-
-        SDL_DisplayID displayId = ids[i];
-        SDL_Rect r;
-        SDL_GetDisplayBounds(displayId, &r);
-        info.posX = static_cast<i32>(r.x);
-        info.posY = static_cast<i32>(r.y);
-        info.sizeW = static_cast<u32>(r.w);
-        info.sizeH = static_cast<u32>(r.h);
-
-        if (SDL_GetDisplayUsableBounds(displayId, &r) && r.w > 0 && r.h > 0)
-        {
-            info.workPosX = static_cast<i32>(r.x);
-            info.workPosY = static_cast<i32>(r.y);
-            info.workSizeW = static_cast<u32>(r.w);
-            info.workSizeH = static_cast<u32>(r.h);
-        }
-        else
-        {
-            info.workPosX = info.posX;
-            info.workPosY = info.posY;
-            info.workSizeW = info.sizeW;
-            info.workSizeH = info.sizeH;
-        }
-
-        info.dpiScale = SDL_GetDisplayContentScale(displayId);
-    }
-
-    return true;
-}
-
-static void windowDeinit()
-{
-    windowState.windows.forEach([](SDL_WindowID, WindowData* window)
-    {
-        *window = {};
-    });
-
-    for (u32 i = 0; i < CursorType_count; i++)
-    {
-        if (windowState.cursors[i] != nullptr)
-            SDL_DestroyCursor(windowState.cursors[i]);
-    }
-    windowState.currentCursor = nullptr;
-}
-
-WindowData::~WindowData() noexcept
-{
-    if (sdlWindow != nullptr)
-    {
-        windowState.windows.remove(SDL_GetWindowID(sdlWindow));
-        SDL_DestroyWindow(sdlWindow);
-    }
-}
-
-WindowData::WindowData(WindowData&& other) noexcept
-    : swap{std::move(other.swap)}
-    , sdlWindow{std::exchange(other.sdlWindow, nullptr)}
-    , events{std::move(other.events)}
-    , mouse{std::exchange(other.mouse, {})}
-    , width{std::exchange(other.width, 0)}
-    , height{std::exchange(other.height, 0)}
-    , wasClosed{std::exchange(other.wasClosed, false)}
-    , isFocused{std::exchange(other.isFocused, false)}
-    , wasFocusGained{std::exchange(other.wasFocusGained, false)}
-    , wasFocusLost{std::exchange(other.wasFocusLost, false)}
-    , wasResized{std::exchange(other.wasResized, false)}
-{}
-
-WindowData& WindowData::operator=(WindowData&& other) noexcept
-{
-    if (this != &other)
-    {
-        this->~WindowData();
-        new (this) WindowData{std::move(other)};
-    }
-    return *this;
-}
-
-static SDL_SystemCursor cursorToSdl(CursorType type)
-{
-    switch (type)
-    {
-        case CursorType_arrow:
-            return SDL_SYSTEM_CURSOR_DEFAULT;
-        case CursorType_textInput:
-            return SDL_SYSTEM_CURSOR_TEXT;
-        case CursorType_resizeAll:
-            return SDL_SYSTEM_CURSOR_MOVE;
-        case CursorType_resizeNS:
-            return SDL_SYSTEM_CURSOR_NS_RESIZE;
-        case CursorType_resizeEW:
-            return SDL_SYSTEM_CURSOR_EW_RESIZE;
-        case CursorType_resizeNESW:
-            return SDL_SYSTEM_CURSOR_NESW_RESIZE;
-        case CursorType_resizeNWSE:
-            return SDL_SYSTEM_CURSOR_NWSE_RESIZE;
-        case CursorType_hand:
-            return SDL_SYSTEM_CURSOR_POINTER;
-        case CursorType_wait:
-            return SDL_SYSTEM_CURSOR_WAIT;
-        case CursorType_progress:
-            return SDL_SYSTEM_CURSOR_PROGRESS;
-        case CursorType_notAllowed:
-            return SDL_SYSTEM_CURSOR_NOT_ALLOWED;
-        default:
-            return SDL_SYSTEM_CURSOR_DEFAULT;
-    }
-}
+namespace hg {
 
 static Button sdlKeycodeToHgButton(u32 key)
 {
@@ -385,54 +166,122 @@ static Button sdlButtonToHgButton(u32 button)
     return Button_none;
 }
 
-static WindowData* getWindow(SDL_WindowID id)
+WindowSdl3* InputDeviceSdl3::getWindow(SDL_WindowID id)
 {
-    WindowData** data = windowState.windows.get(id);
+    WindowSdl3** data = windows.get(id);
     if (data == nullptr)
         return nullptr;
     return *data;
 }
 
-std::span<DisplayInfo> displayInfo()
+std::unique_ptr<InputDeviceSdl3> InputDeviceSdl3::create()
 {
-    return windowState.displays;
-}
-
-void setCursor(CursorType type)
-{
-    SDL_Cursor*& cursor = windowState.cursors[static_cast<u32>(type)];
-    if (cursor == nullptr)
-        cursor = SDL_CreateSystemCursor(cursorToSdl(type));
-
-    if (windowState.currentCursor != cursor)
+    if (!SDL_InitSubSystem(
+        SDL_INIT_VIDEO |
+        SDL_INIT_EVENTS))
     {
-        SDL_SetCursor(cursor);
-        windowState.currentCursor = cursor;
+        setError(SDL_GetError());
+        return nullptr;
     }
-}
 
-void showCursor(bool show)
-{
-    if (show)
-        SDL_ShowCursor();
-    else
-        SDL_HideCursor();
-}
+    std::unique_ptr<InputDeviceSdl3> device = std::make_unique<InputDeviceSdl3>();
 
-void processEvents()
-{
-    windowState.events.clear();
-
-    std::memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
-    windowState.mouseDelta = {};
-    windowState.wheelDelta = {};
-
-    windowState.windows.forEach([&](SDL_WindowID, WindowData* data)
+    int count = 0;
+    SDL_DisplayID* ids = SDL_GetDisplays(&count);
+    if (ids == nullptr)
     {
-        data->events.clear();
-        data->wasFocusGained = false;
-        data->wasFocusLost = false;
-        data->wasResized = false;
+        setError(SDL_GetError());
+        SDL_QuitSubSystem(
+            SDL_INIT_VIDEO |
+            SDL_INIT_EVENTS);
+        return nullptr;
+    }
+    HG_DEFER(SDL_free(ids));
+
+    device->displays.resize(static_cast<u64>(count));
+    for (u32 i = 0; i < device->displays.size(); i++)
+    {
+        DisplayInfo& info = device->displays[i];
+
+        SDL_DisplayID displayId = ids[i];
+        SDL_Rect r;
+        SDL_GetDisplayBounds(displayId, &r);
+        info.posX = static_cast<i32>(r.x);
+        info.posY = static_cast<i32>(r.y);
+        info.sizeW = static_cast<u32>(r.w);
+        info.sizeH = static_cast<u32>(r.h);
+
+        if (SDL_GetDisplayUsableBounds(displayId, &r) && r.w > 0 && r.h > 0)
+        {
+            info.workPosX = static_cast<i32>(r.x);
+            info.workPosY = static_cast<i32>(r.y);
+            info.workSizeW = static_cast<u32>(r.w);
+            info.workSizeH = static_cast<u32>(r.h);
+        }
+        else
+        {
+            info.workPosX = info.posX;
+            info.workPosY = info.posY;
+            info.workSizeW = info.sizeW;
+            info.workSizeH = info.sizeH;
+        }
+
+        info.dpiScale = SDL_GetDisplayContentScale(displayId);
+    }
+
+    return device;
+}
+
+InputDeviceSdl3::~InputDeviceSdl3()
+{
+    for (u32 i = 0; i < CursorType_count; i++)
+    {
+        if (cursors[i] != nullptr)
+            SDL_DestroyCursor(cursors[i]);
+    }
+    currentCursor = nullptr;
+
+    SDL_QuitSubSystem(
+        SDL_INIT_VIDEO |
+        SDL_INIT_EVENTS);
+}
+
+std::span<std::string_view> InputDeviceSdl3::getVulkanExtensions()
+{
+    u32 extCount = 0;
+    const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);
+    if (exts == nullptr)
+        HG_PANIC("SDL could not get Vulkan instance extensions: {}\n", SDL_GetError());
+
+    static std::vector<std::string_view> extBuffer{};
+    extBuffer.resize(extCount);
+    for (u32 i = 0; i < extCount; ++i)
+    {
+        extBuffer[i] = exts[i];
+    }
+
+    return extBuffer;
+}
+
+std::span<DisplayInfo> InputDeviceSdl3::displayInfo()
+{
+    return displays;
+}
+
+void InputDeviceSdl3::processEvents()
+{
+    events.clear();
+
+    std::memcpy(wasKeyDown, isKeyDown, sizeof(isKeyDown));
+    mouseDeltaAccum = {};
+    wheelDeltaAccum = {};
+
+    windows.forEach([&](SDL_WindowID, WindowSdl3* data)
+    {
+        data->eventQueue.clear();
+        data->focusGained = false;
+        data->focusLost = false;
+        data->resized = false;
     });
 
     SDL_Event sdlEvent;
@@ -442,12 +291,12 @@ void processEvents()
         {
             case SDL_EVENT_QUIT:
             {
-                windowState.wasQuit = true;
+                quit = true;
 
                 Event event{};
                 event.type = EventType_quit;
                 event.timestamp = sdlEvent.common.timestamp;
-                windowState.events.push_back(event);
+                events.push_back(event);
             } break;
             case SDL_EVENT_TEXT_INPUT:
             {
@@ -456,7 +305,7 @@ void processEvents()
                 event.timestamp = sdlEvent.common.timestamp;
                 std::memset(event.text, 0, sizeof(event.text));
                 strncpy(event.text, sdlEvent.text.text, sizeof(event.text) - 1);
-                windowState.events.push_back(event);
+                events.push_back(event);
             } break;
             case SDL_EVENT_KEY_DOWN:
             {
@@ -464,9 +313,9 @@ void processEvents()
                 event.type = EventType_keyPress;
                 event.timestamp = sdlEvent.common.timestamp;
                 event.button = sdlKeycodeToHgButton(sdlEvent.key.key);
-                windowState.events.push_back(event);
+                events.push_back(event);
 
-                windowState.isKeyDown[event.button] = true;
+                isKeyDown[event.button] = true;
             } break;
             case SDL_EVENT_KEY_UP:
             {
@@ -474,9 +323,9 @@ void processEvents()
                 event.type = EventType_keyRelease;
                 event.timestamp = sdlEvent.common.timestamp;
                 event.button = sdlKeycodeToHgButton(sdlEvent.key.key);
-                windowState.events.push_back(event);
+                events.push_back(event);
 
-                windowState.isKeyDown[event.button] = false;
+                isKeyDown[event.button] = false;
             } break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
@@ -484,9 +333,9 @@ void processEvents()
                 event.type = EventType_keyPress;
                 event.timestamp = sdlEvent.common.timestamp;
                 event.button = sdlButtonToHgButton(sdlEvent.button.button);
-                windowState.events.push_back(event);
+                events.push_back(event);
 
-                windowState.isKeyDown[event.button] = true;
+                isKeyDown[event.button] = true;
             } break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
@@ -494,9 +343,9 @@ void processEvents()
                 event.type = EventType_keyRelease;
                 event.timestamp = sdlEvent.common.timestamp;
                 event.button = sdlButtonToHgButton(sdlEvent.button.button);
-                windowState.events.push_back(event);
+                events.push_back(event);
 
-                windowState.isKeyDown[event.button] = false;
+                isKeyDown[event.button] = false;
             } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
@@ -509,13 +358,13 @@ void processEvents()
                 event.mouse.delta = {sdlEvent.motion.xrel, sdlEvent.motion.yrel};
                 event.mouse.pos = {sdlEvent.motion.x, sdlEvent.motion.y};
                 event.mouse.globalPos = {gmx, gmy};
-                windowState.events.push_back(event);
+                events.push_back(event);
 
-                WindowData* w = getWindow(sdlEvent.motion.windowID);
+                WindowSdl3* w = getWindow(sdlEvent.motion.windowID);
                 if (w != nullptr)
                     w->mouse = Vec2{event.mouse.pos.x, event.mouse.pos.y};
 
-                windowState.mouseDelta += event.mouse.delta;
+                mouseDeltaAccum += event.mouse.delta;
             } break;
             case SDL_EVENT_MOUSE_WHEEL:
             {
@@ -523,9 +372,9 @@ void processEvents()
                 event.type = EventType_wheelMoved;
                 event.timestamp = sdlEvent.common.timestamp;
                 event.wheel.delta = {sdlEvent.wheel.x, sdlEvent.wheel.y};
-                windowState.events.push_back(event);
+                events.push_back(event);
 
-                windowState.wheelDelta += event.wheel.delta;
+                wheelDeltaAccum += event.wheel.delta;
             } break;
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             {
@@ -533,14 +382,14 @@ void processEvents()
                 event.type = EventType_windowClosed;
                 event.timestamp = sdlEvent.common.timestamp;
 
-                WindowData* w = getWindow(sdlEvent.window.windowID);
+                WindowSdl3* w = getWindow(sdlEvent.window.windowID);
                 event.window.window = w;
-                windowState.events.push_back(event);
+                events.push_back(event);
 
                 if (w != nullptr)
                 {
-                    w->wasClosed = true;
-                    w->events.push_back(event);
+                    w->closed = true;
+                    w->eventQueue.push_back(event);
                 }
             } break;
             case SDL_EVENT_WINDOW_FOCUS_GAINED:
@@ -549,13 +398,13 @@ void processEvents()
                 event.type = EventType_windowFocused;
                 event.timestamp = sdlEvent.common.timestamp;
 
-                WindowData* w = getWindow(sdlEvent.window.windowID);
+                WindowSdl3* w = getWindow(sdlEvent.window.windowID);
                 if (w != nullptr)
                 {
-                    w->isFocused = true;
-                    w->wasFocusGained = true;
-                    windowState.activeWindow = w;
-                    w->events.push_back(event);
+                    w->focused = true;
+                    w->focusGained = true;
+                    activeWindow = w;
+                    w->eventQueue.push_back(event);
                 }
             } break;
             case SDL_EVENT_WINDOW_FOCUS_LOST:
@@ -564,14 +413,14 @@ void processEvents()
                 event.type = EventType_windowUnfocused;
                 event.timestamp = sdlEvent.common.timestamp;
 
-                WindowData* w = getWindow(sdlEvent.window.windowID);
+                WindowSdl3* w = getWindow(sdlEvent.window.windowID);
                 if (w != nullptr)
                 {
-                    w->isFocused = false;
-                    w->wasFocusLost = true;
-                    if (windowState.activeWindow == w)
-                        windowState.activeWindow = nullptr;
-                    w->events.push_back(event);
+                    w->focused = false;
+                    w->focusLost = true;
+                    if (activeWindow == w)
+                        activeWindow = nullptr;
+                    w->eventQueue.push_back(event);
                 }
             } break;
             case SDL_EVENT_WINDOW_RESIZED:
@@ -583,59 +432,95 @@ void processEvents()
                 event.type = EventType_windowResized;
                 event.timestamp = sdlEvent.common.timestamp;
 
-                WindowData* w = getWindow(sdlEvent.window.windowID);
+                WindowSdl3* w = getWindow(sdlEvent.window.windowID);
                 event.window.window = w;
                 event.window.width = width;
                 event.window.height = height;
-                windowState.events.push_back(event);
+                events.push_back(event);
 
                 if (w != nullptr)
                 {
                     w->swap.resize(width, height);
                     w->width = width;
                     w->height = height;
-                    w->wasResized = true;
-                    w->events.push_back(event);
+                    w->resized = true;
+                    w->eventQueue.push_back(event);
                 }
             } break;
         }
     }
 }
 
-std::span<Event> getEvents()
+std::span<Event> InputDeviceSdl3::getEvents()
 {
-    return windowState.events;
+    return events;
 }
 
-bool wasQuit()
+bool InputDeviceSdl3::wasQuit()
 {
-    return windowState.wasQuit;
+    return quit;
 }
 
-bool isButtonDown(Button key)
+std::unique_ptr<Window> InputDeviceSdl3::createWindow(const WindowConfig& config)
 {
-    return windowState.isKeyDown[key];
+    std::unique_ptr<WindowSdl3> win = std::make_unique<WindowSdl3>(this);
+
+    u32 width = config.width != 0 ? config.width : 800;
+    u32 height = config.height != 0 ? config.height : 600;
+    std::string title = config.title.length() != 0 ? std::string{config.title} : "Hurdy Gurdy";
+
+    win->sdlWindow = SDL_CreateWindow(
+        title.c_str(),
+        static_cast<int>(width),
+        static_cast<int>(height),
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    if (win->sdlWindow == nullptr)
+        HG_PANIC("SDL could not create window: {}\n", SDL_GetError());
+
+    windows.add(SDL_GetWindowID(win->sdlWindow), win.get());
+
+    u32 w, h;
+    SDL_GetWindowSize(win->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
+    win->width = w;
+    win->height = h;
+
+    VkSurfaceKHR surface;
+    if (!SDL_Vulkan_CreateSurface(
+        win->sdlWindow,
+        static_cast<VkInstance>(internal::getVkInstance()),
+        nullptr,
+        &surface))
+        HG_PANIC("SDL could not create Vulkan surface: {}\n", SDL_GetError());
+
+    win->swap = GpuSwapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
+
+    return win;
 }
 
-bool wasButtonPressed(Button key)
+bool InputDeviceSdl3::isButtonDown(Button button)
 {
-    return !windowState.wasKeyDown[key] && windowState.isKeyDown[key];
+    return isKeyDown[button];
 }
 
-bool wasButtonReleased(Button key)
+bool InputDeviceSdl3::wasButtonPressed(Button button)
 {
-    return windowState.wasKeyDown[key] && !windowState.isKeyDown[key];
+    return !wasKeyDown[button] && isKeyDown[button];
 }
 
-Vec2 mousePos()
+bool InputDeviceSdl3::wasButtonReleased(Button button)
 {
-    if (windowState.activeWindow != nullptr)
-        return windowState.activeWindow->mouse;
+    return wasKeyDown[button] && !isKeyDown[button];
+}
 
-    if (windowState.windows.count == 1)
+Vec2 InputDeviceSdl3::mousePos()
+{
+    if (activeWindow != nullptr)
+        return activeWindow->mouse;
+
+    if (windows.count == 1)
     {
         Vec2 ret;
-        windowState.windows.forEach([&](SDL_WindowID, WindowData* wd)
+        windows.forEach([&](SDL_WindowID, WindowSdl3* wd)
         {
             ret = wd->mouse;
         });
@@ -644,263 +529,268 @@ Vec2 mousePos()
     return {};
 }
 
-Vec2 mouseDelta()
+Vec2 InputDeviceSdl3::mouseDelta()
 {
-    if (windowState.activeWindow != nullptr)
-        return windowState.mouseDelta / static_cast<f32>(windowState.activeWindow->height);
+    if (activeWindow != nullptr)
+        return mouseDeltaAccum / static_cast<f32>(activeWindow->height);
 
-    if (windowState.windows.count == 1)
+    if (windows.count == 1)
     {
-        Vec2 ret = windowState.mouseDelta;
-        windowState.windows.forEach([&](SDL_WindowID, WindowData* wd)
+        Vec2 ret = mouseDeltaAccum;
+        windows.forEach([&](SDL_WindowID, WindowSdl3* wd)
         {
             ret = ret / static_cast<f32>(wd->height);
         });
         return ret;
     }
-    return windowState.mouseDelta;
+    return mouseDeltaAccum;
 }
 
-Vec2 windowMousePos(void* data)
+Vec2 InputDeviceSdl3::wheelDelta()
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (wd != nullptr)
-        return wd->mouse;
-
-    Vec2 pos;
-    SDL_GetGlobalMouseState(&pos.x, &pos.y);
-    return pos;
+    return wheelDeltaAccum;
 }
 
-Vec2 windowMouseDelta(void* data)
+void InputDeviceSdl3::setCursor(CursorType type)
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (wd != nullptr)
-        return windowState.mouseDelta / static_cast<f32>(wd->height);
+    SDL_Cursor*& cursor = cursors[static_cast<u32>(type)];
+    if (cursor == nullptr)
+    {
+        SDL_SystemCursor systemCursor;
+        switch (type)
+        {
+            case CursorType_arrow:
+                systemCursor = SDL_SYSTEM_CURSOR_DEFAULT;
+                break;
+            case CursorType_textInput:
+                systemCursor = SDL_SYSTEM_CURSOR_TEXT;
+                break;
+            case CursorType_resizeAll:
+                systemCursor = SDL_SYSTEM_CURSOR_MOVE;
+                break;
+            case CursorType_resizeNS:
+                systemCursor = SDL_SYSTEM_CURSOR_NS_RESIZE;
+                break;
+            case CursorType_resizeEW:
+                systemCursor = SDL_SYSTEM_CURSOR_EW_RESIZE;
+                break;
+            case CursorType_resizeNESW:
+                systemCursor = SDL_SYSTEM_CURSOR_NESW_RESIZE;
+                break;
+            case CursorType_resizeNWSE:
+                systemCursor = SDL_SYSTEM_CURSOR_NWSE_RESIZE;
+                break;
+            case CursorType_hand:
+                systemCursor = SDL_SYSTEM_CURSOR_POINTER;
+                break;
+            case CursorType_wait:
+                systemCursor = SDL_SYSTEM_CURSOR_WAIT;
+                break;
+            case CursorType_progress:
+                systemCursor = SDL_SYSTEM_CURSOR_PROGRESS;
+                break;
+            case CursorType_notAllowed:
+                systemCursor = SDL_SYSTEM_CURSOR_NOT_ALLOWED;
+                break;
+            default:
+                systemCursor = SDL_SYSTEM_CURSOR_DEFAULT;
+                break;
+        }
+        cursor = SDL_CreateSystemCursor(systemCursor);
+    }
 
-    return windowState.mouseDelta;
+    if (currentCursor != cursor)
+    {
+        SDL_SetCursor(cursor);
+        currentCursor = cursor;
+    }
 }
 
-Vec2 wheelDelta()
+void InputDeviceSdl3::showCursor(bool show)
 {
-    return windowState.wheelDelta;
+    if (show)
+        SDL_ShowCursor();
+    else
+        SDL_HideCursor();
 }
 
-Window windowCreate(const WindowConfig& config)
+WindowSdl3::~WindowSdl3()
 {
-    Window window{};
-    window.data = new WindowData{};
+    if (sdlWindow != nullptr)
+    {
+        static_cast<InputDeviceSdl3*>(device)->windows.remove(SDL_GetWindowID(sdlWindow));
+        SDL_DestroyWindow(sdlWindow);
+    }
+}
 
-    WindowData* wd = static_cast<WindowData*>(window.data);
+GpuSwapchain& WindowSdl3::swapchain() const
+{
+    return swap;
+}
 
-    u32 width = config.width != 0 ? config.width : 800;
-    u32 height = config.height != 0 ? config.height : 600;
-    const char* title = config.title.length() != 0 ? std::string{config.title}.c_str() : "Hurdy Gurdy";
+void WindowSdl3::setTitle(std::string_view title)
+{
+    SDL_SetWindowTitle(sdlWindow, std::string{title}.c_str());
+}
 
-    wd->sdlWindow = SDL_CreateWindow(
-        title,
-        static_cast<int>(width),
-        static_cast<int>(height),
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-    if (wd->sdlWindow == nullptr)
-        HG_PANIC("SDL could not create window: {}\n", SDL_GetError());
+std::span<Event> WindowSdl3::events() const
+{
+    return eventQueue;
+}
 
-    windowState.windows.add(SDL_GetWindowID(wd->sdlWindow), wd);
+bool WindowSdl3::wasClosed() const
+{
+    return closed;
+}
+
+bool WindowSdl3::isFocused() const
+{
+    return SDL_GetMouseFocus() == sdlWindow;
+}
+
+bool WindowSdl3::wasFocusGained() const
+{
+    return focusGained;
+}
+
+bool WindowSdl3::wasFocusLost() const
+{
+    return focusLost;
+}
+
+bool WindowSdl3::wasResized() const
+{
+    return resized;
+}
+
+void WindowSdl3::size(u32* outWidth, u32* outHeight) const
+{
+    if (outWidth != nullptr)
+        *outWidth = width;
+    if (outHeight != nullptr)
+        *outHeight = height;
+}
+
+void WindowSdl3::setFullscreen(bool set)
+{
+    SDL_SetWindowFullscreen(sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
 
     u32 w, h;
-    SDL_GetWindowSize(wd->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
-    wd->width = w;
-    wd->height = h;
-
-    VkSurfaceKHR surface;
-    if (!SDL_Vulkan_CreateSurface(
-        wd->sdlWindow,
-        static_cast<VkInstance>(internal::getVulkanInstance()),
-        nullptr,
-        &surface))
-        HG_PANIC("SDL could not create Vulkan surface: {}\n", SDL_GetError());
-
-    wd->swap = GpuSwapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
-
-    return window;
+    swap.size(&w, &h);
+    swap.resize(w, h);
 }
 
-void windowDestroy(void* data)
+Vec2 WindowSdl3::mousePos() const
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    delete wd;
+    return mouse;
 }
 
-GpuSwapchain& windowSwapchain(void* data)
+Vec2 WindowSdl3::mouseDelta() const
 {
-    return static_cast<WindowData*>(data)->swap;
+    return static_cast<InputDeviceSdl3*>(device)->mouseDeltaAccum / static_cast<f32>(height);
 }
 
-void windowSetTitle(void* data, std::string_view title)
+std::unique_ptr<AudioDeviceSdl3> AudioDeviceSdl3::create()
 {
-    SDL_SetWindowTitle(static_cast<WindowData*>(data)->sdlWindow, std::string{title}.c_str());
-}
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
+    {
+        setError("SDL could not initialize audio subsystem: {}", SDL_GetError());
+        return nullptr;
+    }
 
-std::span<Event> windowEvents(void* data)
-{
-    return static_cast<WindowData*>(data)->events;
-}
+    std::unique_ptr<AudioDeviceSdl3> audio = std::make_unique<AudioDeviceSdl3>();
 
-bool windowWasClosed(void* data)
-{
-    return static_cast<WindowData*>(data)->wasClosed;
-}
-
-bool windowIsFocused(void* data)
-{
-    return SDL_GetMouseFocus() == static_cast<WindowData*>(data)->sdlWindow;
-}
-
-bool windowWasFocusGained(void* data)
-{
-    return static_cast<WindowData*>(data)->wasFocusGained;
-}
-
-bool windowWasFocusLost(void* data)
-{
-    return static_cast<WindowData*>(data)->wasFocusLost;
-}
-
-bool windowWasResized(void* data)
-{
-    return static_cast<WindowData*>(data)->wasResized;
-}
-
-void windowGetSize(void* data, u32* w, u32* h)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (w != nullptr)
-        *w = wd != nullptr ? wd->width : 0;
-    if (h != nullptr)
-        *h = wd != nullptr ? wd->height : 0;
-}
-
-void windowSetFullscreen(void* data, bool set)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    SDL_SetWindowFullscreen(wd->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
-
-    u32 w, h;
-    wd->swap.size(&w, &h);
-    wd->swap.resize(w, h);
-}
-
-std::string_view getClipboardText()
-{
-    return std::string_view{windowState.clipboard.data(), windowState.clipboard.size()};
-}
-
-void setClipboardText(std::string_view text)
-{
-    SDL_SetClipboardText(std::string{text}.c_str());
-    windowState.clipboard.resize(text.length());
-    std::memcpy(windowState.clipboard.data(), text.data(), text.length());
-}
-
-void openURL(std::string_view url)
-{
-    SDL_OpenURL(std::string{url}.c_str());
-}
-
-struct AudioState {
-    SDL_AudioDeviceID device = 0;
-    SDL_AudioStream* stream = nullptr;
-
-    AudioCallback callback = nullptr;
-    void* callbackData = nullptr;
-    AudioConfig callbackConfig{};
-};
-
-static AudioState audio{};
-
-static bool initAudio()
-{
-    audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
-    if (audio.device == 0)
+    audio->device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+    if (audio->device == 0)
     {
         setError("SDL could not open audio device: {}", SDL_GetError());
-        return false;
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+        return nullptr;
     }
 
-    audio.stream = SDL_CreateAudioStream(nullptr, nullptr);
-    if (audio.stream == nullptr)
+    audio->stream = SDL_CreateAudioStream(nullptr, nullptr);
+    if (audio->stream == nullptr)
     {
         setError("SDL could not open audio stream: {}", SDL_GetError());
-        SDL_CloseAudioDevice(audio.device);
-        return false;
+        SDL_CloseAudioDevice(audio->device);
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+        return nullptr;
     }
 
-    if (!SDL_BindAudioStream(audio.device, audio.stream))
+    if (!SDL_BindAudioStream(audio->device, audio->stream))
     {
         setError("SDL could not bind audio stream to device: {}", SDL_GetError());
-        SDL_DestroyAudioStream(audio.stream);
-        SDL_CloseAudioDevice(audio.device);
-        return false;
+        SDL_DestroyAudioStream(audio->stream);
+        SDL_CloseAudioDevice(audio->device);
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+        return nullptr;
     }
 
-    return true;
+    return audio;
 }
 
-static void deinitAudio()
+AudioDeviceSdl3::~AudioDeviceSdl3()
 {
-    SDL_DestroyAudioStream(audio.stream);
-    SDL_CloseAudioDevice(audio.device);
+    if (stream != nullptr)
+        SDL_DestroyAudioStream(stream);
+    if (device != 0)
+        SDL_CloseAudioDevice(device);
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
-static void sdlCallback(
+void AudioDeviceSdl3::sdlCallback(
     void* userData,
     SDL_AudioStream* stream,
     int additionalAmount,
     int totalAmount)
 {
-    (void)userData;
     (void)totalAmount;
 
     ArenaScope scratch = getScratch();
 
+    AudioDeviceSdl3* audio = static_cast<AudioDeviceSdl3*>(userData);
+
     void* buf = scratch.alloc(static_cast<u64>(additionalAmount), alignof(f32));
     std::memset(buf, 0, static_cast<u64>(additionalAmount));
 
-    if (audio.callback != nullptr)
+    if (audio->callback != nullptr)
     {
-        audio.callback(
-            audio.callbackData,
+        audio->callback(
             {static_cast<f32*>(buf), static_cast<u64>(additionalAmount) / sizeof(f32)},
-            audio.callbackConfig);
+            audio->callbackConfig);
     }
 
     if (!SDL_PutAudioStreamData(stream, buf, additionalAmount))
         HG_PANIC("SDL could not push audio stream data: {}\n", SDL_GetError());
 }
 
-void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
+void AudioDeviceSdl3::setCallback(AudioCallback callback, const AudioConfig& preferredConfig)
 {
+    AudioConfig config = preferredConfig;
+    if (config.sampleRate == 0)
+        config.sampleRate = 48000;
+    if (config.channels == 0)
+        config.channels = 2;
+
     SDL_AudioSpec audioSpec{};
     audioSpec.format = SDL_AUDIO_F32;
-    audioSpec.freq = static_cast<int>(preferredConfig.sampleRate);
-    audioSpec.channels = static_cast<int>(preferredConfig.channels);
+    audioSpec.freq = static_cast<int>(config.sampleRate);
+    audioSpec.channels = static_cast<int>(config.channels);
 
-    if (!SDL_SetAudioStreamFormat(audio.stream, &audioSpec, nullptr))
+    if (!SDL_SetAudioStreamFormat(stream, &audioSpec, nullptr))
         HG_PANIC("SDL could not set audio stream format: {}\n", SDL_GetError());
 
-    audio.callback = callback;
-    audio.callbackData = userData;
-    audio.callbackConfig = preferredConfig;
+    this->callback = std::move(callback);
+    callbackConfig = config;
 
-    if (!SDL_SetAudioStreamGetCallback(audio.stream, sdlCallback, nullptr))
+    if (!SDL_SetAudioStreamGetCallback(stream, sdlCallback, this))
         HG_PANIC("SDL could not set audio stream callback: {}\n", SDL_GetError());
 }
 
-void unsetAudioCallback()
+void AudioDeviceSdl3::unsetCallback()
 {
-    audio.callback = nullptr;
-    audio.callbackData = nullptr;
-    audio.callbackConfig = {};
+    callback = {};
+    callbackConfig = {};
 }
 
-} // namespace hg::sdl
+} // namespace hg

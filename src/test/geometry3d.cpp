@@ -1,6 +1,8 @@
 #include "tests.hpp"
 #include "hg/geometry3d.hpp"
 
+#include <cfloat>
+
 using namespace hg;
 
 TEST(testSphereContainsPoint)

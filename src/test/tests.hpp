@@ -5,9 +5,6 @@
 #include "hg/hash.hpp"
 #include "hg/serialization.hpp"
 
-#include <cfloat>
-#include <cmath>
-
 namespace hg {
 
 struct TestFailure {

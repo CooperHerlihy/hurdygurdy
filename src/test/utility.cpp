@@ -2,6 +2,8 @@
 #include "hg/utility.hpp"
 #include "hg/error.hpp"
 
+#include <cfloat>
+
 #include <string>
 #include <vector>
 

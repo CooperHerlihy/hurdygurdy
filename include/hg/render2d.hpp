@@ -663,6 +663,31 @@ struct Renderer2D {
     Renderer2D(Format colorFormat);
 
     /**
+     * Move construct, keeping the default pixel font initialized
+     */
+    Renderer2D(Renderer2D&& other) noexcept;
+
+    /**
+     * Move assign
+     */
+    Renderer2D& operator=(Renderer2D&& other) noexcept;
+
+    /**
+     * Deinitialize the renderer and the default pixel font if unused
+     */
+    ~Renderer2D() noexcept;
+
+    Renderer2D(const Renderer2D&) = delete;
+    Renderer2D& operator=(const Renderer2D&) = delete;
+
+private:
+    /**
+     * Whether this instance holds a reference to the default pixel font
+     */
+    bool fontOwned = false;
+
+public:
+    /**
      * Queue a layer to draw this frame
      */
     void drawLayer(Layer2D& layer);

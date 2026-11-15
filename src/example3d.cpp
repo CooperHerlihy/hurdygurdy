@@ -6,18 +6,24 @@ static volatile bool quit = false;
 
 int main()
 {
-    std::optional<HurdyGurdy> hg = init();
-    if (!hg.has_value())
-        HG_PANIC("Could not initialize Hurdy Gurdy\n");
+    std::unique_ptr<InputDevice> input = InputDevice::create();
+    if (input == nullptr)
+        HG_PANIC("Could not create input device: {}\n", std::string{getError()}.c_str());
 
-    Window window = Window::create({});
-    window.setTitle("Hurdy Gurdy 3D Example");
+    if (!initGpu(input->getVulkanExtensions()))
+        HG_PANIC("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
+    HG_DEFER(deinitGpu());
+
+    std::unique_ptr<Window> window = input->createWindow({});
+    if (window == nullptr)
+        HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
+    window->setTitle("Hurdy Gurdy 3D Example");
 
     u32 width, height;
-    window.size(&width, &height);
+    window->size(&width, &height);
     f32 aspect = height == 0 ? 1 : static_cast<f32>(width) / static_cast<f32>(height);
 
-    Renderer3D renderer{window.swapchain().format(), Format_d32_sfloat};
+    Renderer3D renderer{window->swapchain().format(), Format_d32_sfloat};
 
     Camera camera{Perspective{aspect, pif / 2.0f, 0.1f, 100.0f}};
     camera.position = Vec3{0.0f, 1.5f, -5.0f};
@@ -111,13 +117,13 @@ int main()
         f64 delta = gameClock.tick();
         elapsed += delta;
 
-        processEvents();
-        if (wasQuit() || window.wasClosed())
+        input->processEvents();
+        if (input->wasQuit() || window->wasClosed())
             goto quit;
 
-        if (window.wasResized())
+        if (window->wasResized())
         {
-            window.size(&width, &height);
+            window->size(&width, &height);
             aspect = static_cast<f32>(width) / static_cast<f32>(height);
             camera.projection = Perspective{aspect, pif / 2.0f, 0.1f, 100.0f};
 
@@ -126,19 +132,19 @@ int main()
             depthView = GpuView::create(depthImg, GpuAspect_depth);
         }
 
-        if (isButtonDown(Button_lmouse))
+        if (input->isButtonDown(Button_lmouse))
         {
             f32 rotSpeed = 2.0f;
-            Vec2 md = mouseDelta();
+            Vec2 md = input->mouseDelta();
             Quat rotX = quatAxisAngle({ 0, 1, 0}, md.x * rotSpeed);
             Quat rotY = quatAxisAngle({1, 0, 0}, md.y * rotSpeed);
             camera.rotation = rotX * camera.rotation * rotY;
         }
 
         Vec3 movement = Vec3{0.0f};
-        movement.y += static_cast<f32>(isButtonDown(Button_space) - isButtonDown(Button_lshift));
-        movement.x += static_cast<f32>(isButtonDown(Button_d) - isButtonDown(Button_a));
-        movement.z += static_cast<f32>(isButtonDown(Button_w) - isButtonDown(Button_s));
+        movement.y += static_cast<f32>(input->isButtonDown(Button_space) - input->isButtonDown(Button_lshift));
+        movement.x += static_cast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a));
+        movement.z += static_cast<f32>(input->isButtonDown(Button_w) - input->isButtonDown(Button_s));
 
         if (movement != Vec3{0.0f})
         {
@@ -181,12 +187,12 @@ int main()
             }
         }
 
-        Window* windows[] = {&window};
+        Window* windows[] = {window.get()};
         GpuCmd* cmd = gpuBeginFrame(windows);
-        if (window.swapchain().renderTarget() != nullptr)
+        if (window->swapchain().renderTarget() != nullptr)
         {
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window.swapchain().renderTarget();
+            colorAttachment.image = window->swapchain().renderTarget();
             colorAttachment.clearColor = Vec4{0.02f, 0.02f, 0.05f, 1.0f};
 
             GpuAttachment depthAttachment{};

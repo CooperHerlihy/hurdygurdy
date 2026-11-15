@@ -10,12 +10,14 @@ namespace hg {
  *
  * Parameters
  * - window The window for ImGui to use
+ * - device The input device for ImGui to use
  * - colorFormat The format the color target will be in
  * - depthFormat The format the depth buffer will be in, if used
  * - stencilFormat The format the stencil will be in, if used
  */
 void initImGui(
     const Window& window,
+    InputDevice& device,
     Format colorFormat,
     Format depthFormat = Format_undefined,
     Format stencilFormat = Format_undefined);

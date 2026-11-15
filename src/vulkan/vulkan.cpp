@@ -440,9 +440,12 @@ static VkDevice createDevice()
     deviceInfo.pNext = &synchronization2Feature;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueInfo;
-    deviceInfo.enabledExtensionCount = static_cast<u32>(std::size(deviceExtensions));
-    deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     deviceInfo.pEnabledFeatures = &features;
+    if (vk.surfaceExtensions)
+    {
+        deviceInfo.enabledExtensionCount = static_cast<u32>(std::size(deviceExtensions));
+        deviceInfo.ppEnabledExtensionNames = deviceExtensions;
+    }
 
     VkDevice device = nullptr;
     VkResult result = vkCreateDevice(vk.physicalDevice, &deviceInfo, nullptr, &device);
@@ -675,9 +678,7 @@ VkSampler samplerGet(
 
 } // namespace vulkan
 
-namespace internal {
-
-bool initGpu()
+bool initGpu(std::span<std::string_view> extensions)
 {
     ArenaScope scratch = getScratch();
 
@@ -685,8 +686,18 @@ bool initGpu()
         goto loadFailed;
 
     vk.enableDebugMessenger = isDebugMessengerAvailable();
+    vk.surfaceExtensions = false;
 
-    vk.instance = createInstance(getPlatformVulkanExtensions());
+    for (std::string_view extension : extensions)
+    {
+        if (extension == "VK_KHR_surface")
+        {
+            vk.surfaceExtensions = true;
+            break;
+        }
+    }
+
+    vk.instance = createInstance(extensions);
     if (vk.instance == nullptr)
         goto instanceFailed;
     if (!loadVulkanInstanceFuncs(vk.instance))
@@ -788,6 +799,8 @@ loadFailed:
 
 void deinitGpu()
 {
+    vkQueueWaitIdle(vk.queue);
+
     for (u32 i = 0; i < vk.frames.size(); ++i)
     {
         vkDestroyFence(vk.device, vk.frames[i].fence, nullptr);
@@ -812,6 +825,7 @@ void deinitGpu()
     vkDestroyCommandPool(vk.device, vk.cmdPool, nullptr);
 
     vmaDestroyAllocator(vk.vma);
+    vk.vma = nullptr;
 
     vkDestroyDevice(vk.device, nullptr);
 
@@ -822,6 +836,8 @@ void deinitGpu()
 
     unloadVulkan();
 }
+
+namespace internal {
 
 void* getVkInstance()
 {

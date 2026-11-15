@@ -2,6 +2,7 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/gpu.hpp"
+#include "hg/error.hpp"
 
 #include <span>
 #include <string_view>
@@ -9,67 +10,30 @@
 namespace hg {
 
 /**
- * Display enumeration info
+ * The supported input backends
  */
-struct DisplayInfo {
-    i32 posX = 0;
-    i32 posY = 0;
-    u32 sizeW = 0;
-    u32 sizeH = 0;
-    i32 workPosX = 0;
-    i32 workPosY = 0;
-    u32 workSizeW = 0;
-    u32 workSizeH = 0;
-    f32 dpiScale = 1.0f;
+enum class InputBackend {
+    /**
+     * A dummy backend for headless or inputless setups
+     */
+    none,
+    /**
+     * Wayland for modern Linux
+     */
+    wayland,
+    /**
+     * X11 for legacy Linux
+     */
+    x11,
+    /**
+     * Win32 for Windows
+     */
+    win32,
+    /**
+     * SDL3 for other platforms
+     */
+    sdl3,
 };
-
-/**
- * Returns the display info
- */
-std::span<DisplayInfo> displayInfo();
-
-/**
- * The types of cursors
- */
-enum CursorType : u32 {
-    CursorType_arrow,
-    CursorType_textInput,
-    CursorType_resizeAll,
-    CursorType_resizeNS,
-    CursorType_resizeEW,
-    CursorType_resizeNESW,
-    CursorType_resizeNWSE,
-    CursorType_hand,
-    CursorType_wait,
-    CursorType_progress,
-    CursorType_notAllowed,
-    CursorType_count,
-};
-
-/**
- * Set the current cursor
- */
-void setCursor(CursorType type);
-
-/**
- * Show or hide the cursor
- */
-void showCursor(bool show = true);
-
-/**
- * Returns the platform clipboard text
- */
-std::string_view getClipboardText();
-
-/**
- * Set the platform clipboard text
- */
-void setClipboardText(std::string_view text);
-
-/**
- * Open a URL in the platform's default handler
- */
-void openURL(std::string_view url);
 
 /**
  * The event types
@@ -217,6 +181,39 @@ enum Button : u32 {
 };
 
 /**
+ * The types of cursors
+ */
+enum CursorType : u32 {
+    CursorType_arrow,
+    CursorType_textInput,
+    CursorType_resizeAll,
+    CursorType_resizeNS,
+    CursorType_resizeEW,
+    CursorType_resizeNESW,
+    CursorType_resizeNWSE,
+    CursorType_hand,
+    CursorType_wait,
+    CursorType_progress,
+    CursorType_notAllowed,
+    CursorType_count,
+};
+
+/**
+ * Display enumeration info
+ */
+struct DisplayInfo {
+    i32 posX = 0;
+    i32 posY = 0;
+    u32 sizeW = 0;
+    u32 sizeH = 0;
+    i32 workPosX = 0;
+    i32 workPosY = 0;
+    u32 workSizeW = 0;
+    u32 workSizeH = 0;
+    f32 dpiScale = 1.0f;
+};
+
+/**
  * A mouse event
  */
 struct MouseEvent {
@@ -247,7 +244,7 @@ struct WheelEvent {
 /**
  * Forward declaration of Window
  */
-struct Window;
+class Window;
 
 /**
  * A window event
@@ -307,53 +304,6 @@ struct Event {
 };
 
 /**
- * Processes all events since startup or the last call to process events
- */
-void processEvents();
-
-/**
- * Returns the events processed by processEvents
- */
-std::span<Event> getEvents();
-
-/**
- * Returns whether the application was quit
- */
-bool wasQuit();
-
-/**
- * Get whether a button is currently down
- */
-bool isButtonDown(Button button);
-
-/**
- * Get whether a button was pressed last frame
- */
-bool wasButtonPressed(Button button);
-
-/**
- * Get whether a button was released last frame
- */
-bool wasButtonReleased(Button button);
-
-/**
- * Get the current mouse position relative to the active window
- */
-Vec2 mousePos();
-
-/**
- * Get the change in mouse position
- *
- * Note, if there is only one window, it will be scaled to that window
- */
-Vec2 mouseDelta();
-
-/**
- * Get the mouse wheel movement
- */
-Vec2 wheelDelta();
-
-/**
  * Configuration for a window
  */
 struct WindowConfig {
@@ -394,101 +344,387 @@ struct WindowConfig {
 };
 
 /**
+ * An input device
+ */
+class InputDevice {
+public:
+    /**
+     * Hint to create to use a specific backend
+     *
+     * Note, it is not guarunteed that this backend will be used
+     */
+    static void hintBackend(InputBackend preferredBackend);
+
+    /**
+     * Create a new input device
+     *
+     * Note, the backend should be checked to make sure it is not the dummy
+     */
+    static std::unique_ptr<InputDevice> create();
+
+    /**
+     * Destroy the input device
+     */
+    virtual ~InputDevice() = default;
+
+    /**
+     * Returns the backend in use
+     */
+    virtual InputBackend getBackend() = 0;
+
+    /**
+     * Returns the Vulkan extensions needed by the platform for windowing
+     */
+    virtual std::span<std::string_view> getVulkanExtensions() = 0;
+
+    /**
+     * Returns the display info
+     */
+    virtual std::span<DisplayInfo> displayInfo() = 0;
+
+    /**
+     * Processes all events since startup or the last call to process events
+     */
+    virtual void processEvents() = 0;
+
+    /**
+     * Returns the events processed by processEvents
+     */
+    virtual std::span<Event> getEvents() = 0;
+
+    /**
+     * Returns whether the application was quit
+     */
+    virtual bool wasQuit() = 0;
+
+    /**
+     * Create a new window
+     */
+    virtual std::unique_ptr<Window> createWindow(const WindowConfig& config) = 0;
+
+    /**
+     * Get whether a button is currently down
+     */
+    virtual bool isButtonDown(Button button) = 0;
+
+    /**
+     * Get whether a button was pressed last frame
+     */
+    virtual bool wasButtonPressed(Button button) = 0;
+
+    /**
+     * Get whether a button was released last frame
+     */
+    virtual bool wasButtonReleased(Button button) = 0;
+
+    /**
+     * Get the current mouse position relative to the active window
+     */
+    virtual Vec2 mousePos() = 0;
+
+    /**
+     * Get the change in mouse position
+     *
+     * Note, if there is only one window, it will be scaled to that window
+     */
+    virtual Vec2 mouseDelta() = 0;
+
+    /**
+     * Get the mouse wheel movement
+     */
+    virtual Vec2 wheelDelta() = 0;
+
+    /**
+     * Set the current cursor
+     */
+    virtual void setCursor(CursorType type) = 0;
+
+    /**
+     * Show or hide the cursor
+     */
+    virtual void showCursor(bool show = true) = 0;
+};
+
+/**
+ * A dummy input device for headless or inputless setups
+ */
+class InputDeviceDummy : public InputDevice {
+public:
+    /**
+     * Create a new input device
+     */
+    static std::unique_ptr<InputDeviceDummy> create()
+    {
+        return std::make_unique<InputDeviceDummy>();
+    }
+
+    /**
+     * Returns the backend in use
+     */
+    virtual InputBackend getBackend() override
+    {
+        return InputBackend::none;
+    }
+
+    /**
+     * Returns the Vulkan extensions needed by the platform for windowing
+     */
+    virtual std::span<std::string_view> getVulkanExtensions() override
+    {
+        return {};
+    }
+
+    /**
+     * Returns the display info
+     */
+    virtual std::span<DisplayInfo> displayInfo() override
+    {
+        return {};
+    }
+
+    /**
+     * Processes all events since startup or the last call to process events
+     */
+    virtual void processEvents() override
+    {
+    }
+
+    /**
+     * Returns the events processed by processEvents
+     */
+    virtual std::span<Event> getEvents() override
+    {
+        return {};
+    }
+
+    /**
+     * Returns whether the application was quit
+     */
+    virtual bool wasQuit() override
+    {
+        return false;
+    }
+
+    /**
+     * Create a new window
+     */
+    virtual std::unique_ptr<Window> createWindow(const WindowConfig&) override
+    {
+        setError("Dummy input device cannot create windows");
+        return nullptr;
+    }
+
+    /**
+     * Get whether a button is currently down
+     */
+    virtual bool isButtonDown(Button) override
+    {
+        return false;
+    }
+
+    /**
+     * Get whether a button was pressed last frame
+     */
+    virtual bool wasButtonPressed(Button) override
+    {
+        return false;
+    }
+
+    /**
+     * Get whether a button was released last frame
+     */
+    virtual bool wasButtonReleased(Button) override
+    {
+        return false;
+    }
+
+    /**
+     * Get the current mouse position relative to the active window
+     */
+    virtual Vec2 mousePos() override
+    {
+        return {};
+    }
+
+    /**
+     * Get the change in mouse position
+     */
+    virtual Vec2 mouseDelta() override
+    {
+        return {};
+    }
+
+    /**
+     * Get the mouse wheel movement
+     */
+    virtual Vec2 wheelDelta() override
+    {
+        return {};
+    }
+
+    /**
+     * Set the current cursor
+     */
+    virtual void setCursor(CursorType) override
+    {
+    }
+
+    /**
+     * Show or hide the cursor
+     */
+    virtual void showCursor(bool) override
+    {
+    }
+};
+
+/**
  * A window
  */
-struct Window {
+class Window {
+protected:
     /**
-     * Implementation data
+     * The input device
      */
-    void* data = nullptr;
+    InputDevice* device;
 
     /**
-     * Construct empty
+     * Construct with the input device that created the window
      */
-    Window() noexcept;
+    explicit Window(InputDevice* device) noexcept
+        : device{device}
+    {}
 
-    /**
-     * Open a new window
-     */
-    static Window create(const WindowConfig& config = {});
-
+public:
     /**
      * Close the window
      */
-    ~Window() noexcept;
+    virtual ~Window() noexcept = default;
 
     /**
      * Return the window's swapchain for rendering
      */
-    GpuSwapchain& swapchain() const;
+    virtual GpuSwapchain& swapchain() const = 0;
 
     /**
      * Set the window title
      */
-    void setTitle(std::string_view title);
+    virtual void setTitle(std::string_view title) = 0;
 
     /**
      * Get events relevant to this window
      */
-    std::span<Event> events() const;
+    virtual std::span<Event> events() const = 0;
 
     /**
      * Returns whether the window was closed
      */
-    bool wasClosed() const;
+    virtual bool wasClosed() const = 0;
 
     /**
      * Returns whether this is the active window
      */
-    bool isFocused() const;
+    virtual bool isFocused() const = 0;
 
     /**
      * Returns whether the window gained focus last frame
      */
-    bool wasFocusGained() const;
+    virtual bool wasFocusGained() const = 0;
 
     /**
      * Returns whether the window lost focus last frame
      */
-    bool wasFocusLost() const;
+    virtual bool wasFocusLost() const = 0;
 
     /**
      * Returns whether the window was resized this frame
      */
-    bool wasResized() const;
+    virtual bool wasResized() const = 0;
 
     /**
      * Get the width and height
      */
-    void size(u32* width, u32* height) const;
+    virtual void size(u32* width, u32* height) const = 0;
 
     /**
      * Set to fullscreen or disable fullscreen
      */
-    void setFullscreen(bool set = true);
+    virtual void setFullscreen(bool set = true) = 0;
 
     /**
      * Get the mouse position relative to this window
      */
-    Vec2 mousePos() const;
+    virtual Vec2 mousePos() const = 0;
 
     /**
      * Get the change in mouse position relative to this window
      */
-    Vec2 mouseDelta() const;
+    virtual Vec2 mouseDelta() const = 0;
 
     /**
-     * Move construct
+     * Get whether a button is currently down
      */
-    Window(Window&& other) noexcept;
+    bool isButtonDown(Button button)
+    {
+        return device->isButtonDown(button);
+    }
 
     /**
-     * Move assign
+     * Get whether a button was pressed last frame
      */
-    Window& operator=(Window&& other) noexcept;
+    bool wasButtonPressed(Button button)
+    {
+        return device->wasButtonPressed(button);
+    }
 
-    Window(const Window&) = delete;
-    Window& operator=(const Window&) = delete;
+    /**
+     * Get whether a button was released last frame
+     */
+    bool wasButtonReleased(Button button)
+    {
+        return device->wasButtonReleased(button);
+    }
+
+    /**
+     * Get the current mouse position relative to the active window
+     */
+    Vec2 mousePos()
+    {
+        return device->mousePos();
+    }
+
+    /**
+     * Get the change in mouse position
+     *
+     * Note, if there is only one window, it will be scaled to that window
+     */
+    Vec2 mouseDelta()
+    {
+        return device->mouseDelta();
+    }
+
+    /**
+     * Get the mouse wheel movement
+     */
+    Vec2 wheelDelta()
+    {
+        return device->wheelDelta();
+    }
+
+    /**
+     * Set the current cursor
+     */
+    void setCursor(CursorType type)
+    {
+        return device->setCursor(type);
+    }
+
+    /**
+     * Show or hide the cursor
+     */
+    void showCursor(bool show = true)
+    {
+        return device->showCursor(show);
+    }
 };
 
 } // namespace hg

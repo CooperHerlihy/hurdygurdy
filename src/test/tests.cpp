@@ -1,5 +1,5 @@
 #include "tests.hpp"
-#include "hg/init.hpp"
+#include "hg/window.hpp"
 #include "hg/time.hpp"
 
 using namespace hg;
@@ -29,13 +29,13 @@ static i32 failCount = 0;
 
 int main()
 {
-    std::optional<HurdyGurdy> maybeHg = init();
-    if (!maybeHg.has_value())
-    {
-        std::printf("Could not initialize Hurdy Gurdy\n");
-        return 1;
-    }
-    HurdyGurdy hg = *maybeHg;
+    std::unique_ptr<InputDevice> input = InputDevice::create();
+    if (input == nullptr)
+        HG_PANIC("Could not create input device\n");
+
+    if (!initGpu(input->getVulkanExtensions()))
+        HG_PANIC("Could not initialize GPU\n");
+    HG_DEFER(deinitGpu());
 
     std::printf("HurdyGurdy: Tests begun\n");
 

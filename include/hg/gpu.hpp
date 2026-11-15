@@ -6,6 +6,7 @@
 #include <concepts>
 #include <span>
 #include <memory>
+#include <string_view>
 #include <type_traits>
 
 namespace hg {
@@ -1105,7 +1106,7 @@ struct GpuSwapchain {
 /**
  * Forward declaration of Window
  */
-struct Window;
+class Window;
 
 /**
  * Acquire an image from each swapchain and begin a command buffer
@@ -1122,5 +1123,18 @@ GpuCmd* gpuBeginFrame(std::span<Window*> windows);
  * - cmd The command buffer given from beginFrame
  */
 void gpuEndFrame(GpuCmd* cmd);
+
+/**
+ * Initialize the GPU
+ *
+ * Parameters
+ * - extensions The Vulkan instance extensions required by the windowing backend
+ */
+bool initGpu(std::span<std::string_view> extensions);
+
+/**
+ * Deinitialize the GPU
+ */
+void deinitGpu();
 
 } // namespace hg

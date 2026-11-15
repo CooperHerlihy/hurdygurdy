@@ -1,6 +1,8 @@
 #include "tests.hpp"
 #include "hg/geometry2d.hpp"
 
+#include <cfloat>
+
 using namespace hg;
 
 TEST(testCircleContainsPoint)

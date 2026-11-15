@@ -315,6 +315,7 @@ GpuView GpuView::createEx(const GpuViewCreateInfo& config)
     }
 
     view.data->image = image;
+    view.data->usage = image->usage;
     view.data->type = config.type;
     view.data->aspectFlags = config.aspectFlags;
     view.data->baseMipLevel = static_cast<u8>(config.baseMipLevel);
@@ -329,9 +330,9 @@ GpuViewData::~GpuViewData()
 {
     if (view != nullptr)
     {
-        if (image->usage & GpuImageUsage_storage)
+        if (usage & GpuImageUsage_storage)
             descriptorDestroy(storageDesc, DescriptorType_storageImage);
-        if (image->usage & GpuImageUsage_sampled)
+        if (usage & GpuImageUsage_sampled)
             descriptorDestroy(samplerDesc, DescriptorType_combinedImageSampler);
         vkDestroyImageView(vk.device, view, nullptr);
     }

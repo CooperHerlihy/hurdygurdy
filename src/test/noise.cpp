@@ -2,6 +2,8 @@
 #include "hg/noise.hpp"
 #include "hg/gpu.hpp"
 
+#include <cfloat>
+
 #include "test/shaders/noise.comp.spv.h"
 
 using namespace hg;

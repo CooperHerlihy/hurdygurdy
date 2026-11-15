@@ -2,11 +2,87 @@
 
 #include "hg/memory.hpp"
 
+#if defined(HG_PLATFORM_LINUX)
+#include "pipewire/pipewire_audio.hpp"
+#endif
+
+#if defined(HG_USE_SDL)
+#include "sdl/sdl_audio.hpp"
+#endif
+
 #include "dr_flac.h"
 #include "dr_mp3.h"
 #include "dr_wav.h"
 
 namespace hg {
+
+#if defined(HG_PLATFORM_LINUX)
+static AudioBackend preferredBackend = AudioBackend::pipewire;
+#elif defined(HG_PLATFORM_WINDOWS)
+static AudioBackend preferredBackend = AudioBackend::wasapi;
+#else
+static AudioBackend preferredBackend = AudioBackend::sdl3;
+#endif
+
+void AudioDevice::hintBackend(AudioBackend backend)
+{
+    preferredBackend = backend;
+}
+
+static std::unique_ptr<AudioDevice> createBackend(AudioBackend backend)
+{
+    switch (backend)
+    {
+#if defined(HG_USE_SDL)
+    case AudioBackend::sdl3:
+        return AudioDeviceSdl3::create();
+#endif
+#if defined(HG_PLATFORM_LINUX)
+    case AudioBackend::pipewire:
+        return AudioDevicePipewire::create();
+#endif
+#if defined(HG_PLATFORM_WINDOWS)
+    case AudioBackend::wasapi:
+        // TODO wasapi backend
+#endif
+    case AudioBackend::none:
+        return AudioDeviceDummy::create();
+    default:
+        return nullptr;
+    }
+
+    return nullptr;
+}
+
+std::unique_ptr<AudioDevice> AudioDevice::create()
+{
+
+    std::unique_ptr<AudioDevice> d = nullptr;
+
+    d = createBackend(preferredBackend);
+    if (d != nullptr)
+        return d;
+
+#if defined(HG_PLATFORM_LINUX)
+    d = createBackend(AudioBackend::pipewire);
+    if (d != nullptr)
+        return d;
+#endif
+
+#if defined(HG_PLATFORM_WINDOWS)
+    d = createBackend(AudioBackend::wasapi);
+    if (d != nullptr)
+        return d;
+#endif
+
+#if defined(HG_USE_SDL)
+    d = createBackend(AudioBackend::sdl3);
+    if (d != nullptr)
+        return d;
+#endif
+
+    return AudioDeviceDummy::create();
+}
 
 template<>
 bool serialize(Serializer* s, Sound* sound)
@@ -137,11 +213,23 @@ bool storeSoundWav(const Sound& sound, std::string_view path)
     return true;
 }
 
-void AudioPlayer::update(std::span<f32> buf, AudioConfig config)
+AudioPlayer::AudioPlayer(AudioDevice* device)
+    : device{device}
+{
+    device->setCallback([this](std::span<f32> buf, AudioConfig config) { update(buf, config); });
+}
+
+AudioPlayer::~AudioPlayer() noexcept
 {
     SpinLockScope scope{lock};
+    device->unsetCallback();
+}
 
+void AudioPlayer::update(std::span<f32> buf, AudioConfig config)
+{
     (void)config;
+
+    SpinLockScope scope{lock};
 
     for (u32 i = 0; i < sounds.size(); ++i)
     {

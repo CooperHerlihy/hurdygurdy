@@ -1,15 +1,26 @@
 #include <hurdygurdy.hpp>
 
+#include <memory>
+#include <string>
+
 using namespace hg;
 
 #define IM_ASSERT HG_ASSERT
 #include "imgui.h"
 
 static AudioPlayer audio{};
+static std::unique_ptr<AudioDevice> audioDevice{};
+static std::string backendError{};
 static bool toneActive = false;
 static f32 toneT = 0.0f;
-static char clipboardBuf[256]{};
 static f32 musicGain = 0.5f;
+
+static std::unique_ptr<InputDevice> input{};
+static std::unique_ptr<Window> window{};
+static std::unique_ptr<Window> secondWindow{};
+static std::string inputBackendName = "none";
+static std::string inputBackendError{};static u32 width, height;
+static Camera camera{Orthographic{{{0, 0}, {1.0f, 1.0f}}}};
 
 static const char* eventName(EventType type)
 {
@@ -171,9 +182,9 @@ static const char* cursorName(CursorType t)
     return "?";
 }
 
-static void audioCallback(void* userData, std::span<f32> buf, AudioConfig config)
+static void audioCallback(std::span<f32> buf, AudioConfig config)
 {
-    static_cast<AudioPlayer*>(userData)->update(buf, config);
+    audio.update(buf, config);
 
     if (toneActive)
     {
@@ -187,45 +198,181 @@ static void audioCallback(void* userData, std::span<f32> buf, AudioConfig config
     }
 }
 
+static const char* backendName(AudioBackend backend)
+{
+    switch (backend)
+    {
+        case AudioBackend::none: return "none";
+        case AudioBackend::pipewire: return "pipewire";
+        case AudioBackend::wasapi: return "wasapi";
+        case AudioBackend::sdl3: return "sdl3";
+    }
+    return "?";
+}
+
+static const char* inputBackendNameStr(InputBackend backend)
+{
+    switch (backend)
+    {
+        case InputBackend::none: return "none";
+        case InputBackend::wayland: return "wayland";
+        case InputBackend::x11: return "x11";
+        case InputBackend::win32: return "win32";
+        case InputBackend::sdl3: return "sdl3";
+    }
+    return "?";
+}
+
+static void switchInputBackend(InputBackend backend)
+{
+    // wait for in-flight frames, they still reference the resources about to be destroyed
+    gpuWaitIdle();
+
+    // release resources held by the app before the GPU goes away
+    camera.vpBuffer = GpuBuffer{};
+
+    // full teardown: windows and the GPU instance belong to the backend
+    deinitImGui();
+    secondWindow = nullptr;
+    window = nullptr;
+    input = nullptr;
+    deinitGpu();
+
+    auto rebuild = []() -> bool
+    {
+        input = InputDevice::create();
+        if (input == nullptr)
+        {
+            inputBackendError = std::string{getError()};
+            return false;
+        }
+
+        if (!initGpu(input->getVulkanExtensions()))
+        {
+            input = nullptr;
+            inputBackendError = std::string{getError()};
+            return false;
+        }
+
+        window = input->createWindow({});
+        if (window == nullptr)
+        {
+            inputBackendError = std::string{getError()};
+            input = nullptr;
+            deinitGpu();
+            return false;
+        }
+
+        window->setTitle("Platform API Test");
+        return true;
+    };
+
+    InputDevice::hintBackend(backend);
+    bool ok = rebuild();
+    std::string firstError = inputBackendError;
+    bool usedFallback = false;
+
+    if (!ok)
+    {
+        // requested backend failed, fall back through the remaining ones
+        usedFallback = true;
+        const InputBackend fallbacks[] = {InputBackend::wayland, InputBackend::x11, InputBackend::sdl3};
+        for (InputBackend fallback : fallbacks)
+        {
+            if (fallback == backend)
+                continue;
+            InputDevice::hintBackend(fallback);
+            if (rebuild())
+            {
+                ok = true;
+                break;
+            }
+        }
+    }
+
+    if (!ok)
+        HG_PANIC("Could not recreate input device: {}\n", inputBackendError.c_str());
+
+    inputBackendName = inputBackendNameStr(input->getBackend());
+    inputBackendError = usedFallback ? "requested backend failed: " + firstError : std::string{};
+
+    window->size(&width, &height);
+    camera.projection = Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}};
+    camera.update();
+
+    initImGui(*window, *input, window->swapchain().format());
+}
+
+static bool switchAudioBackend(AudioBackend backend)
+{
+    // destroy first: a second pipewire device would otherwise share the old
+    // device's thread loop, which its destructor tears down
+    audioDevice = nullptr;
+
+    AudioDevice::hintBackend(backend);
+    std::unique_ptr<AudioDevice> newDevice = AudioDevice::create();
+    if (newDevice == nullptr)
+    {
+        backendError = std::string{getError()};
+
+        AudioDevice::hintBackend(AudioBackend::none);
+        newDevice = AudioDevice::create();
+        if (newDevice == nullptr)
+        {
+            backendError = std::string{getError()};
+            return false;
+        }
+    }
+
+    backendError = {};
+    newDevice->setCallback(audioCallback, {.channels = 2, .sampleRate = 48000});
+    audioDevice = std::move(newDevice);
+    return true;
+}
+
 int main()
 {
-    std::optional<HurdyGurdy> hg = init();
-    if (!hg.has_value())
-        HG_PANIC("Could not initialize Hurdy Gurdy\n");
+    input = InputDevice::create();
+    if (input == nullptr)
+        HG_PANIC("Could not create input device: {}\n", std::string{getError()}.c_str());
+    inputBackendName = inputBackendNameStr(input->getBackend());
 
-    Window window = Window::create({});
-    window.setTitle("Platform API Test");
+    if (!initGpu(input->getVulkanExtensions()))
+        HG_PANIC("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
+
+    window = input->createWindow({});
+    if (window == nullptr)
+        HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
+    window->setTitle("Platform API Test");
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    HG_DEFER(ImGui::DestroyContext());
 
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    initImGui(window, window.swapchain().format());
-    HG_DEFER(deinitImGui());
+    initImGui(*window, *input, window->swapchain().format());
 
-    setAudioCallback(audioCallback, &audio, {.channels = 2, .sampleRate = 48000});
-    HG_DEFER(unsetAudioCallback());
+    audioDevice = AudioDevice::create();
+    if (audioDevice == nullptr)
+        HG_PANIC("Could not create audio device: {}\n", std::string{getError()}.c_str());
+    audioDevice->setCallback(audioCallback, {.channels = 2, .sampleRate = 48000});
+    HG_DEFER(if (audioDevice) audioDevice->unsetCallback());
 
-    u32 width, height;
-    window.size(&width, &height);
-    Camera camera{Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}}};
+    window->size(&width, &height);
+    camera.projection = Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}};
 
     bool showEvents = true;
     bool showKeyboard = true;
     bool showMousePanel = true;
     bool showWindowPanel = true;
     bool showAudio = true;
+    bool showBackend = true;
     bool showDisplay = true;
     bool showCursorPanel = true;
-    bool showClipboard = true;
     bool showTimers = true;
-
-    Window secondWindow{};
 
     Clock gameClock{};
     for (;;)
@@ -233,11 +380,11 @@ int main()
         f64 delta = gameClock.tick();
         {
             ProfilerScopeTimer timer{"Cpu"};
-                processEvents();
-                if (wasQuit() || window.wasClosed())
+                input->processEvents();
+                if (input->wasQuit() || window->wasClosed())
                     goto quit;
 
-                window.size(&width, &height);
+                window->size(&width, &height);
                 camera.projection = Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}};
                 camera.update();
 
@@ -253,9 +400,9 @@ int main()
                     ImGui::MenuItem("Mouse", nullptr, &showMousePanel);
                     ImGui::MenuItem("Window", nullptr, &showWindowPanel);
                     ImGui::MenuItem("Audio", nullptr, &showAudio);
+                    ImGui::MenuItem("Backend", nullptr, &showBackend);
                     ImGui::MenuItem("Display", nullptr, &showDisplay);
                     ImGui::MenuItem("Cursor", nullptr, &showCursorPanel);
-                    ImGui::MenuItem("Clipboard", nullptr, &showClipboard);
                     ImGui::MenuItem("Timers", nullptr, &showTimers);
                     ImGui::EndMenu();
                 }
@@ -269,7 +416,7 @@ int main()
             {
                 if (ImGui::Begin("Events", &showEvents))
                 {
-                    std::span<Event> events = getEvents();
+                    std::span<Event> events = input->getEvents();
                     ImGui::Text("Event count: %d", (int)events.size());
                     if (ImGui::BeginTable("events", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0, 200)))
                     {
@@ -322,7 +469,7 @@ int main()
                     for (u32 i = 1; i < Button_count; ++i)
                     {
                         Button b = static_cast<Button>(i);
-                        if (wasButtonPressed(b))
+                        if (input->wasButtonPressed(b))
                         {
                             ImGui::SameLine();
                             ImGui::Text("%s", buttonName(b));
@@ -333,7 +480,7 @@ int main()
                     for (u32 i = 1; i < Button_count; ++i)
                     {
                         Button b = static_cast<Button>(i);
-                        if (wasButtonReleased(b))
+                        if (input->wasButtonReleased(b))
                         {
                             ImGui::SameLine();
                             ImGui::Text("%s", buttonName(b));
@@ -344,7 +491,7 @@ int main()
                     for (u32 i = 1; i < Button_count; ++i)
                     {
                         Button b = static_cast<Button>(i);
-                        if (isButtonDown(b))
+                        if (input->isButtonDown(b))
                         {
                             ImGui::SameLine();
                             ImGui::Text("[%s]", buttonName(b));
@@ -358,9 +505,9 @@ int main()
             {
                 if (ImGui::Begin("Mouse", &showMousePanel))
                 {
-                    Vec2 mp = mousePos();
-                    Vec2 md = mouseDelta();
-                    Vec2 wd = wheelDelta();
+                    Vec2 mp = input->mousePos();
+                    Vec2 md = input->mouseDelta();
+                    Vec2 wd = input->wheelDelta();
 
                     ImGui::Text("pos: %.1f, %.1f", mp.x, mp.y);
                     ImGui::Text("delta: %.1f, %.1f", md.x, md.y);
@@ -371,14 +518,14 @@ int main()
                     {
                         Button b = static_cast<Button>(i);
                         ImGui::Text("%s: down=%d pressed=%d released=%d",
-                            buttonName(b), isButtonDown(b), wasButtonPressed(b), wasButtonReleased(b));
+                            buttonName(b), input->isButtonDown(b), input->wasButtonPressed(b), input->wasButtonReleased(b));
                     }
 
-                    if (secondWindow.data != nullptr)
+                    if (secondWindow != nullptr)
                     {
                         ImGui::Text("Second Window Mouse");
-                        Vec2 swmp = secondWindow.mousePos();
-                        Vec2 swmd = secondWindow.mouseDelta();
+                        Vec2 swmp = secondWindow->mousePos();
+                        Vec2 swmd = secondWindow->mouseDelta();
                         ImGui::Text("pos: %.1f, %.1f  delta: %.1f, %.1f", swmp.x, swmp.y, swmd.x, swmd.y);
                     }
                 }
@@ -390,51 +537,52 @@ int main()
                 if (ImGui::Begin("Window", &showWindowPanel))
                 {
                     ImGui::Text("State");
-                    ImGui::Text("isFocused: %d", window.isFocused());
-                    ImGui::Text("wasFocusGained: %d", window.wasFocusGained());
-                    ImGui::Text("wasFocusLost: %d", window.wasFocusLost());
-                    ImGui::Text("wasResized: %d", window.wasResized());
-                    ImGui::Text("wasClosed: %d", window.wasClosed());
+                    ImGui::Text("isFocused: %d", window->isFocused());
+                    ImGui::Text("wasFocusGained: %d", window->wasFocusGained());
+                    ImGui::Text("wasFocusLost: %d", window->wasFocusLost());
+                    ImGui::Text("wasResized: %d", window->wasResized());
+                    ImGui::Text("wasClosed: %d", window->wasClosed());
 
                     u32 ww, wh;
-                    window.size(&ww, &wh);
+                    window->size(&ww, &wh);
                     ImGui::Text("size: %u, %u", ww, wh);
 
-                    if (secondWindow.data != nullptr)
+                    if (secondWindow != nullptr)
                     {
                         ImGui::Text("Second Window");
                         ImGui::Text("focused=%d resized=%d closed=%d",
-                            secondWindow.isFocused(),
-                            secondWindow.wasResized(), secondWindow.wasClosed());
+                            secondWindow->isFocused(),
+                            secondWindow->wasResized(), secondWindow->wasClosed());
                         u32 sw, sh;
-                        secondWindow.size(&sw, &sh);
+                        secondWindow->size(&sw, &sh);
                         ImGui::Text("size: %u, %u", sw, sh);
                     }
 
                     ImGui::Text("Actions");
-                    if (ImGui::Button("Fullscreen On")) window.setFullscreen(true);
+                    if (ImGui::Button("Fullscreen On")) window->setFullscreen(true);
                     ImGui::SameLine();
-                    if (ImGui::Button("Fullscreen Off")) window.setFullscreen(false);
+                    if (ImGui::Button("Fullscreen Off")) window->setFullscreen(false);
 
                     ImGui::Text("Second Window");
-                    if (secondWindow.data == nullptr)
+                    if (secondWindow == nullptr)
                     {
                         if (ImGui::Button("Create"))
                         {
-                            secondWindow = Window::create();
-                            secondWindow.setTitle("Second Window");
+                            secondWindow = input->createWindow({});
+                            if (secondWindow != nullptr)
+                                secondWindow->setTitle("Second Window");
                         }
                     }
                     else
                     {
                         if (ImGui::Button("Close"))
-                            secondWindow = Window{};
+                            secondWindow = nullptr;
                         ImGui::SameLine();
                         if (ImGui::Button("SetTitle"))
-                            secondWindow.setTitle("Renamed!");
+                            secondWindow->setTitle("Renamed!");
                     }
 
-                    std::span<Event> wevts = window.events();
+                    std::span<Event> wevts = window->events();
                     ImGui::Text("Window Events");
                     ImGui::Text("Count: %d", (int)wevts.size());
                 }
@@ -480,9 +628,9 @@ int main()
                         audio.playSound(snd, 0.5f);
                     }
 
+                    static Asset<Sound> mus;
                     if (ImGui::Button("Play Music"))
                     {
-                        static Asset<Sound> mus;
                         if (mus.data == nullptr)
                         {
                             mus = newAsset<Sound>();
@@ -507,21 +655,66 @@ int main()
                     ImGui::SameLine();
                     if (ImGui::Button("Pause Music"))
                     {
-                        if (audio.music.size() > 0)
-                            audio.pauseMusic(audio.music[0].asset);
+                        if (mus.data != nullptr)
+                            audio.pauseMusic(mus);
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("Kill Music"))
                     {
-                        if (audio.music.size() > 0)
-                            audio.killMusic(audio.music[0].asset);
+                        if (mus.data != nullptr)
+                            audio.killMusic(mus);
                     }
 
                     if (ImGui::SliderFloat("Gain", &musicGain, 0.0f, 2.0f))
                     {
-                        if (audio.music.size() > 0)
-                            audio.setMusicGain(audio.music[0].asset, musicGain);
+                        if (mus.data != nullptr)
+                            audio.setMusicGain(mus, musicGain);
                     }
+                }
+                ImGui::End();
+            }
+
+            if (showBackend)
+            {
+                if (ImGui::Begin("Backend", &showBackend))
+                {
+                    ImGui::Text("Input");
+                    ImGui::Text("Current: %s", inputBackendName.c_str());
+
+                    ImGui::PushID("InputBackend");
+                    if (ImGui::Button("Wayland"))
+                        switchInputBackend(InputBackend::wayland);
+                    ImGui::SameLine();
+                    if (ImGui::Button("X11"))
+                        switchInputBackend(InputBackend::x11);
+                    ImGui::SameLine();
+                    if (ImGui::Button("SDL3"))
+                        switchInputBackend(InputBackend::sdl3);
+                    ImGui::PopID();
+
+                    if (inputBackendError.length() > 0)
+                        ImGui::Text("Error: %s", inputBackendError.c_str());
+
+                    ImGui::Separator();
+
+                    ImGui::Text("Audio");
+                    if (audioDevice != nullptr)
+                        ImGui::Text("Current: %s", backendName(audioDevice->getBackend()));
+                    else
+                        ImGui::Text("Current: none");
+
+                    ImGui::PushID("AudioBackend");
+                    if (ImGui::Button("Pipewire"))
+                        switchAudioBackend(AudioBackend::pipewire);
+                    ImGui::SameLine();
+                    if (ImGui::Button("SDL3"))
+                        switchAudioBackend(AudioBackend::sdl3);
+                    ImGui::SameLine();
+                    if (ImGui::Button("WASAPI"))
+                        switchAudioBackend(AudioBackend::wasapi);
+                    ImGui::PopID();
+                    if (backendError.length() > 0)
+                        ImGui::Text("Error: %s", backendError.c_str());
                 }
                 ImGui::End();
             }
@@ -530,7 +723,7 @@ int main()
             {
                 if (ImGui::Begin("Display", &showDisplay))
                 {
-                    std::span<DisplayInfo> displays = displayInfo();
+                    std::span<DisplayInfo> displays = input->displayInfo();
                     ImGui::Text("Count: %d", (int)displays.size());
                     for (u64 i = 0; i < displays.size(); ++i)
                     {
@@ -556,30 +749,12 @@ int main()
                         CursorType t = static_cast<CursorType>(i);
                         if (i > 0) ImGui::SameLine();
                         if (ImGui::Button(cursorName(t)))
-                            setCursor(t);
+                            input->setCursor(t);
                     }
                     ImGui::Separator();
-                    if (ImGui::Button("Show")) hg::showCursor(true);
+                    if (ImGui::Button("Show")) input->showCursor(true);
                     ImGui::SameLine();
-                    if (ImGui::Button("Hide")) hg::showCursor(false);
-                }
-                ImGui::End();
-            }
-
-            if (showClipboard)
-            {
-                if (ImGui::Begin("Clipboard", &showClipboard))
-                {
-                    if (ImGui::Button("Get"))
-                    {
-                        std::string_view sv = getClipboardText();
-                        u64 len = sv.length() < sizeof(clipboardBuf) - 1 ? sv.length() : sizeof(clipboardBuf) - 1;
-                        std::memcpy(clipboardBuf, sv.data(), len);
-                        clipboardBuf[len] = '\0';
-                    }
-                    ImGui::InputText("##clip", clipboardBuf, sizeof(clipboardBuf));
-                    if (ImGui::Button("Set"))
-                        setClipboardText(clipboardBuf);
+                    if (ImGui::Button("Hide")) input->showCursor(false);
                 }
                 ImGui::End();
             }
@@ -609,23 +784,23 @@ int main()
         GpuCmd* cmd;
         {
             ProfilerScopeTimer timer{"Gpu"};
-            if (secondWindow.data != nullptr)
+            if (secondWindow != nullptr)
             {
-                Window* windows[] = {&window, &secondWindow};
+                Window* windows[] = {window.get(), secondWindow.get()};
                 cmd = gpuBeginFrame(windows);
             }
             else
             {
-                Window* windows[] = {&window};
+                Window* windows[] = {window.get()};
                 cmd = gpuBeginFrame(windows);
             }
         }
 
-        if (window.swapchain().renderTarget() != nullptr)
+        if (window->swapchain().renderTarget() != nullptr)
         {
             ProfilerScopeTimer timer{"Cpu"};
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window.swapchain().renderTarget();
+            colorAttachment.image = window->swapchain().renderTarget();
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
             gpuBeginRenderPass(cmd, pass);
@@ -633,11 +808,11 @@ int main()
             gpuEndRenderPass(cmd);
         }
 
-        if (secondWindow.data != nullptr && secondWindow.swapchain().renderTarget() != nullptr)
+        if (secondWindow != nullptr && secondWindow->swapchain().renderTarget() != nullptr)
         {
             ProfilerScopeTimer timer{"Cpu"};
             GpuAttachment colorAttachment{};
-            colorAttachment.image = secondWindow.swapchain().renderTarget();
+            colorAttachment.image = secondWindow->swapchain().renderTarget();
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
             gpuBeginRenderPass(cmd, pass);
@@ -651,6 +826,12 @@ int main()
     }
 
 quit:
-    secondWindow = Window{};
     gpuWaitIdle();
+    camera.vpBuffer = GpuBuffer{};
+    secondWindow = nullptr;
+    window = nullptr;
+    deinitImGui();
+    input = nullptr;
+    deinitGpu();
+    ImGui::DestroyContext();
 }

@@ -11,17 +11,17 @@
             pkgs = nixpkgs.legacyPackages.${system};
 
             debug = pkgs.writeShellScriptBin "debug" ''
-                cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug \
+                cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug -DHG_USE_SDL=ON \
                 && cmake --build build \
                 && ./build/tests
             '';
             release = pkgs.writeShellScriptBin "release" ''
-                cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release \
+                cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release -DHG_USE_SDL=ON \
                 && cmake --build build/release \
                 && ./build/release/tests
             '';
             san = pkgs.writeShellScriptBin "san" ''
-                cmake -G Ninja -B build/san -DCMAKE_BUILD_TYPE=Debug \
+                cmake -G Ninja -B build/san -DCMAKE_BUILD_TYPE=Debug -DHG_USE_SDL=ON \
                     -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
                     -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
                     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
@@ -29,7 +29,7 @@
                 && LSAN_OPTIONS=detect_leaks=0 ./build/san/tests
             '';
             tsan = pkgs.writeShellScriptBin "tsan" ''
-                cmake -G Ninja -B build/tsan -DCMAKE_BUILD_TYPE=Debug \
+                cmake -G Ninja -B build/tsan -DCMAKE_BUILD_TYPE=Debug -DHG_USE_SDL=ON \
                     -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
                     -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
                     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
@@ -51,6 +51,7 @@
 
                     shaderc
                     vulkan-validation-layers
+                    sdl3
 
                     gdb
                     valgrind
@@ -70,6 +71,7 @@
                     pipewire
                     libxkbcommon
                     wayland
+                    sdl3
                 ];
             };
         });
@@ -168,6 +170,7 @@
                 ];
 
                 cmakeBuildType = "Release";
+                cmakeFlags = [ "-DHG_USE_SDL=OFF" ];
 
                 preConfigure = ''
                     rm -rf vendor/imgui vendor/Vulkan-Headers

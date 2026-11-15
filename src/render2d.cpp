@@ -269,7 +269,9 @@ void convertPixelFont()
     storeFile(bin, "resources/pixel_font.hg");
 }
 
-void initPixelFont()
+} // namespace internal
+
+static void initPixelFont()
 {
     std::optional<Serializer> s = readSerialBinary(resources_pixel_font_hg);
 
@@ -284,12 +286,10 @@ void initPixelFont()
     render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95);
 }
 
-void deinitPixelFont()
+static void deinitPixelFont()
 {
     render2D = {};
 }
-
-} // namespace internal
 
 u32 TextureAtlas::addEmpty(u32 count)
 {
@@ -536,8 +536,14 @@ struct RenderPush2D {
 #include "shaders/render2d.vert.spv.h"
 #include "shaders/render2d.frag.spv.h"
 
+static u32 pixelFontCount = 0;
+
 Renderer2D::Renderer2D(Format colorFormat)
 {
+    if (pixelFontCount++ == 0)
+        initPixelFont();
+    fontOwned = true;
+
     GpuGraphicsPipelineCreateInfo pipelineConfig{};
     pipelineConfig.vertexShader = shaders_render2d_vert_spv;
     pipelineConfig.fragmentShader = shaders_render2d_frag_spv;
@@ -547,6 +553,39 @@ Renderer2D::Renderer2D(Format colorFormat)
     pipelineConfig.colorBlendEnables = {&enableColorBlend, 1};
 
     pipeline = GpuPipeline::graphics(pipelineConfig);
+}
+
+Renderer2D::Renderer2D(Renderer2D&& other) noexcept
+    : pipeline{std::move(other.pipeline)}
+    , layerQueue{std::move(other.layerQueue)}
+    , fontOwned{std::exchange(other.fontOwned, false)}
+{}
+
+Renderer2D& Renderer2D::operator=(Renderer2D&& other) noexcept
+{
+    if (this != &other)
+    {
+        pipeline = std::move(other.pipeline);
+        layerQueue = std::move(other.layerQueue);
+        if (fontOwned)
+        {
+            fontOwned = false;
+            if (--pixelFontCount == 0 && !other.fontOwned)
+                deinitPixelFont();
+        }
+        fontOwned = std::exchange(other.fontOwned, false);
+    }
+    return *this;
+}
+
+Renderer2D::~Renderer2D() noexcept
+{
+    if (fontOwned)
+    {
+        fontOwned = false;
+        if (--pixelFontCount == 0)
+            deinitPixelFont();
+    }
 }
 
 void Renderer2D::drawLayer(Layer2D& layer)

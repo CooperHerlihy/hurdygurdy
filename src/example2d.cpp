@@ -6,17 +6,23 @@ static volatile bool quit = false;
 
 int main()
 {
-    std::optional<HurdyGurdy> hg = init();
-    if (!hg.has_value())
-        HG_PANIC("Could not initialize Hurdy Gurdy\n");
+    std::unique_ptr<InputDevice> input = InputDevice::create();
+    if (input == nullptr)
+        HG_PANIC("Could not create input device: {}\n", std::string{getError()}.c_str());
 
-    Window window = Window::create({});
-    window.setTitle("Hurdy Gurdy 2D Example");
+    if (!initGpu(input->getVulkanExtensions()))
+        HG_PANIC("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
+    HG_DEFER(deinitGpu());
 
-    Renderer2D renderer{window.swapchain().format()};
+    std::unique_ptr<Window> window = input->createWindow({});
+    if (window == nullptr)
+        HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
+    window->setTitle("Hurdy Gurdy 2D Example");
+
+    Renderer2D renderer{window->swapchain().format()};
 
     u32 winW, winH;
-    window.size(&winW, &winH);
+    window->size(&winW, &winH);
     f32 aspect = static_cast<f32>(winW) / static_cast<f32>(winH);
 
     Camera camera{Orthographic{{{0, 0}, {aspect, 1.0f}}}};
@@ -47,28 +53,28 @@ int main()
     {
         f64 delta = gameClock.tick();
 
-        processEvents();
-        if (wasQuit() || window.wasClosed())
+        input->processEvents();
+        if (input->wasQuit() || window->wasClosed())
             goto quit;
 
-        if (window.wasResized())
+        if (window->wasResized())
         {
-            window.size(&winW, &winH);
+            window->size(&winW, &winH);
             aspect = static_cast<f32>(winW) / static_cast<f32>(winH);
             camera.projection = Orthographic{{{0, 0}, {aspect, 1.0f}}};
         }
 
-        if (isButtonDown(Button_lmouse))
+        if (input->isButtonDown(Button_lmouse))
         {
-            Vec2 md = mouseDelta();
+            Vec2 md = input->mouseDelta();
             camera.position.x -= md.x;
             camera.position.y -= md.y;
         }
         camera.update();
 
         Vec2 spriteMove = {
-            static_cast<f32>(isButtonDown(Button_d) - isButtonDown(Button_a)),
-            static_cast<f32>(isButtonDown(Button_s) - isButtonDown(Button_w)),
+            static_cast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a)),
+            static_cast<f32>(input->isButtonDown(Button_s) - input->isButtonDown(Button_w)),
         };
         if (spriteMove != Vec2{0.0f})
         {
@@ -76,7 +82,7 @@ int main()
             spritePos += vecNorm2(spriteMove) * moveSpeed * static_cast<f32>(delta);
         }
 
-        spriteRot += (isButtonDown(Button_e) - isButtonDown(Button_q)) * 2.0f * static_cast<f32>(delta);
+        spriteRot += (input->isButtonDown(Button_e) - input->isButtonDown(Button_q)) * 2.0f * static_cast<f32>(delta);
 
         f32 sq = aspect < 1.0f ? aspect : 1.0f;
         f32 ox = (aspect - sq) / 2.0f;
@@ -137,12 +143,12 @@ int main()
 
         renderer.drawLayer(layer);
 
-        Window* windows[] = {&window};
+        Window* windows[] = {window.get()};
         GpuCmd* cmd = gpuBeginFrame(windows);
-        if (window.swapchain().renderTarget() != nullptr)
+        if (window->swapchain().renderTarget() != nullptr)
         {
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window.swapchain().renderTarget();
+            colorAttachment.image = window->swapchain().renderTarget();
 
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};

@@ -1,6 +1,8 @@
 #include "tests.hpp"
 #include "hg/math.hpp"
 
+#include <cfloat>
+
 using namespace hg;
 
 TEST(testScalarPow)

@@ -9,15 +9,10 @@ namespace hg {
 
 namespace internal {
 
-std::span<std::string_view> getPlatformVulkanExtensions();
-
-bool initGpu();
-void deinitGpu();
 void* getVkInstance();
 void* getVkInstanceProcAddr(const char* name);
 
-void initPixelFont();
-void deinitPixelFont();
+void convertPixelFont();
 
 void initImGuiGpu(
     const GpuSwapchain& swap,

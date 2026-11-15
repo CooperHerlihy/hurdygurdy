@@ -1,8 +1,7 @@
-#include "pipewire_platform.hpp"
+#include "pipewire_audio.hpp"
 
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"
-#include "hg/audio.hpp"
 
 extern "C" {
 void pw_init(int* argc, char** argv[]);
@@ -16,7 +15,9 @@ void pw_deinit(void);
 #include <spa/param/audio/format-utils.h>
 #include <spa/param/audio/raw.h>
 
-namespace hg::pipewire {
+namespace hg {
+
+namespace pipewire {
 
 #define HG_PW_FUNC(name) decltype(&::name) name = nullptr
 
@@ -101,97 +102,9 @@ struct AudioState {
     struct pw_thread_loop* threadLoop = nullptr;
     struct pw_context* context = nullptr;
     struct pw_core* core = nullptr;
-    struct pw_stream* stream = nullptr;
-    struct spa_hook streamListener{};
-
-    AudioCallback callback = nullptr;
-    void* callbackData = nullptr;
-    AudioConfig callbackConfig{};
 };
 
 static AudioState audio{};
-
-static void streamProcess(void* userData)
-{
-    AudioState* state = static_cast<AudioState*>(userData);
-
-    struct pw_buffer* pwBuf = pwFuncs.pw_stream_dequeue_buffer(state->stream);
-    if (pwBuf == nullptr)
-        return;
-
-    struct spa_buffer* buf = pwBuf->buffer;
-    f32* data = static_cast<f32*>(buf->datas[0].data);
-    if (data == nullptr)
-    {
-        pwFuncs.pw_stream_queue_buffer(state->stream, pwBuf);
-        return;
-    }
-
-    u64 maxBytes = buf->datas[0].maxsize;
-    u64 frames = maxBytes / sizeof(f32) / state->callbackConfig.channels;
-    u64 totalSamples = frames * state->callbackConfig.channels;
-    std::memset(data, 0, totalSamples * sizeof(f32));
-    std::span<f32> buffer{data, totalSamples};
-
-    if (state->callback != nullptr)
-        state->callback(state->callbackData, buffer, state->callbackConfig);
-
-    buf->datas[0].chunk->offset = 0;
-    buf->datas[0].chunk->size = static_cast<uint32_t>(buffer.size() * sizeof(f32));
-    buf->datas[0].chunk->stride = static_cast<int32_t>(sizeof(f32) * state->callbackConfig.channels);
-    pwBuf->size = static_cast<uint32_t>(frames);
-
-    pwFuncs.pw_stream_queue_buffer(state->stream, pwBuf);
-}
-
-static void paramChanged(void* userData, uint32_t id, const struct spa_pod* param)
-{
-    AudioState* state = static_cast<AudioState*>(userData);
-    if (id != SPA_PARAM_Format || param == nullptr)
-        return;
-
-    struct spa_audio_info_raw info{};
-    if (spa_format_audio_raw_parse(param, &info) <= 0)
-        return;
-
-    state->callbackConfig.channels = info.channels;
-    state->callbackConfig.sampleRate = info.rate;
-
-    uint8_t buffer[1024];
-    struct spa_pod_builder builder;
-    spa_pod_builder_init(&builder, buffer, sizeof(buffer));
-
-    const struct spa_pod* params[2];
-    params[0] = spa_format_audio_raw_build(&builder, SPA_PARAM_Format, &info);
-
-    struct spa_pod_frame frame;
-    spa_pod_builder_push_object(&builder, &frame,
-        SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers);
-    spa_pod_builder_add(&builder,
-        SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(2, 1, 64),
-        SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1),
-        SPA_PARAM_BUFFERS_size, SPA_POD_Int(256 * static_cast<int>(sizeof(f32) * info.channels)),
-        SPA_PARAM_BUFFERS_stride, SPA_POD_Int(static_cast<int>(sizeof(f32) * info.channels)),
-        0);
-    params[1] = spa_pod_builder_pop(&builder, &frame);
-
-    pwFuncs.pw_stream_update_params(state->stream, params, 2);
-}
-
-static struct pw_stream_events streamEvents = {
-    .version = PW_VERSION_STREAM_EVENTS,
-    .destroy = nullptr,
-    .state_changed = nullptr,
-    .control_info = nullptr,
-    .io_changed = nullptr,
-    .param_changed = paramChanged,
-    .add_buffer = nullptr,
-    .remove_buffer = nullptr,
-    .process = streamProcess,
-    .drained = nullptr,
-    .command = nullptr,
-    .trigger_done = nullptr,
-};
 
 bool initPipewire()
 {
@@ -231,13 +144,6 @@ void deinitPipewire()
     {
         pwFuncs.pw_thread_loop_lock(audio.threadLoop);
 
-        if (audio.stream != nullptr)
-        {
-            pwFuncs.pw_stream_disconnect(audio.stream);
-            pwFuncs.pw_stream_destroy(audio.stream);
-            audio.stream = nullptr;
-        }
-
         if (audio.core != nullptr)
         {
             pwFuncs.pw_core_disconnect(audio.core);
@@ -259,26 +165,131 @@ void deinitPipewire()
     pwFuncs.pw_deinit();
 }
 
-void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
+} // namespace pipewire
+
+struct pw_stream_events AudioDevicePipewire::streamEvents = {
+    .version = PW_VERSION_STREAM_EVENTS,
+    .destroy = nullptr,
+    .state_changed = nullptr,
+    .control_info = nullptr,
+    .io_changed = nullptr,
+    .param_changed = AudioDevicePipewire::paramChanged,
+    .add_buffer = nullptr,
+    .remove_buffer = nullptr,
+    .process = AudioDevicePipewire::streamProcess,
+    .drained = nullptr,
+    .command = nullptr,
+    .trigger_done = nullptr,
+};
+
+void AudioDevicePipewire::streamProcess(void* userData)
 {
-    if (audio.stream != nullptr)
+    AudioDevicePipewire* audio = static_cast<AudioDevicePipewire*>(userData);
+
+    struct pw_buffer* pwBuf = pipewire::pwFuncs.pw_stream_dequeue_buffer(audio->stream);
+    if (pwBuf == nullptr)
+        return;
+
+    struct spa_buffer* buf = pwBuf->buffer;
+    f32* data = static_cast<f32*>(buf->datas[0].data);
+    if (data == nullptr)
     {
-        pwFuncs.pw_stream_disconnect(audio.stream);
-        pwFuncs.pw_stream_destroy(audio.stream);
-        audio.stream = nullptr;
+        pipewire::pwFuncs.pw_stream_queue_buffer(audio->stream, pwBuf);
+        return;
     }
 
-    audio.callback = callback;
-    audio.callbackData = userData;
-    audio.callbackConfig = preferredConfig;
+    u64 maxBytes = buf->datas[0].maxsize;
+    u64 frames = maxBytes / sizeof(f32) / audio->callbackConfig.channels;
+    u64 totalSamples = frames * audio->callbackConfig.channels;
+    std::memset(data, 0, totalSamples * sizeof(f32));
+    std::span<f32> buffer{data, totalSamples};
 
-    if (audio.callbackConfig.sampleRate == 0)
-        audio.callbackConfig.sampleRate = 48000;
-    if (audio.callbackConfig.channels == 0)
-        audio.callbackConfig.channels = 2;
+    if (audio->callback != nullptr)
+        audio->callback(buffer, audio->callbackConfig);
 
-    audio.stream = pwFuncs.pw_stream_new(audio.core, "hurdygurdy-audio", nullptr);
-    if (audio.stream == nullptr)
+    buf->datas[0].chunk->offset = 0;
+    buf->datas[0].chunk->size = static_cast<uint32_t>(buffer.size() * sizeof(f32));
+    buf->datas[0].chunk->stride = static_cast<int32_t>(sizeof(f32) * audio->callbackConfig.channels);
+    pwBuf->size = static_cast<uint32_t>(frames);
+
+    pipewire::pwFuncs.pw_stream_queue_buffer(audio->stream, pwBuf);
+}
+
+void AudioDevicePipewire::paramChanged(void* userData, uint32_t id, const struct spa_pod* param)
+{
+    AudioDevicePipewire* audio = static_cast<AudioDevicePipewire*>(userData);
+    if (id != SPA_PARAM_Format || param == nullptr)
+        return;
+
+    struct spa_audio_info_raw info{};
+    if (spa_format_audio_raw_parse(param, &info) <= 0)
+        return;
+
+    audio->callbackConfig.channels = info.channels;
+    audio->callbackConfig.sampleRate = info.rate;
+
+    uint8_t buffer[1024];
+    struct spa_pod_builder builder;
+    spa_pod_builder_init(&builder, buffer, sizeof(buffer));
+
+    const struct spa_pod* params[2];
+    params[0] = spa_format_audio_raw_build(&builder, SPA_PARAM_Format, &info);
+
+    struct spa_pod_frame frame;
+    spa_pod_builder_push_object(&builder, &frame,
+        SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers);
+    spa_pod_builder_add(&builder,
+        SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(2, 1, 64),
+        SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1),
+        SPA_PARAM_BUFFERS_size, SPA_POD_Int(256 * static_cast<int>(sizeof(f32) * info.channels)),
+        SPA_PARAM_BUFFERS_stride, SPA_POD_Int(static_cast<int>(sizeof(f32) * info.channels)),
+        0);
+    params[1] = spa_pod_builder_pop(&builder, &frame);
+
+    pipewire::pwFuncs.pw_stream_update_params(audio->stream, params, 2);
+}
+
+std::unique_ptr<AudioDevicePipewire> AudioDevicePipewire::create()
+{
+    if (pipewire::audio.threadLoop == nullptr)
+    {
+        if (!pipewire::loadPipeWire())
+            return nullptr;
+
+        if (!pipewire::initPipewire())
+            return nullptr;
+    }
+
+    return std::make_unique<AudioDevicePipewire>();
+}
+
+AudioDevicePipewire::~AudioDevicePipewire()
+{
+    unsetCallback();
+    pipewire::deinitPipewire();
+}
+
+void AudioDevicePipewire::setCallback(AudioCallback callback, const AudioConfig& preferredConfig)
+{
+    if (stream != nullptr)
+    {
+        pipewire::pwFuncs.pw_thread_loop_lock(pipewire::audio.threadLoop);
+        pipewire::pwFuncs.pw_stream_disconnect(stream);
+        pipewire::pwFuncs.pw_stream_destroy(stream);
+        pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop);
+        stream = nullptr;
+    }
+
+    this->callback = std::move(callback);
+
+    callbackConfig = preferredConfig;
+    if (callbackConfig.sampleRate == 0)
+        callbackConfig.sampleRate = 48000;
+    if (callbackConfig.channels == 0)
+        callbackConfig.channels = 2;
+
+    stream = pipewire::pwFuncs.pw_stream_new(pipewire::audio.core, "hurdygurdy-audio", nullptr);
+    if (stream == nullptr)
     {
         setError("Could not create PipeWire stream");
         return;
@@ -290,8 +301,8 @@ void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig&
 
     struct spa_audio_info_raw audioInfo{};
     audioInfo.format = SPA_AUDIO_FORMAT_F32;
-    audioInfo.channels = audio.callbackConfig.channels;
-    audioInfo.rate = audio.callbackConfig.sampleRate;
+    audioInfo.channels = callbackConfig.channels;
+    audioInfo.rate = callbackConfig.sampleRate;
 
     const struct spa_pod* params[2];
     params[0] = spa_format_audio_raw_build(&builder, SPA_PARAM_EnumFormat, &audioInfo);
@@ -302,17 +313,17 @@ void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig&
     spa_pod_builder_add(&builder,
         SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(2, 1, 64),
         SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1),
-        SPA_PARAM_BUFFERS_size, SPA_POD_Int(256 * static_cast<int>(sizeof(f32) * audio.callbackConfig.channels)),
-        SPA_PARAM_BUFFERS_stride, SPA_POD_Int(static_cast<int>(sizeof(f32) * audio.callbackConfig.channels)),
+        SPA_PARAM_BUFFERS_size, SPA_POD_Int(256 * static_cast<int>(sizeof(f32) * callbackConfig.channels)),
+        SPA_PARAM_BUFFERS_stride, SPA_POD_Int(static_cast<int>(sizeof(f32) * callbackConfig.channels)),
         0);
     params[1] = spa_pod_builder_pop(&builder, &frame);
 
-    pwFuncs.pw_thread_loop_lock(audio.threadLoop);
+    pipewire::pwFuncs.pw_thread_loop_lock(pipewire::audio.threadLoop);
 
-    pwFuncs.pw_stream_add_listener(audio.stream, &audio.streamListener, &streamEvents, &audio);
+    pipewire::pwFuncs.pw_stream_add_listener(stream, &streamListener, &streamEvents, this);
 
-    pwFuncs.pw_stream_connect(
-        audio.stream,
+    pipewire::pwFuncs.pw_stream_connect(
+        stream,
         SPA_DIRECTION_OUTPUT,
         PW_ID_ANY,
         static_cast<pw_stream_flags>(
@@ -324,25 +335,24 @@ void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig&
         2
     );
 
-    pwFuncs.pw_thread_loop_unlock(audio.threadLoop);
+    pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop);
 
-    pwFuncs.pw_thread_loop_start(audio.threadLoop);
+    pipewire::pwFuncs.pw_thread_loop_start(pipewire::audio.threadLoop);
 }
 
-void unsetAudioCallback()
+void AudioDevicePipewire::unsetCallback()
 {
-    audio.callback = nullptr;
-    audio.callbackData = nullptr;
-    audio.callbackConfig = {};
+    callback = {};
+    callbackConfig = {};
 
-    if (audio.stream != nullptr)
+    if (stream != nullptr)
     {
-        pwFuncs.pw_thread_loop_lock(audio.threadLoop);
-        pwFuncs.pw_stream_disconnect(audio.stream);
-        pwFuncs.pw_stream_destroy(audio.stream);
-        pwFuncs.pw_thread_loop_unlock(audio.threadLoop);
-        audio.stream = nullptr;
+        pipewire::pwFuncs.pw_thread_loop_lock(pipewire::audio.threadLoop);
+        pipewire::pwFuncs.pw_stream_disconnect(stream);
+        pipewire::pwFuncs.pw_stream_destroy(stream);
+        pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop);
+        stream = nullptr;
     }
 }
 
-} // namespace hg::pipewire
+} // namespace hg

@@ -187,7 +187,7 @@ endif()
 
 set(CORE_SOURCES
     src/error.cpp
-    src/init.cpp
+    src/window.cpp
     src/utility.cpp
     src/memory.cpp
     src/concurrency.cpp

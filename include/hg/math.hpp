@@ -97,6 +97,19 @@ constexpr f32 smoothQuintic(f32 t)
 }
 
 /**
+ * An N-dimensional vector
+ */
+template<usize N>
+struct Vec {
+    /**
+     * The vector components
+     */
+    f32 vals[N];
+
+
+};
+
+/**
  * A 2D vector
  */
 struct Vec2 {

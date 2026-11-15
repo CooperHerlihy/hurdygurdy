@@ -1,4 +1,4 @@
-#include "x11_platform.hpp"
+#include "x11_window.hpp"
 
 #include "internal.hpp"
 #include "hg/error.hpp"
@@ -28,7 +28,7 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_xlib.h>
 
-namespace hg::x11 {
+namespace hg {
 
 #define HG_X11_FUNC(name) decltype(&::name) name = nullptr
 
@@ -91,13 +91,13 @@ struct XkbFuncs {
 #undef HG_X11_FUNC
 
 static Library libX11{};
-XlibFuncs xlibFuncs{};
+static XlibFuncs xlibFuncs{};
 
 static Library libXrandr{};
-XrandrFuncs xrandrFuncs{};
+static XrandrFuncs xrandrFuncs{};
 
 static Library libxkb{};
-XkbFuncs xkbFuncs{};
+static XkbFuncs xkbFuncs{};
 
 static bool loadXlib()
 {
@@ -206,7 +206,7 @@ static bool loadXkb()
     return true;
 }
 
-bool loadX11()
+static bool loadX11()
 {
     if (!loadXlib())
         return false;
@@ -217,80 +217,6 @@ bool loadX11()
 
     return true;
 }
-
-std::span<std::string_view> getPlatformVulkanExtensions()
-{
-    static std::string_view exts[] = {
-        "VK_KHR_surface",
-        "VK_KHR_xlib_surface",
-    };
-    return exts;
-}
-
-struct WindowData {
-    GpuSwapchain swap{};
-
-    ::Window x11Window = 0;
-
-    std::vector<Event> events{};
-    Vec2 mouse{};
-    u32 width = 0;
-    u32 height = 0;
-    bool wasClosed = false;
-    bool isFocused = false;
-    bool wasFocusGained = false;
-    bool wasFocusLost = false;
-    bool wasResized = false;
-
-    WindowData() noexcept = default;
-    ~WindowData() noexcept;
-
-    WindowData(WindowData&& other) noexcept;
-    WindowData& operator=(WindowData&& other) noexcept;
-
-    WindowData(const WindowData&) = delete;
-    WindowData& operator=(const WindowData&) = delete;
-};
-
-struct WindowState {
-    ::Display* display = nullptr;
-    int screen = 0;
-    ::Window root = 0;
-
-    Atom wmProtocols = 0;
-    Atom wmDeleteMessage = 0;
-    Atom wmStateAtom = 0;
-    Atom wmStateFullscreen = 0;
-    Atom clipboardAtom = 0;
-    Atom targetsAtom = 0;
-    Atom utf8StringAtom = 0;
-
-    std::vector<DisplayInfo> displays{};
-
-    Cursor cursors[CursorType_count]{};
-    Cursor currentCursor = 0;
-
-    std::vector<Event> events{};
-    bool wasQuit = false;
-    bool isKeyDown[Button_count]{};
-    bool wasKeyDown[Button_count]{};
-    Vec2 mouseDelta{};
-    Vec2 wheelDelta{};
-
-    HashMap<::Window, WindowData*> windows{};
-    WindowData* activeWindow = nullptr;
-
-    std::vector<char> clipboard{};
-    ::Window clipboardRequestor = 0;
-    Atom clipboardProperty = 0;
-
-    // XKB state
-    struct xkb_context* xkbContext = nullptr;
-    struct xkb_keymap* xkbKeymap = nullptr;
-    struct xkb_state* xkbState = nullptr;
-};
-
-static WindowState windowState{};
 
 // Button mapping
 static Button xkbKeysymToButton(KeySym keysym)
@@ -428,19 +354,19 @@ static Button xButtonToButton(unsigned int button)
     }
 }
 
-static void updateDisplayInfo()
+void InputDeviceX11::updateDisplayInfo()
 {
-    XRRScreenResources* res = xrandrFuncs.XRRGetScreenResourcesCurrent(windowState.display, windowState.root);
+    XRRScreenResources* res = xrandrFuncs.XRRGetScreenResourcesCurrent(display, root);
     if (res == nullptr)
         return;
 
-    windowState.displays.resize(static_cast<u64>(res->ncrtc));
+    displays.resize(static_cast<u64>(res->ncrtc));
 
     for (u32 i = 0; i < static_cast<u32>(res->ncrtc); i++)
     {
-        DisplayInfo& info = windowState.displays[i];
+        DisplayInfo& info = displays[i];
 
-        XRRCrtcInfo* crtc = xrandrFuncs.XRRGetCrtcInfo(windowState.display, res, res->crtcs[i]);
+        XRRCrtcInfo* crtc = xrandrFuncs.XRRGetCrtcInfo(display, res, res->crtcs[i]);
         if (crtc == nullptr)
             continue;
 
@@ -464,36 +390,44 @@ static void updateDisplayInfo()
     xrandrFuncs.XRRFreeScreenResources(res);
 }
 
-bool initX11()
-{
-    windowState = WindowState{};
 
-    windowState.display = xlibFuncs.XOpenDisplay(nullptr);
-    if (windowState.display == nullptr)
+} // namespace hg
+
+namespace hg {
+
+std::unique_ptr<InputDeviceX11> InputDeviceX11::create()
+{
+    if (!loadX11())
+        return nullptr;
+
+    std::unique_ptr<InputDeviceX11> device = std::make_unique<InputDeviceX11>();
+
+    device->display = xlibFuncs.XOpenDisplay(nullptr);
+    if (device->display == nullptr)
     {
         setError("Could not open X11 display");
-        return false;
+        return nullptr;
     }
 
-    windowState.screen = xlibFuncs.XDefaultScreen(windowState.display);
-    windowState.root = xlibFuncs.XRootWindow(windowState.display, windowState.screen);
+    device->screen = xlibFuncs.XDefaultScreen(device->display);
+    device->root = xlibFuncs.XRootWindow(device->display, device->screen);
 
     // Create atoms
-    windowState.wmProtocols = xlibFuncs.XInternAtom(windowState.display,"WM_PROTOCOLS", False);
-    windowState.wmDeleteMessage = xlibFuncs.XInternAtom(windowState.display,"WM_DELETE_WINDOW", False);
-    windowState.wmStateAtom = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE", False);
-    windowState.wmStateFullscreen = xlibFuncs.XInternAtom(windowState.display,"_NET_WM_STATE_FULLSCREEN", False);
-    windowState.clipboardAtom = xlibFuncs.XInternAtom(windowState.display,"CLIPBOARD", False);
-    windowState.targetsAtom = xlibFuncs.XInternAtom(windowState.display,"TARGETS", False);
-    windowState.utf8StringAtom = xlibFuncs.XInternAtom(windowState.display,"UTF8_STRING", False);
+    device->wmProtocols = xlibFuncs.XInternAtom(device->display,"WM_PROTOCOLS", False);
+    device->wmDeleteMessage = xlibFuncs.XInternAtom(device->display,"WM_DELETE_WINDOW", False);
+    device->wmStateAtom = xlibFuncs.XInternAtom(device->display,"_NET_WM_STATE", False);
+    device->wmStateFullscreen = xlibFuncs.XInternAtom(device->display,"_NET_WM_STATE_FULLSCREEN", False);
+    device->clipboardAtom = xlibFuncs.XInternAtom(device->display,"CLIPBOARD", False);
+    device->targetsAtom = xlibFuncs.XInternAtom(device->display,"TARGETS", False);
+    device->utf8StringAtom = xlibFuncs.XInternAtom(device->display,"UTF8_STRING", False);
 
     // Initialize XKB
-    windowState.xkbContext = xkbFuncs.xkb_context_new(static_cast<xkb_context_flags>(0));
-    if (windowState.xkbContext == nullptr)
+    device->xkbContext = xkbFuncs.xkb_context_new(static_cast<xkb_context_flags>(0));
+    if (device->xkbContext == nullptr)
     {
         setError("Could not create XKB context");
-        xlibFuncs.XCloseDisplay(windowState.display);
-        return false;
+        xlibFuncs.XCloseDisplay(device->display);
+        return nullptr;
     }
 
     struct xkb_rule_names names = {
@@ -504,374 +438,108 @@ bool initX11()
         .options = ""
     };
 
-    windowState.xkbKeymap = xkbFuncs.xkb_keymap_new_from_names(windowState.xkbContext, &names, static_cast<xkb_keymap_compile_flags>(0));
-    if (windowState.xkbKeymap == nullptr)
+    device->xkbKeymap = xkbFuncs.xkb_keymap_new_from_names(device->xkbContext, &names, static_cast<xkb_keymap_compile_flags>(0));
+    if (device->xkbKeymap == nullptr)
     {
         setError("Could not create XKB keymap");
-        xkbFuncs.xkb_context_unref(windowState.xkbContext);
-        xlibFuncs.XCloseDisplay(windowState.display);
-        return false;
+        xkbFuncs.xkb_context_unref(device->xkbContext);
+        xlibFuncs.XCloseDisplay(device->display);
+        return nullptr;
     }
 
-    windowState.xkbState = xkbFuncs.xkb_state_new(windowState.xkbKeymap);
-    if (windowState.xkbState == nullptr)
+    device->xkbState = xkbFuncs.xkb_state_new(device->xkbKeymap);
+    if (device->xkbState == nullptr)
     {
         setError("Could not create XKB state");
-        xkbFuncs.xkb_keymap_unref(windowState.xkbKeymap);
-        xkbFuncs.xkb_context_unref(windowState.xkbContext);
-        xlibFuncs.XCloseDisplay(windowState.display);
-        return false;
+        xkbFuncs.xkb_keymap_unref(device->xkbKeymap);
+        xkbFuncs.xkb_context_unref(device->xkbContext);
+        xlibFuncs.XCloseDisplay(device->display);
+        return nullptr;
     }
 
     // Create default cursors
-    windowState.cursors[CursorType_arrow] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_left_ptr));
-    windowState.cursors[CursorType_textInput] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_xterm));
-    windowState.cursors[CursorType_resizeAll] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_fleur));
-    windowState.cursors[CursorType_resizeNESW] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_plus));
-    windowState.cursors[CursorType_resizeNS] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_sb_v_double_arrow));
-    windowState.cursors[CursorType_resizeNWSE] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_plus));
-    windowState.cursors[CursorType_resizeEW] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_sb_h_double_arrow));
-    windowState.cursors[CursorType_hand] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_hand2));
-    windowState.cursors[CursorType_wait] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_watch));
-    windowState.cursors[CursorType_progress] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_watch));
-    windowState.cursors[CursorType_notAllowed] = xlibFuncs.XCreateFontCursor(windowState.display,static_cast<unsigned int>(XC_X_cursor));
+    device->cursors[CursorType_arrow] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_left_ptr));
+    device->cursors[CursorType_textInput] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_xterm));
+    device->cursors[CursorType_resizeAll] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_fleur));
+    device->cursors[CursorType_resizeNESW] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_plus));
+    device->cursors[CursorType_resizeNS] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_sb_v_double_arrow));
+    device->cursors[CursorType_resizeNWSE] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_plus));
+    device->cursors[CursorType_resizeEW] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_sb_h_double_arrow));
+    device->cursors[CursorType_hand] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_hand2));
+    device->cursors[CursorType_wait] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_watch));
+    device->cursors[CursorType_progress] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_watch));
+    device->cursors[CursorType_notAllowed] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_X_cursor));
 
     // Enumerate displays
-    updateDisplayInfo();
+    device->updateDisplayInfo();
 
-    return true;
+    return device;
 }
 
-void deinitX11()
+InputDeviceX11::~InputDeviceX11()
 {
+    if (display == nullptr)
+        return;
+
     for (u32 i = 0; i < CursorType_count; i++)
     {
-        if (windowState.cursors[i] != 0)
-            xlibFuncs.XFreeCursor(windowState.display,windowState.cursors[i]);
+        if (cursors[i] != 0)
+            xlibFuncs.XFreeCursor(display,cursors[i]);
     }
-    windowState.currentCursor = 0;
+    currentCursor = 0;
 
     // Cleanup XKB
-    if (windowState.xkbState != nullptr)
-        xkbFuncs.xkb_state_unref(windowState.xkbState);
-    if (windowState.xkbKeymap != nullptr)
-        xkbFuncs.xkb_keymap_unref(windowState.xkbKeymap);
-    if (windowState.xkbContext != nullptr)
-        xkbFuncs.xkb_context_unref(windowState.xkbContext);
+    if (xkbState != nullptr)
+        xkbFuncs.xkb_state_unref(xkbState);
+    if (xkbKeymap != nullptr)
+        xkbFuncs.xkb_keymap_unref(xkbKeymap);
+    if (xkbContext != nullptr)
+        xkbFuncs.xkb_context_unref(xkbContext);
 
-    if (windowState.display != nullptr)
-        xlibFuncs.XCloseDisplay(windowState.display);
+    if (display != nullptr)
+        xlibFuncs.XCloseDisplay(display);
 }
 
-WindowData::~WindowData() noexcept
+std::span<std::string_view> InputDeviceX11::getVulkanExtensions()
 {
-    if (x11Window != 0)
-    {
-        windowState.windows.remove(x11Window);
-        xlibFuncs.XDestroyWindow(windowState.display,x11Window);
-    }
+    static std::string_view exts[] = {
+        "VK_KHR_surface",
+        "VK_KHR_xlib_surface",
+    };
+    return exts;
 }
 
-WindowData::WindowData(WindowData&& other) noexcept
-    : swap{std::exchange(other.swap, GpuSwapchain{})}
-    , x11Window{std::exchange(other.x11Window, 0)}
-    , events{std::exchange(other.events, std::vector<Event>{})}
-    , mouse{other.mouse}
-    , width{other.width}
-    , height{other.height}
-    , wasClosed{other.wasClosed}
-    , isFocused{other.isFocused}
-    , wasFocusGained{other.wasFocusGained}
-    , wasFocusLost{other.wasFocusLost}
-    , wasResized{other.wasResized}
-{}
-
-WindowData& WindowData::operator=(WindowData&& other) noexcept
+std::span<DisplayInfo> InputDeviceX11::displayInfo()
 {
-    if (this != &other)
-    {
-        if (x11Window != 0)
-        {
-            windowState.windows.remove(x11Window);
-            xlibFuncs.XDestroyWindow(windowState.display,x11Window);
-        }
-
-        swap = std::exchange(other.swap, GpuSwapchain{});
-        x11Window = std::exchange(other.x11Window, 0);
-        events = std::exchange(other.events, std::vector<Event>{});
-        mouse = other.mouse;
-        width = other.width;
-        height = other.height;
-        wasClosed = other.wasClosed;
-        isFocused = other.isFocused;
-        wasFocusGained = other.wasFocusGained;
-        wasFocusLost = other.wasFocusLost;
-        wasResized = other.wasResized;
-    }
-    return *this;
+    return displays;
 }
 
-Window windowCreate(const WindowConfig& config)
-{
-    u32 width = config.width != 0 ? config.width : 800;
-    u32 height = config.height != 0 ? config.height : 600;
-    std::string titleStr = config.title.length() != 0 ? std::string{config.title} : "Hurdy Gurdy";
-    const char* title = titleStr.c_str();
-
-    std::unique_ptr<WindowData> windowData = std::make_unique<WindowData>();
-    WindowData* window = windowData.get();
-
-    XWindowAttributes attrs;
-    xlibFuncs.XGetWindowAttributes(windowState.display,windowState.root, &attrs);
-
-    window->x11Window = xlibFuncs.XCreateWindow(
-        windowState.display,
-        windowState.root,
-        0, 0,
-        static_cast<u16>(width), static_cast<u16>(height),
-        0,
-        CopyFromParent,
-        InputOutput,
-        nullptr,
-        0,
-        nullptr
-    );
-
-    if (window->x11Window == 0)
-    {
-        setError("Could not create X11 window");
-        return Window{};
-    }
-
-    // Set window title
-    xlibFuncs.XStoreName(windowState.display,window->x11Window, title);
-
-    // Set WM_DELETE_WINDOW protocol
-    xlibFuncs.XSetWMProtocols(windowState.display,window->x11Window, &windowState.wmDeleteMessage, 1);
-
-    // Select input events
-    xlibFuncs.XSelectInput(windowState.display,window->x11Window,
-        ExposureMask |
-        KeyPressMask | KeyReleaseMask |
-        ButtonPressMask | ButtonReleaseMask |
-        PointerMotionMask |
-        FocusChangeMask |
-        StructureNotifyMask |
-        PropertyChangeMask
-    );
-
-    // Create Vulkan surface
-    VkXlibSurfaceCreateInfoKHR createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-    createInfo.dpy = windowState.display;
-    createInfo.window = window->x11Window;
-
-    using PFN_vkCreateXlibSurfaceKHR = VkResult(*)(VkInstance, const VkXlibSurfaceCreateInfoKHR*, const VkAllocationCallbacks*, VkSurfaceKHR*);
-    auto vkCreateXlibSurfaceKHR = reinterpret_cast<PFN_vkCreateXlibSurfaceKHR>(
-        internal::getVkInstanceProcAddr("vkCreateXlibSurfaceKHR"));
-
-    VkSurfaceKHR surface;
-    VkResult result = vkCreateXlibSurfaceKHR(
-        static_cast<VkInstance>(internal::getVkInstance()),
-        &createInfo,
-        nullptr,
-        &surface
-    );
-
-    if (result != VK_SUCCESS)
-    {
-        xlibFuncs.XDestroyWindow(windowState.display,window->x11Window);
-        setError("Could not create Vulkan surface");
-        return Window{};
-    }
-
-    u32 winW = 800;
-    u32 winH = 600;
-    window->swap = GpuSwapchain::create(surface, winW, winH, config.preferredPresentMode, config.imageUsage);
-
-    // Get initial window attributes
-    xlibFuncs.XGetWindowAttributes(windowState.display,window->x11Window, &attrs);
-    window->width = static_cast<u32>(attrs.width);
-    window->height = static_cast<u32>(attrs.height);
-    window->isFocused = (attrs.map_state == IsViewable);
-
-    windowState.windows.add(window->x11Window, window);
-
-    // Map the window
-    xlibFuncs.XMapWindow(windowState.display,window->x11Window);
-
-    Window w{};
-    w.data = windowData.release();
-    return w;
-}
-
-void windowDestroy(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    delete window;
-}
-
-GpuSwapchain& windowSwapchain(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->swap;
-}
-
-void windowSetTitle(void* data, std::string_view title)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    char buf[256];
-    u64 len = title.length() < sizeof(buf) - 1 ? title.length() : sizeof(buf) - 1;
-    std::memcpy(buf, title.data(), len);
-    buf[len] = '\0';
-    xlibFuncs.XStoreName(windowState.display,window->x11Window, buf);
-}
-
-std::span<Event> windowEvents(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->events;
-}
-
-bool windowWasClosed(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasClosed;
-}
-
-bool windowIsFocused(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->isFocused;
-}
-
-bool windowWasFocusGained(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasFocusGained;
-}
-
-bool windowWasFocusLost(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasFocusLost;
-}
-
-bool windowWasResized(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->wasResized;
-}
-
-void windowGetSize(void* data, u32* w, u32* h)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    *w = window->width;
-    *h = window->height;
-}
-
-void windowSetFullscreen(void* data, bool set)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-
-    XEvent event{};
-    event.xclient.type = ClientMessage;
-    event.xclient.window = window->x11Window;
-    event.xclient.message_type = windowState.wmStateAtom;
-    event.xclient.format = 32;
-    event.xclient.data.l[0] = set ? 1 : 0; // _NET_WM_STATE_ADD or _NET_WM_STATE_REMOVE
-    event.xclient.data.l[1] = static_cast<long>(windowState.wmStateFullscreen);
-    event.xclient.data.l[2] = 0;
-    event.xclient.data.l[3] = 1;
-
-    xlibFuncs.XSendEvent(windowState.display,windowState.root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
-}
-
-Vec2 windowMousePos(void* data)
-{
-    WindowData* window = static_cast<WindowData*>(data);
-    return window->mouse;
-}
-
-Vec2 windowMouseDelta(void* data)
-{
-    (void)data;
-    return windowState.mouseDelta;
-}
-
-// Global functions
-std::span<DisplayInfo> displayInfo()
-{
-    return windowState.displays;
-}
-
-void setCursor(CursorType type)
-{
-    if (type < CursorType_count && windowState.cursors[type] != 0)
-    {
-        windowState.currentCursor = windowState.cursors[type];
-        // Apply to all windows
-        windowState.windows.forEach([](::Window, WindowData* window)
-        {
-            if (windowState.currentCursor != 0)
-                xlibFuncs.XDefineCursor(windowState.display,window->x11Window, windowState.currentCursor);
-            else
-                xlibFuncs.XUndefineCursor(windowState.display,window->x11Window);
-        });
-    }
-}
-
-void showCursor(bool show)
-{
-    if (show)
-    {
-        windowState.windows.forEach([](::Window, WindowData* window)
-        {
-            if (windowState.currentCursor != 0)
-                xlibFuncs.XDefineCursor(windowState.display,window->x11Window, windowState.currentCursor);
-        });
-    }
-    else
-    {
-        windowState.windows.forEach([](::Window, WindowData* window)
-        {
-            // Create a 1x1 transparent cursor
-            Pixmap pixmap = xlibFuncs.XCreatePixmap(windowState.display, windowState.root, 1, 1, 1);
-            XColor color{};
-            Cursor cursor = xlibFuncs.XCreatePixmapCursor(windowState.display, pixmap, pixmap, &color, &color, 0, 0);
-            xlibFuncs.XDefineCursor(windowState.display,window->x11Window, cursor);
-            xlibFuncs.XFreeCursor(windowState.display,cursor);
-                xlibFuncs.XFreePixmap(windowState.display, pixmap);
-        });
-    }
-}
-
-void processEvents()
+void InputDeviceX11::processEvents()
 {
     // Copy previous key state
-    std::memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
+    std::memcpy(wasKeyDown, isKeyDown, sizeof(isKeyDown));
 
     // Reset deltas
-    windowState.mouseDelta = Vec2{};
-    windowState.wheelDelta = Vec2{};
+    mouseDeltaAccum = Vec2{};
+    wheelDeltaAccum = Vec2{};
 
     // Reset per-window flags
-    windowState.windows.forEach([](::Window, WindowData* window)
+    windows.forEach([&](::Window, WindowX11* window)
     {
-        window->wasFocusGained = false;
-        window->wasFocusLost = false;
-        window->wasResized = false;
-        window->events.resize(0);
+        window->focusGained = false;
+        window->focusLost = false;
+        window->resized = false;
+        window->eventQueue.resize(0);
     });
 
     // Clear global events
-    windowState.events.resize(0);
+    events.resize(0);
 
     // Process X11 events
-    while (xlibFuncs.XPending(windowState.display))
+    while (xlibFuncs.XPending(display))
     {
         XEvent event;
-        xlibFuncs.XNextEvent(windowState.display,&event);
+        xlibFuncs.XNextEvent(display,&event);
 
         switch (event.type)
         {
@@ -881,7 +549,7 @@ void processEvents()
                 bool pressed = (event.type == KeyPress);
 
                 // Update XKB state
-                xkbFuncs.xkb_state_update_mask(windowState.xkbState,
+                xkbFuncs.xkb_state_update_mask(xkbState,
                     event.xkey.state & ShiftMask ? 1 : 0,
                     event.xkey.state & LockMask ? 1 : 0,
                     0,
@@ -892,32 +560,32 @@ void processEvents()
                 // modifier-dependent keysym: press/release must resolve to
                 // the same button with or without shift.
                 Button button = Button_count;
-                if (windowState.xkbState != nullptr)
+                if (xkbState != nullptr)
                 {
                     xkb_layout_index_t layout =
-                        xkbFuncs.xkb_state_key_get_layout(windowState.xkbState, event.xkey.keycode);
+                        xkbFuncs.xkb_state_key_get_layout(xkbState, event.xkey.keycode);
                     const xkb_keysym_t* syms = nullptr;
                     int numSyms = xkbFuncs.xkb_keymap_key_get_syms_by_level(
-                        windowState.xkbKeymap, event.xkey.keycode, layout, 0, &syms);
+                        xkbKeymap, event.xkey.keycode, layout, 0, &syms);
                     if (numSyms > 0 && syms != nullptr)
                         button = xkbKeysymToButton(syms[0]);
                 }
 
                 if (button < Button_count)
                 {
-                    windowState.isKeyDown[button] = pressed;
+                    isKeyDown[button] = pressed;
 
                     Event e{};
                     e.type = pressed ? EventType_keyPress : EventType_keyRelease;
                     e.button = button;
-                    windowState.events.push_back(e);
+                    events.push_back(e);
                 }
 
                 // Text input
                 if (pressed)
                 {
                     char buf[32];
-                    int len = xkbFuncs.xkb_state_key_get_utf8(windowState.xkbState, event.xkey.keycode, buf, sizeof(buf) - 1);
+                    int len = xkbFuncs.xkb_state_key_get_utf8(xkbState, event.xkey.keycode, buf, sizeof(buf) - 1);
                     if (len > 0)
                     {
                         buf[len] = '\0';
@@ -925,7 +593,7 @@ void processEvents()
                         e.type = EventType_text;
                         std::memset(e.text, 0, sizeof(e.text));
                         std::memcpy(e.text, buf, static_cast<u64>(len));
-                        windowState.events.push_back(e);
+                        events.push_back(e);
                     }
                 }
                 break;
@@ -947,12 +615,12 @@ void processEvents()
                         else if (event.xbutton.button == 6) delta.x = 1.0f;
                         else if (event.xbutton.button == 7) delta.x = -1.0f;
 
-                        windowState.wheelDelta += delta;
+                        wheelDeltaAccum += delta;
 
                         Event e{};
                         e.type = EventType_wheelMoved;
                         e.wheel.delta = delta;
-                        windowState.events.push_back(e);
+                        events.push_back(e);
                     }
                     break;
                 }
@@ -961,12 +629,12 @@ void processEvents()
 
                 if (button < Button_count)
                 {
-                    windowState.isKeyDown[button] = pressed;
+                    isKeyDown[button] = pressed;
 
                     Event e{};
                     e.type = pressed ? EventType_keyPress : EventType_keyRelease;
                     e.button = button;
-                    windowState.events.push_back(e);
+                    events.push_back(e);
                 }
 
                 break;
@@ -974,21 +642,21 @@ void processEvents()
 
             case MotionNotify:
             {
-                WindowData** found = windowState.windows.get(event.xmotion.window);
+                WindowX11** found = windows.get(event.xmotion.window);
                 if (found != nullptr)
                 {
-                    WindowData* window = *found;
+                    WindowX11* window = *found;
                     Vec2 newPos{static_cast<f32>(event.xmotion.x), static_cast<f32>(event.xmotion.y)};
                     Vec2 delta = newPos - window->mouse;
                     window->mouse = newPos;
-                    windowState.mouseDelta += delta;
+                    mouseDeltaAccum += delta;
 
                     Event e{};
                     e.type = EventType_mouseMoved;
                     e.mouse.delta = delta;
                     e.mouse.pos = newPos;
                     e.mouse.globalPos = Vec2{static_cast<f32>(event.xmotion.x_root), static_cast<f32>(event.xmotion.y_root)};
-                    windowState.events.push_back(e);
+                    events.push_back(e);
                 }
                 break;
             }
@@ -996,29 +664,29 @@ void processEvents()
             case FocusIn:
             case FocusOut:
             {
-                WindowData** found = windowState.windows.get(event.xfocus.window);
+                WindowX11** found = windows.get(event.xfocus.window);
                 if (found != nullptr)
                 {
-                    WindowData* window = *found;
+                    WindowX11* window = *found;
                     bool focused = (event.type == FocusIn);
-                    if (focused != window->isFocused)
+                    if (focused != window->focused)
                     {
-                        window->isFocused = focused;
+                        window->focused = focused;
                         if (focused)
                         {
-                            window->wasFocusGained = true;
-                            windowState.activeWindow = window;
+                            window->focusGained = true;
+                            activeWindow = window;
                         }
                         else
                         {
-                            window->wasFocusLost = true;
-                            if (windowState.activeWindow == window)
-                                windowState.activeWindow = nullptr;
+                            window->focusLost = true;
+                            if (activeWindow == window)
+                                activeWindow = nullptr;
                         }
 
                         Event e{};
                         e.type = focused ? EventType_windowFocused : EventType_windowUnfocused;
-                        windowState.events.push_back(e);
+                        events.push_back(e);
                     }
                 }
                 break;
@@ -1026,16 +694,16 @@ void processEvents()
 
             case ConfigureNotify:
             {
-                WindowData** found = windowState.windows.get(event.xconfigure.window);
+                WindowX11** found = windows.get(event.xconfigure.window);
                 if (found != nullptr)
                 {
-                    WindowData* window = *found;
+                    WindowX11* window = *found;
                     u32 newW = static_cast<u32>(event.xconfigure.width);
                     u32 newH = static_cast<u32>(event.xconfigure.height);
 
                     if (newW != window->width || newH != window->height)
                     {
-                        window->wasResized = true;
+                        window->resized = true;
                         window->width = newW;
                         window->height = newH;
                     }
@@ -1045,21 +713,21 @@ void processEvents()
 
             case ClientMessage:
             {
-                if (event.xclient.message_type == windowState.wmProtocols &&
-                    static_cast<Atom>(event.xclient.data.l[0]) == windowState.wmDeleteMessage)
+                if (event.xclient.message_type == wmProtocols &&
+                    static_cast<Atom>(event.xclient.data.l[0]) == wmDeleteMessage)
                 {
-                    windowState.wasQuit = true;
+                    quit = true;
                     Event e{};
                     e.type = EventType_quit;
-                    windowState.events.push_back(e);
+                    events.push_back(e);
 
-                    WindowData** found = windowState.windows.get(event.xclient.window);
+                    WindowX11** found = windows.get(event.xclient.window);
                     if (found != nullptr)
                     {
-                        (*found)->wasClosed = true;
+                        (*found)->closed = true;
                         Event e2{};
                         e2.type = EventType_windowClosed;
-                        windowState.events.push_back(e2);
+                        events.push_back(e2);
                     }
                 }
                 break;
@@ -1067,7 +735,7 @@ void processEvents()
 
             case SelectionNotify:
             {
-                if (event.xselection.selection == windowState.clipboardAtom &&
+                if (event.xselection.selection == clipboardAtom &&
                     event.xselection.property != None)
                 {
                     // Get clipboard data
@@ -1076,7 +744,7 @@ void processEvents()
                     unsigned long nitems, bytesAfter;
                     unsigned char* data = nullptr;
 
-                    xlibFuncs.XGetWindowProperty(windowState.display,
+                    xlibFuncs.XGetWindowProperty(display,
                         event.xselection.requestor,
                         event.xselection.property,
                         0, 1024 * 1024, // 1MB max
@@ -1091,8 +759,8 @@ void processEvents()
 
                     if (data != nullptr && nitems > 0)
                     {
-                        windowState.clipboard.resize(nitems);
-                        std::memcpy(windowState.clipboard.data(), data, nitems);
+                        clipboard.resize(nitems);
+                        std::memcpy(clipboard.data(), data, nitems);
                         xlibFuncs.XFree(data);
                     }
                 }
@@ -1101,7 +769,7 @@ void processEvents()
 
             case SelectionRequest:
             {
-                if (event.xselectionrequest.selection == windowState.clipboardAtom)
+                if (event.xselectionrequest.selection == clipboardAtom)
                 {
                     XEvent reply{};
                     reply.xselection.type = SelectionNotify;
@@ -1111,11 +779,11 @@ void processEvents()
                     reply.xselection.target = event.xselectionrequest.target;
                     reply.xselection.time = event.xselectionrequest.time;
 
-                    if (event.xselectionrequest.target == windowState.targetsAtom)
+                    if (event.xselectionrequest.target == targetsAtom)
                     {
                         // Send supported targets
-                        Atom targets[] = {windowState.targetsAtom, windowState.utf8StringAtom};
-                        xlibFuncs.XChangeProperty(windowState.display,
+                        Atom targets[] = {targetsAtom, utf8StringAtom};
+                        xlibFuncs.XChangeProperty(display,
                             event.xselectionrequest.requestor,
                             event.xselectionrequest.property,
                             XA_ATOM,
@@ -1126,19 +794,19 @@ void processEvents()
                         );
                         reply.xselection.property = event.xselectionrequest.property;
                     }
-                    else if (event.xselectionrequest.target == windowState.utf8StringAtom)
+                    else if (event.xselectionrequest.target == utf8StringAtom)
                     {
                         // Send clipboard content
-                        if (windowState.clipboard.size() > 0)
+                        if (clipboard.size() > 0)
                         {
-                            xlibFuncs.XChangeProperty(windowState.display,
+                            xlibFuncs.XChangeProperty(display,
                                 event.xselectionrequest.requestor,
                                 event.xselectionrequest.property,
-                                windowState.utf8StringAtom,
+                                utf8StringAtom,
                                 8,
                                 PropModeReplace,
-                                reinterpret_cast<const unsigned char*>(windowState.clipboard.data()),
-                                static_cast<int>(windowState.clipboard.size())
+                                reinterpret_cast<const unsigned char*>(clipboard.data()),
+                                static_cast<int>(clipboard.size())
                             );
                             reply.xselection.property = event.xselectionrequest.property;
                         }
@@ -1158,48 +826,138 @@ void processEvents()
     }
 
     // Forward events to windows
-    windowState.windows.forEach([](::Window, WindowData* window)
+    windows.forEach([&](::Window, WindowX11* window)
     {
-        window->events.clear();
-        for (u64 i = 0; i < windowState.events.size(); ++i)
-            window->events.push_back(windowState.events[i]);
+        window->eventQueue.clear();
+        for (u64 i = 0; i < events.size(); ++i)
+            window->eventQueue.push_back(events[i]);
     });
 }
 
-std::span<Event> getEvents()
+std::span<Event> InputDeviceX11::getEvents()
 {
-    return windowState.events;
+    return events;
 }
 
-bool wasQuit()
+bool InputDeviceX11::wasQuit()
 {
-    return windowState.wasQuit;
+    return quit;
 }
 
-bool isButtonDown(Button key)
+std::unique_ptr<Window> InputDeviceX11::createWindow(const WindowConfig& config)
 {
-    return windowState.isKeyDown[key];
+    u32 width = config.width != 0 ? config.width : 800;
+    u32 height = config.height != 0 ? config.height : 600;
+    std::string titleStr = config.title.length() != 0 ? std::string{config.title} : "Hurdy Gurdy";
+    const char* title = titleStr.c_str();
+
+    std::unique_ptr<WindowX11> window = std::make_unique<WindowX11>(this);
+
+    XWindowAttributes attrs;
+    xlibFuncs.XGetWindowAttributes(display,root, &attrs);
+
+    window->x11Window = xlibFuncs.XCreateWindow(
+        display,
+        root,
+        0, 0,
+        static_cast<u16>(width), static_cast<u16>(height),
+        0,
+        CopyFromParent,
+        InputOutput,
+        nullptr,
+        0,
+        nullptr
+    );
+
+    if (window->x11Window == 0)
+    {
+        setError("Could not create X11 window");
+        return nullptr;
+    }
+
+    // Set window title
+    xlibFuncs.XStoreName(display,window->x11Window, title);
+
+    // Set WM_DELETE_WINDOW protocol
+    xlibFuncs.XSetWMProtocols(display,window->x11Window, &wmDeleteMessage, 1);
+
+    // Select input events
+    xlibFuncs.XSelectInput(display,window->x11Window,
+        ExposureMask |
+        KeyPressMask | KeyReleaseMask |
+        ButtonPressMask | ButtonReleaseMask |
+        PointerMotionMask |
+        FocusChangeMask |
+        StructureNotifyMask |
+        PropertyChangeMask
+    );
+
+    // Create Vulkan surface
+    VkXlibSurfaceCreateInfoKHR createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+    createInfo.dpy = display;
+    createInfo.window = window->x11Window;
+
+    using PFN_vkCreateXlibSurfaceKHR = VkResult(*)(VkInstance, const VkXlibSurfaceCreateInfoKHR*, const VkAllocationCallbacks*, VkSurfaceKHR*);
+    auto vkCreateXlibSurfaceKHR = reinterpret_cast<PFN_vkCreateXlibSurfaceKHR>(
+        internal::getVkInstanceProcAddr("vkCreateXlibSurfaceKHR"));
+
+    VkSurfaceKHR surface;
+    VkResult result = vkCreateXlibSurfaceKHR(
+        static_cast<VkInstance>(internal::getVkInstance()),
+        &createInfo,
+        nullptr,
+        &surface
+    );
+
+    if (result != VK_SUCCESS)
+    {
+        setError("Could not create Vulkan surface");
+        return nullptr;
+    }
+
+    u32 winW = 800;
+    u32 winH = 600;
+    window->swap = GpuSwapchain::create(surface, winW, winH, config.preferredPresentMode, config.imageUsage);
+
+    // Get initial window attributes
+    xlibFuncs.XGetWindowAttributes(display,window->x11Window, &attrs);
+    window->width = static_cast<u32>(attrs.width);
+    window->height = static_cast<u32>(attrs.height);
+    window->focused = (attrs.map_state == IsViewable);
+
+    windows.add(window->x11Window, window.get());
+
+    // Map the window
+    xlibFuncs.XMapWindow(display,window->x11Window);
+
+    return window;
 }
 
-bool wasButtonPressed(Button key)
+bool InputDeviceX11::isButtonDown(Button button)
 {
-    return windowState.isKeyDown[key] && !windowState.wasKeyDown[key];
+    return isKeyDown[button];
 }
 
-bool wasButtonReleased(Button key)
+bool InputDeviceX11::wasButtonPressed(Button button)
 {
-    return !windowState.isKeyDown[key] && windowState.wasKeyDown[key];
+    return isKeyDown[button] && !wasKeyDown[button];
 }
 
-Vec2 mousePos()
+bool InputDeviceX11::wasButtonReleased(Button button)
 {
-    if (windowState.activeWindow != nullptr)
-        return windowState.activeWindow->mouse;
+    return !isKeyDown[button] && wasKeyDown[button];
+}
 
-    if (windowState.windows.count == 1)
+Vec2 InputDeviceX11::mousePos()
+{
+    if (activeWindow != nullptr)
+        return activeWindow->mouse;
+
+    if (windows.count == 1)
     {
         Vec2 ret{};
-        windowState.windows.forEach([&](::Window, WindowData* wd)
+        windows.forEach([&](::Window, WindowX11* wd)
         {
             ret = wd->mouse;
         });
@@ -1208,56 +966,155 @@ Vec2 mousePos()
     return {};
 }
 
-Vec2 mouseDelta()
+Vec2 InputDeviceX11::mouseDelta()
 {
-    if (windowState.activeWindow != nullptr)
-        return windowState.mouseDelta / static_cast<f32>(windowState.activeWindow->height);
+    if (activeWindow != nullptr)
+        return mouseDeltaAccum / static_cast<f32>(activeWindow->height);
 
-    if (windowState.windows.count == 1)
+    if (windows.count == 1)
     {
-        Vec2 ret = windowState.mouseDelta;
-        windowState.windows.forEach([&](::Window, WindowData* wd)
+        Vec2 ret = mouseDeltaAccum;
+        windows.forEach([&](::Window, WindowX11* wd)
         {
             ret = ret / static_cast<f32>(wd->height);
         });
         return ret;
     }
-    return windowState.mouseDelta;
+    return mouseDeltaAccum;
 }
 
-Vec2 wheelDelta()
+Vec2 InputDeviceX11::wheelDelta()
 {
-    return windowState.wheelDelta;
+    return wheelDeltaAccum;
 }
 
-std::string_view getClipboardText()
+void InputDeviceX11::setCursor(CursorType type)
 {
-    if (windowState.clipboard.size() == 0)
-        return std::string_view{};
-
-    return std::string_view{windowState.clipboard.data(), windowState.clipboard.size()};
+    if (type < CursorType_count && cursors[type] != 0)
+    {
+        currentCursor = cursors[type];
+        // Apply to all windows
+        windows.forEach([&](::Window, WindowX11* window)
+        {
+            if (currentCursor != 0)
+                xlibFuncs.XDefineCursor(display,window->x11Window, currentCursor);
+            else
+                xlibFuncs.XUndefineCursor(display,window->x11Window);
+        });
+    }
 }
 
-void setClipboardText(std::string_view text)
+void InputDeviceX11::showCursor(bool show)
 {
-    windowState.clipboard.resize(text.length());
-    std::memcpy(windowState.clipboard.data(), text.data(), text.length());
-
-    // Claim clipboard ownership
-    xlibFuncs.XSetSelectionOwner(windowState.display,windowState.clipboardAtom, windowState.root, CurrentTime);
+    if (show)
+    {
+        windows.forEach([&](::Window, WindowX11* window)
+        {
+            if (currentCursor != 0)
+                xlibFuncs.XDefineCursor(display,window->x11Window, currentCursor);
+        });
+    }
+    else
+    {
+        windows.forEach([&](::Window, WindowX11* window)
+        {
+            // Create a 1x1 transparent cursor
+            Pixmap pixmap = xlibFuncs.XCreatePixmap(display, root, 1, 1, 1);
+            XColor color{};
+            Cursor cursor = xlibFuncs.XCreatePixmapCursor(display, pixmap, pixmap, &color, &color, 0, 0);
+            xlibFuncs.XDefineCursor(display,window->x11Window, cursor);
+            xlibFuncs.XFreeCursor(display,cursor);
+            xlibFuncs.XFreePixmap(display, pixmap);
+        });
+    }
 }
 
-void openURL(std::string_view url)
+WindowX11::~WindowX11()
 {
-    // Use xdg-open for URL opening
-    char cmd[1024];
-    u64 len = url.length() < sizeof(cmd) - 16 ? url.length() : sizeof(cmd) - 16;
-    std::memcpy(cmd, url.data(), len);
-    cmd[len] = '\0';
-
-    char fullCmd[1024];
-    snprintf(fullCmd, sizeof(fullCmd), "xdg-open '%s' &", cmd);
-    (void)system(fullCmd);
+    if (x11Window != 0)
+    {
+        static_cast<InputDeviceX11*>(device)->windows.remove(x11Window);
+        xlibFuncs.XDestroyWindow(static_cast<InputDeviceX11*>(device)->display, x11Window);
+    }
 }
 
-} // namespace hg::x11
+GpuSwapchain& WindowX11::swapchain() const
+{
+    return swap;
+}
+
+void WindowX11::setTitle(std::string_view title)
+{
+    char buf[256];
+    u64 len = title.length() < sizeof(buf) - 1 ? title.length() : sizeof(buf) - 1;
+    std::memcpy(buf, title.data(), len);
+    buf[len] = '\0';
+    xlibFuncs.XStoreName(static_cast<InputDeviceX11*>(device)->display, x11Window, buf);
+}
+
+std::span<Event> WindowX11::events() const
+{
+    return eventQueue;
+}
+
+bool WindowX11::wasClosed() const
+{
+    return closed;
+}
+
+bool WindowX11::isFocused() const
+{
+    return focused;
+}
+
+bool WindowX11::wasFocusGained() const
+{
+    return focusGained;
+}
+
+bool WindowX11::wasFocusLost() const
+{
+    return focusLost;
+}
+
+bool WindowX11::wasResized() const
+{
+    return resized;
+}
+
+void WindowX11::size(u32* outWidth, u32* outHeight) const
+{
+    if (outWidth != nullptr)
+        *outWidth = width;
+    if (outHeight != nullptr)
+        *outHeight = height;
+}
+
+void WindowX11::setFullscreen(bool set)
+{
+    InputDeviceX11* dev = static_cast<InputDeviceX11*>(device);
+
+    XEvent event{};
+    event.xclient.type = ClientMessage;
+    event.xclient.window = x11Window;
+    event.xclient.message_type = dev->wmStateAtom;
+    event.xclient.format = 32;
+    event.xclient.data.l[0] = set ? 1 : 0; // _NET_WM_STATE_ADD or _NET_WM_STATE_REMOVE
+    event.xclient.data.l[1] = static_cast<long>(dev->wmStateFullscreen);
+    event.xclient.data.l[2] = 0;
+    event.xclient.data.l[3] = 1;
+
+    xlibFuncs.XSendEvent(dev->display, dev->root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
+}
+
+Vec2 WindowX11::mousePos() const
+{
+    return mouse;
+}
+
+Vec2 WindowX11::mouseDelta() const
+{
+    return static_cast<InputDeviceX11*>(device)->mouseDeltaAccum;
+}
+
+} // namespace hg

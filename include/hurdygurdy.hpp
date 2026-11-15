@@ -29,7 +29,6 @@
 #include <hg/inttypes.hpp>
 #include <hg/macros.hpp>
 #include <hg/error.hpp>
-#include <hg/init.hpp>
 #include <hg/utility.hpp>
 #include <hg/memory.hpp>
 #include <hg/concurrency.hpp>

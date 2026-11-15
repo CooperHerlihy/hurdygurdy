@@ -12,10 +12,10 @@ namespace hg {
 
 struct ImGuiState {
     Window* window = nullptr;
+    InputDevice* device = nullptr;
     Clock clock{};
     CursorType cursors[ImGuiMouseCursor_COUNT]{};
     CursorType lastCursor = CursorType_count;
-    std::string_view clipboardText;
 };
 
 static ImGuiState state;
@@ -116,6 +116,7 @@ static ImGuiKey hgButtonToImGuiKey(Button button)
 
 void initImGui(
     const Window& window,
+    InputDevice& device,
     Format colorFormat,
     Format depthFormat,
     Format stencilFormat)
@@ -124,6 +125,7 @@ void initImGui(
     IMGUI_CHECKVERSION();
 
     state.window = const_cast<Window*>(&window);
+    state.device = &device;
     state.clock = Clock{};
     state.lastCursor = CursorType_count;
 
@@ -145,23 +147,8 @@ void initImGui(
 
     ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
 
-    pio.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* text) -> void
-    {
-        setClipboardText(text);
-    };
-    pio.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char*
-    {
-        state.clipboardText = getClipboardText();
-        return state.clipboardText.data();
-    };
-    pio.Platform_OpenInShellFn = [](ImGuiContext*, const char* url) -> bool
-    {
-        openURL(url);
-        return true;
-    };
-
     pio.Monitors.resize(0);
-    std::span<DisplayInfo> displays = displayInfo();
+    std::span<DisplayInfo> displays = state.device->displayInfo();
     for (u32 i = 0; i < displays.size(); i++)
     {
         ImGuiPlatformMonitor monitor;
@@ -224,7 +211,7 @@ void beginImGuiFrame()
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    for (Event& event : getEvents())
+    for (Event& event : state.device->getEvents())
     {
         switch (event.type)
         {
@@ -294,7 +281,7 @@ void beginImGuiFrame()
     if (io.DeltaTime <= 0.0f)
         io.DeltaTime = 1.0f / 60.0f;
 
-    Vec2 wheel = wheelDelta();
+    Vec2 wheel = state.device->wheelDelta();
     if (wheel.x != 0.0f || wheel.y != 0.0f)
         io.AddMouseWheelEvent(wheel.x, wheel.y);
 
@@ -303,17 +290,17 @@ void beginImGuiFrame()
         ImGuiMouseCursor imguiCursor = ImGui::GetMouseCursor();
         if (io.MouseDrawCursor || imguiCursor == ImGuiMouseCursor_None)
         {
-            showCursor(false);
+            state.device->showCursor(false);
         }
         else
         {
             CursorType expected = state.cursors[imguiCursor];
             if (state.lastCursor != expected)
             {
-                setCursor(expected);
+                state.device->setCursor(expected);
                 state.lastCursor = expected;
             }
-            showCursor(true);
+            state.device->showCursor(true);
         }
     }
 

@@ -1,4 +1,4 @@
-#include "wayland_platform.hpp"
+#include "wayland_window.hpp"
 
 #include "internal.hpp"
 #include "hg/error.hpp"
@@ -184,15 +184,6 @@ wl_data_device_manager_get_data_device(struct wl_data_device_manager* manager,
         NULL, (struct wl_proxy*)seat);
 }
 
-static struct wl_data_source*
-wl_data_device_manager_create_data_source(struct wl_data_device_manager* manager)
-{
-    return (struct wl_data_source*)wlFuncs.wl_proxy_marshal_flags(
-        (struct wl_proxy*)manager, WL_DATA_DEVICE_MANAGER_CREATE_DATA_SOURCE,
-        &wl_data_source_interface,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)manager), 0, NULL);
-}
-
 static void
 wl_data_device_manager_destroy(struct wl_data_device_manager* manager)
 {
@@ -211,15 +202,6 @@ static void
 wl_data_device_destroy(struct wl_data_device* device)
 {
     wlFuncs.wl_proxy_destroy((struct wl_proxy*)device);
-}
-
-static void
-wl_data_device_set_selection(struct wl_data_device* device,
-    struct wl_data_source* source, uint32_t serial)
-{
-    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)device, WL_DATA_DEVICE_SET_SELECTION, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)device), 0,
-        (struct wl_proxy*)source, serial);
 }
 
 static int
@@ -250,28 +232,6 @@ wl_data_offer_destroy(struct wl_data_offer* offer)
 {
     wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)offer, WL_DATA_OFFER_DESTROY, NULL,
         wlFuncs.wl_proxy_get_version((struct wl_proxy*)offer), WL_MARSHAL_FLAG_DESTROY);
-}
-
-static void
-wl_data_source_offer(struct wl_data_source* source, const char* mimeType)
-{
-    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)source, WL_DATA_SOURCE_OFFER, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)source), 0, mimeType);
-}
-
-static int
-wl_data_source_add_listener(struct wl_data_source* source,
-    const struct wl_data_source_listener* listener, void* data)
-{
-    return wlFuncs.wl_proxy_add_listener((struct wl_proxy*)source,
-        (void(**)(void))listener, data);
-}
-
-static void
-wl_data_source_destroy(struct wl_data_source* source)
-{
-    wlFuncs.wl_proxy_marshal_flags((struct wl_proxy*)source, WL_DATA_SOURCE_DESTROY, NULL,
-        wlFuncs.wl_proxy_get_version((struct wl_proxy*)source), WL_MARSHAL_FLAG_DESTROY);
 }
 
 static int
@@ -378,7 +338,9 @@ xdg_toplevel_destroy(struct xdg_toplevel* toplevel)
 
 } // extern "C"
 
-namespace hg::wayland {
+namespace hg {
+
+static InputDeviceWayland* wlDevice = nullptr;
 
 static u64 surfaceKey(struct wl_surface* surface)
 {
@@ -476,7 +438,7 @@ static bool loadXkb()
     return true;
 }
 
-bool loadWayland()
+static bool loadWayland()
 {
     if (!loadLibwayland())
         return false;
@@ -485,93 +447,6 @@ bool loadWayland()
 
     return true;
 }
-
-std::span<std::string_view> getPlatformVulkanExtensions()
-{
-    static std::string_view exts[] = {
-        "VK_KHR_surface",
-        "VK_KHR_wayland_surface",
-    };
-    return exts;
-}
-
-struct WindowData {
-    GpuSwapchain swap{};
-
-    struct wl_surface* wlSurface = nullptr;
-    struct xdg_surface* xdgSurface = nullptr;
-    struct xdg_toplevel* xdgToplevel = nullptr;
-
-    std::vector<Event> events{};
-    Vec2 mouse{};
-    u32 width = 0;
-    u32 height = 0;
-    bool wasClosed = false;
-    bool isFocused = false;
-    bool wasFocusGained = false;
-    bool wasFocusLost = false;
-    bool wasResized = false;
-
-    WindowData() noexcept = default;
-    ~WindowData() noexcept;
-
-    WindowData(WindowData&& other) noexcept;
-    WindowData& operator=(WindowData&& other) noexcept;
-
-    WindowData(const WindowData&) = delete;
-    WindowData& operator=(const WindowData&) = delete;
-};
-
-struct WindowState {
-    struct wl_display* display = nullptr;
-    struct wl_compositor* compositor = nullptr;
-    struct wl_shm* shm = nullptr;
-    struct xdg_wm_base* xdgWmBase = nullptr;
-    struct wl_seat* seat = nullptr;
-    struct wl_keyboard* keyboard = nullptr;
-    struct wl_pointer* pointer = nullptr;
-    struct wl_data_device_manager* dataDeviceManager = nullptr;
-    struct wl_data_device* dataDevice = nullptr;
-    struct wl_data_source* dataSource = nullptr;
-
-    std::vector<DisplayInfo> displays{};
-
-    std::vector<Event> events{};
-    bool wasQuit = false;
-    bool isKeyDown[Button_count]{};
-    bool wasKeyDown[Button_count]{};
-    Vec2 mouseDelta{};
-    Vec2 wheelDelta{};
-
-    HashMap<u64, WindowData*> windows{};
-    WindowData* activeWindow = nullptr;
-
-    std::vector<char> clipboard{};
-    bool clipboardOwned = false;
-
-    // Incoming clipboard transfer
-    struct wl_data_offer* pendingOffer = nullptr;
-    int clipboardFd = -1;
-    bool clipboardHasText = false;
-    std::vector<char> clipboardIncoming{};
-
-    struct xkb_context* xkbContext = nullptr;
-    struct xkb_keymap* xkbKeymap = nullptr;
-    struct xkb_state* xkbState = nullptr;
-    u32 xkbModifiers = 0;
-
-    u32 pointerEnterSerial = 0;
-    u32 lastSerial = 0;
-    struct wl_surface* pointerFocus = nullptr;
-
-    // Output tracking
-    struct wl_output* outputs[16]{};
-    u32 outputCount = 0;
-
-    bool globalsReady = false;
-};
-
-static WindowState windowState{};
 
 // Button mapping
 static Button xkbKeysymToButton(uint32_t keysym)
@@ -711,7 +586,7 @@ static Button pointerButtonToHgButton(uint32_t button)
 
 // ---- Wayland protocol callbacks ----
 
-static void keyboardKeymap(void* data, struct wl_keyboard* keyboard,
+void InputDeviceWayland::keyboardKeymap(void* data, struct wl_keyboard* keyboard,
     uint32_t format, int fd, uint32_t size)
 {
     (void)data;
@@ -731,86 +606,86 @@ static void keyboardKeymap(void* data, struct wl_keyboard* keyboard,
         return;
     }
 
-    if (windowState.xkbKeymap != nullptr)
-        xkbFuncs.xkb_keymap_unref(windowState.xkbKeymap);
-    if (windowState.xkbState != nullptr)
-        xkbFuncs.xkb_state_unref(windowState.xkbState);
+    if (wlDevice->xkbKeymap != nullptr)
+        xkbFuncs.xkb_keymap_unref(wlDevice->xkbKeymap);
+    if (wlDevice->xkbState != nullptr)
+        xkbFuncs.xkb_state_unref(wlDevice->xkbState);
 
-    windowState.xkbKeymap = xkbFuncs.xkb_keymap_new_from_string(
-        windowState.xkbContext, mapStr, XKB_KEYMAP_FORMAT_TEXT_V1,
+    wlDevice->xkbKeymap = xkbFuncs.xkb_keymap_new_from_string(
+        wlDevice->xkbContext, mapStr, XKB_KEYMAP_FORMAT_TEXT_V1,
         static_cast<xkb_keymap_compile_flags>(0));
 
     munmap(mapStr, size);
     close(fd);
 
-    if (windowState.xkbKeymap == nullptr)
+    if (wlDevice->xkbKeymap == nullptr)
     {
         return;
     }
 
-    windowState.xkbState = xkbFuncs.xkb_state_new(windowState.xkbKeymap);
+    wlDevice->xkbState = xkbFuncs.xkb_state_new(wlDevice->xkbKeymap);
 }
 
-static void keyboardEnter(void* data, struct wl_keyboard* keyboard,
+void InputDeviceWayland::keyboardEnter(void* data, struct wl_keyboard* keyboard,
     uint32_t serial, struct wl_surface* surface, struct wl_array* keys)
 {
     (void)data;
     (void)keyboard;
     (void)keys;
 
-    windowState.lastSerial = serial;
+    wlDevice->lastSerial = serial;
 
     if (surface == nullptr)
         return;
 
-    WindowData** found = windowState.windows.get(surfaceKey(surface));
+    WindowWayland** found = wlDevice->windows.get(surfaceKey(surface));
     if (found != nullptr)
     {
-        (*found)->isFocused = true;
-        (*found)->wasFocusGained = true;
-        windowState.activeWindow = *found;
+        (*found)->focused = true;
+        (*found)->focusGained = true;
+        wlDevice->activeWindow = *found;
 
         Event event{};
         event.type = EventType_windowFocused;
-        windowState.events.push_back(event);
-        (*found)->events.push_back(event);
+        wlDevice->events.push_back(event);
+        (*found)->eventQueue.push_back(event);
     }
 }
 
-static void keyboardLeave(void* data, struct wl_keyboard* keyboard,
+void InputDeviceWayland::keyboardLeave(void* data, struct wl_keyboard* keyboard,
     uint32_t serial, struct wl_surface* surface)
 {
     (void)data;
     (void)keyboard;
 
-    windowState.lastSerial = serial;
+    wlDevice->lastSerial = serial;
 
     if (surface == nullptr)
         return;
 
-    WindowData** found = windowState.windows.get(surfaceKey(surface));
+    WindowWayland** found = wlDevice->windows.get(surfaceKey(surface));
     if (found != nullptr)
     {
-        (*found)->isFocused = false;
-        (*found)->wasFocusLost = true;
-        if (windowState.activeWindow == *found)
-            windowState.activeWindow = nullptr;
+        (*found)->focused = false;
+        (*found)->focusLost = true;
+        if (wlDevice->activeWindow == *found)
+            wlDevice->activeWindow = nullptr;
 
         Event event{};
         event.type = EventType_windowUnfocused;
-        windowState.events.push_back(event);
-        (*found)->events.push_back(event);
+        wlDevice->events.push_back(event);
+        (*found)->eventQueue.push_back(event);
     }
 }
 
-static void keyboardKey(void* data, struct wl_keyboard* keyboard,
+void InputDeviceWayland::keyboardKey(void* data, struct wl_keyboard* keyboard,
     uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
 {
     (void)data;
     (void)keyboard;
     (void)time;
 
-    windowState.lastSerial = serial;
+    wlDevice->lastSerial = serial;
 
     bool pressed = (state == WL_KEYBOARD_KEY_STATE_PRESSED);
 
@@ -818,31 +693,31 @@ static void keyboardKey(void* data, struct wl_keyboard* keyboard,
     // keysym of the active layout instead of the modifier-dependent keysym:
     // press/release must resolve to the same button with or without shift.
     Button button = Button_count;
-    if (windowState.xkbState != nullptr)
+    if (wlDevice->xkbState != nullptr)
     {
         xkb_layout_index_t layout =
-            xkbFuncs.xkb_state_key_get_layout(windowState.xkbState, key + 8);
+            xkbFuncs.xkb_state_key_get_layout(wlDevice->xkbState, key + 8);
         const xkb_keysym_t* syms = nullptr;
         int numSyms = xkbFuncs.xkb_keymap_key_get_syms_by_level(
-            windowState.xkbKeymap, key + 8, layout, 0, &syms);
+            wlDevice->xkbKeymap, key + 8, layout, 0, &syms);
         if (numSyms > 0 && syms != nullptr)
             button = xkbKeysymToButton(syms[0]);
     }
 
     if (button < Button_count)
     {
-        windowState.isKeyDown[button] = pressed;
+        wlDevice->isKeyDown[button] = pressed;
 
         Event event{};
         event.type = pressed ? EventType_keyPress : EventType_keyRelease;
         event.button = button;
-        windowState.events.push_back(event);
+        wlDevice->events.push_back(event);
     }
 
-    if (pressed && windowState.xkbState != nullptr)
+    if (pressed && wlDevice->xkbState != nullptr)
     {
         char buf[32];
-        int len = xkbFuncs.xkb_state_key_get_utf8(windowState.xkbState, key + 8, buf, sizeof(buf) - 1);
+        int len = xkbFuncs.xkb_state_key_get_utf8(wlDevice->xkbState, key + 8, buf, sizeof(buf) - 1);
         if (len > 0)
         {
             buf[len] = '\0';
@@ -850,12 +725,12 @@ static void keyboardKey(void* data, struct wl_keyboard* keyboard,
             event.type = EventType_text;
             std::memset(event.text, 0, sizeof(event.text));
             std::memcpy(event.text, buf, static_cast<u64>(len));
-            windowState.events.push_back(event);
+            wlDevice->events.push_back(event);
         }
     }
 }
 
-static void keyboardModifiers(void* data, struct wl_keyboard* keyboard,
+void InputDeviceWayland::keyboardModifiers(void* data, struct wl_keyboard* keyboard,
     uint32_t serial, uint32_t modsDepressed, uint32_t modsLatched,
     uint32_t modsLocked, uint32_t group)
 {
@@ -863,12 +738,12 @@ static void keyboardModifiers(void* data, struct wl_keyboard* keyboard,
     (void)keyboard;
     (void)serial;
 
-    xkbFuncs.xkb_state_update_mask(windowState.xkbState,
+    xkbFuncs.xkb_state_update_mask(wlDevice->xkbState,
         modsDepressed, modsLatched, modsLocked, 0, 0, group);
-    windowState.xkbModifiers = modsDepressed;
+    wlDevice->xkbModifiers = modsDepressed;
 }
 
-static void keyboardRepeatInfo(void* data, struct wl_keyboard* keyboard,
+void InputDeviceWayland::keyboardRepeatInfo(void* data, struct wl_keyboard* keyboard,
     int32_t rate, int32_t delay)
 {
     (void)data;
@@ -878,28 +753,28 @@ static void keyboardRepeatInfo(void* data, struct wl_keyboard* keyboard,
 }
 
 static const struct wl_keyboard_listener keyboardListener = {
-    .keymap = keyboardKeymap,
-    .enter = keyboardEnter,
-    .leave = keyboardLeave,
-    .key = keyboardKey,
-    .modifiers = keyboardModifiers,
-    .repeat_info = keyboardRepeatInfo,
+    .keymap = InputDeviceWayland::keyboardKeymap,
+    .enter = InputDeviceWayland::keyboardEnter,
+    .leave = InputDeviceWayland::keyboardLeave,
+    .key = InputDeviceWayland::keyboardKey,
+    .modifiers = InputDeviceWayland::keyboardModifiers,
+    .repeat_info = InputDeviceWayland::keyboardRepeatInfo,
 };
-static void pointerEnter(void* data, struct wl_pointer* pointer,
+void InputDeviceWayland::pointerEnter(void* data, struct wl_pointer* pointer,
     uint32_t serial, struct wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy)
 {
     (void)data;
     (void)pointer;
 
 
-    windowState.lastSerial = serial;
-    windowState.pointerEnterSerial = serial;
-    windowState.pointerFocus = surface;
+    wlDevice->lastSerial = serial;
+    wlDevice->pointerEnterSerial = serial;
+    wlDevice->pointerFocus = surface;
 
     if (surface == nullptr)
         return;
 
-    WindowData** found = windowState.windows.get(surfaceKey(surface));
+    WindowWayland** found = wlDevice->windows.get(surfaceKey(surface));
     if (found != nullptr)
     {
         (*found)->mouse.x = static_cast<f32>(wl_fixed_to_double(sx));
@@ -907,69 +782,69 @@ static void pointerEnter(void* data, struct wl_pointer* pointer,
     }
 }
 
-static void pointerLeave(void* data, struct wl_pointer* pointer,
+void InputDeviceWayland::pointerLeave(void* data, struct wl_pointer* pointer,
     uint32_t serial, struct wl_surface* surface)
 {
     (void)data;
     (void)pointer;
 
-    windowState.lastSerial = serial;
+    wlDevice->lastSerial = serial;
 
-    if (windowState.pointerFocus == surface)
-        windowState.pointerFocus = nullptr;
+    if (wlDevice->pointerFocus == surface)
+        wlDevice->pointerFocus = nullptr;
 }
 
-static void pointerMotion(void* data, struct wl_pointer* pointer,
+void InputDeviceWayland::pointerMotion(void* data, struct wl_pointer* pointer,
     uint32_t time, wl_fixed_t sx, wl_fixed_t sy)
 {
     (void)data;
     (void)pointer;
     (void)time;
 
-    if (windowState.pointerFocus == nullptr)
+    if (wlDevice->pointerFocus == nullptr)
         return;
 
-    WindowData** found = windowState.windows.get(surfaceKey(windowState.pointerFocus));
+    WindowWayland** found = wlDevice->windows.get(surfaceKey(wlDevice->pointerFocus));
     if (found != nullptr)
     {
         Vec2 newPos{static_cast<f32>(wl_fixed_to_double(sx)), static_cast<f32>(wl_fixed_to_double(sy))};
         Vec2 delta = newPos - (*found)->mouse;
         (*found)->mouse = newPos;
-        windowState.mouseDelta += delta;
+        wlDevice->mouseDeltaAccum += delta;
 
         Event event{};
         event.type = EventType_mouseMoved;
         event.mouse.delta = delta;
         event.mouse.pos = newPos;
         event.mouse.globalPos = newPos;
-        windowState.events.push_back(event);
+        wlDevice->events.push_back(event);
     }
 }
 
-static void pointerButton(void* data, struct wl_pointer* pointer,
+void InputDeviceWayland::pointerButton(void* data, struct wl_pointer* pointer,
     uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
     (void)data;
     (void)pointer;
     (void)time;
 
-    windowState.lastSerial = serial;
+    wlDevice->lastSerial = serial;
 
     bool pressed = (state == WL_POINTER_BUTTON_STATE_PRESSED);
     Button hgButton = pointerButtonToHgButton(button);
 
     if (hgButton < Button_count)
     {
-        windowState.isKeyDown[hgButton] = pressed;
+        wlDevice->isKeyDown[hgButton] = pressed;
 
         Event event{};
         event.type = pressed ? EventType_keyPress : EventType_keyRelease;
         event.button = hgButton;
-        windowState.events.push_back(event);
+        wlDevice->events.push_back(event);
     }
 }
 
-static void pointerAxis(void* data, struct wl_pointer* pointer,
+void InputDeviceWayland::pointerAxis(void* data, struct wl_pointer* pointer,
     uint32_t time, uint32_t axis, wl_fixed_t value)
 {
     (void)data;
@@ -986,21 +861,21 @@ static void pointerAxis(void* data, struct wl_pointer* pointer,
 
     if (delta.x != 0.0f || delta.y != 0.0f)
     {
-        windowState.wheelDelta += delta;
+        wlDevice->wheelDeltaAccum += delta;
 
         Event event{};
         event.type = EventType_wheelMoved;
         event.wheel.delta = delta;
-        windowState.events.push_back(event);
+        wlDevice->events.push_back(event);
     }
 }
 
 static const struct wl_pointer_listener pointerListener = {
-    .enter = pointerEnter,
-    .leave = pointerLeave,
-    .motion = pointerMotion,
-    .button = pointerButton,
-    .axis = pointerAxis,
+    .enter = InputDeviceWayland::pointerEnter,
+    .leave = InputDeviceWayland::pointerLeave,
+    .motion = InputDeviceWayland::pointerMotion,
+    .button = InputDeviceWayland::pointerButton,
+    .axis = InputDeviceWayland::pointerAxis,
     .frame = [](void*, struct wl_pointer*) {},
     .axis_source = [](void*, struct wl_pointer*, uint32_t) {},
     .axis_stop = [](void*, struct wl_pointer*, uint32_t, uint32_t) {},
@@ -1010,34 +885,34 @@ static const struct wl_pointer_listener pointerListener = {
     .warp = [](void*, struct wl_pointer*, wl_fixed_t, wl_fixed_t) {},
 };
 
-static void seatCapabilities(void* data, struct wl_seat* seat, uint32_t capabilities)
+void InputDeviceWayland::seatCapabilities(void* data, struct wl_seat* seat, uint32_t capabilities)
 {
     (void)data;
 
-    if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && windowState.keyboard == nullptr)
+    if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && wlDevice->keyboard == nullptr)
     {
-        windowState.keyboard = wl_seat_get_keyboard(seat);
-        wl_keyboard_add_listener(windowState.keyboard, &keyboardListener, nullptr);
+        wlDevice->keyboard = wl_seat_get_keyboard(seat);
+        wl_keyboard_add_listener(wlDevice->keyboard, &keyboardListener, nullptr);
     }
-    else if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && windowState.keyboard != nullptr)
+    else if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && wlDevice->keyboard != nullptr)
     {
-        wl_keyboard_destroy(windowState.keyboard);
-        windowState.keyboard = nullptr;
+        wl_keyboard_destroy(wlDevice->keyboard);
+        wlDevice->keyboard = nullptr;
     }
 
-    if ((capabilities & WL_SEAT_CAPABILITY_POINTER) && windowState.pointer == nullptr)
+    if ((capabilities & WL_SEAT_CAPABILITY_POINTER) && wlDevice->pointer == nullptr)
     {
-        windowState.pointer = wl_seat_get_pointer(seat);
-        wl_pointer_add_listener(windowState.pointer, &pointerListener, nullptr);
+        wlDevice->pointer = wl_seat_get_pointer(seat);
+        wl_pointer_add_listener(wlDevice->pointer, &pointerListener, nullptr);
     }
-    else if (!(capabilities & WL_SEAT_CAPABILITY_POINTER) && windowState.pointer != nullptr)
+    else if (!(capabilities & WL_SEAT_CAPABILITY_POINTER) && wlDevice->pointer != nullptr)
     {
-        wl_pointer_destroy(windowState.pointer);
-        windowState.pointer = nullptr;
+        wl_pointer_destroy(wlDevice->pointer);
+        wlDevice->pointer = nullptr;
     }
 }
 
-static void seatName(void* data, struct wl_seat* seat, const char* name)
+void InputDeviceWayland::seatName(void* data, struct wl_seat* seat, const char* name)
 {
     (void)data;
     (void)seat;
@@ -1045,11 +920,11 @@ static void seatName(void* data, struct wl_seat* seat, const char* name)
 }
 
 static const struct wl_seat_listener seatListener = {
-    .capabilities = seatCapabilities,
-    .name = seatName,
+    .capabilities = InputDeviceWayland::seatCapabilities,
+    .name = InputDeviceWayland::seatName,
 };
 
-static void outputGeometry(void* data, struct wl_output* output,
+void InputDeviceWayland::outputGeometry(void* data, struct wl_output* output,
     int32_t x, int32_t y, int32_t physicalWidth, int32_t physicalHeight,
     int32_t subpixel, const char* make, const char* model, int32_t transform)
 {
@@ -1062,20 +937,20 @@ static void outputGeometry(void* data, struct wl_output* output,
     (void)model;
     (void)transform;
 
-    for (u32 i = 0; i < windowState.outputCount; i++)
+    for (u32 i = 0; i < wlDevice->outputCount; i++)
     {
-        if (windowState.outputs[i] == output)
+        if (wlDevice->outputs[i] == output)
         {
-            if (windowState.displays.size() <= i)
-                windowState.displays.resize(static_cast<u64>(i + 1));
-            windowState.displays[i].posX = x;
-            windowState.displays[i].posY = y;
+            if (wlDevice->displays.size() <= i)
+                wlDevice->displays.resize(static_cast<u64>(i + 1));
+            wlDevice->displays[i].posX = x;
+            wlDevice->displays[i].posY = y;
             break;
         }
     }
 }
 
-static void outputMode(void* data, struct wl_output* output,
+void InputDeviceWayland::outputMode(void* data, struct wl_output* output,
     uint32_t flags, int32_t width, int32_t height, int32_t refresh)
 {
     (void)data;
@@ -1084,54 +959,54 @@ static void outputMode(void* data, struct wl_output* output,
     if (!(flags & WL_OUTPUT_MODE_CURRENT))
         return;
 
-    for (u32 i = 0; i < windowState.outputCount; i++)
+    for (u32 i = 0; i < wlDevice->outputCount; i++)
     {
-        if (windowState.outputs[i] == output)
+        if (wlDevice->outputs[i] == output)
         {
-            if (windowState.displays.size() <= i)
-                windowState.displays.resize(static_cast<u64>(i + 1));
-            windowState.displays[i].sizeW = static_cast<u32>(width);
-            windowState.displays[i].sizeH = static_cast<u32>(height);
-            windowState.displays[i].workPosX = windowState.displays[i].posX;
-            windowState.displays[i].workPosY = windowState.displays[i].posY;
-            windowState.displays[i].workSizeW = windowState.displays[i].sizeW;
-            windowState.displays[i].workSizeH = windowState.displays[i].sizeH;
-            windowState.displays[i].dpiScale = 1.0f;
+            if (wlDevice->displays.size() <= i)
+                wlDevice->displays.resize(static_cast<u64>(i + 1));
+            wlDevice->displays[i].sizeW = static_cast<u32>(width);
+            wlDevice->displays[i].sizeH = static_cast<u32>(height);
+            wlDevice->displays[i].workPosX = wlDevice->displays[i].posX;
+            wlDevice->displays[i].workPosY = wlDevice->displays[i].posY;
+            wlDevice->displays[i].workSizeW = wlDevice->displays[i].sizeW;
+            wlDevice->displays[i].workSizeH = wlDevice->displays[i].sizeH;
+            wlDevice->displays[i].dpiScale = 1.0f;
             break;
         }
     }
 }
 
-static void outputDone(void* data, struct wl_output* output)
+void InputDeviceWayland::outputDone(void* data, struct wl_output* output)
 {
     (void)data;
     (void)output;
 }
 
-static void outputScale(void* data, struct wl_output* output, int32_t factor)
+void InputDeviceWayland::outputScale(void* data, struct wl_output* output, int32_t factor)
 {
     (void)data;
 
-    for (u32 i = 0; i < windowState.outputCount; i++)
+    for (u32 i = 0; i < wlDevice->outputCount; i++)
     {
-        if (windowState.outputs[i] == output)
+        if (wlDevice->outputs[i] == output)
         {
-            if (windowState.displays.size() <= i)
-                windowState.displays.resize(static_cast<u64>(i + 1));
-            windowState.displays[i].dpiScale = static_cast<f32>(factor);
+            if (wlDevice->displays.size() <= i)
+                wlDevice->displays.resize(static_cast<u64>(i + 1));
+            wlDevice->displays[i].dpiScale = static_cast<f32>(factor);
             break;
         }
     }
 }
 
-static void outputName(void* data, struct wl_output* output, const char* name)
+void InputDeviceWayland::outputName(void* data, struct wl_output* output, const char* name)
 {
     (void)data;
     (void)output;
     (void)name;
 }
 
-static void outputDescription(void* data, struct wl_output* output, const char* description)
+void InputDeviceWayland::outputDescription(void* data, struct wl_output* output, const char* description)
 {
     (void)data;
     (void)output;
@@ -1139,22 +1014,22 @@ static void outputDescription(void* data, struct wl_output* output, const char* 
 }
 
 static const struct wl_output_listener outputListener = {
-    .geometry = outputGeometry,
-    .mode = outputMode,
-    .done = outputDone,
-    .scale = outputScale,
-    .name = outputName,
-    .description = outputDescription,
+    .geometry = InputDeviceWayland::outputGeometry,
+    .mode = InputDeviceWayland::outputMode,
+    .done = InputDeviceWayland::outputDone,
+    .scale = InputDeviceWayland::outputScale,
+    .name = InputDeviceWayland::outputName,
+    .description = InputDeviceWayland::outputDescription,
 };
 
-static void registryGlobal(void* data, struct wl_registry* registry,
+void InputDeviceWayland::registryGlobal(void* data, struct wl_registry* registry,
     uint32_t name, const char* interface, uint32_t version)
 {
     (void)data;
 
     if (strcmp(interface, wl_compositor_interface.name) == 0)
     {
-        windowState.compositor = reinterpret_cast<struct wl_compositor*>(
+        wlDevice->compositor = reinterpret_cast<struct wl_compositor*>(
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &wl_compositor_interface, version, 0,
@@ -1162,7 +1037,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
     }
     else if (strcmp(interface, wl_shm_interface.name) == 0)
     {
-        windowState.shm = reinterpret_cast<struct wl_shm*>(
+        wlDevice->shm = reinterpret_cast<struct wl_shm*>(
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &wl_shm_interface, version, 0,
@@ -1170,7 +1045,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
     }
     else if (strcmp(interface, xdg_wm_base_interface.name) == 0)
     {
-        windowState.xdgWmBase = reinterpret_cast<struct xdg_wm_base*>(
+        wlDevice->xdgWmBase = reinterpret_cast<struct xdg_wm_base*>(
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &xdg_wm_base_interface, version, 0,
@@ -1178,29 +1053,29 @@ static void registryGlobal(void* data, struct wl_registry* registry,
     }
     else if (strcmp(interface, wl_seat_interface.name) == 0)
     {
-        windowState.seat = reinterpret_cast<struct wl_seat*>(
+        wlDevice->seat = reinterpret_cast<struct wl_seat*>(
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &wl_seat_interface, version, 0,
                 name, wl_seat_interface.name, version, NULL));
-        wl_seat_add_listener(windowState.seat, &seatListener, nullptr);
+        wl_seat_add_listener(wlDevice->seat, &seatListener, nullptr);
     }
     else if (strcmp(interface, wl_output_interface.name) == 0)
     {
-        if (windowState.outputCount < 16)
+        if (wlDevice->outputCount < 16)
         {
             struct wl_output* output = reinterpret_cast<struct wl_output*>(
                 wlFuncs.wl_proxy_marshal_flags(
                     reinterpret_cast<struct wl_proxy*>(registry),
                     WL_REGISTRY_BIND, &wl_output_interface, version, 0,
                     name, wl_output_interface.name, version, NULL));
-            windowState.outputs[windowState.outputCount++] = output;
+            wlDevice->outputs[wlDevice->outputCount++] = output;
             wl_output_add_listener(output, &outputListener, nullptr);
         }
     }
     else if (strcmp(interface, wl_data_device_manager_interface.name) == 0)
     {
-        windowState.dataDeviceManager = reinterpret_cast<struct wl_data_device_manager*>(
+        wlDevice->dataDeviceManager = reinterpret_cast<struct wl_data_device_manager*>(
             wlFuncs.wl_proxy_marshal_flags(
                 reinterpret_cast<struct wl_proxy*>(registry),
                 WL_REGISTRY_BIND, &wl_data_device_manager_interface, version, 0,
@@ -1208,7 +1083,7 @@ static void registryGlobal(void* data, struct wl_registry* registry,
     }
 }
 
-static void registryGlobalRemove(void* data, struct wl_registry* registry, uint32_t name)
+void InputDeviceWayland::registryGlobalRemove(void* data, struct wl_registry* registry, uint32_t name)
 {
     (void)data;
     (void)registry;
@@ -1216,27 +1091,27 @@ static void registryGlobalRemove(void* data, struct wl_registry* registry, uint3
 }
 
 static struct wl_registry_listener registryListener = {
-    .global = registryGlobal,
-    .global_remove = registryGlobalRemove,
+    .global = InputDeviceWayland::registryGlobal,
+    .global_remove = InputDeviceWayland::registryGlobalRemove,
 };
 
-static void xdgWmBasePing(void* data, struct xdg_wm_base* xdgWmBase, uint32_t serial)
+void InputDeviceWayland::xdgWmBasePing(void* data, struct xdg_wm_base* xdgWmBase, uint32_t serial)
 {
     (void)data;
     xdg_wm_base_pong(xdgWmBase, serial);
 }
 
 static const struct xdg_wm_base_listener xdgWmBaseListener = {
-    .ping = xdgWmBasePing,
+    .ping = InputDeviceWayland::xdgWmBasePing,
 };
 
-static void xdgToplevelConfigure(void* data, struct xdg_toplevel* toplevel,
+void InputDeviceWayland::xdgToplevelConfigure(void* data, struct xdg_toplevel* toplevel,
     int32_t width, int32_t height, struct wl_array* states)
 {
     (void)toplevel;
     (void)states;
 
-    WindowData* window = static_cast<WindowData*>(data);
+    WindowWayland* window = static_cast<WindowWayland*>(data);
     if (window == nullptr)
         return;
 
@@ -1255,7 +1130,7 @@ static void xdgToplevelConfigure(void* data, struct xdg_toplevel* toplevel,
                 return;
             }
 
-            window->wasResized = true;
+            window->resized = true;
             window->width = newW;
             window->height = newH;
 
@@ -1266,29 +1141,29 @@ static void xdgToplevelConfigure(void* data, struct xdg_toplevel* toplevel,
             event.window.window = window;
             event.window.width = newW;
             event.window.height = newH;
-            windowState.events.push_back(event);
-            window->events.push_back(event);
+            wlDevice->events.push_back(event);
+            window->eventQueue.push_back(event);
         }
     }
 }
 
-static void xdgToplevelClose(void* data, struct xdg_toplevel* toplevel)
+void InputDeviceWayland::xdgToplevelClose(void* data, struct xdg_toplevel* toplevel)
 {
     (void)toplevel;
 
-    WindowData* window = static_cast<WindowData*>(data);
+    WindowWayland* window = static_cast<WindowWayland*>(data);
     if (window == nullptr)
         return;
 
-    window->wasClosed = true;
+    window->closed = true;
 
     Event event{};
     event.type = EventType_windowClosed;
-    windowState.events.push_back(event);
-    window->events.push_back(event);
+    wlDevice->events.push_back(event);
+    window->eventQueue.push_back(event);
 }
 
-static void xdgToplevelConfigureBounds(void* data, struct xdg_toplevel* toplevel,
+void InputDeviceWayland::xdgToplevelConfigureBounds(void* data, struct xdg_toplevel* toplevel,
     int32_t width, int32_t height)
 {
     (void)data;
@@ -1297,7 +1172,7 @@ static void xdgToplevelConfigureBounds(void* data, struct xdg_toplevel* toplevel
     (void)height;
 }
 
-static void xdgToplevelWmCapabilities(void* data, struct xdg_toplevel* toplevel,
+void InputDeviceWayland::xdgToplevelWmCapabilities(void* data, struct xdg_toplevel* toplevel,
     struct wl_array* capabilities)
 {
     (void)data;
@@ -1306,39 +1181,39 @@ static void xdgToplevelWmCapabilities(void* data, struct xdg_toplevel* toplevel,
 }
 
 static const struct xdg_toplevel_listener xdgToplevelListener = {
-    .configure = xdgToplevelConfigure,
-    .close = xdgToplevelClose,
-    .configure_bounds = xdgToplevelConfigureBounds,
-    .wm_capabilities = xdgToplevelWmCapabilities,
+    .configure = InputDeviceWayland::xdgToplevelConfigure,
+    .close = InputDeviceWayland::xdgToplevelClose,
+    .configure_bounds = InputDeviceWayland::xdgToplevelConfigureBounds,
+    .wm_capabilities = InputDeviceWayland::xdgToplevelWmCapabilities,
 };
 
-static void xdgSurfaceConfigure(void* data, struct xdg_surface* xdgSurface, uint32_t serial)
+void InputDeviceWayland::xdgSurfaceConfigure(void* data, struct xdg_surface* xdgSurface, uint32_t serial)
 {
     (void)data;
     xdg_surface_ack_configure(xdgSurface, serial);
 }
 
 static const struct xdg_surface_listener xdgSurfaceListener = {
-    .configure = xdgSurfaceConfigure,
+    .configure = InputDeviceWayland::xdgSurfaceConfigure,
 };
 
-static void dataOfferOffer(void* data, struct wl_data_offer* offer, const char* mimeType)
+void InputDeviceWayland::dataOfferOffer(void* data, struct wl_data_offer* offer, const char* mimeType)
 {
     (void)data;
     (void)offer;
 
     if (mimeType != nullptr &&
         (strcmp(mimeType, "text/plain") == 0 || strcmp(mimeType, "text/plain;charset=utf-8") == 0))
-        windowState.clipboardHasText = true;
+        wlDevice->clipboardHasText = true;
 }
 
 static const struct wl_data_offer_listener dataOfferListener = {
-    .offer = dataOfferOffer,
+    .offer = InputDeviceWayland::dataOfferOffer,
     .source_actions = [](void*, struct wl_data_offer*, uint32_t) {},
     .action = [](void*, struct wl_data_offer*, uint32_t) {},
 };
 
-static void dataDeviceDataOffer(void* data, struct wl_data_device* device,
+void InputDeviceWayland::dataDeviceDataOffer(void* data, struct wl_data_device* device,
     struct wl_data_offer* offer)
 {
     (void)data;
@@ -1346,12 +1221,12 @@ static void dataDeviceDataOffer(void* data, struct wl_data_device* device,
 
     if (offer != nullptr)
     {
-        windowState.clipboardHasText = false;
+        wlDevice->clipboardHasText = false;
         wl_data_offer_add_listener(offer, &dataOfferListener, nullptr);
     }
 }
 
-static void dataDeviceEnter(void* data, struct wl_data_device* device,
+void InputDeviceWayland::dataDeviceEnter(void* data, struct wl_data_device* device,
     uint32_t serial, struct wl_surface* surface, wl_fixed_t x, wl_fixed_t y,
     struct wl_data_offer* offer)
 {
@@ -1364,7 +1239,7 @@ static void dataDeviceEnter(void* data, struct wl_data_device* device,
     (void)offer;
 }
 
-static void dataDeviceMotion(void* data, struct wl_data_device* device,
+void InputDeviceWayland::dataDeviceMotion(void* data, struct wl_data_device* device,
     uint32_t time, wl_fixed_t x, wl_fixed_t y)
 {
     (void)data;
@@ -1374,282 +1249,78 @@ static void dataDeviceMotion(void* data, struct wl_data_device* device,
     (void)y;
 }
 
-static void dataDeviceLeave(void* data, struct wl_data_device* device)
+void InputDeviceWayland::dataDeviceLeave(void* data, struct wl_data_device* device)
 {
     (void)data;
     (void)device;
 }
 
-static void dataDeviceDrop(void* data, struct wl_data_device* device)
+void InputDeviceWayland::dataDeviceDrop(void* data, struct wl_data_device* device)
 {
     (void)data;
     (void)device;
 }
 
-static void dataDeviceSelection(void* data, struct wl_data_device* device,
+void InputDeviceWayland::dataDeviceSelection(void* data, struct wl_data_device* device,
     struct wl_data_offer* offer)
 {
     (void)data;
     (void)device;
 
-    if (windowState.pendingOffer != nullptr && windowState.pendingOffer != offer)
+    if (wlDevice->pendingOffer != nullptr && wlDevice->pendingOffer != offer)
     {
-        wl_data_offer_destroy(windowState.pendingOffer);
-        windowState.pendingOffer = nullptr;
+        wl_data_offer_destroy(wlDevice->pendingOffer);
+        wlDevice->pendingOffer = nullptr;
     }
 
     if (offer == nullptr)
         return;
 
-    windowState.pendingOffer = offer;
-    if (!windowState.clipboardHasText)
+    wlDevice->pendingOffer = offer;
+    if (!wlDevice->clipboardHasText)
         return;
 
-    wl_data_offer_accept(offer, windowState.lastSerial, "text/plain;charset=utf-8");
+    wl_data_offer_accept(offer, wlDevice->lastSerial, "text/plain;charset=utf-8");
 
-    if (windowState.clipboardFd >= 0)
+    if (wlDevice->clipboardFd >= 0)
     {
-        close(windowState.clipboardFd);
-        windowState.clipboardFd = -1;
+        close(wlDevice->clipboardFd);
+        wlDevice->clipboardFd = -1;
     }
-    windowState.clipboardIncoming.resize(0);
+    wlDevice->clipboardIncoming.resize(0);
 
-    windowState.clipboardFd = memfd_create("hurdygurdy-clipboard", 0);
-    if (windowState.clipboardFd < 0)
+    wlDevice->clipboardFd = memfd_create("hurdygurdy-clipboard", 0);
+    if (wlDevice->clipboardFd < 0)
         return;
 
-    wl_data_offer_receive(offer, "text/plain;charset=utf-8", windowState.clipboardFd);
+    wl_data_offer_receive(offer, "text/plain;charset=utf-8", wlDevice->clipboardFd);
 }
 
 static const struct wl_data_device_listener dataDeviceListener = {
-    .data_offer = dataDeviceDataOffer,
-    .enter = dataDeviceEnter,
-    .leave = dataDeviceLeave,
-    .motion = dataDeviceMotion,
-    .drop = dataDeviceDrop,
-    .selection = dataDeviceSelection,
-};
-
-static void dataSourceSend(void* data, struct wl_data_source* source,
-    const char* mimeType, int32_t fd)
-{
-    (void)data;
-    (void)source;
-    (void)mimeType;
-
-    if (windowState.clipboard.size() > 0)
-    {
-        ssize_t written = write(fd, windowState.clipboard.data(), windowState.clipboard.size());
-        (void)written;
-    }
-    close(fd);
-}
-
-static void dataSourceCancelled(void* data, struct wl_data_source* source)
-{
-    (void)data;
-    (void)source;
-    windowState.clipboardOwned = false;
-}
-
-static const struct wl_data_source_listener dataSourceListener = {
-    .target = [](void*, struct wl_data_source*, const char*) {},
-    .send = dataSourceSend,
-    .cancelled = dataSourceCancelled,
-    .dnd_drop_performed = [](void*, struct wl_data_source*) {},
-    .dnd_finished = [](void*, struct wl_data_source*) {},
-    .action = [](void*, struct wl_data_source*, uint32_t) {},
+    .data_offer = InputDeviceWayland::dataDeviceDataOffer,
+    .enter = InputDeviceWayland::dataDeviceEnter,
+    .leave = InputDeviceWayland::dataDeviceLeave,
+    .motion = InputDeviceWayland::dataDeviceMotion,
+    .drop = InputDeviceWayland::dataDeviceDrop,
+    .selection = InputDeviceWayland::dataDeviceSelection,
 };
 
 
-// ---- Lifecycle ----
 
-bool initWayland()
+
+void InputDeviceWayland::readClipboard()
 {
-    windowState = WindowState{};
-
-    windowState.display = wlFuncs.wl_display_connect(nullptr);
-    if (windowState.display == nullptr)
-    {
-        setError("Could not connect to Wayland display");
-        return false;
-    }
-
-    windowState.xkbContext = xkbFuncs.xkb_context_new(static_cast<xkb_context_flags>(0));
-    if (windowState.xkbContext == nullptr)
-    {
-        setError("Could not create XKB context");
-        wlFuncs.wl_display_disconnect(windowState.display);
-        return false;
-    }
-
-    struct wl_registry* registry = wl_display_get_registry(windowState.display);
-    struct wl_registry_listener* listenerPtr = &registryListener;
-    wlFuncs.wl_proxy_add_listener(
-        reinterpret_cast<struct wl_proxy*>(registry),
-        reinterpret_cast<void(**)(void)>(listenerPtr), nullptr);
-
-    wlFuncs.wl_display_roundtrip(windowState.display);
-    wlFuncs.wl_display_roundtrip(windowState.display);
-
-    if (windowState.compositor == nullptr)
-    {
-        setError("Wayland compositor not available");
-        wlFuncs.wl_display_disconnect(windowState.display);
-        return false;
-    }
-
-    if (windowState.xdgWmBase != nullptr)
-        xdg_wm_base_add_listener(windowState.xdgWmBase, &xdgWmBaseListener, nullptr);
-
-    wlFuncs.wl_display_roundtrip(windowState.display);
-
-    if (windowState.dataDeviceManager != nullptr)
-    {
-        windowState.dataDevice = wl_data_device_manager_get_data_device(
-            windowState.dataDeviceManager, windowState.seat);
-        if (windowState.dataDevice != nullptr)
-            wl_data_device_add_listener(windowState.dataDevice, &dataDeviceListener, nullptr);
-    }
-
-    windowState.globalsReady = true;
-
-    return true;
-}
-
-void deinitWayland()
-{
-    if (windowState.clipboardFd >= 0)
-    {
-        close(windowState.clipboardFd);
-        windowState.clipboardFd = -1;
-    }
-    if (windowState.pendingOffer != nullptr)
-    {
-        wl_data_offer_destroy(windowState.pendingOffer);
-        windowState.pendingOffer = nullptr;
-    }
-    if (windowState.dataSource != nullptr)
-    {
-        wl_data_source_destroy(windowState.dataSource);
-        windowState.dataSource = nullptr;
-    }
-
-    if (windowState.xkbState != nullptr)
-        xkbFuncs.xkb_state_unref(windowState.xkbState);
-    if (windowState.xkbKeymap != nullptr)
-        xkbFuncs.xkb_keymap_unref(windowState.xkbKeymap);
-    if (windowState.xkbContext != nullptr)
-        xkbFuncs.xkb_context_unref(windowState.xkbContext);
-
-    windowState.windows.forEach([](u64, WindowData* window)
-    {
-        *window = {};
-    });
-
-    if (windowState.dataDevice != nullptr)
-        wl_data_device_destroy(windowState.dataDevice);
-    if (windowState.dataDeviceManager != nullptr)
-        wl_data_device_manager_destroy(windowState.dataDeviceManager);
-
-    if (windowState.keyboard != nullptr)
-        wl_keyboard_destroy(windowState.keyboard);
-    if (windowState.pointer != nullptr)
-        wl_pointer_destroy(windowState.pointer);
-    if (windowState.seat != nullptr)
-        wl_seat_destroy(windowState.seat);
-
-    for (u32 i = 0; i < windowState.outputCount; i++)
-    {
-        if (windowState.outputs[i] != nullptr)
-            wl_output_destroy(windowState.outputs[i]);
-    }
-
-    if (windowState.xdgWmBase != nullptr)
-        xdg_wm_base_destroy(windowState.xdgWmBase);
-    if (windowState.shm != nullptr)
-        wl_shm_destroy(windowState.shm);
-    if (windowState.compositor != nullptr)
-        wl_compositor_destroy(windowState.compositor);
-
-    if (windowState.display != nullptr)
-        wlFuncs.wl_display_disconnect(windowState.display);
-}
-
-WindowData::~WindowData() noexcept
-{
-    if (wlSurface != nullptr)
-    {
-        windowState.windows.remove(surfaceKey(wlSurface));
-
-        if (xdgToplevel != nullptr)
-            xdg_toplevel_destroy(xdgToplevel);
-        if (xdgSurface != nullptr)
-            xdg_surface_destroy(xdgSurface);
-        if (wlSurface != nullptr)
-            wl_surface_destroy(wlSurface);
-    }
-}
-
-WindowData::WindowData(WindowData&& other) noexcept
-    : swap{std::exchange(other.swap, GpuSwapchain{})}
-    , wlSurface{std::exchange(other.wlSurface, nullptr)}
-    , xdgSurface{std::exchange(other.xdgSurface, nullptr)}
-    , xdgToplevel{std::exchange(other.xdgToplevel, nullptr)}
-    , events{std::exchange(other.events, std::vector<Event>{})}
-    , mouse{other.mouse}
-    , width{other.width}
-    , height{other.height}
-    , wasClosed{other.wasClosed}
-    , isFocused{other.isFocused}
-    , wasFocusGained{other.wasFocusGained}
-    , wasFocusLost{other.wasFocusLost}
-    , wasResized{other.wasResized}
-{}
-
-WindowData& WindowData::operator=(WindowData&& other) noexcept
-{
-    if (this != &other)
-    {
-        this->~WindowData();
-        new (this) WindowData{std::move(other)};
-    }
-    return *this;
-}
-
-// ---- Public API ----
-
-std::span<DisplayInfo> displayInfo()
-{
-    return windowState.displays;
-}
-
-void setCursor(CursorType type)
-{
-    (void)type;
-    // Wayland cursor handling would require wl_cursor_theme.
-    // For now, let the compositor handle the default cursor.
-}
-
-void showCursor(bool show)
-{
-    (void)show;
-    // Wayland cursor visibility is handled by the compositor.
-}
-
-static void readClipboard()
-{
-    if (windowState.clipboardFd < 0)
+    if (clipboardFd < 0)
         return;
 
     char buf[4096];
     ssize_t n;
     bool eof = false;
-    while ((n = read(windowState.clipboardFd, buf, sizeof(buf))) > 0)
+    while ((n = read(clipboardFd, buf, sizeof(buf))) > 0)
     {
-        u64 old = windowState.clipboardIncoming.size();
-        windowState.clipboardIncoming.resize(old + static_cast<u64>(n));
-        std::memcpy(windowState.clipboardIncoming.data() + old, buf, static_cast<u64>(n));
+        u64 old = clipboardIncoming.size();
+        clipboardIncoming.resize(old + static_cast<u64>(n));
+        std::memcpy(clipboardIncoming.data() + old, buf, static_cast<u64>(n));
     }
     if (n == 0)
         eof = true;
@@ -1658,171 +1329,113 @@ static void readClipboard()
 
     if (eof)
     {
-        close(windowState.clipboardFd);
-        windowState.clipboardFd = -1;
+        close(clipboardFd);
+        clipboardFd = -1;
 
-        windowState.clipboard.resize(windowState.clipboardIncoming.size());
-        std::memcpy(windowState.clipboard.data(), windowState.clipboardIncoming.data(), windowState.clipboardIncoming.size());
-        windowState.clipboardIncoming.resize(0);
+        clipboard.resize(clipboardIncoming.size());
+        std::memcpy(clipboard.data(), clipboardIncoming.data(), clipboardIncoming.size());
+        clipboardIncoming.resize(0);
 
-        if (windowState.pendingOffer != nullptr)
+        if (pendingOffer != nullptr)
         {
-            wl_data_offer_destroy(windowState.pendingOffer);
-            windowState.pendingOffer = nullptr;
+            wl_data_offer_destroy(pendingOffer);
+            pendingOffer = nullptr;
         }
     }
 }
 
-void processEvents()
+std::span<std::string_view> InputDeviceWayland::getVulkanExtensions()
 {
-    windowState.events.clear();
+    static std::string_view exts[] = {
+        "VK_KHR_surface",
+        "VK_KHR_wayland_surface",
+    };
+    return exts;
+}
 
-    std::memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
-    windowState.mouseDelta = {};
-    windowState.wheelDelta = {};
+std::span<DisplayInfo> InputDeviceWayland::displayInfo()
+{
+    return displays;
+}
 
-    windowState.windows.forEach([](u64, WindowData* data)
+void InputDeviceWayland::processEvents()
+{
+    events.clear();
+
+    std::memcpy(wasKeyDown, isKeyDown, sizeof(isKeyDown));
+    mouseDeltaAccum = {};
+    wheelDeltaAccum = {};
+
+    windows.forEach([](u64, WindowWayland* data)
     {
-        data->events.clear();
-        data->wasFocusGained = false;
-        data->wasFocusLost = false;
-        data->wasResized = false;
+        data->eventQueue.clear();
+        data->focusGained = false;
+        data->focusLost = false;
+        data->resized = false;
     });
 
-    if (wlFuncs.wl_display_get_error(windowState.display) != 0)
+    if (wlFuncs.wl_display_get_error(display) != 0)
         return;
 
-    while (wlFuncs.wl_display_prepare_read(windowState.display) != 0)
+    while (wlFuncs.wl_display_prepare_read(display) != 0)
     {
-        wlFuncs.wl_display_dispatch_pending(windowState.display);
-        if (wlFuncs.wl_display_get_error(windowState.display) != 0)
+        wlFuncs.wl_display_dispatch_pending(display);
+        if (wlFuncs.wl_display_get_error(display) != 0)
             return;
     }
 
-    wlFuncs.wl_display_flush(windowState.display);
+    wlFuncs.wl_display_flush(display);
 
     struct pollfd pfd{};
-    pfd.fd = wlFuncs.wl_display_get_fd(windowState.display);
+    pfd.fd = wlFuncs.wl_display_get_fd(display);
     pfd.events = POLLIN;
 
     if (poll(&pfd, 1, 0) > 0)
     {
-        wlFuncs.wl_display_read_events(windowState.display);
-        while (wlFuncs.wl_display_dispatch_pending(windowState.display) != 0)
+        wlFuncs.wl_display_read_events(display);
+        while (wlFuncs.wl_display_dispatch_pending(display) != 0)
         {
-            if (wlFuncs.wl_display_get_error(windowState.display) != 0)
+            if (wlFuncs.wl_display_get_error(display) != 0)
                 return;
         }
     }
     else
     {
-        wlFuncs.wl_display_cancel_read(windowState.display);
+        wlFuncs.wl_display_cancel_read(display);
     }
 
-    wlFuncs.wl_display_flush(windowState.display);
+    wlFuncs.wl_display_flush(display);
 
     readClipboard();
 }
 
-std::span<Event> getEvents()
+std::span<Event> InputDeviceWayland::getEvents()
 {
-    return windowState.events;
+    return events;
 }
 
-bool wasQuit()
+bool InputDeviceWayland::wasQuit()
 {
-    return windowState.wasQuit;
+    return quit;
 }
 
-bool isButtonDown(Button key)
+std::unique_ptr<Window> InputDeviceWayland::createWindow(const WindowConfig& config)
 {
-    return windowState.isKeyDown[key];
-}
+    std::unique_ptr<WindowWayland> window = std::make_unique<WindowWayland>(this);
+    WindowWayland* wd = window.get();
 
-bool wasButtonPressed(Button key)
-{
-    return !windowState.wasKeyDown[key] && windowState.isKeyDown[key];
-}
-
-bool wasButtonReleased(Button key)
-{
-    return windowState.wasKeyDown[key] && !windowState.isKeyDown[key];
-}
-
-Vec2 mousePos()
-{
-    if (windowState.activeWindow != nullptr)
-        return windowState.activeWindow->mouse;
-
-    if (windowState.windows.count == 1)
-    {
-        Vec2 ret;
-        windowState.windows.forEach([&](u64, WindowData* wd)
-        {
-            ret = wd->mouse;
-        });
-        return ret;
-    }
-
-    return {};
-}
-
-Vec2 mouseDelta()
-{
-    if (windowState.activeWindow != nullptr)
-        return windowState.mouseDelta / static_cast<f32>(windowState.activeWindow->height);
-
-    if (windowState.windows.count == 1)
-    {
-        Vec2 ret = windowState.mouseDelta;
-        windowState.windows.forEach([&](u64, WindowData* wd)
-        {
-            ret = ret / static_cast<f32>(wd->height);
-        });
-        return ret;
-    }
-
-    return windowState.mouseDelta;
-}
-
-Vec2 windowMousePos(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    return wd->mouse;
-}
-
-Vec2 windowMouseDelta(void* data)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
-    return windowState.mouseDelta / static_cast<f32>(wd->height);
-}
-
-Vec2 wheelDelta()
-{
-    return windowState.wheelDelta;
-}
-
-Window windowCreate(const WindowConfig& config)
-{
-    Window window{};
-
-    std::unique_ptr<WindowData> data = std::make_unique<WindowData>();
-    WindowData* wd = data.get();
-
-    wd->wlSurface = wl_compositor_create_surface(windowState.compositor);
+    wd->wlSurface = wl_compositor_create_surface(compositor);
     if (wd->wlSurface == nullptr)
     {
         setError("Could not create Wayland surface");
-        return Window{};
+        return nullptr;
     }
 
-    wd->xdgSurface = xdg_wm_base_get_xdg_surface(windowState.xdgWmBase, wd->wlSurface);
+    wd->xdgSurface = xdg_wm_base_get_xdg_surface(xdgWmBase, wd->wlSurface);
     if (wd->xdgSurface == nullptr)
     {
-        wl_surface_destroy(wd->wlSurface);
-        wd->wlSurface = nullptr;
         setError("Could not create XDG surface");
-        return Window{};
+        return nullptr;
     }
 
     xdg_surface_add_listener(wd->xdgSurface, &xdgSurfaceListener, nullptr);
@@ -1830,11 +1443,8 @@ Window windowCreate(const WindowConfig& config)
     wd->xdgToplevel = xdg_surface_get_toplevel(wd->xdgSurface);
     if (wd->xdgToplevel == nullptr)
     {
-        xdg_surface_destroy(wd->xdgSurface);
-        wl_surface_destroy(wd->wlSurface);
-        wd->wlSurface = nullptr;
         setError("Could not create XDG toplevel");
-        return Window{};
+        return nullptr;
     }
 
     xdg_toplevel_add_listener(wd->xdgToplevel, &xdgToplevelListener, wd);
@@ -1846,15 +1456,15 @@ Window windowCreate(const WindowConfig& config)
     wd->width = config.width != 0 ? config.width : 800;
     wd->height = config.height != 0 ? config.height : 600;
 
-    windowState.windows.add(surfaceKey(wd->wlSurface), wd);
+    windows.add(surfaceKey(wd->wlSurface), wd);
 
     wl_surface_commit(wd->wlSurface);
 
-    wlFuncs.wl_display_roundtrip(windowState.display);
+    wlFuncs.wl_display_roundtrip(display);
 
     VkWaylandSurfaceCreateInfoKHR createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
-    createInfo.display = windowState.display;
+    createInfo.display = display;
     createInfo.surface = wd->wlSurface;
 
     using PFN_vkCreateWaylandSurfaceKHR = VkResult(*)(VkInstance, const VkWaylandSurfaceCreateInfoKHR*, const VkAllocationCallbacks*, VkSurfaceKHR*);
@@ -1871,126 +1481,278 @@ Window windowCreate(const WindowConfig& config)
 
     if (result != VK_SUCCESS)
     {
-        windowState.windows.remove(surfaceKey(wd->wlSurface));
-        xdg_toplevel_destroy(wd->xdgToplevel);
-        xdg_surface_destroy(wd->xdgSurface);
-        wl_surface_destroy(wd->wlSurface);
-        wd->wlSurface = nullptr;
         setError("Could not create Vulkan surface");
-        return Window{};
+        return nullptr;
     }
 
     wd->swap = GpuSwapchain::create(surface, wd->width, wd->height, config.preferredPresentMode, config.imageUsage);
 
-    window.data = data.release();
     return window;
 }
 
-void windowDestroy(void* data)
+bool InputDeviceWayland::isButtonDown(Button button)
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    delete wd;
+    return isKeyDown[button];
 }
 
-GpuSwapchain& windowSwapchain(void* data)
+bool InputDeviceWayland::wasButtonPressed(Button button)
 {
-    return static_cast<WindowData*>(data)->swap;
+    return !wasKeyDown[button] && isKeyDown[button];
 }
 
-void windowSetTitle(void* data, std::string_view title)
+bool InputDeviceWayland::wasButtonReleased(Button button)
 {
-    WindowData* wd = static_cast<WindowData*>(data);
+    return wasKeyDown[button] && !isKeyDown[button];
+}
+
+Vec2 InputDeviceWayland::mousePos()
+{
+    if (activeWindow != nullptr)
+        return activeWindow->mouse;
+
+    if (windows.count == 1)
+    {
+        Vec2 ret;
+        windows.forEach([&](u64, WindowWayland* wd)
+        {
+            ret = wd->mouse;
+        });
+        return ret;
+    }
+
+    return {};
+}
+
+Vec2 InputDeviceWayland::mouseDelta()
+{
+    if (activeWindow != nullptr)
+        return mouseDeltaAccum / static_cast<f32>(activeWindow->height);
+
+    if (windows.count == 1)
+    {
+        Vec2 ret = mouseDeltaAccum;
+        windows.forEach([&](u64, WindowWayland* wd)
+        {
+            ret = ret / static_cast<f32>(wd->height);
+        });
+        return ret;
+    }
+
+    return mouseDeltaAccum;
+}
+
+Vec2 InputDeviceWayland::wheelDelta()
+{
+    return wheelDeltaAccum;
+}
+
+void InputDeviceWayland::setCursor(CursorType type)
+{
+    (void)type;
+    // Wayland cursor handling would require wl_cursor_theme.
+    // For now, let the compositor handle the default cursor.
+}
+
+void InputDeviceWayland::showCursor(bool show)
+{
+    (void)show;
+    // Wayland cursor visibility is handled by the compositor.
+}
+
+std::unique_ptr<InputDeviceWayland> InputDeviceWayland::create()
+{
+    if (!loadWayland())
+        return nullptr;
+
+    std::unique_ptr<InputDeviceWayland> device = std::make_unique<InputDeviceWayland>();
+    wlDevice = device.get();
+
+    device->display = wlFuncs.wl_display_connect(nullptr);
+    if (device->display == nullptr)
+    {
+        setError("Could not connect to Wayland display");
+        wlDevice = nullptr;
+        return nullptr;
+    }
+
+    device->xkbContext = xkbFuncs.xkb_context_new(static_cast<xkb_context_flags>(0));
+    if (device->xkbContext == nullptr)
+    {
+        setError("Could not create XKB context");
+        wlFuncs.wl_display_disconnect(device->display);
+        wlDevice = nullptr;
+        return nullptr;
+    }
+
+    struct wl_registry* registry = wl_display_get_registry(device->display);
+    struct wl_registry_listener* listenerPtr = &registryListener;
+    wlFuncs.wl_proxy_add_listener(
+        reinterpret_cast<struct wl_proxy*>(registry),
+        reinterpret_cast<void(**)(void)>(listenerPtr), nullptr);
+
+    wlFuncs.wl_display_roundtrip(device->display);
+    wlFuncs.wl_display_roundtrip(device->display);
+
+    if (device->compositor == nullptr)
+    {
+        setError("Wayland compositor not available");
+        wlFuncs.wl_display_disconnect(device->display);
+        wlDevice = nullptr;
+        return nullptr;
+    }
+
+    if (device->xdgWmBase != nullptr)
+        xdg_wm_base_add_listener(device->xdgWmBase, &xdgWmBaseListener, nullptr);
+
+    wlFuncs.wl_display_roundtrip(device->display);
+
+    if (device->dataDeviceManager != nullptr)
+    {
+        device->dataDevice = wl_data_device_manager_get_data_device(
+            device->dataDeviceManager, device->seat);
+        if (device->dataDevice != nullptr)
+            wl_data_device_add_listener(device->dataDevice, &dataDeviceListener, nullptr);
+    }
+
+    device->globalsReady = true;
+
+    return device;
+}
+
+InputDeviceWayland::~InputDeviceWayland()
+{
+    wlDevice = nullptr;
+
+    if (clipboardFd >= 0)
+    {
+        close(clipboardFd);
+        clipboardFd = -1;
+    }
+    if (pendingOffer != nullptr)
+    {
+        wl_data_offer_destroy(pendingOffer);
+        pendingOffer = nullptr;
+    }
+
+    if (xkbState != nullptr)
+        xkbFuncs.xkb_state_unref(xkbState);
+    if (xkbKeymap != nullptr)
+        xkbFuncs.xkb_keymap_unref(xkbKeymap);
+    if (xkbContext != nullptr)
+        xkbFuncs.xkb_context_unref(xkbContext);
+
+    if (dataDevice != nullptr)
+        wl_data_device_destroy(dataDevice);
+    if (dataDeviceManager != nullptr)
+        wl_data_device_manager_destroy(dataDeviceManager);
+
+    if (keyboard != nullptr)
+        wl_keyboard_destroy(keyboard);
+    if (pointer != nullptr)
+        wl_pointer_destroy(pointer);
+    if (seat != nullptr)
+        wl_seat_destroy(seat);
+
+    for (u32 i = 0; i < outputCount; i++)
+    {
+        if (outputs[i] != nullptr)
+            wl_output_destroy(outputs[i]);
+    }
+
+    if (xdgWmBase != nullptr)
+        xdg_wm_base_destroy(xdgWmBase);
+    if (shm != nullptr)
+        wl_shm_destroy(shm);
+    if (compositor != nullptr)
+        wl_compositor_destroy(compositor);
+
+    if (display != nullptr)
+        wlFuncs.wl_display_disconnect(display);
+}
+
+WindowWayland::~WindowWayland()
+{
+    if (wlSurface != nullptr)
+    {
+        static_cast<InputDeviceWayland*>(device)->windows.remove(surfaceKey(wlSurface));
+
+        if (xdgToplevel != nullptr)
+            xdg_toplevel_destroy(xdgToplevel);
+        if (xdgSurface != nullptr)
+            xdg_surface_destroy(xdgSurface);
+        if (wlSurface != nullptr)
+            wl_surface_destroy(wlSurface);
+    }
+}
+
+GpuSwapchain& WindowWayland::swapchain() const
+{
+    return swap;
+}
+
+void WindowWayland::setTitle(std::string_view title)
+{
     char buf[256];
     u64 len = title.length() < sizeof(buf) - 1 ? title.length() : sizeof(buf) - 1;
     std::memcpy(buf, title.data(), len);
     buf[len] = '\0';
-    xdg_toplevel_set_title(wd->xdgToplevel, buf);
+    xdg_toplevel_set_title(xdgToplevel, buf);
 }
 
-std::span<Event> windowEvents(void* data)
+std::span<Event> WindowWayland::events() const
 {
-    return static_cast<WindowData*>(data)->events;
+    return eventQueue;
 }
 
-bool windowWasClosed(void* data)
+bool WindowWayland::wasClosed() const
 {
-    return static_cast<WindowData*>(data)->wasClosed;
+    return closed;
 }
 
-bool windowIsFocused(void* data)
+bool WindowWayland::isFocused() const
 {
-    return static_cast<WindowData*>(data)->isFocused;
+    return focused;
 }
 
-bool windowWasFocusGained(void* data)
+bool WindowWayland::wasFocusGained() const
 {
-    return static_cast<WindowData*>(data)->wasFocusGained;
+    return focusGained;
 }
 
-bool windowWasFocusLost(void* data)
+bool WindowWayland::wasFocusLost() const
 {
-    return static_cast<WindowData*>(data)->wasFocusLost;
+    return focusLost;
 }
 
-bool windowWasResized(void* data)
+bool WindowWayland::wasResized() const
 {
-    return static_cast<WindowData*>(data)->wasResized;
+    return resized;
 }
 
-void windowGetSize(void* data, u32* w, u32* h)
+void WindowWayland::size(u32* outWidth, u32* outHeight) const
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (w != nullptr)
-        *w = wd->width;
-    if (h != nullptr)
-        *h = wd->height;
+    if (outWidth != nullptr)
+        *outWidth = width;
+    if (outHeight != nullptr)
+        *outHeight = height;
 }
 
-void windowSetFullscreen(void* data, bool set)
+void WindowWayland::setFullscreen(bool set)
 {
-    WindowData* wd = static_cast<WindowData*>(data);
     if (set)
-        xdg_toplevel_set_fullscreen(wd->xdgToplevel, nullptr);
+        xdg_toplevel_set_fullscreen(xdgToplevel, nullptr);
     else
-        xdg_toplevel_unset_fullscreen(wd->xdgToplevel);
+        xdg_toplevel_unset_fullscreen(xdgToplevel);
 }
 
-std::string_view getClipboardText()
+Vec2 WindowWayland::mousePos() const
 {
-    if (windowState.clipboard.size() == 0)
-        return std::string_view{};
-    return std::string_view{windowState.clipboard.data(), windowState.clipboard.size()};
+    return mouse;
 }
 
-void setClipboardText(std::string_view text)
+Vec2 WindowWayland::mouseDelta() const
 {
-    if (windowState.dataDevice == nullptr)
-        return;
-
-    windowState.clipboard.resize(text.length());
-    std::memcpy(windowState.clipboard.data(), text.data(), text.length());
-
-    struct wl_data_source* source = wl_data_device_manager_create_data_source(windowState.dataDeviceManager);
-    wl_data_source_offer(source, "text/plain;charset=utf-8");
-    wl_data_source_add_listener(source, &dataSourceListener, nullptr);
-
-    if (windowState.dataSource != nullptr)
-        wl_data_source_destroy(windowState.dataSource);
-    windowState.dataSource = source;
-    wl_data_device_set_selection(windowState.dataDevice, source, windowState.lastSerial);
-    windowState.clipboardOwned = true;
+    return static_cast<InputDeviceWayland*>(device)->mouseDeltaAccum / static_cast<f32>(height);
 }
 
-void openURL(std::string_view url)
-{
-    char cmd[1024];
-    u64 len = url.length() < sizeof(cmd) - 16 ? url.length() : sizeof(cmd) - 16;
-    std::memcpy(cmd, url.data(), len);
-    cmd[len] = '\0';
-
-    char fullCmd[1024];
-    snprintf(fullCmd, sizeof(fullCmd), "xdg-open '%s' &", cmd);
-    (void)system(fullCmd);
-}
-
-} // namespace hg::wayland
+} // namespace hg

@@ -134,6 +134,7 @@ struct GpuViewData {
     VkSampler sampler = nullptr;
     GpuDescriptor samplerDesc = {};
     GpuDescriptor storageDesc = {};
+    GpuImageUsageFlags usage = 0;
     GpuViewType type = GpuViewType_1D;
     GpuAspectFlags aspectFlags = 0;
     u8 baseMipLevel = 0;
@@ -152,6 +153,7 @@ struct GpuViewData {
         , sampler{other.sampler}
         , samplerDesc{std::exchange(other.samplerDesc, {})}
         , storageDesc{std::exchange(other.storageDesc, {})}
+        , usage{other.usage}
         , type{other.type}
         , aspectFlags{other.aspectFlags}
         , baseMipLevel{other.baseMipLevel}
@@ -297,6 +299,7 @@ struct Frame {
 
 struct VulkanState {
     bool enableDebugMessenger;
+    bool surfaceExtensions = false;
     VkInstance instance = nullptr;
     VkDebugUtilsMessengerEXT debugMessenger = nullptr;
     VkPhysicalDevice physicalDevice = nullptr;
