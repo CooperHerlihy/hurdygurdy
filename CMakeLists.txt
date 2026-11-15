@@ -114,40 +114,39 @@ add_custom_target(resources DEPENDS ${RESOURCE_HEADERS})
 add_executable(embed src/embed.c)
 
 set(SHADERS
-    shaders/render2d.vert
-    shaders/render2d.frag
-    shaders/render3d.vert
-    shaders/render3d.frag
-    test/shaders/compute.comp
-    test/shaders/tri.vert
-    test/shaders/tri.frag
-    test/shaders/sampler.frag
-    test/shaders/mul.comp
-    test/shaders/buf_to_img.comp
-    test/shaders/uniform.vert
-    test/shaders/uniform.frag
-    test/shaders/storage_img.comp
-    test/shaders/depth.vert
-    test/shaders/depth.frag
-    test/shaders/instance.vert
-    test/shaders/instance.frag
-    test/shaders/blur.comp
-    test/shaders/invert.frag
-    test/shaders/noise.comp
+    render2d.vert
+    render2d.frag
+    render3d.vert
+    render3d.frag
+    compute.comp
+    tri.vert
+    tri.frag
+    sampler.frag
+    mul.comp
+    buf_to_img.comp
+    uniform.vert
+    uniform.frag
+    storage_img.comp
+    depth.vert
+    depth.frag
+    instance.vert
+    instance.frag
+    blur.comp
+    invert.frag
+    noise.comp
 )
 
 set(SHADER_HEADERS)
 foreach(shader ${SHADERS})
-    set(spv ${CMAKE_CURRENT_BINARY_DIR}/${shader}.spv)
-    set(spv_h ${CMAKE_CURRENT_BINARY_DIR}/${shader}.spv.h)
-    get_filename_component(spv_dir ${spv} DIRECTORY)
+    set(shader_src ${CMAKE_CURRENT_SOURCE_DIR}/shaders/${shader})
+    set(spv ${CMAKE_CURRENT_BINARY_DIR}/shaders/${shader}.spv)
+    set(spv_h ${CMAKE_CURRENT_BINARY_DIR}/shaders/${shader}.spv.h)
     add_custom_command(
         OUTPUT ${spv_h}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${spv_dir}
-        COMMAND glslc -o ${spv} ${CMAKE_CURRENT_SOURCE_DIR}/src/${shader} -I${CMAKE_CURRENT_SOURCE_DIR}/include
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+        COMMAND glslc -o ${spv} ${shader_src} -I${CMAKE_CURRENT_SOURCE_DIR}/include
         COMMAND embed ${spv} ${shader}.spv ${spv_h}
-        DEPENDS embed
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/${shader}
+        DEPENDS embed ${shader_src}
             ${CMAKE_CURRENT_SOURCE_DIR}/include/hurdygurdy.glsl
         COMMENT "Compiling ${shader}"
     )
@@ -283,25 +282,24 @@ endif()
 # Executables
 
 add_executable(tests
-    src/test/tests.cpp
-    src/test/utility.cpp
-    src/test/memory.cpp
-    src/test/concurrency.cpp
-    src/test/math.cpp
-    src/test/geometry2d.cpp
-    src/test/geometry3d.cpp
-    src/test/noise.cpp
-    src/test/filesystem.cpp
-    src/test/hash.cpp
-    src/test/assets.cpp
-    src/test/audio.cpp
-    src/test/serialization.cpp
-    src/test/json.cpp
-    src/test/gpu.cpp
-    src/test/render.cpp
-    src/test/texture.cpp
-    src/test/dynlib.cpp
-    src/test/ecs.cpp
+    test/tests.cpp
+    test/utility.cpp
+    test/memory.cpp
+    test/concurrency.cpp
+    test/math.cpp
+    test/geometry2d.cpp
+    test/geometry3d.cpp
+    test/noise.cpp
+    test/filesystem.cpp
+    test/hash.cpp
+    test/assets.cpp
+    test/audio.cpp
+    test/serialization.cpp
+    test/json.cpp
+    test/gpu.cpp
+    test/texture.cpp
+    test/dynlib.cpp
+    test/ecs.cpp
 )
 target_link_libraries(tests hurdygurdy)
 target_precompile_headers(tests PRIVATE <hurdygurdy.hpp>)

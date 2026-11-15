@@ -545,8 +545,8 @@ Renderer2D::Renderer2D(Format colorFormat)
     fontOwned = true;
 
     GpuGraphicsPipelineCreateInfo pipelineConfig{};
-    pipelineConfig.vertexShader = shaders_render2d_vert_spv;
-    pipelineConfig.fragmentShader = shaders_render2d_frag_spv;
+    pipelineConfig.vertexShader = render2d_vert_spv;
+    pipelineConfig.fragmentShader = render2d_frag_spv;
     pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
     pipelineConfig.colorAttachmentFormats = {&colorFormat, 1};
     bool enableColorBlend = true;

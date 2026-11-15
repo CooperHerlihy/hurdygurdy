@@ -30,8 +30,6 @@ static i32 failCount = 0;
 int main()
 {
     std::unique_ptr<InputDevice> input = InputDevice::create();
-    if (input == nullptr)
-        HG_PANIC("Could not create input device\n");
 
     if (!initGpu(input->getVulkanExtensions()))
         HG_PANIC("Could not initialize GPU\n");

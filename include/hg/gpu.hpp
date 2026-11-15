@@ -12,6 +12,19 @@
 namespace hg {
 
 /**
+ * Initialize the GPU
+ *
+ * Parameters
+ * - extensions The Vulkan instance extensions required by the windowing backend
+ */
+bool initGpu(std::span<std::string_view> extensions);
+
+/**
+ * Deinitialize the GPU
+ */
+void deinitGpu();
+
+/**
  * Wait for the GPU to finish work
  */
 void gpuWaitIdle();
@@ -1123,18 +1136,5 @@ GpuCmd* gpuBeginFrame(std::span<Window*> windows);
  * - cmd The command buffer given from beginFrame
  */
 void gpuEndFrame(GpuCmd* cmd);
-
-/**
- * Initialize the GPU
- *
- * Parameters
- * - extensions The Vulkan instance extensions required by the windowing backend
- */
-bool initGpu(std::span<std::string_view> extensions);
-
-/**
- * Deinitialize the GPU
- */
-void deinitGpu();
 
 } // namespace hg

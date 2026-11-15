@@ -19,7 +19,7 @@ int main()
         HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hurdy Gurdy 2D Example");
 
-    Renderer2D renderer{window->swapchain().format()};
+    Renderer2D renderer{window->swapchainFormat()};
 
     u32 winW, winH;
     window->size(&winW, &winH);
@@ -145,10 +145,10 @@ int main()
 
         Window* windows[] = {window.get()};
         GpuCmd* cmd = gpuBeginFrame(windows);
-        if (window->swapchain().renderTarget() != nullptr)
+        if (window->renderTarget() != nullptr)
         {
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window->swapchain().renderTarget();
+            colorAttachment.image = window->renderTarget();
 
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};

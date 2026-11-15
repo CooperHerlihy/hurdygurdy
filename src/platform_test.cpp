@@ -300,7 +300,7 @@ static void switchInputBackend(InputBackend backend)
     camera.projection = Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}};
     camera.update();
 
-    initImGui(*window, *input, window->swapchain().format());
+    initImGui(*window, *input, window->swapchainFormat());
 }
 
 static bool switchAudioBackend(AudioBackend backend)
@@ -353,7 +353,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    initImGui(*window, *input, window->swapchain().format());
+    initImGui(*window, *input, window->swapchainFormat());
 
     audioDevice = AudioDevice::create();
     if (audioDevice == nullptr)
@@ -796,11 +796,11 @@ int main()
             }
         }
 
-        if (window->swapchain().renderTarget() != nullptr)
+        if (window->renderTarget() != nullptr)
         {
             ProfilerScopeTimer timer{"Cpu"};
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window->swapchain().renderTarget();
+            colorAttachment.image = window->renderTarget();
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
             gpuBeginRenderPass(cmd, pass);
@@ -808,11 +808,11 @@ int main()
             gpuEndRenderPass(cmd);
         }
 
-        if (secondWindow != nullptr && secondWindow->swapchain().renderTarget() != nullptr)
+        if (secondWindow != nullptr && secondWindow->renderTarget() != nullptr)
         {
             ProfilerScopeTimer timer{"Cpu"};
             GpuAttachment colorAttachment{};
-            colorAttachment.image = secondWindow->swapchain().renderTarget();
+            colorAttachment.image = secondWindow->renderTarget();
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
             gpuBeginRenderPass(cmd, pass);

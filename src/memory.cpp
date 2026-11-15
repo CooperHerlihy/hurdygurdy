@@ -22,7 +22,7 @@ void* Arena::alloc(usize size, usize alignment)
     u64 newHead = alignUp(head, alignment) + size;
     if (newHead > capacity)
     {
-        HG_WARN("Arena out of memory");
+        HG_WARN("Arena out of memory\n");
         setError("Arena out of memory");
         return nullptr;
     }

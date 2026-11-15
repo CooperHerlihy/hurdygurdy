@@ -606,6 +606,22 @@ public:
     virtual GpuSwapchain& swapchain() const = 0;
 
     /**
+     * Get the current swapchain image view
+     */
+    GpuView* renderTarget() const
+    {
+        return swapchain().renderTarget();
+    }
+
+    /**
+     * Get the swapchain image format
+     */
+    Format swapchainFormat() const
+    {
+        return swapchain().format();
+    }
+
+    /**
      * Set the window title
      */
     virtual void setTitle(std::string_view title) = 0;

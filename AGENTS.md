@@ -131,13 +131,12 @@ Note: the protocol functions in `wayland.cpp` call through the `wlFuncs` functio
 - `sdl_platform.hpp` - internal api header
 - `sdl.cpp`
 
-`src/shaders/` - GLSL shaders:
+`shaders/` - GLSL shaders:
 - `render2d.vert`/`render2d.frag` - 2D sprite rendering
 - `render3d.vert`/`render3d.frag` - 3D model rendering
 - `skybox.vert`/`skybox.frag` - skybox rendering
 
-`src/test/` - tests:
+`test/` - tests:
 - `tests.hpp` - test framework: TEST/ASSERT registration macros, LifecycleT helper
 - `tests.cpp` - runs all tests
 - `*.cpp` - remaining tests, named like headers
-- `shaders/` - `.vert`/`.frag`/`.comp` test shaders

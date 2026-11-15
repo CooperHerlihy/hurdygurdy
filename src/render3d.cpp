@@ -89,8 +89,8 @@ struct Push {
 Renderer3D::Renderer3D(Format colorFormat, Format depthFormat)
 {
     GpuGraphicsPipelineCreateInfo conf{};
-    conf.vertexShader = shaders_render3d_vert_spv;
-    conf.fragmentShader = shaders_render3d_frag_spv;
+    conf.vertexShader = render3d_vert_spv;
+    conf.fragmentShader = render3d_frag_spv;
     conf.pushConstantSize = sizeof(Push);
     Format colorFormats[] = {colorFormat};
     conf.colorAttachmentFormats = colorFormats;

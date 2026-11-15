@@ -23,7 +23,7 @@ int main()
     window->size(&width, &height);
     f32 aspect = height == 0 ? 1 : static_cast<f32>(width) / static_cast<f32>(height);
 
-    Renderer3D renderer{window->swapchain().format(), Format_d32_sfloat};
+    Renderer3D renderer{window->swapchainFormat(), Format_d32_sfloat};
 
     Camera camera{Perspective{aspect, pif / 2.0f, 0.1f, 100.0f}};
     camera.position = Vec3{0.0f, 1.5f, -5.0f};
@@ -189,10 +189,10 @@ int main()
 
         Window* windows[] = {window.get()};
         GpuCmd* cmd = gpuBeginFrame(windows);
-        if (window->swapchain().renderTarget() != nullptr)
+        if (window->renderTarget() != nullptr)
         {
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window->swapchain().renderTarget();
+            colorAttachment.image = window->renderTarget();
             colorAttachment.clearColor = Vec4{0.02f, 0.02f, 0.05f, 1.0f};
 
             GpuAttachment depthAttachment{};
