@@ -87,3 +87,122 @@ bool storeFile(std::span<u8> bin, std::string_view path)
 } // namespace hg
 
 #endif
+
+#if defined(HG_PLATFORM_WINDOWS)
+
+#define WIN32_LEAN_AND_MEAN
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
+#include <windows.h>
+
+namespace hg {
+
+static bool win32PathToWide(std::string_view path, wchar_t* wPath, u64 capacity)
+{
+    int wlen = MultiByteToWideChar(
+        CP_UTF8,
+        0,
+        path.data(),
+        static_cast<int>(path.length()),
+        wPath,
+        static_cast<int>(capacity) - 1);
+    if (wlen <= 0)
+        return false;
+    wPath[wlen] = L'\0';
+    return true;
+}
+
+std::optional<std::vector<u8>> loadFile(std::string_view path)
+{
+    ArenaScope scratch = getScratch();
+    string_temp p{path, scratch};
+
+    wchar_t wPath[1024]{};
+    if (!win32PathToWide(p.c_str(), wPath, sizeof(wPath) / sizeof(wchar_t)))
+    {
+        setError("Invalid file path: {}", p.c_str());
+        return {};
+    }
+
+    HANDLE file = CreateFileW(wPath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        setError("Failed to open file: {}", p.c_str());
+        return {};
+    }
+    HG_DEFER(CloseHandle(file));
+
+    LARGE_INTEGER size{};
+    if (!GetFileSizeEx(file, &size))
+    {
+        setError("Failed to stat file: {}", p.c_str());
+        return {};
+    }
+
+    u64 fileSize = static_cast<u64>(size.QuadPart);
+
+    std::optional<std::vector<u8>> bin = std::vector<u8>(fileSize);
+
+    u64 remaining = fileSize;
+    u8* ptr = bin->data();
+    while (remaining > 0)
+    {
+        DWORD bytesToRead = remaining > 0xFFFFFFFF ? 0xFFFFFFFF : static_cast<DWORD>(remaining);
+        DWORD bytesRead = 0;
+        if (!ReadFile(file, ptr, bytesToRead, &bytesRead, nullptr) || bytesRead == 0)
+        {
+            setError("Failed to read file: {}", p.c_str());
+            return {};
+        }
+        remaining -= static_cast<u64>(bytesRead);
+        ptr += bytesRead;
+    }
+
+    return bin;
+}
+
+bool storeFile(std::span<u8> bin, std::string_view path)
+{
+    ArenaScope scratch = getScratch();
+    string_temp p{path, scratch};
+
+    wchar_t wPath[1024]{};
+    if (!win32PathToWide(p.c_str(), wPath, sizeof(wPath) / sizeof(wchar_t)))
+    {
+        setError("Invalid file path: {}", p.c_str());
+        return false;
+    }
+
+    HANDLE file = CreateFileW(wPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        setError("Failed to open file for writing: {}", p.c_str());
+        return false;
+    }
+    HG_DEFER(CloseHandle(file));
+
+    u64 remaining = bin.size();
+    const u8* ptr = bin.data();
+    while (remaining > 0)
+    {
+        DWORD bytesToWrite = remaining > 0xFFFFFFFF ? 0xFFFFFFFF : static_cast<DWORD>(remaining);
+        DWORD bytesWritten = 0;
+        if (!WriteFile(file, ptr, bytesToWrite, &bytesWritten, nullptr) || bytesWritten == 0)
+        {
+            setError("Failed to write file: {}", p.c_str());
+            return false;
+        }
+        remaining -= static_cast<u64>(bytesWritten);
+        ptr += bytesWritten;
+    }
+
+    return true;
+}
+
+} // namespace hg
+
+#endif

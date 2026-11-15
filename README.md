@@ -4,7 +4,7 @@
 
 Hurdy Gurdy is a game engine written in C++ for fun.
 
-Supports Linux natively, and any platform supported by SDL3.
+Supports Linux and Windows natively, and any platform supported by SDL3.
 
 ## Build
 

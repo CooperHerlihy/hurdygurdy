@@ -16,7 +16,7 @@ endif()
 
 if(MSVC)
     add_compile_options(/permissive- /GR- /D_CRT_SECURE_NO_WARNINGS)
-    add_compile_options(/wd4702 /wd4127)
+    add_compile_options(/wd4702 /wd4127 /wd4530)
     set(STRICT_FLAGS /W4 /WX)
     set(TESTS_EXCEPTION_FLAG /EHsc)
 else()

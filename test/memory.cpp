@@ -193,15 +193,15 @@ TEST(testArenaScopeNested)
     ArenaScope outer{&a};
     void* po = a.alloc(8, 1);
     ASSERT(po != nullptr);
-    void* pi = nullptr;
+    void* pinner = nullptr;
     {
         ArenaScope inner{&a};
-        pi = a.alloc(8, 1);
-        ASSERT(pi != nullptr);
-        ASSERT(pi != po);
+        pinner = a.alloc(8, 1);
+        ASSERT(pinner != nullptr);
+        ASSERT(pinner != po);
     }
     void* pAfterInner = a.alloc(8, 1);
-    ASSERT(pAfterInner == pi);
+    ASSERT(pAfterInner == pinner);
     void* withinOuter = a.alloc(8, 1);
     ASSERT(withinOuter != nullptr);
     ASSERT(withinOuter != po);

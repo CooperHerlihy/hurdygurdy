@@ -214,20 +214,40 @@ public:
     {}
 
     /**
+     * Construct from a rebinding allocator
+     */
+    template<typename U>
+    ArenaAllocator(const ArenaAllocator<U>& other) noexcept
+        : arena{other.arena}
+    {}
+
+    /**
      * Allocate from the arena
+     *
+     * Note, falls back to the heap when no arena was set
      */
     T* allocate(std::size_t size)
     {
+        if (arena == nullptr)
+            return new T[size];
+
         HG_ASSERT(arena != nullptr);
         return new (static_cast<T*>(arena->alloc(size * sizeof(T), alignof(T)))) T;
     }
 
     /**
      * Deallocate from the arena
+     *
+     * Note, frees the heap when no arena was set
      */
-    void deallocate(T*, std::size_t)
+    void deallocate(T* ptr, std::size_t)
     {
+        if (arena == nullptr)
+            delete[] ptr;
     }
+
+    template <typename U>
+    friend class ArenaAllocator;
 
     /**
      * Compare arena allocators

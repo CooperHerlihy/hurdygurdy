@@ -6,6 +6,10 @@
 #include "pipewire/pipewire_audio.hpp"
 #endif
 
+#if defined(HG_PLATFORM_WINDOWS)
+#include "win32/win32_audio.hpp"
+#endif
+
 #if defined(HG_USE_SDL)
 #include "sdl/sdl_audio.hpp"
 #endif
@@ -43,14 +47,15 @@ static std::unique_ptr<AudioDevice> createBackend(AudioBackend backend)
 #endif
 #if defined(HG_PLATFORM_WINDOWS)
     case AudioBackend::wasapi:
-        // TODO wasapi backend
+        return AudioDeviceWasapi::create();
 #endif
     case AudioBackend::none:
         return AudioDeviceDummy::create();
     default:
-        return nullptr;
+        break;
     }
 
+    setError("Could not create audio backend: {}", static_cast<u32>(backend));
     return nullptr;
 }
 

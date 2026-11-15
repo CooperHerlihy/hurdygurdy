@@ -7,6 +7,10 @@
 #include "x11/x11_window.hpp"
 #endif
 
+#if defined(HG_PLATFORM_WINDOWS)
+#include "win32/win32_window.hpp"
+#endif
+
 #if defined(HG_USE_SDL)
 #include "sdl/sdl_window.hpp"
 #endif
@@ -38,8 +42,7 @@ static std::unique_ptr<InputDevice> createBackend(InputBackend backend)
 #endif
 #if defined(HG_PLATFORM_WINDOWS)
     case InputBackend::win32:
-        // TODO win32 backend
-        break;
+        return InputDeviceWin32::create();
 #endif
 #if defined(HG_USE_SDL)
     case InputBackend::sdl3:

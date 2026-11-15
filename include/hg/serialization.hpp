@@ -287,7 +287,7 @@ bool serialize(Serializer* s, std::vector<T>* arr)
 template<typename T>
 bool serialize(Serializer* s, std::vector<T>* vec)
 {
-    u32 count = vec->size();
+    u32 count = static_cast<u32>(vec->size());
     serializeBegin(s, &count);
     HG_DEFER(serializeEnd(s));
 
@@ -308,7 +308,7 @@ bool serialize(Serializer* s, std::vector<T>* vec)
 template<typename V>
 bool serialize(Serializer* s, HashSet<V>* set)
 {
-    u32 count = set->count;
+    u32 count = static_cast<u32>(set->count);
     serializeBegin(s, &count);
     HG_DEFER(serializeEnd(s));
 
@@ -339,7 +339,7 @@ bool serialize(Serializer* s, HashSet<V>* set)
 template<typename K, typename V>
 bool serialize(Serializer* s, HashMap<K, V>* map)
 {
-    u32 count = map->count;
+    u32 count = static_cast<u32>(map->count);
     serializeBegin(s, &count);
     HG_DEFER(serializeEnd(s));
 

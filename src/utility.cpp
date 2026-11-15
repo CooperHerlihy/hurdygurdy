@@ -86,13 +86,13 @@ bool isFloat(std::string_view str)
         if (str[head] == '+' || str[head] == '-')
             ++head;
 
-        bool hasNumber = false;
+        bool hasExponent = false;
         while (head < str.length() && isNumeral(str[head]))
         {
-            hasNumber = true;
+            hasExponent = true;
             ++head;
         }
-        if (!hasNumber)
+        if (!hasExponent)
             return false;
     }
 

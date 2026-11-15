@@ -123,8 +123,9 @@ Note: the protocol functions in `wayland.cpp` call through the `wlFuncs` functio
 - `pipewire_platform.hpp` - internal api header
 - `pipewire.cpp`
 
-`src/win32/` - Windows (Win32) window/audio implementation:
-- `win32_platform.hpp` - internal api header
+`src/win32/` - Windows (Win32) window/input and WASAPI audio implementation:
+- `win32_window.hpp` - internal api header, InputDeviceWin32, WindowWin32
+- `win32_audio.hpp` - internal api header, AudioDeviceWasapi
 - `win32.cpp`
 
 `src/sdl/` - SDL implementation:

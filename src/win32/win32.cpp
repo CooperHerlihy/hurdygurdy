@@ -1,259 +1,35 @@
-#include "win32_platform.hpp"
+#include "win32_audio.hpp"
+
+#include "win32_window.hpp"
+
+#include "internal.hpp"
 
 #include "hg/error.hpp"
 #include "hg/hash.hpp"
 
+#include <span>
+#include <string_view>
 #include <string>
 #include <vector>
-#include <string_view>
 #include <memory>
 
 #define WIN32_LEAN_AND_MEAN
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
-#include <mmdeviceapi.h>
-#include <audioclient.h>
-#include <audiopolicy.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
 
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
-namespace hg::win32 {
-
-static HINSTANCE hInstance = nullptr;
-
-static bool windowInit(HINSTANCE hInst);
-static void windowDeinit();
-static bool initAudio();
-static void deinitAudio();
-
-bool loadWin32()
-{
-    hInstance = GetModuleHandleA(nullptr);
-    if (hInstance == nullptr)
-    {
-        setError("Could not get module handle");
-        return false;
-    }
-    return true;
-}
-
-bool initWin32()
-{
-    if (!windowInit(hInstance))
-        return false;
-
-    if (!initAudio())
-    {
-        windowDeinit();
-        return false;
-    }
-
-    return true;
-}
-
-void deinitWin32()
-{
-    deinitAudio();
-    windowDeinit();
-}
-
-std::span<std::string_view> getPlatformVulkanExtensions()
-{
-    static std::string_view exts[] = {
-        "VK_KHR_surface",
-        "VK_KHR_win32_surface",
-    };
-    return exts;
-}
-
-struct WindowData {
-    GpuSwapchain swap{};
-
-    HWND hwnd = nullptr;
-
-    std::vector<Event> events{};
-    Vec2 mouse{};
-    u32 width = 0;
-    u32 height = 0;
-    bool wasClosed = false;
-    bool isFocused = false;
-    bool wasFocusGained = false;
-    bool wasFocusLost = false;
-    bool wasResized = false;
-
-    WindowData() noexcept = default;
-    ~WindowData() noexcept;
-
-    WindowData(WindowData&& other) noexcept;
-    WindowData& operator=(WindowData&& other) noexcept;
-
-    WindowData(const WindowData&) = delete;
-    WindowData& operator=(const WindowData&) = delete;
-};
-
-struct WindowState {
-    HINSTANCE hInstance = nullptr;
-    ATOM windowClass = 0;
-
-    HCURSOR cursors[CursorType_count]{};
-    HCURSOR currentCursor = nullptr;
-
-    std::vector<DisplayInfo> displays{};
-
-    std::vector<Event> events{};
-    bool wasQuit = false;
-    bool isKeyDown[Button_count]{};
-    bool wasKeyDown[Button_count]{};
-    Vec2 mouseDelta{};
-    Vec2 wheelDelta{};
-
-    HashMap<u64, WindowData*> windows{};
-    WindowData* activeWindow = nullptr;
-
-    std::vector<char> clipboard{};
-};
-
-static WindowState windowState{};
-
-static u64 hwndToKey(HWND hwnd)
-{
-    return std::bit_cast<u64>(hwnd);
-}
-
-static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-static bool windowInit(HINSTANCE hInst)
-{
-    windowState = WindowState{};
-    windowState.hInstance = hInst;
-
-    WNDCLASSEXA wc{};
-    wc.cbSize = sizeof(wc);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = win32WndProc;
-    wc.hInstance = hInst;
-    wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
-    wc.lpszClassName = "HurdyGurdyWindow";
-
-    windowState.windowClass = RegisterClassExA(&wc);
-    if (windowState.windowClass == 0)
-    {
-        setError("Could not register window class");
-        return false;
-    }
-
-    // Create cursors
-    windowState.cursors[CursorType_arrow] = LoadCursorA(nullptr, IDC_ARROW);
-    windowState.cursors[CursorType_textInput] = LoadCursorA(nullptr, IDC_IBEAM);
-    windowState.cursors[CursorType_resizeAll] = LoadCursorA(nullptr, IDC_SIZEALL);
-    windowState.cursors[CursorType_resizeNS] = LoadCursorA(nullptr, IDC_SIZENS);
-    windowState.cursors[CursorType_resizeEW] = LoadCursorA(nullptr, IDC_SIZEWE);
-    windowState.cursors[CursorType_resizeNESW] = LoadCursorA(nullptr, IDC_SIZENESW);
-    windowState.cursors[CursorType_resizeNWSE] = LoadCursorA(nullptr, IDC_SIZENWSE);
-    windowState.cursors[CursorType_hand] = LoadCursorA(nullptr, IDC_HAND);
-    windowState.cursors[CursorType_wait] = LoadCursorA(nullptr, IDC_WAIT);
-    windowState.cursors[CursorType_progress] = LoadCursorA(nullptr, IDC_APPSTARTING);
-    windowState.cursors[CursorType_notAllowed] = LoadCursorA(nullptr, IDC_NO);
-
-    // Enumerate displays
-    struct EnumData {
-        std::vector<DisplayInfo>* displays;
-    } enumData{&windowState.displays};
-
-    MONITORENUMPROC monitorEnumProc = [](HMONITOR hmon, HDC, LPRECT, LPARAM lp) -> BOOL
-    {
-        EnumData* data = reinterpret_cast<EnumData*>(lp);
-
-        MONITORINFOEXA mi{};
-        mi.cbSize = sizeof(mi);
-        if (!GetMonitorInfoA(hmon, &mi))
-            return TRUE;
-
-        DisplayInfo info{};
-        info.posX = mi.rcMonitor.left;
-        info.posY = mi.rcMonitor.top;
-        info.sizeW = static_cast<u32>(mi.rcMonitor.right - mi.rcMonitor.left);
-        info.sizeH = static_cast<u32>(mi.rcMonitor.bottom - mi.rcMonitor.top);
-        info.workPosX = mi.rcWork.left;
-        info.workPosY = mi.rcWork.top;
-        info.workSizeW = static_cast<u32>(mi.rcWork.right - mi.rcWork.left);
-        info.workSizeH = static_cast<u32>(mi.rcWork.bottom - mi.rcWork.top);
-
-        // DPI scale
-       HDC hdc = GetDC(nullptr);
-        i32 dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
-        ReleaseDC(nullptr, hdc);
-        info.dpiScale = static_cast<f32>(dpiX) / 96.0f;
-
-        data->displays->push(info);
-        return TRUE;
-    };
-
-    EnumDisplayMonitors(nullptr, nullptr, monitorEnumProc, reinterpret_cast<LPARAM>(&enumData));
-
-    if (windowState.displays.size() == 0)
-    {
-        DisplayInfo info{};
-        info.sizeW = static_cast<u32>(GetSystemMetrics(SM_CXSCREEN));
-        info.sizeH = static_cast<u32>(GetSystemMetrics(SM_CYSCREEN));
-        info.workSizeW = info.sizeW;
-        info.workSizeH = info.sizeH;
-        info.dpiScale = 1.0f;
-        windowState.displays.push_back(info);
-    }
-
-    return true;
-}
-
-static void windowDeinit()
-{
-    windowState.windows.forEach([](u64, WindowData* window)
-    {
-        *window = {};
-    });
-
-    windowState.currentCursor = nullptr;
-
-    UnregisterClassA("HurdyGurdyWindow", windowState.hInstance);
-}
-
-WindowData::~WindowData() noexcept
-{
-    if (hwnd != nullptr)
-    {
-        windowState.windows.remove(hwndToKey(hwnd));
-        DestroyWindow(hwnd);
-    }
-}
-
-WindowData::WindowData(WindowData&& other) noexcept
-    : swap{std::move(other.swap)}
-    , hwnd{std::exchange(other.hwnd, nullptr)}
-    , events{std::move(other.events)}
-    , mouse{std::exchange(other.mouse, {})}
-    , width{std::exchange(other.width, 0)}
-    , height{std::exchange(other.height, 0)}
-    , wasClosed{std::exchange(other.wasClosed, false)}
-    , isFocused{std::exchange(other.isFocused, false)}
-    , wasFocusGained{std::exchange(other.wasFocusGained, false)}
-    , wasFocusLost{std::exchange(other.wasFocusLost, false)}
-    , wasResized{std::exchange(other.wasResized, false)}
-{}
-
-WindowData& WindowData::operator=(WindowData&& other) noexcept
-{
-    if (this != &other)
-    {
-        this->~WindowData();
-        new (this) WindowData{std::move(other)};
-    }
-    return *this;
-}
+namespace hg {
 
 static Button win32VirtKeyToButton(u32 vk)
 {
@@ -367,63 +143,184 @@ static Button win32VirtKeyToButton(u32 vk)
     return Button_none;
 }
 
-static Button win32MouseButtonToButton(u32 btn)
+std::unique_ptr<InputDeviceWin32> InputDeviceWin32::create()
 {
-    switch (btn)
+    std::unique_ptr<InputDeviceWin32> device = std::make_unique<InputDeviceWin32>();
+
+    device->hInstance = GetModuleHandleW(nullptr);
+    if (device->hInstance == nullptr)
     {
-        case WM_LBUTTONDOWN:
-        case WM_LBUTTONUP: return Button_mouse1;
-        case WM_RBUTTONDOWN:
-        case WM_RBUTTONUP: return Button_mouse2;
-        case WM_MBUTTONDOWN:
-        case WM_MBUTTONUP: return Button_mouse3;
-        case WM_XBUTTONDOWN:
-        case WM_XBUTTONUP:
-        {
-            u32 xbtn = GET_XBUTTON_WPARAM(btn);
-            if (xbtn == XBUTTON1) return Button_mouse4;
-            if (xbtn == XBUTTON2) return Button_mouse5;
-            return Button_none;
-        }
-    }
-    return Button_none;
-}
-
-static WindowData* getWindow(HWND hwnd)
-{
-    WindowData** data = windowState.windows.get(hwndToKey(hwnd));
-    if (data == nullptr)
+        setError("Could not get module handle");
         return nullptr;
-    return *data;
+    }
+
+    // Prefer per-monitor DPI awareness when available
+    using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(DPI_AWARENESS_CONTEXT);
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    auto setProcessDpiAwarenessContext = reinterpret_cast<SetProcessDpiAwarenessContextFn>(
+        GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
+    if (setProcessDpiAwarenessContext != nullptr)
+    {
+        if (!setProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
+            SetProcessDPIAware();
+    }
+    else
+    {
+        SetProcessDPIAware();
+    }
+
+    WNDCLASSEXW wc{};
+    wc.cbSize = sizeof(wc);
+    wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = &InputDeviceWin32::wndProc;
+    wc.hInstance = device->hInstance;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = L"HurdyGurdyWindow";
+
+    device->windowClass = RegisterClassExW(&wc);
+    if (device->windowClass == 0)
+    {
+        setError("Could not register window class");
+        return nullptr;
+    }
+
+    device->cursors[CursorType_arrow] = LoadCursorW(nullptr, IDC_ARROW);
+    device->cursors[CursorType_textInput] = LoadCursorW(nullptr, IDC_IBEAM);
+    device->cursors[CursorType_resizeAll] = LoadCursorW(nullptr, IDC_SIZEALL);
+    device->cursors[CursorType_resizeNS] = LoadCursorW(nullptr, IDC_SIZENS);
+    device->cursors[CursorType_resizeEW] = LoadCursorW(nullptr, IDC_SIZEWE);
+    device->cursors[CursorType_resizeNESW] = LoadCursorW(nullptr, IDC_SIZENESW);
+    device->cursors[CursorType_resizeNWSE] = LoadCursorW(nullptr, IDC_SIZENWSE);
+    device->cursors[CursorType_hand] = LoadCursorW(nullptr, IDC_HAND);
+    device->cursors[CursorType_wait] = LoadCursorW(nullptr, IDC_WAIT);
+    device->cursors[CursorType_progress] = LoadCursorW(nullptr, IDC_APPSTARTING);
+    device->cursors[CursorType_notAllowed] = LoadCursorW(nullptr, IDC_NO);
+
+    // Enumerate displays
+    using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, i32, u32*, u32*);
+    HMODULE shcore = GetModuleHandleW(L"Shcore.dll");
+    GetDpiForMonitorFn getDpiForMonitor = nullptr;
+    if (shcore != nullptr)
+        getDpiForMonitor = reinterpret_cast<GetDpiForMonitorFn>(GetProcAddress(shcore, "GetDpiForMonitor"));
+
+    struct EnumData {
+        std::vector<DisplayInfo>* displays;
+        GetDpiForMonitorFn getDpiForMonitor;
+    } enumData{&device->displays, getDpiForMonitor};
+
+    MONITORENUMPROC monitorEnumProc = [](HMONITOR hmon, HDC, LPRECT, LPARAM lp) -> BOOL
+    {
+        EnumData* data = reinterpret_cast<EnumData*>(lp);
+
+        MONITORINFOEXW mi{};
+        mi.cbSize = sizeof(mi);
+        if (!GetMonitorInfoW(hmon, &mi))
+            return TRUE;
+
+        DisplayInfo info{};
+        info.posX = mi.rcMonitor.left;
+        info.posY = mi.rcMonitor.top;
+        info.sizeW = static_cast<u32>(mi.rcMonitor.right - mi.rcMonitor.left);
+        info.sizeH = static_cast<u32>(mi.rcMonitor.bottom - mi.rcMonitor.top);
+        info.workPosX = mi.rcWork.left;
+        info.workPosY = mi.rcWork.top;
+        info.workSizeW = static_cast<u32>(mi.rcWork.right - mi.rcWork.left);
+        info.workSizeH = static_cast<u32>(mi.rcWork.bottom - mi.rcWork.top);
+        info.dpiScale = 1.0f;
+
+        if (data->getDpiForMonitor != nullptr)
+        {
+            u32 dpiX = 96;
+            u32 dpiY = 96;
+            if (SUCCEEDED(data->getDpiForMonitor(hmon, 0, &dpiX, &dpiY)))
+                info.dpiScale = static_cast<f32>(dpiX) / 96.0f;
+        }
+
+        data->displays->push_back(info);
+        return TRUE;
+    };
+
+    EnumDisplayMonitors(nullptr, nullptr, monitorEnumProc, reinterpret_cast<LPARAM>(&enumData));
+
+    if (device->displays.empty())
+    {
+        DisplayInfo info{};
+        info.sizeW = static_cast<u32>(GetSystemMetrics(SM_CXSCREEN));
+        info.sizeH = static_cast<u32>(GetSystemMetrics(SM_CYSCREEN));
+        info.workSizeW = info.sizeW;
+        info.workSizeH = info.sizeH;
+        info.dpiScale = 1.0f;
+        device->displays.push_back(info);
+    }
+
+    return device;
 }
 
-static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+InputDeviceWin32::~InputDeviceWin32()
 {
+    windows.clear();
+
+    if (windowClass != 0 && hInstance != nullptr)
+        UnregisterClassW(L"HurdyGurdyWindow", hInstance);
+}
+
+std::span<std::string_view> InputDeviceWin32::getVulkanExtensions()
+{
+    static std::string_view exts[] = {
+        "VK_KHR_surface",
+        "VK_KHR_win32_surface",
+    };
+    return exts;
+}
+
+std::span<DisplayInfo> InputDeviceWin32::displayInfo()
+{
+    return displays;
+}
+
+LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    if (msg == WM_NCCREATE)
+    {
+        CREATESTRUCTW* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
+        return DefWindowProcW(hwnd, msg, wParam, lParam);
+    }
+
+    WindowWin32* w = reinterpret_cast<WindowWin32*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    InputDeviceWin32* dev = w != nullptr ? static_cast<InputDeviceWin32*>(w->device) : nullptr;
+
     switch (msg)
     {
         case WM_CLOSE:
         {
-            WindowData* w = getWindow(hwnd);
-            if (w != nullptr)
+            if (dev != nullptr)
             {
-                w->wasClosed = true;
+                w->closed = true;
+
                 Event event{};
                 event.type = EventType_windowClosed;
                 event.window.window = w;
-                windowState.events.push_back(event);
-                w->events.push_back(event);
+                dev->events.push_back(event);
+                w->eventQueue.push_back(event);
             }
             DestroyWindow(hwnd);
             return 0;
         }
         case WM_DESTROY:
         {
-            if (windowState.windows.count == 0)
+            if (dev != nullptr)
             {
-                windowState.wasQuit = true;
-                Event event{};
-                event.type = EventType_quit;
-                windowState.events.push_back(event);
+                dev->windows.remove(std::bit_cast<u64>(hwnd));
+
+                if (dev->windows.count == 0)
+                {
+                    dev->quit = true;
+
+                    Event event{};
+                    event.type = EventType_quit;
+                    dev->events.push_back(event);
+                }
             }
             return 0;
         }
@@ -431,288 +328,387 @@ static LRESULT CALLBACK win32WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         {
             u32 width = static_cast<u32>(LOWORD(lParam));
             u32 height = static_cast<u32>(HIWORD(lParam));
-            if (width == 0 || height == 0)
+            if (width == 0 || height == 0 || dev == nullptr)
                 return 0;
 
-            WindowData* w = getWindow(hwnd);
-            if (w != nullptr)
-            {
-                w->swap.resize(width, height);
-                w->width = width;
-                w->height = height;
-                w->wasResized = true;
+            w->swap.resize(width, height);
+            w->width = width;
+            w->height = height;
+            w->resized = true;
 
-                Event event{};
-                event.type = EventType_windowResized;
-                event.window.window = w;
-                event.window.width = width;
-                event.window.height = height;
-                windowState.events.push_back(event);
-                w->events.push_back(event);
-            }
+            Event event{};
+            event.type = EventType_windowResized;
+            event.window.window = w;
+            event.window.width = width;
+            event.window.height = height;
+            dev->events.push_back(event);
+            w->eventQueue.push_back(event);
             return 0;
         }
         case WM_SETFOCUS:
         {
-            WindowData* w = getWindow(hwnd);
-            if (w != nullptr)
+            if (dev != nullptr && !w->focused)
             {
-                w->isFocused = true;
-                w->wasFocusGained = true;
-                windowState.activeWindow = w;
+                w->focused = true;
+                w->focusGained = true;
+                dev->activeWindow = w;
 
                 Event event{};
                 event.type = EventType_windowFocused;
-                windowState.events.push_back(event);
-                w->events.push_back(event);
+                event.window.window = w;
+                dev->events.push_back(event);
+                w->eventQueue.push_back(event);
             }
             return 0;
         }
         case WM_KILLFOCUS:
         {
-            WindowData* w = getWindow(hwnd);
-            if (w != nullptr)
+            if (dev != nullptr && w->focused)
             {
-                w->isFocused = false;
-                w->wasFocusLost = true;
-                if (windowState.activeWindow == w)
-                    windowState.activeWindow = nullptr;
+                w->focused = false;
+                w->focusLost = true;
+                if (dev->activeWindow == w)
+                    dev->activeWindow = nullptr;
 
                 Event event{};
                 event.type = EventType_windowUnfocused;
-                windowState.events.push_back(event);
-                w->events.push_back(event);
+                event.window.window = w;
+                dev->events.push_back(event);
+                w->eventQueue.push_back(event);
             }
             return 0;
         }
         case WM_MOUSEMOVE:
         {
-            f32 mx = static_cast<f32>(GET_X_LPARAM(lParam));
-            f32 my = static_cast<f32>(GET_Y_LPARAM(lParam));
+            if (dev == nullptr)
+                return 0;
 
-            WindowData* w = getWindow(hwnd);
-            if (w != nullptr)
-            {
-                Vec2 newPos{mx, my};
-                Vec2 delta = newPos - w->mouse;
-                w->mouse = newPos;
-                windowState.mouseDelta += delta;
+            Vec2 newPos{static_cast<f32>(GET_X_LPARAM(lParam)), static_cast<f32>(GET_Y_LPARAM(lParam))};
+            Vec2 delta = newPos - w->mouse;
+            w->mouse = newPos;
+            dev->mouseDeltaAccum += delta;
 
-                Event event{};
-                event.type = EventType_mouseMoved;
-                event.mouse.delta = delta;
-                event.mouse.pos = newPos;
-                event.mouse.globalPos = newPos;
-                windowState.events.push_back(event);
-            }
+            POINT globalPt{};
+            GetCursorPos(&globalPt);
+
+            Event event{};
+            event.type = EventType_mouseMoved;
+            event.mouse.delta = delta;
+            event.mouse.pos = newPos;
+            event.mouse.globalPos = Vec2{static_cast<f32>(globalPt.x), static_cast<f32>(globalPt.y)};
+            dev->events.push_back(event);
+            w->eventQueue.push_back(event);
             return 0;
         }
         case WM_MOUSEWHEEL:
         {
-            f32 delta = static_cast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
+            if (dev == nullptr)
+                return 0;
 
-            windowState.wheelDelta.y += delta;
+            f32 delta = static_cast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
+            dev->wheelDeltaAccum.y += delta;
 
             Event event{};
             event.type = EventType_wheelMoved;
             event.wheel.delta = Vec2{0.0f, delta};
-            windowState.events.push_back(event);
+            dev->events.push_back(event);
+            w->eventQueue.push_back(event);
             return 0;
         }
         case WM_MOUSEHWHEEL:
         {
-            f32 delta = static_cast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
+            if (dev == nullptr)
+                return 0;
 
-            windowState.wheelDelta.x += delta;
+            f32 delta = static_cast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
+            dev->wheelDeltaAccum.x += delta;
 
             Event event{};
             event.type = EventType_wheelMoved;
             event.wheel.delta = Vec2{delta, 0.0f};
-            windowState.events.push_back(event);
+            dev->events.push_back(event);
+            w->eventQueue.push_back(event);
             return 0;
         }
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
         case WM_MBUTTONDOWN:
         case WM_XBUTTONDOWN:
-        {
-            Button button = win32MouseButtonToButton(msg);
-            if (button != Button_none)
-            {
-                windowState.isKeyDown[button] = true;
-                Event event{};
-                event.type = EventType_keyPress;
-                event.button = button;
-                windowState.events.push_back(event);
-            }
-            return 0;
-        }
         case WM_LBUTTONUP:
         case WM_RBUTTONUP:
         case WM_MBUTTONUP:
         case WM_XBUTTONUP:
         {
-            Button button = win32MouseButtonToButton(msg);
+            if (dev == nullptr)
+                return 0;
+
+            bool pressed = msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN ||
+                msg == WM_MBUTTONDOWN || msg == WM_XBUTTONDOWN;
+
+            Button button = Button_none;
+            switch (msg)
+            {
+                case WM_LBUTTONDOWN:
+                case WM_LBUTTONUP: button = Button_mouse1; break;
+                case WM_RBUTTONDOWN:
+                case WM_RBUTTONUP: button = Button_mouse2; break;
+                case WM_MBUTTONDOWN:
+                case WM_MBUTTONUP: button = Button_mouse3; break;
+                case WM_XBUTTONDOWN:
+                case WM_XBUTTONUP:
+                {
+                    if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
+                        button = Button_mouse4;
+                    else if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
+                        button = Button_mouse5;
+                    break;
+                }
+            }
+
             if (button != Button_none)
             {
-                windowState.isKeyDown[button] = false;
+                dev->isKeyDown[button] = pressed;
+
                 Event event{};
-                event.type = EventType_keyRelease;
+                event.type = pressed ? EventType_keyPress : EventType_keyRelease;
                 event.button = button;
-                windowState.events.push_back(event);
+                dev->events.push_back(event);
+                w->eventQueue.push_back(event);
             }
             return 0;
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
         {
-            u32 vk = static_cast<u32>(wParam);
-            Button button = win32VirtKeyToButton(vk);
+            if (dev == nullptr)
+                return 0;
+
+            Button button = win32VirtKeyToButton(static_cast<u32>(wParam));
             if (button != Button_none)
             {
-                windowState.isKeyDown[button] = true;
+                dev->isKeyDown[button] = true;
+
                 Event event{};
                 event.type = EventType_keyPress;
                 event.button = button;
-                windowState.events.push_back(event);
-            }
-
-            // Text input
-            UINT scancode = (lParam >> 16) & 0xFF;
-            bool extended = (lParam >> 24) & 1;
-            if (extended)
-                scancode |= 0xE000;
-
-            BYTE keyboardState[256]{};
-            GetKeyboardState(keyboardState);
-
-            wchar_t unicodeBuf[8]{};
-            int len = ToUnicode(vk, scancode, keyboardState, unicodeBuf, 8, 0);
-            if (len > 0)
-            {
-                char utf8Buf[32]{};
-                int utf8Len = WideCharToMultiByte(CP_UTF8, 0, unicodeBuf, len, utf8Buf, sizeof(utf8Buf) - 1, nullptr, nullptr);
-                if (utf8Len > 0)
-                {
-                    Event event{};
-                    event.type = EventType_text;
-                    std::memset(event.text, 0, sizeof(event.text));
-                    std::memcpy(event.text, utf8Buf, static_cast<u64>(utf8Len) < sizeof(event.text) - 1 ? static_cast<u64>(utf8Len) : sizeof(event.text) - 1);
-                    windowState.events.push_back(event);
-                }
+                dev->events.push_back(event);
+                w->eventQueue.push_back(event);
             }
             return 0;
         }
         case WM_KEYUP:
         case WM_SYSKEYUP:
         {
-            u32 vk = static_cast<u32>(wParam);
-            Button button = win32VirtKeyToButton(vk);
+            if (dev == nullptr)
+                return 0;
+
+            Button button = win32VirtKeyToButton(static_cast<u32>(wParam));
             if (button != Button_none)
             {
-                windowState.isKeyDown[button] = false;
+                dev->isKeyDown[button] = false;
+
                 Event event{};
                 event.type = EventType_keyRelease;
                 event.button = button;
-                windowState.events.push_back(event);
+                dev->events.push_back(event);
+                w->eventQueue.push_back(event);
             }
             return 0;
         }
         case WM_CHAR:
         {
-            // WM_CHAR handles text input for non-dead keys
+            if (dev == nullptr)
+                return 0;
+
+            wchar_t ch = static_cast<wchar_t>(wParam);
+            if (ch >= 0x20 && ch != 0x7F)
+            {
+                static wchar_t pendingHigh = 0;
+                if (ch >= 0xD800 && ch < 0xDC00)
+                {
+                    pendingHigh = ch;
+                }
+                else
+                {
+                    wchar_t units[2] = {ch, 0};
+                    int unitCount = 1;
+                    if (ch >= 0xDC00 && ch < 0xE000 && pendingHigh != 0)
+                    {
+                        units[0] = pendingHigh;
+                        units[1] = ch;
+                        unitCount = 2;
+                    }
+                    pendingHigh = 0;
+
+                    char utf8[8]{};
+                    int utf8Len = WideCharToMultiByte(CP_UTF8, 0, units, unitCount, utf8, sizeof(utf8) - 1, nullptr, nullptr);
+                    if (utf8Len > 0)
+                    {
+                        Event event{};
+                        event.type = EventType_text;
+                        std::memset(event.text, 0, sizeof(event.text));
+                        std::memcpy(event.text, utf8, static_cast<u64>(utf8Len) < sizeof(event.text) ? static_cast<u64>(utf8Len) : sizeof(event.text));
+                        dev->events.push_back(event);
+                        w->eventQueue.push_back(event);
+                    }
+                }
+            }
             return 0;
+        }
+        case WM_SETCURSOR:
+        {
+            if (dev != nullptr && LOWORD(lParam) == HTCLIENT)
+            {
+                if (dev->currentCursor != nullptr)
+                    SetCursor(dev->currentCursor);
+                return TRUE;
+            }
+            break;
         }
     }
 
-    return DefWindowProcA(hwnd, msg, wParam, lParam);
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
-std::span<DisplayInfo> displayInfo()
+void InputDeviceWin32::processEvents()
 {
-    return windowState.displays;
-}
+    std::memcpy(wasKeyDown, isKeyDown, sizeof(isKeyDown));
+    mouseDeltaAccum = Vec2{};
+    wheelDeltaAccum = Vec2{};
 
-void setCursor(CursorType type)
-{
-    if (type < CursorType_count && windowState.cursors[type] != nullptr)
+    windows.forEach([](u64, WindowWin32* data)
     {
-        windowState.currentCursor = windowState.cursors[type];
-        SetCursor(windowState.currentCursor);
-    }
-}
-
-void showCursor(bool show)
-{
-    ::ShowCursor(show ? TRUE : FALSE);
-}
-
-void processEvents()
-{
-    windowState.events.clear();
-
-    std::memcpy(windowState.wasKeyDown, windowState.isKeyDown, sizeof(windowState.isKeyDown));
-    windowState.mouseDelta = {};
-    windowState.wheelDelta = {};
-
-    windowState.windows.forEach([](u64, WindowData* data)
-    {
-        data->events.clear();
-        data->wasFocusGained = false;
-        data->wasFocusLost = false;
-        data->wasResized = false;
+        data->eventQueue.clear();
+        data->focusGained = false;
+        data->focusLost = false;
+        data->resized = false;
     });
 
+    events.clear();
+
     MSG msg{};
-    while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE))
+    while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
     {
         if (msg.message == WM_QUIT)
         {
-            windowState.wasQuit = true;
+            quit = true;
+
             Event event{};
             event.type = EventType_quit;
-            windowState.events.push_back(event);
+            events.push_back(event);
             break;
         }
         TranslateMessage(&msg);
-        DispatchMessageA(&msg);
+        DispatchMessageW(&msg);
     }
 }
 
-std::span<Event> getEvents()
+std::span<Event> InputDeviceWin32::getEvents()
 {
-    return windowState.events;
+    return events;
 }
 
-bool wasQuit()
+bool InputDeviceWin32::wasQuit()
 {
-    return windowState.wasQuit;
+    return quit;
 }
 
-bool isButtonDown(Button key)
+std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& config)
 {
-    return windowState.isKeyDown[key];
+    u32 width = config.width != 0 ? config.width : 800;
+    u32 height = config.height != 0 ? config.height : 600;
+    std::string titleStr = config.title.length() != 0 ? std::string{config.title} : "Hurdy Gurdy";
+
+    std::unique_ptr<WindowWin32> win = std::make_unique<WindowWin32>(this);
+
+    wchar_t wtitle[256]{};
+    MultiByteToWideChar(
+        CP_UTF8,
+        0,
+        titleStr.c_str(),
+        -1,
+        wtitle,
+        static_cast<int>(sizeof(wtitle) / sizeof(wchar_t)) - 1);
+
+    win->hwnd = CreateWindowExW(
+        0,
+        L"HurdyGurdyWindow",
+        wtitle,
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        static_cast<int>(width),
+        static_cast<int>(height),
+        nullptr, nullptr,
+        hInstance,
+        win.get());
+
+    if (win->hwnd == nullptr)
+    {
+        setError("Could not create Win32 window");
+        return nullptr;
+    }
+
+    windows.add(std::bit_cast<u64>(win->hwnd), win.get());
+
+    RECT rect{};
+    GetClientRect(win->hwnd, &rect);
+    win->width = static_cast<u32>(rect.right - rect.left);
+    win->height = static_cast<u32>(rect.bottom - rect.top);
+    win->focused = (GetFocus() == win->hwnd);
+
+    VkWin32SurfaceCreateInfoKHR createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    createInfo.hinstance = hInstance;
+    createInfo.hwnd = win->hwnd;
+
+    auto vkCreateWin32SurfaceKHR = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(
+        internal::getVkInstanceProcAddr("vkCreateWin32SurfaceKHR"));
+
+    VkSurfaceKHR surface;
+    VkResult result = vkCreateWin32SurfaceKHR(
+        static_cast<VkInstance>(internal::getVkInstance()),
+        &createInfo,
+        nullptr,
+        &surface);
+
+    if (result != VK_SUCCESS)
+    {
+        setError("Could not create Vulkan surface");
+        return nullptr;
+    }
+
+    win->swap = GpuSwapchain::create(surface, win->width, win->height, config.preferredPresentMode, config.imageUsage);
+
+    ShowWindow(win->hwnd, SW_SHOW);
+    UpdateWindow(win->hwnd);
+
+    return win;
 }
 
-bool wasButtonPressed(Button key)
+bool InputDeviceWin32::isButtonDown(Button button)
 {
-    return !windowState.wasKeyDown[key] && windowState.isKeyDown[key];
+    return isKeyDown[button];
 }
 
-bool wasButtonReleased(Button key)
+bool InputDeviceWin32::wasButtonPressed(Button button)
 {
-    return windowState.wasKeyDown[key] && !windowState.isKeyDown[key];
+    return !wasKeyDown[button] && isKeyDown[button];
 }
 
-Vec2 mousePos()
+bool InputDeviceWin32::wasButtonReleased(Button button)
 {
-    if (windowState.activeWindow != nullptr)
-        return windowState.activeWindow->mouse;
+    return wasKeyDown[button] && !isKeyDown[button];
+}
 
-    if (windowState.windows.count == 1)
+Vec2 InputDeviceWin32::mousePos()
+{
+    if (activeWindow != nullptr)
+        return activeWindow->mouse;
+
+    if (windows.count == 1)
     {
         Vec2 ret{};
-        windowState.windows.forEach([&](u64, WindowData* wd)
+        windows.forEach([&](u64, WindowWin32* wd)
         {
             ret = wd->mouse;
         });
@@ -721,369 +717,178 @@ Vec2 mousePos()
     return {};
 }
 
-Vec2 mouseDelta()
+Vec2 InputDeviceWin32::mouseDelta()
 {
-    if (windowState.activeWindow != nullptr)
-        return windowState.mouseDelta / static_cast<f32>(windowState.activeWindow->height);
+    if (activeWindow != nullptr)
+        return mouseDeltaAccum / static_cast<f32>(activeWindow->height);
 
-    if (windowState.windows.count == 1)
+    if (windows.count == 1)
     {
-        Vec2 ret = windowState.mouseDelta;
-        windowState.windows.forEach([&](u64, WindowData* wd)
+        Vec2 ret = mouseDeltaAccum;
+        windows.forEach([&](u64, WindowWin32* wd)
         {
             ret = ret / static_cast<f32>(wd->height);
         });
         return ret;
     }
-    return windowState.mouseDelta;
+    return mouseDeltaAccum;
 }
 
-Vec2 wheelDelta()
+Vec2 InputDeviceWin32::wheelDelta()
 {
-    return windowState.wheelDelta;
+    return wheelDeltaAccum;
 }
 
-Window windowCreate(const WindowConfig& config)
+void InputDeviceWin32::setCursor(CursorType type)
 {
-    Window window{};
-
-    std::unique_ptr<WindowData> data = std::make_unique<WindowData>();
-    WindowData* wd = data.get();
-
-    u32 width = config.width != 0 ? config.width : 0;
-    u32 height = config.height != 0 ? config.height : 0;
-    std::string titleStr = config.title.length() != 0 ? std::string{config.title} : "Hurdy Gurdy";
-    const char* title = titleStr.c_str();
-
-    wchar_t wtitle[256]{};
-    MultiByteToWideChar(
-        CP_UTF8,
-        0,
-        title,
-        -1,
-        wtitle,
-        static_cast<int>(sizeof(wtitle) / sizeof(wchar_t)) - 1);
-
-    HWND hwnd = CreateWindowExW(
-        0,
-        L"HurdyGurdyWindow",
-        wtitle,
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT,
-        width != 0 ? static_cast<int>(width) : CW_USEDEFAULT,
-        height != 0 ? static_cast<int>(height) : CW_USEDEFAULT,
-        nullptr, nullptr,
-        windowState.hInstance,
-        nullptr);
-
-    if (hwnd == nullptr)
+    if (type < CursorType_count && cursors[type] != nullptr)
     {
-        setError("Could not create Win32 window");
-        return Window{};
+        currentCursor = cursors[type];
+        SetCursor(currentCursor);
     }
+}
 
-    wd->hwnd = hwnd;
-    windowState.windows.add(hwndToKey(hwnd), wd);
+void InputDeviceWin32::showCursor(bool show)
+{
+    static bool visible = true;
+    if (show == visible)
+        return;
+    ::ShowCursor(show ? TRUE : FALSE);
+    visible = show;
+}
 
-    RECT rect{};
-    GetClientRect(hwnd, &rect);
-    wd->width = static_cast<u32>(rect.right - rect.left);
-    wd->height = static_cast<u32>(rect.bottom - rect.top);
-    wd->isFocused = (GetFocus() == hwnd);
-
-    // Create Vulkan surface
-    VkWin32SurfaceCreateInfoKHR createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    createInfo.hinstance = windowState.hInstance;
-    createInfo.hwnd = hwnd;
-
-    auto vkCreateWin32SurfaceKHR = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(
-        internal::getVulkanInstanceProcAddr("vkCreateWin32SurfaceKHR"));
-
-    VkSurfaceKHR surface;
-    VkResult result = vkCreateWin32SurfaceKHR(
-        static_cast<VkInstance>(internal::getVulkanInstance()),
-        &createInfo,
-        nullptr,
-        &surface);
-
-    if (result != VK_SUCCESS)
+WindowWin32::~WindowWin32()
+{
+    if (hwnd != nullptr)
     {
+        static_cast<InputDeviceWin32*>(device)->windows.remove(std::bit_cast<u64>(hwnd));
         DestroyWindow(hwnd);
-        setError("Could not create Vulkan surface");
-        return Window{};
+        hwnd = nullptr;
     }
-
-    wd->swap = GpuSwapchain::create(surface, wd->width, wd->height, config.preferredPresentMode, config.imageUsage);
-
-    ShowWindow(hwnd, SW_SHOW);
-    UpdateWindow(hwnd);
-
-    window.data = data.release();
-    return window;
 }
 
-void windowDestroy(void* data)
+GpuSwapchain& WindowWin32::swapchain() const
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    delete wd;
+    return swap;
 }
 
-GpuSwapchain& windowSwapchain(void* data)
+void WindowWin32::setTitle(std::string_view title)
 {
-    return static_cast<WindowData*>(data)->swap;
-}
-
-void windowSetTitle(void* data, std::string_view title)
-{
-    WindowData* wd = static_cast<WindowData*>(data);
     char buf[256];
     u64 len = title.length() < sizeof(buf) - 1 ? title.length() : sizeof(buf) - 1;
     std::memcpy(buf, title.data(), len);
     buf[len] = '\0';
 
-    // Convert to wide string
     wchar_t wbuf[256]{};
     MultiByteToWideChar(CP_UTF8, 0, buf, static_cast<int>(len), wbuf, 255);
-    SetWindowTextW(wd->hwnd, wbuf);
+    SetWindowTextW(hwnd, wbuf);
 }
 
-std::span<Event> windowEvents(void* data)
+std::span<Event> WindowWin32::events() const
 {
-    return static_cast<WindowData*>(data)->events;
+    return eventQueue;
 }
 
-bool windowWasClosed(void* data)
+bool WindowWin32::wasClosed() const
 {
-    return static_cast<WindowData*>(data)->wasClosed;
+    return closed;
 }
 
-bool windowIsFocused(void* data)
+bool WindowWin32::isFocused() const
 {
-    return static_cast<WindowData*>(data)->isFocused;
+    return focused;
 }
 
-bool windowWasFocusGained(void* data)
+bool WindowWin32::wasFocusGained() const
 {
-    return static_cast<WindowData*>(data)->wasFocusGained;
+    return focusGained;
 }
 
-bool windowWasFocusLost(void* data)
+bool WindowWin32::wasFocusLost() const
 {
-    return static_cast<WindowData*>(data)->wasFocusLost;
+    return focusLost;
 }
 
-bool windowWasResized(void* data)
+bool WindowWin32::wasResized() const
 {
-    return static_cast<WindowData*>(data)->wasResized;
+    return resized;
 }
 
-void windowGetSize(void* data, u32* w, u32* h)
+void WindowWin32::size(u32* outWidth, u32* outHeight) const
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (w != nullptr)
-        *w = wd != nullptr ? wd->width : 0;
-    if (h != nullptr)
-        *h = wd != nullptr ? wd->height : 0;
+    if (outWidth != nullptr)
+        *outWidth = width;
+    if (outHeight != nullptr)
+        *outHeight = height;
 }
 
-void windowSetFullscreen(void* data, bool set)
+void WindowWin32::setFullscreen(bool set)
 {
-    WindowData* wd = static_cast<WindowData*>(data);
+    if (fullscreen == set)
+        return;
+    fullscreen = set;
 
     if (set)
     {
-        RECT rect{};
-        GetWindowRect(wd->hwnd, &rect);
+        savedPlacement.length = sizeof(WINDOWPLACEMENT);
+        GetWindowPlacement(hwnd, &savedPlacement);
 
-        DWORD style = static_cast<DWORD>(GetWindowLongPtrA(wd->hwnd, GWL_STYLE));
+        DWORD style = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
         style &= ~WS_OVERLAPPEDWINDOW;
         style |= WS_POPUP;
-        SetWindowLongPtrA(wd->hwnd, GWL_STYLE, style);
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style);
 
-        HMONITOR hmon = MonitorFromWindow(wd->hwnd, MONITOR_DEFAULTTONEAREST);
-        MONITORINFOEXA mi{};
+        HMONITOR hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFOEXW mi{};
         mi.cbSize = sizeof(mi);
-        GetMonitorInfoA(hmon, &mi);
+        GetMonitorInfoW(hmon, &mi);
 
-        SetWindowPos(wd->hwnd, HWND_TOP,
+        SetWindowPos(hwnd, HWND_TOP,
             mi.rcMonitor.left, mi.rcMonitor.top,
             mi.rcMonitor.right - mi.rcMonitor.left,
             mi.rcMonitor.bottom - mi.rcMonitor.top,
-            SWP_FRAMECHANGED);
-
-        ShowWindow(wd->hwnd, SW_SHOW);
+            SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
     }
     else
     {
-        DWORD style = static_cast<DWORD>(GetWindowLongPtrA(wd->hwnd, GWL_STYLE));
+        DWORD style = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
         style &= ~WS_POPUP;
         style |= WS_OVERLAPPEDWINDOW;
-        SetWindowLongPtrA(wd->hwnd, GWL_STYLE, style);
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style);
 
-        SetWindowPos(wd->hwnd, HWND_TOP,
-            100, 100, 800, 600,
-            SWP_FRAMECHANGED);
+        if (savedPlacement.length != 0)
+            SetWindowPlacement(hwnd, &savedPlacement);
 
-        ShowWindow(wd->hwnd, SW_SHOW);
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
     }
 
     RECT rect{};
-    GetClientRect(wd->hwnd, &rect);
+    GetClientRect(hwnd, &rect);
     u32 w = static_cast<u32>(rect.right - rect.left);
     u32 h = static_cast<u32>(rect.bottom - rect.top);
     if (w > 0 && h > 0)
     {
-        wd->width = w;
-        wd->height = h;
-        wd->swap.resize(w, h);
+        width = w;
+        height = h;
+        swap.resize(w, h);
     }
 }
 
-Vec2 windowMousePos(void* data)
+Vec2 WindowWin32::mousePos() const
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (wd != nullptr)
-        return wd->mouse;
-
-    POINT pt{};
-    GetCursorPos(&pt);
-    return Vec2{static_cast<f32>(pt.x), static_cast<f32>(pt.y)};
+    return mouse;
 }
 
-Vec2 windowMouseDelta(void* data)
+Vec2 WindowWin32::mouseDelta() const
 {
-    WindowData* wd = static_cast<WindowData*>(data);
-    if (wd != nullptr)
-        return windowState.mouseDelta / static_cast<f32>(wd->height);
-
-    return windowState.mouseDelta;
+    return static_cast<InputDeviceWin32*>(device)->mouseDeltaAccum / static_cast<f32>(height);
 }
 
-std::string_view getClipboardText()
+std::unique_ptr<AudioDeviceWasapi> AudioDeviceWasapi::create()
 {
-    if (!OpenClipboard(nullptr))
-        return std::string_view{};
+    std::unique_ptr<AudioDeviceWasapi> audio = std::make_unique<AudioDeviceWasapi>();
 
-    std::string_view result{};
-
-    HANDLE hData = GetClipboardData(CF_UNICODETEXT);
-    if (hData != nullptr)
-    {
-        wchar_t* wstr = static_cast<wchar_t*>(GlobalLock(hData));
-        if (wstr != nullptr)
-        {
-            // Convert wide string to UTF-8
-            int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, nullptr, 0, nullptr, nullptr);
-            if (utf8Len > 0)
-            {
-                windowState.clipboard.resize(static_cast<u64>(utf8Len));
-                WideCharToMultiByte(CP_UTF8, 0, wstr, -1, windowState.clipboard.data(), utf8Len, nullptr, nullptr);
-                result = std::string_view{windowState.clipboard.data(), static_cast<u64>(utf8Len - 1)};
-            }
-            GlobalUnlock(hData);
-        }
-    }
-
-    CloseClipboard();
-    return result;
-}
-
-void setClipboardText(std::string_view text)
-{
-    if (!OpenClipboard(nullptr))
-        return;
-
-    EmptyClipboard();
-
-    // Convert UTF-8 to wide string
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.length()), nullptr, 0);
-    if (wlen > 0)
-    {
-        HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, static_cast<SIZE_T>((wlen + 1) * sizeof(wchar_t)));
-        if (hMem != nullptr)
-        {
-            wchar_t* wstr = static_cast<wchar_t*>(GlobalLock(hMem));
-            MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.length()), wstr, wlen);
-            wstr[wlen] = L'\0';
-            GlobalUnlock(hMem);
-
-            SetClipboardData(CF_UNICODETEXT, hMem);
-        }
-    }
-
-    CloseClipboard();
-}
-
-void openURL(std::string_view url)
-{
-    std::string cstr{url};
-    ShellExecuteA(nullptr, "open", cstr.c_str(), nullptr, nullptr, SW_SHOW);
-}
-
-struct AudioState {
-    IMMDeviceEnumerator* deviceEnumerator = nullptr;
-    IMMDevice* device = nullptr;
-    IAudioClient* audioClient = nullptr;
-    IAudioRenderClient* renderClient = nullptr;
-    HANDLE audioThread = nullptr;
-    HANDLE audioEvent = nullptr;
-    bool audioThreadRunning = false;
-    u32 bufferFrameCount = 0;
-
-    AudioCallback callback = nullptr;
-    void* callbackData = nullptr;
-    AudioConfig callbackConfig{};
-};
-
-static AudioState audio{};
-
-static DWORD WINAPI wasapiAudioThread(LPVOID lpParam)
-{
-    (void)lpParam;
-
-    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-
-    while (audio.audioThreadRunning)
-    {
-        DWORD waitResult = WaitForSingleObject(audio.audioEvent, 1000);
-        if (waitResult == WAIT_TIMEOUT)
-            continue;
-        if (!audio.audioThreadRunning)
-            break;
-
-        u32 padding = 0;
-        HRESULT hr = audio.audioClient->GetCurrentPadding(&padding);
-        if (FAILED(hr))
-            continue;
-
-        u32 availableFrames = audio.bufferFrameCount - padding;
-        if (availableFrames == 0)
-            continue;
-
-        BYTE* data = nullptr;
-        hr = audio.renderClient->GetBuffer(availableFrames, &data);
-        if (FAILED(hr))
-            continue;
-
-        std::memset(data, 0, static_cast<u64>(availableFrames) * sizeof(f32) * audio.callbackConfig.channels);
-
-        if (audio.callback != nullptr)
-        {
-            u64 totalSamples = static_cast<u64>(availableFrames) * audio.callbackConfig.channels;
-            std::span<f32> buffer{reinterpret_cast<f32*>(data), totalSamples};
-            audio.callback(audio.callbackData, buffer, audio.callbackConfig);
-        }
-
-        audio.renderClient->ReleaseBuffer(availableFrames, 0);
-    }
-
-    CoUninitialize();
-    return 0;
-}
-
-static bool initAudio()
-{
     // Initialize COM on the main thread (per-thread requirement)
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 
@@ -1092,141 +897,196 @@ static bool initAudio()
         nullptr,
         CLSCTX_ALL,
         __uuidof(IMMDeviceEnumerator),
-        reinterpret_cast<void**>(&audio.deviceEnumerator));
+        reinterpret_cast<void**>(&audio->deviceEnumerator));
 
-    if (FAILED(hr) || audio.deviceEnumerator == nullptr)
+    if (FAILED(hr) || audio->deviceEnumerator == nullptr)
     {
         setError("Could not create WASAPI device enumerator");
-        return false;
+        audio->deviceEnumerator = nullptr;
+        CoUninitialize();
+        return nullptr;
     }
 
-    hr = audio.deviceEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &audio.device);
-    if (FAILED(hr) || audio.device == nullptr)
+    hr = audio->deviceEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &audio->device);
+    if (FAILED(hr) || audio->device == nullptr)
     {
         setError("Could not get default audio endpoint");
-        audio.deviceEnumerator->Release();
-        audio.deviceEnumerator = nullptr;
-        return false;
+        audio->device = nullptr;
+        audio->deviceEnumerator->Release();
+        audio->deviceEnumerator = nullptr;
+        CoUninitialize();
+        return nullptr;
     }
 
-    hr = audio.device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&audio.audioClient));
-    if (FAILED(hr) || audio.audioClient == nullptr)
-    {
-        setError("Could not activate audio client");
-        audio.device->Release();
-        audio.device = nullptr;
-        audio.deviceEnumerator->Release();
-        audio.deviceEnumerator = nullptr;
-        return false;
-    }
-
-    return true;
+    return audio;
 }
 
-static void deinitAudio()
+AudioDeviceWasapi::~AudioDeviceWasapi()
 {
-    if (audio.audioThreadRunning)
+    stopThread();
+    releaseStream();
+
+    if (device != nullptr)
     {
-        audio.audioThreadRunning = false;
-        if (audio.audioEvent != nullptr)
-            SetEvent(audio.audioEvent);
-        if (audio.audioThread != nullptr)
-        {
-            WaitForSingleObject(audio.audioThread, 5000);
-            CloseHandle(audio.audioThread);
-            audio.audioThread = nullptr;
-        }
+        device->Release();
+        device = nullptr;
     }
 
-    if (audio.audioEvent != nullptr)
+    if (deviceEnumerator != nullptr)
     {
-        CloseHandle(audio.audioEvent);
-        audio.audioEvent = nullptr;
+        deviceEnumerator->Release();
+        deviceEnumerator = nullptr;
     }
 
-    if (audio.renderClient != nullptr)
-    {
-        audio.renderClient->Release();
-        audio.renderClient = nullptr;
-    }
-
-    if (audio.audioClient != nullptr)
-    {
-        audio.audioClient->Release();
-        audio.audioClient = nullptr;
-    }
-
-    if (audio.device != nullptr)
-    {
-        audio.device->Release();
-        audio.device = nullptr;
-    }
-
-    if (audio.deviceEnumerator != nullptr)
-    {
-        audio.deviceEnumerator->Release();
-        audio.deviceEnumerator = nullptr;
-    }
-
-    // Uninitialize COM on the main thread
     CoUninitialize();
 }
 
-void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig)
+void AudioDeviceWasapi::stopThread()
 {
-    if (audio.audioThreadRunning)
+    if (audioThreadRunning)
     {
-        audio.audioThreadRunning = false;
-        if (audio.audioEvent != nullptr)
-            SetEvent(audio.audioEvent);
-        if (audio.audioThread != nullptr)
+        audioThreadRunning = false;
+        if (audioEvent != nullptr)
+            SetEvent(audioEvent);
+        if (audioThread != nullptr)
         {
-            WaitForSingleObject(audio.audioThread, 5000);
-            CloseHandle(audio.audioThread);
-            audio.audioThread = nullptr;
+            WaitForSingleObject(audioThread, 5000);
+            CloseHandle(audioThread);
+            audioThread = nullptr;
         }
     }
+}
 
-    if (audio.renderClient != nullptr)
+void AudioDeviceWasapi::releaseStream()
+{
+    if (renderClient != nullptr)
     {
-        audio.renderClient->Release();
-        audio.renderClient = nullptr;
+        renderClient->Release();
+        renderClient = nullptr;
     }
 
-    audio.callback = callback;
-    audio.callbackData = userData;
-    audio.callbackConfig = preferredConfig;
+    if (audioClient != nullptr)
+    {
+        audioClient->Release();
+        audioClient = nullptr;
+    }
 
-    if (audio.callbackConfig.sampleRate == 0)
-        audio.callbackConfig.sampleRate = 48000;
-    if (audio.callbackConfig.channels == 0)
-        audio.callbackConfig.channels = 2;
+    if (audioEvent != nullptr)
+    {
+        CloseHandle(audioEvent);
+        audioEvent = nullptr;
+    }
+}
 
-    // Get default format from the audio client
+DWORD WINAPI AudioDeviceWasapi::audioThreadProc(LPVOID param)
+{
+    AudioDeviceWasapi* audio = static_cast<AudioDeviceWasapi*>(param);
+
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+
+    while (audio->audioThreadRunning)
+    {
+        DWORD waitResult = WaitForSingleObject(audio->audioEvent, 2000);
+        if (waitResult != WAIT_OBJECT_0 || !audio->audioThreadRunning)
+            continue;
+
+        u32 padding = 0;
+        if (FAILED(audio->audioClient->GetCurrentPadding(&padding)))
+            continue;
+
+        u32 availableFrames = audio->bufferFrameCount - padding;
+        if (availableFrames == 0)
+            continue;
+
+        BYTE* data = nullptr;
+        if (FAILED(audio->renderClient->GetBuffer(availableFrames, &data)))
+            continue;
+
+        std::memset(data, 0, static_cast<u64>(availableFrames) * sizeof(f32) * audio->callbackConfig.channels);
+
+        if (audio->callback != nullptr)
+        {
+            u64 totalSamples = static_cast<u64>(availableFrames) * audio->callbackConfig.channels;
+            audio->callback(std::span<f32>{reinterpret_cast<f32*>(data), totalSamples}, audio->callbackConfig);
+        }
+
+        audio->renderClient->ReleaseBuffer(availableFrames, 0);
+    }
+
+    CoUninitialize();
+    return 0;
+}
+
+void AudioDeviceWasapi::setCallback(AudioCallback newCallback, const AudioConfig& preferredConfig)
+{
+    stopThread();
+
+    AudioConfig config = preferredConfig;
+    if (config.sampleRate == 0)
+        config.sampleRate = 48000;
+    if (config.channels == 0)
+        config.channels = 2;
+
+    // A client cannot be re-initialized, so release the old stream
+    releaseStream();
+
+    // Get the engine mix format, in shared mode it must be used directly
     WAVEFORMATEX* mixFormat = nullptr;
-    HRESULT hr = audio.audioClient->GetMixFormat(&mixFormat);
+    HRESULT hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&audioClient));
+    if (FAILED(hr) || audioClient == nullptr)
+    {
+        setError("Could not activate audio client");
+        return;
+    }
+
+    hr = audioClient->GetMixFormat(&mixFormat);
     if (FAILED(hr) || mixFormat == nullptr)
     {
         setError("Could not get audio mix format");
+        releaseStream();
         return;
     }
 
-    // In shared mode, use the mix format directly
-    // Update callback config to match what the system provides
-    audio.callbackConfig.sampleRate = static_cast<u32>(mixFormat->nSamplesPerSec);
-    audio.callbackConfig.channels = static_cast<u32>(mixFormat->nChannels);
+    // Verify the mix format is 32-bit float, shared mode requires it
+    bool isFloat = false;
+    if (mixFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT)
+    {
+        isFloat = true;
+    }
+    else if (mixFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+    {
+        static const GUID floatSubtype = {
+            0x00000003,
+            0x0000,
+            0x0010,
+            {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}
+        };
+        WAVEFORMATEXTENSIBLE* ext = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(mixFormat);
+        isFloat = ext->SubFormat == floatSubtype;
+    }
 
-    // Set event handle for event-driven mode
-    audio.audioEvent = CreateEventA(nullptr, FALSE, FALSE, nullptr);
-    if (audio.audioEvent == nullptr)
+    if (!isFloat)
+    {
+        setError("Audio mix format is not 32-bit float");
+        CoTaskMemFree(mixFormat);
+        releaseStream();
+        return;
+    }
+
+    // Update callback config to match what the system provides
+    config.sampleRate = static_cast<u32>(mixFormat->nSamplesPerSec);
+    config.channels = static_cast<u32>(mixFormat->nChannels);
+
+    audioEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (audioEvent == nullptr)
     {
         setError("Could not create audio event");
         CoTaskMemFree(mixFormat);
+        releaseStream();
         return;
     }
 
-    // Initialize in shared mode with event callback, using mix format
-    hr = audio.audioClient->Initialize(
+    hr = audioClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
         AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
         0,
@@ -1239,108 +1099,63 @@ void setAudioCallback(AudioCallback callback, void* userData, const AudioConfig&
     if (FAILED(hr))
     {
         setError("Could not initialize audio client");
-        CloseHandle(audio.audioEvent);
-        audio.audioEvent = nullptr;
+        releaseStream();
         return;
     }
 
-    audio.audioClient->SetEventHandle(audio.audioEvent);
+    audioClient->SetEventHandle(audioEvent);
 
-    // Get buffer size
-    hr = audio.audioClient->GetBufferSize(&audio.bufferFrameCount);
+    hr = audioClient->GetBufferSize(&bufferFrameCount);
     if (FAILED(hr))
     {
         setError("Could not get audio buffer size");
-        audio.audioClient->Release();
-        audio.audioClient = nullptr;
-        CloseHandle(audio.audioEvent);
-        audio.audioEvent = nullptr;
+        releaseStream();
         return;
     }
 
-    // Get render client
-    hr = audio.audioClient->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&audio.renderClient));
-    if (FAILED(hr) || audio.renderClient == nullptr)
+    hr = audioClient->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&renderClient));
+    if (FAILED(hr) || renderClient == nullptr)
     {
         setError("Could not get audio render client");
-        audio.audioClient->Release();
-        audio.audioClient = nullptr;
-        CloseHandle(audio.audioEvent);
-        audio.audioEvent = nullptr;
+        renderClient = nullptr;
+        releaseStream();
         return;
     }
 
-    // Start the audio client
-    hr = audio.audioClient->Start();
+    hr = audioClient->Start();
     if (FAILED(hr))
     {
         setError("Could not start audio client");
-        audio.renderClient->Release();
-        audio.renderClient = nullptr;
-        audio.audioClient->Release();
-        audio.audioClient = nullptr;
-        CloseHandle(audio.audioEvent);
-        audio.audioEvent = nullptr;
+        releaseStream();
         return;
     }
 
-    // Start audio thread
-    audio.audioThreadRunning = true;
-    audio.audioThread = CreateThread(nullptr, 0, wasapiAudioThread, nullptr, 0, nullptr);
-    if (audio.audioThread == nullptr)
+    callback = std::move(newCallback);
+    callbackConfig = config;
+
+    audioThreadRunning = true;
+    audioThread = CreateThread(nullptr, 0, audioThreadProc, this, 0, nullptr);
+    if (audioThread == nullptr)
     {
         setError("Could not create audio thread");
-        audio.audioClient->Stop();
-        audio.renderClient->Release();
-        audio.renderClient = nullptr;
-        audio.audioClient->Release();
-        audio.audioClient = nullptr;
-        CloseHandle(audio.audioEvent);
-        audio.audioEvent = nullptr;
-        audio.audioThreadRunning = false;
+        audioThreadRunning = false;
+        audioClient->Stop();
+        releaseStream();
         return;
     }
 }
 
-void unsetAudioCallback()
+void AudioDeviceWasapi::unsetCallback()
 {
-    audio.callback = nullptr;
-    audio.callbackData = nullptr;
-    audio.callbackConfig = {};
+    stopThread();
 
-    if (audio.audioThreadRunning)
-    {
-        audio.audioThreadRunning = false;
-        if (audio.audioEvent != nullptr)
-            SetEvent(audio.audioEvent);
-        if (audio.audioThread != nullptr)
-        {
-            WaitForSingleObject(audio.audioThread, 5000);
-            CloseHandle(audio.audioThread);
-            audio.audioThread = nullptr;
-        }
-    }
+    if (audioClient != nullptr)
+        audioClient->Stop();
 
-    if (audio.audioClient != nullptr)
-        audio.audioClient->Stop();
+    releaseStream();
 
-    if (audio.renderClient != nullptr)
-    {
-        audio.renderClient->Release();
-        audio.renderClient = nullptr;
-    }
-
-    if (audio.audioClient != nullptr)
-    {
-        audio.audioClient->Release();
-        audio.audioClient = nullptr;
-    }
-
-    if (audio.audioEvent != nullptr)
-    {
-        CloseHandle(audio.audioEvent);
-        audio.audioEvent = nullptr;
-    }
+    callback = {};
+    callbackConfig = {};
 }
 
-} // namespace hg::win32
+} // namespace hg

@@ -276,7 +276,7 @@ static void switchInputBackend(InputBackend backend)
     {
         // requested backend failed, fall back through the remaining ones
         usedFallback = true;
-        const InputBackend fallbacks[] = {InputBackend::wayland, InputBackend::x11, InputBackend::sdl3};
+        const InputBackend fallbacks[] = {InputBackend::wayland, InputBackend::x11, InputBackend::win32, InputBackend::sdl3};
         for (InputBackend fallback : fallbacks)
         {
             if (fallback == backend)
@@ -687,6 +687,9 @@ int main()
                     ImGui::SameLine();
                     if (ImGui::Button("X11"))
                         switchInputBackend(InputBackend::x11);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Win32"))
+                        switchInputBackend(InputBackend::win32);
                     ImGui::SameLine();
                     if (ImGui::Button("SDL3"))
                         switchInputBackend(InputBackend::sdl3);

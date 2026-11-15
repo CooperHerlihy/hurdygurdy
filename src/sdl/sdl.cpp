@@ -764,7 +764,7 @@ void AudioDeviceSdl3::sdlCallback(
         HG_PANIC("SDL could not push audio stream data: {}\n", SDL_GetError());
 }
 
-void AudioDeviceSdl3::setCallback(AudioCallback callback, const AudioConfig& preferredConfig)
+void AudioDeviceSdl3::setCallback(AudioCallback callbackVal, const AudioConfig& preferredConfig)
 {
     AudioConfig config = preferredConfig;
     if (config.sampleRate == 0)
@@ -780,7 +780,7 @@ void AudioDeviceSdl3::setCallback(AudioCallback callback, const AudioConfig& pre
     if (!SDL_SetAudioStreamFormat(stream, &audioSpec, nullptr))
         HG_PANIC("SDL could not set audio stream format: {}\n", SDL_GetError());
 
-    this->callback = std::move(callback);
+    this->callback = std::move(callbackVal);
     callbackConfig = config;
 
     if (!SDL_SetAudioStreamGetCallback(stream, sdlCallback, this))

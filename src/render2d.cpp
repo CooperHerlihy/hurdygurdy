@@ -485,9 +485,10 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
     if (box.cutoff < bounds.end.x)
     {
         const char* lastSpace = nullptr;
-        const char* c = text.begin();
+        const char* c = text.data();
+        const char* end = text.data() + text.size();
         f32 width = 0;
-        for (; c != text.end(); ++c)
+        for (; c != end; ++c)
         {
             if (*c == ' ')
                 lastSpace = c;
@@ -503,7 +504,7 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
             }
             width += size.x;
         }
-        toDraw = {text.begin(), c};
+        toDraw = std::string_view{text.data(), static_cast<usize>(c - text.data())};
     }
 
     Vec2 size = bounds.end - bounds.begin;

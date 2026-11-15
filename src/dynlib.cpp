@@ -72,10 +72,10 @@ Library::~Library() noexcept
         FreeLibrary(static_cast<HMODULE>(lib));
 }
 
-std::optional<void*> Library::loadSymbol(StringView name)
+std::optional<void*> Library::loadSymbol(std::string_view name)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    string_temp n{name, scratch};
 
     std::optional<void*> fn = reinterpret_cast<void*>(GetProcAddress(reinterpret_cast<HMODULE>(lib), n.c_str()));
     if (fn == nullptr)
