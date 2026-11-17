@@ -14,7 +14,10 @@ int main()
         HG_PANIC("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
     HG_DEFER(deinitGpu());
 
-    std::unique_ptr<Window> window = input->createWindow({});
+    WindowConfig config{};
+    config.imageUsage |= GpuImageUsage_transferSrc;
+
+    std::unique_ptr<Window> window = input->createWindow(config);
     if (window == nullptr)
         HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hurdy Gurdy 2D Example");
@@ -48,12 +51,19 @@ int main()
 
     const TextureAtlas& font = getDefaultFont();
 
+    Texture shot{};
+    bool shotPending = false;
+
     Clock gameClock{};
+    bool wantScreenshot = false;
     for (;;)
     {
         f64 delta = gameClock.tick();
 
         input->processEvents();
+        if (input->wasButtonPressed(Button_s)
+            && (input->isButtonDown(Button_lctrl) || input->isButtonDown(Button_rctrl)))
+            wantScreenshot = true;
         if (input->wasQuit() || window->wasClosed())
             goto quit;
 
@@ -138,17 +148,23 @@ int main()
         layer.drawText("Hurdy Gurdy 2D", {1.0f, 1.0f, 1.0f, 1.0f}, titleBox);
 
         TextBuilder2D helpBox(font);
-        helpBox.setTopCenter({textX, titleY + titleH + pad}).setHeight(helpH).breakAtSpace();
-        layer.drawText("WASD move   QE rotate   Left mouse pan", {0.6f, 0.6f, 0.6f, 1.0f}, helpBox);
+        helpBox
+            .setTopCenter({textX, titleY + titleH + pad})
+            .setHeight(helpH)
+            .breakAtSpace();
+        layer.drawText("WASD move   QE rotate   Mouse pan   Ctrl-S screenshot",
+            {0.6f, 0.6f, 0.6f, 1.0f}, helpBox);
 
         renderer.drawLayer(layer);
 
         Window* windows[] = {window.get()};
         GpuCmd* cmd = gpuBeginFrame(windows);
-        if (window->renderTarget() != nullptr)
+
+        GpuView* renderTarget = window->renderTarget();
+        if (renderTarget != nullptr)
         {
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window->renderTarget();
+            colorAttachment.image = renderTarget;
 
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
@@ -158,8 +174,33 @@ int main()
             renderer.render(cmd, camera);
 
             gpuEndRenderPass(cmd);
+
+            if (wantScreenshot)
+            {
+                wantScreenshot = false;
+                if (shot.image.data == nullptr || shot.image.width() != renderTarget->width()
+                    || shot.image.height() != renderTarget->height()
+                    || shot.view.format() != renderTarget->format())
+                {
+                    shot.image = GpuImage::create(renderTarget->width(), renderTarget->height(),
+                        renderTarget->format(),
+                        GpuImageUsage_colorAttachment | GpuImageUsage_transferDst
+                            | GpuImageUsage_transferSrc);
+                    shot.view = GpuView::create(shot.image, GpuAspect_color);
+                }
+                gpuCopyImageWhole(cmd, shot.view, *renderTarget);
+                shotPending = true;
+            }
         }
         gpuEndFrame(cmd);
+
+        if (shotPending)
+        {
+            shotPending = false;
+            gpuWaitIdle();
+            if (!storeTexturePng(downloadTextureFromGpu(shot), "screenshot2d.png"))
+                HG_PANIC("Could not save screenshot: {}\n", std::string{getError()}.c_str());
+        }
     }
 
 quit:

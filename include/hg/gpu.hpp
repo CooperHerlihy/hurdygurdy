@@ -2,6 +2,8 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/math.hpp"
+#include "hg/geometry2d.hpp"
+#include "hg/geometry3d.hpp"
 
 #include <concepts>
 #include <span>
@@ -900,6 +902,73 @@ void gpuMemoryBarrier(
     GpuCmd* cmd,
     std::span<const GpuBufferBarrier> bufferBarriers,
     std::span<const GpuImageBarrier> imageBarriers);
+
+/**
+ * Copies a section of a buffer to another
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - dst The buffer to copy to
+ * - dstOffset The distance in bytes into dst to start copying
+ * - src The buffer to copy from
+ * - srcOffset The distance in bytes into src to start copying
+ * - size The size in bytes to copy
+ */
+void gpuCopyBuffer(GpuCmd* cmd, const GpuBuffer& dst, usize dstOffset, const GpuBuffer& src, usize srcOffset, usize size);
+
+/**
+ * Copies part of a 3d image to part of another 3d image
+ *
+ * Both images must be the same format
+ * Both box must be the same size
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - dst The image to copy to
+ * - dstOffset The distance into dst to start copying
+ * - src The image to copy from
+ * - srcOffset The distance into src to start copying
+ * - size The size to copy
+ */
+void gpuCopyImage(GpuCmd* cmd, const GpuView& dst, Vec3 dstOffset, const GpuView& src, Vec3 srcOffset, Vec3 size);
+
+/**
+ * Copies a whole image to another whole image
+ *
+ * Both images must be the same size and format
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - dst The image to copy to
+ * - src The image to copy from
+ */
+void gpuCopyImageWhole(GpuCmd* cmd, const GpuView& dst, const GpuView& src);
+
+/**
+ * Blit part of a 3d image to part of another 3d image
+ *
+ * Images and boxes may be different formats and sizes
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - dst The image to copy to
+ * - dstBox The box in dst to copy to
+ * - src The image to copy from
+ * - srcBox The box in src to copy from
+ */
+void gpuBlitImage(GpuCmd* cmd, const GpuView& dst, Box dstBox, const GpuView& src, Box srcBox);
+
+/**
+ * Blit a whole image to another whole image
+ *
+ * Images and boxes may be different formats and sizes
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - dst The image to copy to
+ * - src The image to copy from
+ */
+void gpuBlitImageWhole(GpuCmd* cmd, const GpuView& dst, const GpuView& src);
 
 /**
  * The operation to load a render attachment

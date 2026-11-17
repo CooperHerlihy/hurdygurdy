@@ -14,7 +14,10 @@ int main()
         HG_PANIC("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
     HG_DEFER(deinitGpu());
 
-    std::unique_ptr<Window> window = input->createWindow({});
+    WindowConfig config{};
+    config.imageUsage |= GpuImageUsage_transferSrc;
+
+    std::unique_ptr<Window> window = input->createWindow(config);
     if (window == nullptr)
         HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hurdy Gurdy 3D Example");
@@ -108,14 +111,21 @@ int main()
     f32 modelRot = 0.0f;
     Vec3 modelPos{0.0f, 0.0f, 0.0f};
 
+    Texture shot{};
+    bool shotPending = false;
+
     Clock gameClock{};
     f64 elapsed = 0.0;
+    bool wantScreenshot = false;
     for (;;)
     {
         f64 delta = gameClock.tick();
         elapsed += delta;
 
         input->processEvents();
+        if (input->wasButtonPressed(Button_s)
+            && (input->isButtonDown(Button_lctrl) || input->isButtonDown(Button_rctrl)))
+            wantScreenshot = true;
         if (input->wasQuit() || window->wasClosed())
             goto quit;
 
@@ -147,8 +157,8 @@ int main()
         if (movement != Vec3{0.0f})
         {
             f32 moveSpeed = 1.5f * static_cast<f32>(delta);
-            Vec3 rotated = rotate(camera.rotation, {movement.x(), 0.0f, movement.z()});
-            camera.position += normalize(rotated) * moveSpeed;
+            movement = rotate(camera.rotation, {movement.x(), 0.0f, movement.z()}) + Vec3{0.0f, movement.y(), 0.0f};
+            camera.position += normalize(movement) * moveSpeed;
         }
 
         modelRot += static_cast<f32>(delta) * 0.5f;
@@ -187,10 +197,12 @@ int main()
 
         Window* windows[] = {window.get()};
         GpuCmd* cmd = gpuBeginFrame(windows);
-        if (window->renderTarget() != nullptr)
+
+        GpuView* renderTarget = window->renderTarget();
+        if (renderTarget != nullptr)
         {
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window->renderTarget();
+            colorAttachment.image = renderTarget;
             colorAttachment.clearColor = Vec4{0.02f, 0.02f, 0.05f, 1.0f};
 
             GpuAttachment depthAttachment{};
@@ -206,8 +218,33 @@ int main()
             renderer.renderScene(cmd, camera);
 
             gpuEndRenderPass(cmd);
+
+            if (wantScreenshot)
+            {
+                wantScreenshot = false;
+                if (shot.image.data == nullptr || shot.image.width() != renderTarget->width()
+                    || shot.image.height() != renderTarget->height()
+                    || shot.view.format() != renderTarget->format())
+                {
+                    shot.image = GpuImage::create(renderTarget->width(), renderTarget->height(),
+                        renderTarget->format(),
+                        GpuImageUsage_colorAttachment | GpuImageUsage_transferDst
+                            | GpuImageUsage_transferSrc);
+                    shot.view = GpuView::create(shot.image, GpuAspect_color);
+                }
+                gpuCopyImageWhole(cmd, shot.view, *renderTarget);
+                shotPending = true;
+            }
         }
         gpuEndFrame(cmd);
+
+        if (shotPending)
+        {
+            shotPending = false;
+            gpuWaitIdle();
+            if (!storeTexturePng(downloadTextureFromGpu(shot), "screenshot3d.png"))
+                HG_PANIC("Could not save screenshot: {}\n", std::string{getError()}.c_str());
+        }
     }
 
 quit:

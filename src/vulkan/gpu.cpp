@@ -1234,6 +1234,408 @@ void gpuComputePass(GpuCmd* cmd, const GpuPass& pass)
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 }
 
+void gpuCopyBuffer(GpuCmd* cmd, const GpuBuffer& dst, usize dstOffset, const GpuBuffer& src, usize srcOffset, usize size)
+{
+    HG_ASSERT(cmd != nullptr);
+    HG_ASSERT(src.data != nullptr);
+    HG_ASSERT(dst.data != nullptr);
+    HG_ASSERT(size > 0);
+    HG_ASSERT(srcOffset + size <= src.data->size);
+    HG_ASSERT(dstOffset + size <= dst.data->size);
+
+    VkBufferMemoryBarrier2 barriers[2]{};
+
+    barriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+    barriers[0].srcStageMask = gpuStateToVkStage(src.data->lastState);
+    barriers[0].srcAccessMask = gpuStateToVkAccess(src.data->lastState);
+    barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barriers[0].buffer = src.data->buffer;
+    barriers[0].size = src.data->size;
+
+    barriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+    barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barriers[1].buffer = dst.data->buffer;
+    barriers[1].size = dst.data->size;
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.bufferMemoryBarrierCount = static_cast<u32>(std::size(barriers));
+    dep.pBufferMemoryBarriers = barriers;
+
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
+
+    VkBufferCopy region{};
+    region.srcOffset = srcOffset;
+    region.dstOffset = dstOffset;
+    region.size = size;
+
+    vkCmdCopyBuffer(reinterpret_cast<VkCommandBuffer>(cmd), src.data->buffer, dst.data->buffer, 1, &region);
+
+    src.data->lastState = GpuAccess_transferSrc;
+    dst.data->lastState = GpuAccess_transferDst;
+}
+
+void gpuCopyImage(GpuCmd* cmd, const GpuView& dst, Vec3 dstOffset, const GpuView& src, Vec3 srcOffset, Vec3 size)
+{
+    HG_ASSERT(cmd != nullptr);
+    HG_ASSERT(src.data != nullptr);
+    HG_ASSERT(dst.data != nullptr);
+    HG_ASSERT(src.data->lastLayout != GpuLayout_undefined);
+    HG_ASSERT(src.data->image->format == dst.data->image->format);
+    HG_ASSERT(size.x() > 0.0f && size.y() > 0.0f && size.z() > 0.0f);
+    HG_ASSERT(srcOffset.x() >= 0.0f && srcOffset.y() >= 0.0f && srcOffset.z() >= 0.0f);
+    HG_ASSERT(dstOffset.x() >= 0.0f && dstOffset.y() >= 0.0f && dstOffset.z() >= 0.0f);
+
+    f32 srcMipW = static_cast<f32>(src.data->image->width >> src.data->baseMipLevel);
+    f32 srcMipH = static_cast<f32>(src.data->image->height >> src.data->baseMipLevel);
+    f32 srcMipD = static_cast<f32>(src.data->image->depth >> src.data->baseMipLevel);
+    f32 dstMipW = static_cast<f32>(dst.data->image->width >> dst.data->baseMipLevel);
+    f32 dstMipH = static_cast<f32>(dst.data->image->height >> dst.data->baseMipLevel);
+    f32 dstMipD = static_cast<f32>(dst.data->image->depth >> dst.data->baseMipLevel);
+
+    HG_ASSERT(
+        srcOffset.x() + size.x() <= srcMipW
+        && srcOffset.y() + size.y() <= srcMipH
+        && srcOffset.z() + size.z() <= srcMipD);
+    HG_ASSERT(
+        dstOffset.x() + size.x() <= dstMipW
+        && dstOffset.y() + size.y() <= dstMipH
+        && dstOffset.z() + size.z() <= dstMipD);
+
+    VkImageMemoryBarrier2 barriers[2]{};
+
+    barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barriers[0].srcStageMask = gpuStateToVkStage(src.data->lastState);
+    barriers[0].srcAccessMask = gpuStateToVkAccess(src.data->lastState);
+    barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barriers[0].oldLayout = gpuLayoutToVk(src.data->lastLayout);
+    barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barriers[0].image = src.data->image->image;
+    barriers[0].subresourceRange.aspectMask = gpuAspectToVk(src.data->aspectFlags);
+    barriers[0].subresourceRange.baseMipLevel = src.data->baseMipLevel;
+    barriers[0].subresourceRange.levelCount = src.data->levelCount;
+    barriers[0].subresourceRange.baseArrayLayer = src.data->baseArrayLayer;
+    barriers[0].subresourceRange.layerCount = src.data->layerCount;
+
+    barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barriers[1].image = dst.data->image->image;
+    barriers[1].subresourceRange.aspectMask = gpuAspectToVk(dst.data->aspectFlags);
+    barriers[1].subresourceRange.baseMipLevel = dst.data->baseMipLevel;
+    barriers[1].subresourceRange.levelCount = dst.data->levelCount;
+    barriers[1].subresourceRange.baseArrayLayer = dst.data->baseArrayLayer;
+    barriers[1].subresourceRange.layerCount = dst.data->layerCount;
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.imageMemoryBarrierCount = static_cast<u32>(std::size(barriers));
+    dep.pImageMemoryBarriers = barriers;
+
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
+
+    VkImageCopy region{};
+    region.srcSubresource = {
+        gpuAspectToVk(src.data->aspectFlags),
+        src.data->baseMipLevel,
+        src.data->baseArrayLayer,
+        src.data->layerCount};
+    region.srcOffset = {
+        static_cast<i32>(srcOffset.x()),
+        static_cast<i32>(srcOffset.y()),
+        static_cast<i32>(srcOffset.z())};
+    region.dstSubresource = {
+        gpuAspectToVk(dst.data->aspectFlags),
+        dst.data->baseMipLevel,
+        dst.data->baseArrayLayer,
+        dst.data->layerCount};
+    region.dstOffset = {
+        static_cast<i32>(dstOffset.x()),
+        static_cast<i32>(dstOffset.y()),
+        static_cast<i32>(dstOffset.z())};
+    region.extent = {
+        static_cast<u32>(size.x()),
+        static_cast<u32>(size.y()),
+        static_cast<u32>(size.z())};
+
+    vkCmdCopyImage(
+        reinterpret_cast<VkCommandBuffer>(cmd),
+        src.data->image->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dst.data->image->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region);
+
+    src.data->lastState = GpuAccess_transferSrc;
+    src.data->lastLayout = GpuLayout_transferSrc;
+    dst.data->lastState = GpuAccess_transferDst;
+    dst.data->lastLayout = GpuLayout_transferDst;
+}
+
+void gpuCopyImageWhole(GpuCmd* cmd, const GpuView& dst, const GpuView& src)
+{
+    HG_ASSERT(cmd != nullptr);
+    HG_ASSERT(src.data != nullptr);
+    HG_ASSERT(dst.data != nullptr);
+    HG_ASSERT(src.data->lastLayout != GpuLayout_undefined);
+    HG_ASSERT(src.data->image->format == dst.data->image->format);
+    HG_ASSERT(src.data->image->width == dst.data->image->width);
+    HG_ASSERT(src.data->image->height == dst.data->image->height);
+
+    VkImageMemoryBarrier2 barriers[2]{};
+
+    barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barriers[0].srcStageMask = gpuStateToVkStage(src.data->lastState);
+    barriers[0].srcAccessMask = gpuStateToVkAccess(src.data->lastState);
+    barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barriers[0].oldLayout = gpuLayoutToVk(src.data->lastLayout);
+    barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barriers[0].image = src.data->image->image;
+    barriers[0].subresourceRange.aspectMask = gpuAspectToVk(src.data->aspectFlags);
+    barriers[0].subresourceRange.baseMipLevel = src.data->baseMipLevel;
+    barriers[0].subresourceRange.levelCount = src.data->levelCount;
+    barriers[0].subresourceRange.baseArrayLayer = src.data->baseArrayLayer;
+    barriers[0].subresourceRange.layerCount = src.data->layerCount;
+
+    barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barriers[1].image = dst.data->image->image;
+    barriers[1].subresourceRange.aspectMask = gpuAspectToVk(dst.data->aspectFlags);
+    barriers[1].subresourceRange.baseMipLevel = dst.data->baseMipLevel;
+    barriers[1].subresourceRange.levelCount = dst.data->levelCount;
+    barriers[1].subresourceRange.baseArrayLayer = dst.data->baseArrayLayer;
+    barriers[1].subresourceRange.layerCount = dst.data->layerCount;
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.imageMemoryBarrierCount = 2;
+    dep.pImageMemoryBarriers = barriers;
+
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
+
+    VkImageCopy region{};
+    region.srcSubresource = {
+        gpuAspectToVk(src.data->aspectFlags),
+        src.data->baseMipLevel,
+        src.data->baseArrayLayer,
+        src.data->layerCount};
+    region.dstSubresource = {
+        gpuAspectToVk(dst.data->aspectFlags),
+        dst.data->baseMipLevel,
+        dst.data->baseArrayLayer,
+        dst.data->layerCount};
+    region.extent = {src.data->image->width, src.data->image->height, src.data->image->depth};
+
+    vkCmdCopyImage(
+        reinterpret_cast<VkCommandBuffer>(cmd),
+        src.data->image->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dst.data->image->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region);
+
+    src.data->lastState = GpuAccess_transferSrc;
+    src.data->lastLayout = GpuLayout_transferSrc;
+    dst.data->lastState = GpuAccess_transferDst;
+    dst.data->lastLayout = GpuLayout_transferDst;
+}
+
+void gpuBlitImage(GpuCmd* cmd, const GpuView& dst, Box dstBox, const GpuView& src, Box srcBox)
+{
+    HG_ASSERT(cmd != nullptr);
+    HG_ASSERT(src.data != nullptr);
+    HG_ASSERT(dst.data != nullptr);
+    HG_ASSERT(src.data->lastLayout != GpuLayout_undefined);
+
+    HG_ASSERT(srcBox.begin.x() < srcBox.end.x()
+        && srcBox.begin.y() < srcBox.end.y()
+        && srcBox.begin.z() < srcBox.end.z());
+    HG_ASSERT(dstBox.begin.x() < dstBox.end.x()
+        && dstBox.begin.y() < dstBox.end.y()
+        && dstBox.begin.z() < dstBox.end.z());
+    HG_ASSERT(srcBox.begin.x() >= 0.0f && srcBox.begin.y() >= 0.0f && srcBox.begin.z() >= 0.0f);
+    HG_ASSERT(dstBox.begin.x() >= 0.0f && dstBox.begin.y() >= 0.0f && dstBox.begin.z() >= 0.0f);
+
+    f32 srcMipW = static_cast<f32>(src.data->image->width >> src.data->baseMipLevel);
+    f32 srcMipH = static_cast<f32>(src.data->image->height >> src.data->baseMipLevel);
+    f32 srcMipD = static_cast<f32>(src.data->image->depth >> src.data->baseMipLevel);
+    f32 dstMipW = static_cast<f32>(dst.data->image->width >> dst.data->baseMipLevel);
+    f32 dstMipH = static_cast<f32>(dst.data->image->height >> dst.data->baseMipLevel);
+    f32 dstMipD = static_cast<f32>(dst.data->image->depth >> dst.data->baseMipLevel);
+
+    HG_ASSERT(
+        srcBox.end.x() <= srcMipW
+        && srcBox.end.y() <= srcMipH
+        && srcBox.end.z() <= srcMipD);
+    HG_ASSERT(
+        dstBox.end.x() <= dstMipW
+        && dstBox.end.y() <= dstMipH
+        && dstBox.end.z() <= dstMipD);
+
+    VkImageMemoryBarrier2 barriers[2]{};
+
+    barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barriers[0].srcStageMask = gpuStateToVkStage(src.data->lastState);
+    barriers[0].srcAccessMask = gpuStateToVkAccess(src.data->lastState);
+    barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barriers[0].oldLayout = gpuLayoutToVk(src.data->lastLayout);
+    barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barriers[0].image = src.data->image->image;
+    barriers[0].subresourceRange.aspectMask = gpuAspectToVk(src.data->aspectFlags);
+    barriers[0].subresourceRange.baseMipLevel = src.data->baseMipLevel;
+    barriers[0].subresourceRange.levelCount = src.data->levelCount;
+    barriers[0].subresourceRange.baseArrayLayer = src.data->baseArrayLayer;
+    barriers[0].subresourceRange.layerCount = src.data->layerCount;
+
+    barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barriers[1].image = dst.data->image->image;
+    barriers[1].subresourceRange.aspectMask = gpuAspectToVk(dst.data->aspectFlags);
+    barriers[1].subresourceRange.baseMipLevel = dst.data->baseMipLevel;
+    barriers[1].subresourceRange.levelCount = dst.data->levelCount;
+    barriers[1].subresourceRange.baseArrayLayer = dst.data->baseArrayLayer;
+    barriers[1].subresourceRange.layerCount = dst.data->layerCount;
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.imageMemoryBarrierCount = static_cast<u32>(std::size(barriers));
+    dep.pImageMemoryBarriers = barriers;
+
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
+
+    VkImageBlit region{};
+    region.srcSubresource = {
+        gpuAspectToVk(src.data->aspectFlags),
+        src.data->baseMipLevel,
+        src.data->baseArrayLayer,
+        src.data->layerCount};
+    region.srcOffsets[0] = {
+        static_cast<i32>(srcBox.begin.x()),
+        static_cast<i32>(srcBox.begin.y()),
+        static_cast<i32>(srcBox.begin.z())};
+    region.srcOffsets[1] = {
+        static_cast<i32>(srcBox.end.x()),
+        static_cast<i32>(srcBox.end.y()),
+        static_cast<i32>(srcBox.end.z())};
+    region.dstSubresource = {
+        gpuAspectToVk(dst.data->aspectFlags),
+        dst.data->baseMipLevel,
+        dst.data->baseArrayLayer,
+        dst.data->layerCount};
+    region.dstOffsets[0] = {
+        static_cast<i32>(dstBox.begin.x()),
+        static_cast<i32>(dstBox.begin.y()),
+        static_cast<i32>(dstBox.begin.z())};
+    region.dstOffsets[1] = {
+        static_cast<i32>(dstBox.end.x()),
+        static_cast<i32>(dstBox.end.y()),
+        static_cast<i32>(dstBox.end.z())};
+
+    vkCmdBlitImage(
+        reinterpret_cast<VkCommandBuffer>(cmd),
+        src.data->image->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dst.data->image->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region,
+        VK_FILTER_LINEAR);
+
+    src.data->lastState = GpuAccess_transferSrc;
+    src.data->lastLayout = GpuLayout_transferSrc;
+    dst.data->lastState = GpuAccess_transferDst;
+    dst.data->lastLayout = GpuLayout_transferDst;
+}
+
+void gpuBlitImageWhole(GpuCmd* cmd, const GpuView& dst, const GpuView& src)
+{
+    HG_ASSERT(cmd != nullptr);
+    HG_ASSERT(src.data != nullptr);
+    HG_ASSERT(dst.data != nullptr);
+    HG_ASSERT(src.data->lastLayout != GpuLayout_undefined);
+
+    VkImageMemoryBarrier2 barriers[2]{};
+
+    barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barriers[0].srcStageMask = gpuStateToVkStage(src.data->lastState);
+    barriers[0].srcAccessMask = gpuStateToVkAccess(src.data->lastState);
+    barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barriers[0].oldLayout = gpuLayoutToVk(src.data->lastLayout);
+    barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barriers[0].image = src.data->image->image;
+    barriers[0].subresourceRange.aspectMask = gpuAspectToVk(src.data->aspectFlags);
+    barriers[0].subresourceRange.baseMipLevel = src.data->baseMipLevel;
+    barriers[0].subresourceRange.levelCount = src.data->levelCount;
+    barriers[0].subresourceRange.baseArrayLayer = src.data->baseArrayLayer;
+    barriers[0].subresourceRange.layerCount = src.data->layerCount;
+
+    barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barriers[1].image = dst.data->image->image;
+    barriers[1].subresourceRange.aspectMask = gpuAspectToVk(dst.data->aspectFlags);
+    barriers[1].subresourceRange.baseMipLevel = dst.data->baseMipLevel;
+    barriers[1].subresourceRange.levelCount = dst.data->levelCount;
+    barriers[1].subresourceRange.baseArrayLayer = dst.data->baseArrayLayer;
+    barriers[1].subresourceRange.layerCount = dst.data->layerCount;
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.imageMemoryBarrierCount = static_cast<u32>(std::size(barriers));
+    dep.pImageMemoryBarriers = barriers;
+
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
+
+    VkImageBlit region{};
+    region.srcSubresource = {
+        gpuAspectToVk(src.data->aspectFlags),
+        src.data->baseMipLevel,
+        src.data->baseArrayLayer,
+        src.data->layerCount};
+    region.srcOffsets[1] = {
+        static_cast<i32>(src.data->image->width),
+        static_cast<i32>(src.data->image->height),
+        static_cast<i32>(src.data->image->depth)};
+    region.dstSubresource = {
+        gpuAspectToVk(dst.data->aspectFlags),
+        dst.data->baseMipLevel,
+        dst.data->baseArrayLayer,
+        dst.data->layerCount};
+    region.dstOffsets[1] = {
+        static_cast<i32>(dst.data->image->width),
+        static_cast<i32>(dst.data->image->height),
+        static_cast<i32>(dst.data->image->depth)};
+
+    vkCmdBlitImage(
+        reinterpret_cast<VkCommandBuffer>(cmd),
+        src.data->image->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dst.data->image->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region,
+        VK_FILTER_LINEAR);
+
+    src.data->lastState = GpuAccess_transferSrc;
+    src.data->lastLayout = GpuLayout_transferSrc;
+    dst.data->lastState = GpuAccess_transferDst;
+    dst.data->lastLayout = GpuLayout_transferDst;
+}
+
 void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 {
     ArenaScope scratch = getScratch();

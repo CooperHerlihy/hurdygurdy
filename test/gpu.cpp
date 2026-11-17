@@ -614,6 +614,383 @@ TEST(testCombinedBufferImageBarrier)
         ASSERT(imgResult[i] == pixelData[i]);
 }
 
+TEST(testGpuCopyBufferRegion)
+{
+    static constexpr u32 elemCount = 64;
+    static constexpr u32 bufSize = elemCount * sizeof(u32);
+
+    GpuBuffer src = GpuBuffer::create(bufSize,
+            GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst,
+            GpuMemoryUsage_frequentUpdate);
+    GpuBuffer dst = GpuBuffer::create(bufSize,
+            GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst);
+
+    u32 pattern[elemCount] = {};
+    for (u32 i = 0; i < elemCount; ++i)
+        pattern[i] = i * 3 + 7;
+    src.write(std::as_bytes(std::span{pattern}), 0);
+
+    u32 sentinel[elemCount] = {};
+    for (u32 i = 0; i < elemCount; ++i)
+        sentinel[i] = 0xDDDDDDDD;
+    dst.write(std::as_bytes(std::span{sentinel}), 0);
+
+    GpuCmd* cmd = gpuCmdBegin();
+    // dst bytes [8, 40) <- src bytes [64, 96)
+    gpuCopyBuffer(cmd, dst, 8, src, 64, 32);
+    // dst bytes [224, 256) <- src bytes [0, 32): region ends exactly at the
+    // end of dst
+    gpuCopyBuffer(cmd, dst, 224, src, 0, 32);
+    gpuCmdEnd(cmd);
+
+    u32 result[elemCount] = {};
+    dst.read(std::as_writable_bytes(std::span{result}), 0);
+
+    for (u32 i = 0; i < elemCount; ++i)
+    {
+        if (i >= 2 && i < 10)
+            ASSERT(result[i] == (16 + (i - 2)) * 3 + 7);
+        else if (i >= 56)
+            ASSERT(result[i] == (i - 56) * 3 + 7);
+        else
+            ASSERT(result[i] == 0xDDDDDDDD);
+    }
+}
+
+TEST(testGpuCopyBufferWhole)
+{
+    static constexpr u32 elemCount = 32;
+    static constexpr u32 bufSize = elemCount * sizeof(u32);
+
+    GpuBuffer src = GpuBuffer::create(bufSize,
+            GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst,
+            GpuMemoryUsage_frequentUpdate);
+    GpuBuffer dst = GpuBuffer::create(bufSize,
+            GpuBufferUsage_transferSrc | GpuBufferUsage_transferDst);
+
+    u32 pattern[elemCount] = {};
+    for (u32 i = 0; i < elemCount; ++i)
+        pattern[i] = 0xAAAA0000u | i;
+    src.write(std::as_bytes(std::span{pattern}), 0);
+
+    u32 sentinel[elemCount] = {};
+    for (u32 i = 0; i < elemCount; ++i)
+        sentinel[i] = 0xDDDDDDDD;
+    dst.write(std::as_bytes(std::span{sentinel}), 0);
+
+    GpuCmd* cmd = gpuCmdBegin();
+    gpuCopyBuffer(cmd, dst, 0, src, 0, bufSize);
+    gpuCmdEnd(cmd);
+
+    u32 result[elemCount] = {};
+    dst.read(std::as_writable_bytes(std::span{result}), 0);
+    for (u32 i = 0; i < elemCount; ++i)
+        ASSERT(result[i] == (0xAAAA0000u | i));
+}
+
+TEST(testGpuCopyImageRegion)
+{
+    static constexpr u32 imgSize = 8;
+    static constexpr u32 sentinelVal = 0xFF00FF00;
+
+    GpuImage srcImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
+    GpuView dstView = GpuView::create(dstImg, GpuAspect_color);
+
+    u32 pattern[imgSize * imgSize] = {};
+    for (u32 y = 0; y < imgSize; ++y)
+        for (u32 x = 0; x < imgSize; ++x)
+            pattern[y * imgSize + x] = 0xFF000000u | (y * imgSize + x + 1);
+    srcView.write(std::as_bytes(std::span{pattern}));
+
+    u32 sentinel[imgSize * imgSize] = {};
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        sentinel[i] = sentinelVal;
+    dstView.write(std::as_bytes(std::span{sentinel}));
+
+    GpuCmd* cmd = gpuCmdBegin();
+    // Top-left quadrant of src -> bottom-right of dst:
+    // both regions touch the image edges exactly
+    gpuCopyImage(cmd, dstView, Vec3{4.0f, 4.0f, 0.0f}, srcView, Vec3{0.0f, 0.0f, 0.0f}, Vec3{4.0f, 4.0f, 1.0f});
+    // Bottom-right quadrant of src -> top-left of dst
+    gpuCopyImage(cmd, dstView, Vec3{0.0f, 0.0f, 0.0f}, srcView, Vec3{4.0f, 4.0f, 0.0f}, Vec3{4.0f, 4.0f, 1.0f});
+    gpuCmdEnd(cmd);
+
+    u32 pixels[imgSize * imgSize] = {};
+    dstView.read(std::as_writable_bytes(std::span{pixels}));
+
+    for (u32 y = 0; y < imgSize; ++y)
+    {
+        for (u32 x = 0; x < imgSize; ++x)
+        {
+            if (x >= 4 && y >= 4)
+                ASSERT(pixels[y * imgSize + x] == (0xFF000000u | ((y - 4) * imgSize + (x - 4) + 1)));
+            else if (x < 4 && y < 4)
+                ASSERT(pixels[y * imgSize + x] == (0xFF000000u | ((y + 4) * imgSize + (x + 4) + 1)));
+            else
+                ASSERT(pixels[y * imgSize + x] == sentinelVal);
+        }
+    }
+
+    // The copy must not modify the source
+    u32 srcPixels[imgSize * imgSize] = {};
+    srcView.read(std::as_writable_bytes(std::span{srcPixels}));
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        ASSERT(srcPixels[i] == pattern[i]);
+}
+
+TEST(testGpuCopyImage3DSlice)
+{
+    static constexpr u32 w = 4;
+    static constexpr u32 h = 4;
+    static constexpr u32 d = 2;
+    static constexpr u32 sentinelVal = 0xFF00FF00;
+
+    GpuImageCreateInfo ci{};
+    ci.dimensions = 3;
+    ci.width = w;
+    ci.height = h;
+    ci.depth = d;
+    ci.format = Format_rgba8_unorm;
+    ci.usage = GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled;
+    GpuImage srcImg = GpuImage::createEx(ci);
+    GpuImage dstImg = GpuImage::createEx(ci);
+
+    GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
+    GpuView dstView = GpuView::create(dstImg, GpuAspect_color);
+
+    u32 pattern[w * h * d] = {};
+    for (u32 z = 0; z < d; ++z)
+        for (u32 y = 0; y < h; ++y)
+            for (u32 x = 0; x < w; ++x)
+                pattern[(z * h + y) * w + x] = 0xFF000000u | ((z * h + y) * w + x + 1);
+    srcView.write(std::as_bytes(std::span{pattern}));
+
+    u32 sentinel[w * h * d] = {};
+    for (u32 i = 0; i < w * h * d; ++i)
+        sentinel[i] = sentinelVal;
+    dstView.write(std::as_bytes(std::span{sentinel}));
+
+    GpuCmd* cmd = gpuCmdBegin();
+    // Copy the z=1 slice of src over the z=0 slice of dst
+    gpuCopyImage(cmd, dstView, Vec3{0.0f, 0.0f, 0.0f}, srcView, Vec3{0.0f, 0.0f, 1.0f}, Vec3{4.0f, 4.0f, 1.0f});
+    gpuCmdEnd(cmd);
+
+    u32 pixels[w * h * d] = {};
+    dstView.read(std::as_writable_bytes(std::span{pixels}));
+
+    for (u32 y = 0; y < h; ++y)
+    {
+        for (u32 x = 0; x < w; ++x)
+        {
+            // z=0 gets the src z=1 slice, z=1 keeps the sentinel
+            ASSERT(pixels[0 * h * w + y * w + x] == pattern[(1 * h + y) * w + x]);
+            ASSERT(pixels[1 * h * w + y * w + x] == sentinelVal);
+        }
+    }
+}
+
+TEST(testGpuCopyImageWhole)
+{
+    static constexpr u32 imgSize = 8;
+    static constexpr u32 sentinelVal = 0xFF00FF00;
+
+    GpuImage srcImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
+    GpuView dstView = GpuView::create(dstImg, GpuAspect_color);
+
+    u32 pattern[imgSize * imgSize] = {};
+    for (u32 y = 0; y < imgSize; ++y)
+        for (u32 x = 0; x < imgSize; ++x)
+            pattern[y * imgSize + x] = 0xFF000000u | (y * imgSize + x + 1);
+    srcView.write(std::as_bytes(std::span{pattern}));
+
+    u32 sentinel[imgSize * imgSize] = {};
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        sentinel[i] = sentinelVal;
+    dstView.write(std::as_bytes(std::span{sentinel}));
+
+    GpuCmd* cmd = gpuCmdBegin();
+    gpuCopyImageWhole(cmd, dstView, srcView);
+    gpuCmdEnd(cmd);
+
+    u32 pixels[imgSize * imgSize] = {};
+    dstView.read(std::as_writable_bytes(std::span{pixels}));
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        ASSERT(pixels[i] == pattern[i]);
+
+    // The copy must not modify the source
+    u32 srcPixels[imgSize * imgSize] = {};
+    srcView.read(std::as_writable_bytes(std::span{srcPixels}));
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        ASSERT(srcPixels[i] == pattern[i]);
+}
+
+TEST(testGpuBlitImageRegion)
+{
+    static constexpr u32 imgSize = 8;
+    static constexpr u32 sentinelVal = 0xFF00FF00;
+
+    GpuImage srcImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
+    GpuView dstView = GpuView::create(dstImg, GpuAspect_color);
+
+    u32 pattern[imgSize * imgSize] = {};
+    for (u32 y = 0; y < imgSize; ++y)
+        for (u32 x = 0; x < imgSize; ++x)
+            pattern[y * imgSize + x] = 0xFF000000u | (y * imgSize + x + 1);
+    srcView.write(std::as_bytes(std::span{pattern}));
+
+    u32 sentinel[imgSize * imgSize] = {};
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        sentinel[i] = sentinelVal;
+    dstView.write(std::as_bytes(std::span{sentinel}));
+
+    GpuCmd* cmd = gpuCmdBegin();
+    // 4x4 box: src [1,5)x[2,6) -> dst [3,7)x[3,7)
+    gpuBlitImage(
+        cmd,
+        dstView,
+        Box{Vec3{3.0f, 3.0f, 0.0f}, Vec3{7.0f, 7.0f, 1.0f}},
+        srcView,
+        Box{Vec3{1.0f, 2.0f, 0.0f}, Vec3{5.0f, 6.0f, 1.0f}});
+    gpuCmdEnd(cmd);
+
+    u32 pixels[imgSize * imgSize] = {};
+    dstView.read(std::as_writable_bytes(std::span{pixels}));
+
+    for (u32 y = 0; y < imgSize; ++y)
+    {
+        for (u32 x = 0; x < imgSize; ++x)
+        {
+            if (x >= 3 && x < 7 && y >= 3 && y < 7)
+                ASSERT(pixels[y * imgSize + x] == pattern[((y - 1) * imgSize) + (x - 2)]);
+            else
+                ASSERT(pixels[y * imgSize + x] == sentinelVal);
+        }
+    }
+}
+
+TEST(testGpuBlitImageScaled)
+{
+    static constexpr u32 imgSize = 8;
+    static constexpr u32 sentinelVal = 0xFF00FF00;
+    static constexpr u32 red = 0xFF0000FF;
+
+    GpuImage srcImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
+    GpuView dstView = GpuView::create(dstImg, GpuAspect_color);
+
+    // Solid color: the blit result must be identical for any filter mode
+    u32 solid[imgSize * imgSize] = {};
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        solid[i] = red;
+    srcView.write(std::as_bytes(std::span{solid}));
+
+    u32 sentinel[imgSize * imgSize] = {};
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        sentinel[i] = sentinelVal;
+    dstView.write(std::as_bytes(std::span{sentinel}));
+
+    GpuCmd* cmd = gpuCmdBegin();
+    // Boxes of different sizes: 2x2 src box [1,3)x[1,3) scaled into the
+    // 4x4 dst box [2,6)x[2,6)
+    gpuBlitImage(
+        cmd,
+        dstView,
+        Box{Vec3{2.0f, 2.0f, 0.0f}, Vec3{6.0f, 6.0f, 1.0f}},
+        srcView,
+        Box{Vec3{1.0f, 1.0f, 0.0f}, Vec3{3.0f, 3.0f, 1.0f}});
+    gpuCmdEnd(cmd);
+
+    u32 pixels[imgSize * imgSize] = {};
+    dstView.read(std::as_writable_bytes(std::span{pixels}));
+
+    for (u32 y = 0; y < imgSize; ++y)
+    {
+        for (u32 x = 0; x < imgSize; ++x)
+        {
+            if (x >= 2 && x < 6 && y >= 2 && y < 6)
+                ASSERT(pixels[y * imgSize + x] == red);
+            else
+                ASSERT(pixels[y * imgSize + x] == sentinelVal);
+        }
+    }
+}
+
+TEST(testGpuBlitImageWholeScaled)
+{
+    static constexpr u32 srcSize = 4;
+    static constexpr u32 dstSize = 8;
+    static constexpr u32 red = 0xFF0000FF;
+
+    GpuImage srcImg = GpuImage::create(srcSize, srcSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuImage dstImg = GpuImage::create(dstSize, dstSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
+    GpuView dstView = GpuView::create(dstImg, GpuAspect_color);
+
+    // Solid color: the blit result must be identical for any filter mode
+    u32 solid[srcSize * srcSize] = {};
+    for (u32 i = 0; i < srcSize * srcSize; ++i)
+        solid[i] = red;
+    srcView.write(std::as_bytes(std::span{solid}));
+
+    GpuCmd* cmd = gpuCmdBegin();
+    // Whole image blit across different sizes: 4x4 -> 8x8
+    gpuBlitImageWhole(cmd, dstView, srcView);
+    gpuCmdEnd(cmd);
+
+    u32 pixels[dstSize * dstSize] = {};
+    dstView.read(std::as_writable_bytes(std::span{pixels}));
+    for (u32 i = 0; i < dstSize * dstSize; ++i)
+        ASSERT(pixels[i] == red);
+}
+
+TEST(testGpuBlitImageFormats)
+{
+    static constexpr u32 imgSize = 4;
+
+    // The contract allows different formats: bgra8 -> rgba8
+    //
+    // Solid color R=0x33 G=0x66 B=0x99 A=0xFF:
+    // - in bgra8 memory the bytes are B,G,R,A -> u32 0xFF336699
+    // - in rgba8 memory the bytes are R,G,B,A -> u32 0xFF996633
+    GpuImage srcImg = GpuImage::create(imgSize, imgSize, Format_bgra8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuImage dstImg = GpuImage::create(imgSize, imgSize, Format_rgba8_unorm,
+            GpuImageUsage_transferSrc | GpuImageUsage_transferDst | GpuImageUsage_sampled);
+    GpuView srcView = GpuView::create(srcImg, GpuAspect_color);
+    GpuView dstView = GpuView::create(dstImg, GpuAspect_color);
+
+    u32 solid[imgSize * imgSize] = {};
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        solid[i] = 0xFF336699;
+    srcView.write(std::as_bytes(std::span{solid}));
+
+    GpuCmd* cmd = gpuCmdBegin();
+    gpuBlitImageWhole(cmd, dstView, srcView);
+    gpuCmdEnd(cmd);
+
+    u32 pixels[imgSize * imgSize] = {};
+    dstView.read(std::as_writable_bytes(std::span{pixels}));
+    for (u32 i = 0; i < imgSize * imgSize; ++i)
+        ASSERT(pixels[i] == 0xFF996633);
+}
+
 TEST(testComputePassDispatch)
 {
     static constexpr u32 elemCount = 64;
