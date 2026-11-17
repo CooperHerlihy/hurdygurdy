@@ -157,8 +157,8 @@ int main()
         if (movement != Vec3{0.0f})
         {
             f32 moveSpeed = 1.5f * static_cast<f32>(delta);
-            movement = rotate(camera.rotation, {movement.x(), 0.0f, movement.z()}) + Vec3{0.0f, movement.y(), 0.0f};
-            camera.position += normalize(movement) * moveSpeed;
+            Vec3 rotated = rotate(camera.rotation, {movement.x(), 0.0f, movement.z()});;
+            camera.position += normalize(Vec3{rotated.x(), movement.y(), rotated.z()}) * moveSpeed;
         }
 
         modelRot += static_cast<f32>(delta) * 0.5f;
@@ -226,13 +226,11 @@ int main()
                     || shot.image.height() != renderTarget->height()
                     || shot.view.format() != renderTarget->format())
                 {
-                    shot.image = GpuImage::create(renderTarget->width(), renderTarget->height(),
-                        renderTarget->format(),
-                        GpuImageUsage_colorAttachment | GpuImageUsage_transferDst
-                            | GpuImageUsage_transferSrc);
+                    shot.image = GpuImage::create(renderTarget->width(), renderTarget->height(), Format_rgba8_srgb,
+                        GpuImageUsage_sampled | GpuImageUsage_transferDst | GpuImageUsage_transferSrc);
                     shot.view = GpuView::create(shot.image, GpuAspect_color);
                 }
-                gpuCopyImageWhole(cmd, shot.view, *renderTarget);
+                gpuBlitImageWhole(cmd, shot.view, *renderTarget);
                 shotPending = true;
             }
         }

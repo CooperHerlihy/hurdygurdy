@@ -182,13 +182,11 @@ int main()
                     || shot.image.height() != renderTarget->height()
                     || shot.view.format() != renderTarget->format())
                 {
-                    shot.image = GpuImage::create(renderTarget->width(), renderTarget->height(),
-                        renderTarget->format(),
-                        GpuImageUsage_colorAttachment | GpuImageUsage_transferDst
-                            | GpuImageUsage_transferSrc);
+                    shot.image = GpuImage::create(renderTarget->width(), renderTarget->height(), Format_rgba8_srgb,
+                        GpuImageUsage_sampled | GpuImageUsage_transferDst | GpuImageUsage_transferSrc);
                     shot.view = GpuView::create(shot.image, GpuAspect_color);
                 }
-                gpuCopyImageWhole(cmd, shot.view, *renderTarget);
+                gpuBlitImageWhole(cmd, shot.view, *renderTarget);
                 shotPending = true;
             }
         }
