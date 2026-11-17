@@ -43,10 +43,10 @@ struct Orthographic {
      * Initialize with rect and clips or sensible defaults
      */
     Orthographic(Rect rect, f32 nearVal = 0.0f, f32 farVal = 1.0f)
-        : left{rect.begin.x}
-        , right{rect.end.x}
-        , top{rect.begin.y}
-        , bottom{rect.end.y}
+        : left{rect.begin.x()}
+        , right{rect.end.x()}
+        , top{rect.begin.y()}
+        , bottom{rect.end.y()}
         , near{nearVal}
         , far{farVal}
     {}

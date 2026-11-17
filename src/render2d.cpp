@@ -320,16 +320,16 @@ u32 TextureAtlas::addGrid(Rect grid, u32 width, u32 height, u32 count, f32 margi
     Vec2 pos = grid.begin;
     for (u32 y = 0; y < height; ++y)
     {
-        pos.x = grid.begin.x;
+        pos.x() = grid.begin.x();
         for (u32 x = 0; x < width; ++x)
         {
             if (i++ == count)
                 goto done;
 
             sprites.emplace_back(pos, pos + spriteSize);
-            pos.x += subdivSize.x;
+            pos.x() += subdivSize.x();
         }
-        pos.y += subdivSize.y;
+        pos.y() += subdivSize.y();
     }
 
 done:
@@ -426,14 +426,14 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
         Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
         Vec2 firstSize = firstRect.end - firstRect.begin;
 
-        factor = box.height / firstSize.y;
+        factor = box.height / firstSize.y();
         for (char c : text)
         {
             Rect cRect = box.font->sprites[static_cast<u32>(c)];
             Vec2 size = cRect.end - cRect.begin;
-            bounds.end.x += size.x * factor;
+            bounds.end.x() += size.x() * factor;
         }
-        bounds.end.y = box.height;
+        bounds.end.y() = box.height;
     }
     else if (box.height == INFINITY)
     {
@@ -445,44 +445,44 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
         {
             Rect cRect = box.font->sprites[static_cast<u32>(c)];
             Vec2 size = cRect.end - cRect.begin;
-            width += size.x;
+            width += size.x();
         }
         factor = box.width / width;
 
-        bounds.end.x = box.width;
-        bounds.end.y = firstSize.y * box.width / width;
+        bounds.end.x() = box.width;
+        bounds.end.y() = firstSize.y() * box.width / width;
     }
     else
     {
         Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
         Vec2 firstSize = firstRect.end - firstRect.begin;
 
-        bounds.end.y = firstSize.y;
+        bounds.end.y() = firstSize.y();
 
         for (char c : text)
         {
             Rect cRect = box.font->sprites[static_cast<u32>(c)];
             Vec2 size = cRect.end - cRect.begin;
-            bounds.end.x += size.x;
+            bounds.end.x() += size.x();
         }
 
-        Rect hBounds = {{}, {bounds.end.x * box.height / bounds.end.y, box.height}};
-        Rect wBounds = {{}, {box.width, bounds.end.y * box.width / bounds.end.x}};
+        Rect hBounds = {{}, {bounds.end.x() * box.height / bounds.end.y(), box.height}};
+        Rect wBounds = {{}, {box.width, bounds.end.y() * box.width / bounds.end.x()}};
 
-        if (hBounds.end.x <= box.width)
+        if (hBounds.end.x() <= box.width)
         {
-            factor = box.height / bounds.end.y;
+            factor = box.height / bounds.end.y();
             bounds = hBounds;
         }
-        else if (wBounds.end.y <= box.height)
+        else if (wBounds.end.y() <= box.height)
         {
-            factor = box.width / bounds.end.x;
+            factor = box.width / bounds.end.x();
             bounds = wBounds;
         }
     }
 
     std::string_view toDraw = text;
-    if (box.cutoff < bounds.end.x)
+    if (box.cutoff < bounds.end.x())
     {
         const char* lastSpace = nullptr;
         const char* c = text.data();
@@ -496,13 +496,13 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
             Rect cRect = box.font->sprites[static_cast<u32>(*c)];
             Vec2 size = cRect.end - cRect.begin;
 
-            if (width + size.x > box.cutoff)
+            if (width + size.x() > box.cutoff)
             {
                 if (box.shouldBreakAtSpace && lastSpace != nullptr)
                     c = lastSpace;
                 break;
             }
-            width += size.x;
+            width += size.x();
         }
         toDraw = std::string_view{text.data(), static_cast<usize>(c - text.data())};
     }
@@ -513,7 +513,7 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
     bounds.end += pos;
     for (char c : toDraw)
     {
-        if (pos.x > bounds.end.x)
+        if (pos.x() > bounds.end.x())
             break;
 
         Rect sprite = box.font->get(static_cast<u32>(c));
@@ -522,7 +522,7 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
         Rect dst = {pos, pos + spriteSize};
         drawSprite(*box.font->texture, sprite, dst, color);
 
-        pos.x += spriteSize.x;
+        pos.x() += spriteSize.x();
     }
 
     return {text.begin() + toDraw.length(), text.end()};

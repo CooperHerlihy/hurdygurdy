@@ -134,21 +134,21 @@ int main()
         {
             f32 rotSpeed = 2.0f;
             Vec2 md = input->mouseDelta();
-            Quat rotX = quatAxisAngle({ 0, 1, 0}, md.x * rotSpeed);
-            Quat rotY = quatAxisAngle({1, 0, 0}, md.y * rotSpeed);
+            Quat rotX = quatAxisAngle({ 0, 1, 0}, md.x() * rotSpeed);
+            Quat rotY = quatAxisAngle({1, 0, 0}, md.y() * rotSpeed);
             camera.rotation = rotX * camera.rotation * rotY;
         }
 
         Vec3 movement = Vec3{0.0f};
-        movement.y += static_cast<f32>(input->isButtonDown(Button_space) - input->isButtonDown(Button_lshift));
-        movement.x += static_cast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a));
-        movement.z += static_cast<f32>(input->isButtonDown(Button_w) - input->isButtonDown(Button_s));
+        movement.y() += static_cast<f32>(input->isButtonDown(Button_space) - input->isButtonDown(Button_lshift));
+        movement.x() += static_cast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a));
+        movement.z() += static_cast<f32>(input->isButtonDown(Button_w) - input->isButtonDown(Button_s));
 
         if (movement != Vec3{0.0f})
         {
             f32 moveSpeed = 1.5f * static_cast<f32>(delta);
-            Vec3 rotated = vecRot3(camera.rotation, {movement.x, 0.0f, movement.z});
-            camera.position += vecNorm3({rotated.x, movement.y, rotated.z}) * moveSpeed;
+            Vec3 rotated = rotate(camera.rotation, {movement.x(), 0.0f, movement.z()});
+            camera.position += normalize(rotated) * moveSpeed;
         }
 
         modelRot += static_cast<f32>(delta) * 0.5f;

@@ -777,8 +777,8 @@ void InputDeviceWayland::pointerEnter(void* data, struct wl_pointer* pointer,
     WindowWayland** found = wlDevice->windows.get(surfaceKey(surface));
     if (found != nullptr)
     {
-        (*found)->mouse.x = static_cast<f32>(wl_fixed_to_double(sx));
-        (*found)->mouse.y = static_cast<f32>(wl_fixed_to_double(sy));
+        (*found)->mouse.x() = static_cast<f32>(wl_fixed_to_double(sx));
+        (*found)->mouse.y() = static_cast<f32>(wl_fixed_to_double(sy));
     }
 }
 
@@ -855,11 +855,11 @@ void InputDeviceWayland::pointerAxis(void* data, struct wl_pointer* pointer,
     f32 amount = static_cast<f32>(wl_fixed_to_double(value));
 
     if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
-        delta.y = amount;
+        delta.y() = amount;
     else if (axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL)
-        delta.x = amount;
+        delta.x() = amount;
 
-    if (delta.x != 0.0f || delta.y != 0.0f)
+    if (delta.x() != 0.0f || delta.y() != 0.0f)
     {
         wlDevice->wheelDeltaAccum += delta;
 

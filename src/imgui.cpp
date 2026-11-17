@@ -271,7 +271,7 @@ void beginImGuiFrame()
     }
 
     Vec2 mouse = state.window->mousePos();
-    io.AddMousePosEvent(mouse.x, mouse.y);
+    io.AddMousePosEvent(mouse.x(), mouse.y());
 
     u32 width, height;
     state.window->size(&width, &height);
@@ -282,8 +282,8 @@ void beginImGuiFrame()
         io.DeltaTime = 1.0f / 60.0f;
 
     Vec2 wheel = state.device->wheelDelta();
-    if (wheel.x != 0.0f || wheel.y != 0.0f)
-        io.AddMouseWheelEvent(wheel.x, wheel.y);
+    if (wheel.x() != 0.0f || wheel.y() != 0.0f)
+        io.AddMouseWheelEvent(wheel.x(), wheel.y());
 
     if (!(io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange))
     {

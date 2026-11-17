@@ -10,8 +10,6 @@
 #include <memory>
 
 #include <math.h>
-#include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 #include <X11/Xlib.h>
@@ -610,10 +608,10 @@ void InputDeviceX11::processEvents()
                     if (pressed)
                     {
                         Vec2 delta{};
-                        if (event.xbutton.button == 4) delta.y = 1.0f;
-                        else if (event.xbutton.button == 5) delta.y = -1.0f;
-                        else if (event.xbutton.button == 6) delta.x = 1.0f;
-                        else if (event.xbutton.button == 7) delta.x = -1.0f;
+                        if (event.xbutton.button == 4) delta.y() = 1.0f;
+                        else if (event.xbutton.button == 5) delta.y() = -1.0f;
+                        else if (event.xbutton.button == 6) delta.x() = 1.0f;
+                        else if (event.xbutton.button == 7) delta.x() = -1.0f;
 
                         wheelDeltaAccum += delta;
 

@@ -1,39 +1,33 @@
 #include "hg/geometry2d.hpp"
 
-// #include "hg/utility.hpp"
-
 #include <cmath>
-#include <cfloat>
-
 #include <algorithm>
-#include <optional>
-#include <array>
 
 namespace hg {
 
 bool containsPointCircle(Vec2 point, Circle circle)
 {
-    return distPointCircle(point, circle) <= FLT_EPSILON;
+    return distPointCircle(point, circle) <= epsilonf;
 }
 
 f32 distPointCircle(Vec2 point, Circle circle)
 {
-    return vecLen2(point - circle.pos) - circle.radius;
+    return length(point - circle.pos) - circle.radius;
 }
 
 Vec2 closestPointCircle(Vec2 pos, Circle circle)
 {
-    return circle.pos + circle.radius * vecNorm2(pos - circle.pos);
+    return circle.pos + circle.radius * normalize(pos - circle.pos);
 }
 
 bool intersectCircles(Circle a, Circle b)
 {
-    return distCircles(a, b) <= FLT_EPSILON;
+    return distCircles(a, b) <= epsilonf;
 }
 
 f32 distCircles(Circle a, Circle b)
 {
-    return vecLen2(a.pos - b.pos) - a.radius - b.radius;
+    return length(a.pos - b.pos) - a.radius - b.radius;
 }
 
 Rect rectEmpty()
@@ -47,31 +41,31 @@ Rect rectEmpty()
 Rect rectAddPoint(Rect rect, Vec2 point)
 {
     Rect newRect;
-    newRect.begin.x = std::min(rect.begin.x, point.x - FLT_EPSILON);
-    newRect.begin.y = std::min(rect.begin.y, point.y - FLT_EPSILON);
-    newRect.end.x = std::max(rect.end.x, point.x + FLT_EPSILON);
-    newRect.end.y = std::max(rect.end.y, point.y + FLT_EPSILON);
+    newRect.begin.x() = std::min(rect.begin.x(), point.x() - epsilonf);
+    newRect.begin.y() = std::min(rect.begin.y(), point.y() - epsilonf);
+    newRect.end.x() = std::max(rect.end.x(), point.x() + epsilonf);
+    newRect.end.y() = std::max(rect.end.y(), point.y() + epsilonf);
     return newRect;
 }
 
 bool containsPointRect(Vec2 point, Rect rect)
 {
-    return point.x >= rect.begin.x - FLT_EPSILON && point.x <= rect.end.x + FLT_EPSILON
-        && point.y >= rect.begin.y - FLT_EPSILON && point.y <= rect.end.y + FLT_EPSILON;
+    return point.x() >= rect.begin.x() - epsilonf && point.x() <= rect.end.x() + epsilonf
+        && point.y() >= rect.begin.y() - epsilonf && point.y() <= rect.end.y() + epsilonf;
 }
 
 Vec2 closestPointRect(Vec2 pos, Rect rect)
 {
     return {
-        std::clamp(pos.x, rect.begin.x, rect.end.x),
-        std::clamp(pos.y, rect.begin.y, rect.end.y),
+        std::clamp(pos.x(), rect.begin.x(), rect.end.x()),
+        std::clamp(pos.y(), rect.begin.y(), rect.end.y()),
     };
 }
 
 bool intersectRects(Rect a, Rect b)
 {
-    return a.end.x >= b.begin.x && a.begin.x <= b.end.x
-        && a.end.y >= b.begin.y && a.begin.y <= b.end.y;
+    return a.end.x() >= b.begin.x() && a.begin.x() <= b.end.x()
+        && a.end.y() >= b.begin.y() && a.begin.y() <= b.end.y();
 }
 
 bool intersectRectCircle(Rect rect, Circle circle)
@@ -84,50 +78,50 @@ std::optional<Hit2D> intersectRays2D(Ray2D ray, Ray2D other)
     HG_ASSERT(ray.dir != Vec2{0});
     HG_ASSERT(other.dir != Vec2{0});
 
-    f32 denom = vecCross2(ray.dir, other.dir);
-    if (std::abs(denom) < FLT_EPSILON)
+    f32 denom = cross(ray.dir, other.dir);
+    if (std::abs(denom) < epsilonf)
         return {};
 
     Vec2 diff = other.pos - ray.pos;
 
-    f32 t = vecCross2(diff, other.dir) / denom;
-    if (t < -FLT_EPSILON)
+    f32 t = cross(diff, other.dir) / denom;
+    if (t < -epsilonf)
         return {};
 
-    f32 tOther = vecCross2(diff, ray.dir) / denom;
-    if (tOther < -FLT_EPSILON)
+    f32 tOther = cross(diff, ray.dir) / denom;
+    if (tOther < -epsilonf)
         return {};
 
     return std::make_optional<Hit2D>(t, denom < 0
-        ? vecNorm2({other.dir.y, -other.dir.x})
-        : vecNorm2({-other.dir.y, other.dir.x}));
+        ? normalize(Vec2{other.dir.y(), -other.dir.x()})
+        : normalize(Vec2{-other.dir.y(), other.dir.x()}));
 }
 
 std::optional<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line)
 {
     HG_ASSERT(ray.dir != Vec2{0});
-    if (vecEq2(line.begin, line.end))
+    if (line.begin == line.end)
         return {};
 
     Vec2 lineDir = line.end - line.begin;
 
-    f32 denom = vecCross2(ray.dir, lineDir);
-    if (std::abs(denom) < FLT_EPSILON)
+    f32 denom = cross(ray.dir, lineDir);
+    if (std::abs(denom) < epsilonf)
         return {};
 
     Vec2 diff = line.begin - ray.pos;
 
-    f32 t = vecCross2(diff, lineDir) / denom;
-    if (t < -FLT_EPSILON)
+    f32 t = cross(diff, lineDir) / denom;
+    if (t < -epsilonf)
         return {};
 
-    f32 tOther = vecCross2(diff, ray.dir) / denom;
-    if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
+    f32 tOther = cross(diff, ray.dir) / denom;
+    if (tOther < -epsilonf || tOther > 1 + epsilonf)
         return {};
 
     return std::make_optional<Hit2D>(t, denom < 0
-        ? vecNorm2({lineDir.y, -lineDir.x})
-        : vecNorm2({-lineDir.y, lineDir.x}));
+        ? normalize(Vec2{lineDir.y(), -lineDir.x()})
+        : normalize(Vec2{-lineDir.y(), lineDir.x()}));
 }
 
 std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
@@ -135,9 +129,9 @@ std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
     HG_ASSERT(ray.dir != Vec2{0});
 
     Vec2 rel = ray.pos - circle.pos;
-    f32 a = vecDot2(ray.dir, ray.dir);
-    f32 b = 2 * vecDot2(ray.dir, rel);
-    f32 c = vecDot2(rel, rel) - square(circle.radius);
+    f32 a = dot(ray.dir, ray.dir);
+    f32 b = 2 * dot(ray.dir, rel);
+    f32 c = dot(rel, rel) - square(circle.radius);
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
@@ -145,9 +139,9 @@ std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
-    if (t < -FLT_EPSILON)
+    if (t < -epsilonf)
         t = (-b + rtdet) / (2 * a);
-    if (t < -FLT_EPSILON)
+    if (t < -epsilonf)
         return {};
 
     return std::make_optional<Hit2D>(t, (ray.pos + t * ray.dir - circle.pos) / circle.radius);
@@ -156,7 +150,7 @@ std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
 std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 {
     HG_ASSERT(ray.dir != Vec2{0});
-    if (vecEq2(rect.begin, rect.end))
+    if (rect.begin == rect.end)
         return {};
 
     if (containsPointRect(ray.pos, rect))
@@ -165,10 +159,10 @@ std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
     }
 
     f32 hits[4] = {
-        (rect.begin.x - ray.pos.x) / ray.dir.x,
-        (rect.begin.y - ray.pos.y) / ray.dir.y,
-        (rect.end.x - ray.pos.x) / ray.dir.x,
-        (rect.end.y - ray.pos.y) / ray.dir.y,
+        (rect.begin.x() - ray.pos.x()) / ray.dir.x(),
+        (rect.begin.y() - ray.pos.y()) / ray.dir.y(),
+        (rect.end.x() - ray.pos.x()) / ray.dir.x(),
+        (rect.end.y() - ray.pos.y()) / ray.dir.y(),
     };
 
     constexpr Vec2 norms[4] = {
@@ -182,7 +176,7 @@ std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
     Vec2 norm;
     for (u32 i = 0; i < std::size(hits); ++i)
     {
-        if (hits[i] < -FLT_EPSILON)
+        if (hits[i] < -epsilonf)
             continue;
 
         if (!containsPointRect(ray.pos + hits[i] * ray.dir, rect))
@@ -202,56 +196,56 @@ std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
 
 std::optional<Hit2D> intersectLines2D(Line2D line, Line2D other)
 {
-    if (vecEq2(line.begin, line.end) || vecEq2(other.begin, other.end))
+    if (line.begin == line.end || (other.begin ==  other.end))
         return {};
 
     Vec2 lineDir = line.end - line.begin;
     Vec2 otherDir = other.end - other.begin;
 
-    f32 denom = vecCross2(lineDir, otherDir);
-    if (std::abs(denom) < FLT_EPSILON)
+    f32 denom = cross(lineDir, otherDir);
+    if (std::abs(denom) < epsilonf)
         return {};
 
     Vec2 diff = other.begin - line.begin;
 
-    f32 t = vecCross2(diff, otherDir) / denom;
-    if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
+    f32 t = cross(diff, otherDir) / denom;
+    if (t < -epsilonf || t > 1 + epsilonf)
         return {};
 
-    f32 tOther = vecCross2(diff, lineDir) / denom;
-    if (tOther < -FLT_EPSILON || tOther > 1 + FLT_EPSILON)
+    f32 tOther = cross(diff, lineDir) / denom;
+    if (tOther < -epsilonf || tOther > 1 + epsilonf)
         return {};
 
     return std::make_optional<Hit2D>(t, denom < 0
-        ? vecNorm2({otherDir.y, -otherDir.x})
-        : vecNorm2({-otherDir.y, otherDir.x}));
+        ? normalize(Vec2{otherDir.y(), -otherDir.x()})
+        : normalize(Vec2{-otherDir.y(), otherDir.x()}));
 }
 
 std::optional<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray)
 {
-    if (vecEq2(line.begin, line.end))
+    if (line.begin == line.end)
         return {};
     HG_ASSERT(ray.dir != Vec2{0});
 
     Vec2 lineDir = line.end - line.begin;
 
-    f32 denom = vecCross2(lineDir, ray.dir);
-    if (std::abs(denom) < FLT_EPSILON)
+    f32 denom = cross(lineDir, ray.dir);
+    if (std::abs(denom) < epsilonf)
         return {};
 
     Vec2 diff = ray.pos - line.begin;
 
-    f32 t = vecCross2(diff, ray.dir) / denom;
-    if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
+    f32 t = cross(diff, ray.dir) / denom;
+    if (t < -epsilonf || t > 1 + epsilonf)
         return {};
 
-    f32 tRay = vecCross2(diff, lineDir) / denom;
-    if (tRay < -FLT_EPSILON)
+    f32 tRay = cross(diff, lineDir) / denom;
+    if (tRay < -epsilonf)
         return {};
 
     return std::make_optional<Hit2D>(t, denom < 0
-        ? vecNorm2({ray.dir.y, -ray.dir.x})
-        : vecNorm2({-ray.dir.y, ray.dir.x}));
+        ? normalize(Vec2{ray.dir.y(), -ray.dir.x()})
+        : normalize(Vec2{-ray.dir.y(), ray.dir.x()}));
 }
 
 std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle)
@@ -259,9 +253,9 @@ std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle)
     Vec2 dir = line.end - line.begin;
 
     Vec2 rel = line.begin - circle.pos;
-    f32 a = vecDot2(dir, dir);
-    f32 b = 2 * vecDot2(dir, rel);
-    f32 c = vecDot2(rel, rel) - square(circle.radius);
+    f32 a = dot(dir, dir);
+    f32 b = 2 * dot(dir, rel);
+    f32 c = dot(rel, rel) - square(circle.radius);
 
     f32 det = square(b) - 4 * a * c;
     if (det < 0)
@@ -269,11 +263,11 @@ std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle)
     f32 rtdet = sqrtf(det);
 
     f32 t = (-b - rtdet) / (2 * a);
-    if (t > 1 + FLT_EPSILON)
+    if (t > 1 + epsilonf)
         return {};
-    if (t < -FLT_EPSILON)
+    if (t < -epsilonf)
         t = (-b + rtdet) / (2 * a);
-    if (t < -FLT_EPSILON || t > 1 + FLT_EPSILON)
+    if (t < -epsilonf || t > 1 + epsilonf)
         return {};
 
     return std::make_optional<Hit2D>(t, (line.begin + t * dir - circle.pos) / circle.radius);
@@ -281,14 +275,14 @@ std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle)
 
 std::optional<Hit2D> intersectLineRect(Line2D line, Rect rect)
 {
-    if (vecEq2(line.begin, line.end) || vecEq2(rect.begin, rect.end))
+    if (line.begin == line.end || rect.begin == rect.end)
         return {};
 
     f32 hits[4] = {
-        (rect.begin.x - line.begin.x) / (line.end.x - line.begin.x),
-        (rect.begin.y - line.begin.y) / (line.end.y - line.begin.y),
-        (rect.end.x - line.begin.x) / (line.end.x - line.begin.x),
-        (rect.end.y - line.begin.y) / (line.end.y - line.begin.y),
+        (rect.begin.x() - line.begin.x()) / (line.end.x() - line.begin.x()),
+        (rect.begin.y() - line.begin.y()) / (line.end.y() - line.begin.y()),
+        (rect.end.x() - line.begin.x()) / (line.end.x() - line.begin.x()),
+        (rect.end.y() - line.begin.y()) / (line.end.y() - line.begin.y()),
     };
 
     constexpr Vec2 norms[4] = {
@@ -302,7 +296,7 @@ std::optional<Hit2D> intersectLineRect(Line2D line, Rect rect)
     Vec2 norm;
     for (u32 i = 0; i < std::size(hits); ++i)
     {
-        if (hits[i] < -FLT_EPSILON || hits[i] > 1 + FLT_EPSILON)
+        if (hits[i] < -epsilonf || hits[i] > 1 + epsilonf)
             continue;
 
         if (!containsPointRect(line.begin + hits[i] * (line.end - line.begin), rect))

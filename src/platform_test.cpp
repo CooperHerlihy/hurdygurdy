@@ -439,14 +439,14 @@ int main()
                                     ImGui::TextUnformatted(buttonName(e.button));
                                     break;
                                 case EventType_mouseMoved:
-                                    ImGui::Text("d: %.1f, %.1f", e.mouse.delta.x, e.mouse.delta.y);
+                                    ImGui::Text("d: %.1f, %.1f", e.mouse.delta.x(), e.mouse.delta.y());
                                     ImGui::TableNextColumn();
-                                    ImGui::Text("p: %.1f, %.1f", e.mouse.pos.x, e.mouse.pos.y);
+                                    ImGui::Text("p: %.1f, %.1f", e.mouse.pos.x(), e.mouse.pos.y());
                                     ImGui::TableNextColumn();
-                                    ImGui::Text("g: %.1f, %.1f", e.mouse.globalPos.x, e.mouse.globalPos.y);
+                                    ImGui::Text("g: %.1f, %.1f", e.mouse.globalPos.x(), e.mouse.globalPos.y());
                                     break;
                                 case EventType_wheelMoved:
-                                    ImGui::Text("d: %.1f, %.1f", e.wheel.delta.x, e.wheel.delta.y);
+                                    ImGui::Text("d: %.1f, %.1f", e.wheel.delta.x(), e.wheel.delta.y());
                                     break;
                                 case EventType_text:
                                     ImGui::Text("\"%s\"", e.text);
@@ -509,16 +509,19 @@ int main()
                     Vec2 md = input->mouseDelta();
                     Vec2 wd = input->wheelDelta();
 
-                    ImGui::Text("pos: %.1f, %.1f", mp.x, mp.y);
-                    ImGui::Text("delta: %.1f, %.1f", md.x, md.y);
-                    ImGui::Text("wheel: %.1f, %.1f", wd.x, wd.y);
+                    ImGui::Text("pos: %.1f, %.1f", mp.x(), mp.y());
+                    ImGui::Text("delta: %.1f, %.1f", md.x(), md.y());
+                    ImGui::Text("wheel: %.1f, %.1f", wd.x(), wd.y());
 
                     ImGui::Text("Buttons");
                     for (u32 i = static_cast<u32>(Button_mouse1); i <= static_cast<u32>(Button_mouse5); ++i)
                     {
                         Button b = static_cast<Button>(i);
                         ImGui::Text("%s: down=%d pressed=%d released=%d",
-                            buttonName(b), input->isButtonDown(b), input->wasButtonPressed(b), input->wasButtonReleased(b));
+                            buttonName(b),
+                            input->isButtonDown(b),
+                            input->wasButtonPressed(b),
+                            input->wasButtonReleased(b));
                     }
 
                     if (secondWindow != nullptr)
@@ -526,7 +529,11 @@ int main()
                         ImGui::Text("Second Window Mouse");
                         Vec2 swmp = secondWindow->mousePos();
                         Vec2 swmd = secondWindow->mouseDelta();
-                        ImGui::Text("pos: %.1f, %.1f  delta: %.1f, %.1f", swmp.x, swmp.y, swmd.x, swmd.y);
+                        ImGui::Text("pos: %.1f, %.1f  delta: %.1f, %.1f",
+                            swmp.x(),
+                            swmp.y(),
+                            swmd.x(),
+                            swmd.y());
                     }
                 }
                 ImGui::End();

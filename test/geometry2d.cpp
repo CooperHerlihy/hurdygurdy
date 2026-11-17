@@ -33,7 +33,7 @@ TEST(testCircleClosestPoint)
 {
     Circle c{{0, 0}, 5};
     Vec2 p = closestPointCircle({10, 0}, c);
-    ASSERT(std::abs(p.x - 5.0f) < FLT_EPSILON && std::abs(p.y) < FLT_EPSILON);
+    ASSERT(std::abs(p.x() - 5.0f) < FLT_EPSILON && std::abs(p.y()) < FLT_EPSILON);
 }
 
 TEST(testCircleIntersect)
@@ -82,13 +82,13 @@ TEST(testRectClosestPoint)
 {
     Rect r{{0, 0}, {10, 10}};
     Vec2 p1 = closestPointRect({-5, 5}, r);
-    ASSERT(p1.x == 0 && p1.y == 5);
+    ASSERT(p1.x() == 0 && p1.y() == 5);
     Vec2 p2 = closestPointRect({15, 5}, r);
-    ASSERT(p2.x == 10 && p2.y == 5);
+    ASSERT(p2.x() == 10 && p2.y() == 5);
     Vec2 p3 = closestPointRect({5, -3}, r);
-    ASSERT(p3.x == 5 && p3.y == 0);
+    ASSERT(p3.x() == 5 && p3.y() == 0);
     Vec2 p4 = closestPointRect({5, 5}, r);
-    ASSERT(p4.x == 5 && p4.y == 5);
+    ASSERT(p4.x() == 5 && p4.y() == 5);
 }
 
 TEST(testRectIntersect)
@@ -266,7 +266,7 @@ TEST(testRectClosestPointInside)
 {
     Rect r{{0, 0}, {10, 10}};
     Vec2 p = closestPointRect({5, 5}, r);
-    ASSERT(p.x == 5 && p.y == 5);
+    ASSERT(p.x() == 5 && p.y() == 5);
 }
 
 TEST(testIntersectLineCircleMiss)

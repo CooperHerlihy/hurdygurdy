@@ -362,7 +362,7 @@ void InputDeviceSdl3::processEvents()
 
                 WindowSdl3* w = getWindow(sdlEvent.motion.windowID);
                 if (w != nullptr)
-                    w->mouse = Vec2{event.mouse.pos.x, event.mouse.pos.y};
+                    w->mouse = event.mouse.pos;
 
                 mouseDeltaAccum += event.mouse.delta;
             } break;

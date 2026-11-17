@@ -94,7 +94,8 @@ bool serializeVoid(Serializer* s, std::span<u8> data)
             setError("Unexpected data length while deserializing");
             return false;
         }
-        std::memcpy(data.data(), leaf->data.data(), data.size());
+        if (!data.empty())
+            std::memcpy(data.data(), leaf->data.data(), data.size());
     }
     return true;
 }

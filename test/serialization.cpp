@@ -75,7 +75,7 @@ TEST(testSerializeMat4)
     ASSERT(serialize(&w, &val));
     Serializer r = serialReader(std::move(w.root));
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
+    ASSERT((copy[0] == val[0] && copy[1] == val[1] && copy[2] == val[2] && copy[3] == val[3]));
 }
 
 TEST(testSerializeComplex)

@@ -33,43 +33,44 @@ u32 noise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
 
 f32 noiseNorm(u32 seed, f32 pos)
 {
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return static_cast<f32>(noise(seed, Convert{pos}.asU32)) / static_cast<f32>(UINT32_MAX);
+    return static_cast<f32>(
+        noise(
+            seed,
+            std::bit_cast<u32>(pos)))
+        / static_cast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm2D(u32 seed, Vec2 pos)
 {
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return static_cast<f32>(noise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32)) / static_cast<f32>(UINT32_MAX);
+    return static_cast<f32>(
+        noise2D(
+            seed,
+            std::bit_cast<u32>(pos.x()),
+            std::bit_cast<u32>(pos.y())))
+        / static_cast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm3D(u32 seed, Vec3 pos)
 {
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return static_cast<f32>(noise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32)) / static_cast<f32>(UINT32_MAX);
+    return static_cast<f32>(
+        noise3D(
+            seed,
+            std::bit_cast<u32>(pos.x()),
+            std::bit_cast<u32>(pos.y()),
+            std::bit_cast<u32>(pos.z())))
+        / static_cast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm4D(u32 seed, Vec4 pos)
 {
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return static_cast<f32>(noise4D(
-        seed,
-        Convert{pos.x}.asU32,
-        Convert{pos.y}.asU32,
-        Convert{pos.z}.asU32,
-        Convert{pos.w}.asU32)) / static_cast<f32>(UINT32_MAX);
+    return static_cast<f32>(
+        noise4D(
+            seed,
+            std::bit_cast<u32>(pos.x()),
+            std::bit_cast<u32>(pos.y()),
+            std::bit_cast<u32>(pos.z()),
+            std::bit_cast<u32>(pos.w()))
+        ) / static_cast<f32>(UINT32_MAX);
 }
 
 f32 noiseVec1D(u32 seed, f32 pos)

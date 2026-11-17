@@ -3,6 +3,8 @@
 #include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
 
+#include <cmath>
+
 namespace hg {
 
 /**
@@ -44,6 +46,11 @@ static constexpr f64 root3 = 1.7320508075688772;
  * The value of square root 3
  */
 static constexpr f32 root3f = static_cast<f32>(root3);
+
+/**
+ * The value of square root 3
+ */
+static constexpr f32 epsilonf = std::numeric_limits<f32>::epsilon();
 
 /**
  * Returns base to the positive integer exp power
@@ -99,435 +106,593 @@ constexpr f32 smoothQuintic(f32 t)
 /**
  * An N-dimensional vector
  */
-template<usize N>
+template<usize N> requires (N > 1)
 struct Vec {
     /**
-     * The vector components
+     * A tag to check in templates
+     */
+    static constexpr bool isVec = true;
+
+    /**
+     * The dimensionality
+     */
+    static constexpr usize n = N;
+
+    /**
+     * The components
      */
     f32 vals[N];
 
+    /**
+     * Default construct
+     */
+    constexpr Vec() noexcept = default;
 
+    /**
+     * Copy assign
+     */
+    constexpr Vec(const Vec& other) noexcept = default;
+
+    /**
+     * Copy construct
+     */
+    constexpr Vec& operator=(const Vec& other) noexcept = default;
+
+    /**
+     * Construct with scalar
+     */
+    explicit constexpr Vec(f32 val)
+    {
+        for (f32& v : vals)
+        {
+            v = val;
+        }
+    }
+
+    /**
+     * Construct from list
+     */
+    template<typename... Vs> requires (sizeof...(Vs) == N && (std::convertible_to<f32, Vs> && ...))
+    constexpr Vec(Vs... vs)
+    {
+        f32* v = vals;
+        ((*(v++) = static_cast<f32>(vs)), ...);
+    }
+
+    /**
+     * Construct from other
+     */
+    template<usize M>
+    explicit constexpr Vec(const Vec<M>& other)
+    {
+        constexpr usize count = N < M ? N : M;
+        for (usize i = 0; i < count; ++i)
+        {
+            vals[i] = other.vals[i];
+        }
+        for (usize i = count; i < N; ++i)
+        {
+            vals[i] = 0.0f;
+        }
+    }
+
+    /**
+     * Construct from other and scalars
+     */
+    template<usize M, typename... Vs> requires (M + sizeof...(Vs) == N && (std::convertible_to<f32, Vs> && ...))
+    constexpr Vec(const Vec<M>& other, Vs... vs)
+    {
+        f32* v = vals;
+        for (const f32& o : other)
+        {
+            *(v++) = o;
+        }
+        ((*(v++) = static_cast<f32>(vs)), ...);
+    }
+
+    /**
+     * Access by index
+     */
+    constexpr f32& operator[](usize idx)
+    {
+        HG_ASSERT(idx < N);
+        return vals[idx];
+    }
+
+    /**
+     * Access by index
+     */
+    constexpr const f32& operator[](usize idx) const
+    {
+        HG_ASSERT(idx < N);
+        return vals[idx];
+    }
+
+    /**
+     * The x component, if it exists
+     */
+    constexpr f32& x()
+    {
+        static_assert(N >= 1);
+        return vals[0];
+    }
+
+    /**
+     * The x component, if it exists
+     */
+    constexpr const f32& x() const
+    {
+        static_assert(N >= 1);
+        return vals[0];
+    }
+
+    /**
+     * The y component, if it exists
+     */
+    constexpr f32& y()
+    {
+        static_assert(N >= 2);
+        return vals[1];
+    }
+
+    /**
+     * The y component, if it exists
+     */
+    constexpr const f32& y() const
+    {
+        static_assert(N >= 2);
+        return vals[1];
+    }
+
+    /**
+     * The z component, if it exists
+     */
+    constexpr f32& z()
+    {
+        static_assert(N >= 3);
+        return vals[2];
+    }
+
+    /**
+     * The z component, if it exists
+     */
+    constexpr const f32& z() const
+    {
+        static_assert(N >= 3);
+        return vals[2];
+    }
+
+    /**
+     * The w component, if it exists
+     */
+    constexpr f32& w()
+    {
+        static_assert(N >= 4);
+        return vals[3];
+    }
+
+    /**
+     * The w component, if it exists
+     */
+    constexpr const f32& w() const
+    {
+        static_assert(N >= 4);
+        return vals[3];
+    }
+
+    /**
+     * C++ style loops
+     */
+    constexpr f32* begin()
+    {
+        return vals;
+    }
+
+    /**
+     * C++ style loops
+     */
+    constexpr const f32* begin() const
+    {
+        return vals;
+    }
+
+    /**
+     * C++ style loops
+     */
+    constexpr f32* end()
+    {
+        return vals + N;
+    }
+
+    /**
+     * C++ style loops
+     */
+    constexpr const f32* end() const
+    {
+        return vals + N;
+    }
+
+    /**
+     * Add another vector in place
+     */
+    template<usize M> requires (M <= N)
+    constexpr Vec& operator+=(const Vec<M>& other)
+    {
+        f32* l = vals;
+        for (const f32& r : other)
+        {
+            *(l++) += r;
+        }
+        return *this;
+    }
+
+    /**
+     * Subtract another vector in place
+     */
+    template<usize M> requires (M <= N)
+    constexpr Vec& operator-=(const Vec<M>& other)
+    {
+        f32* l = vals;
+        for (const f32& r : other)
+        {
+            *(l++) -= r;
+        }
+        return *this;
+    }
+
+    /**
+     * Multiply another vector in place pairwise
+     */
+    template<usize M> requires (M <= N)
+    constexpr Vec& operator*=(const Vec<M>& other)
+    {
+        f32* l = vals;
+        for (const f32& r : other)
+        {
+            *(l++) *= r;
+        }
+        return *this;
+    }
+
+    /**
+     * Multiply by a scalar in place
+     */
+    constexpr Vec& operator*=(f32 scalar)
+    {
+        for (f32& v : vals)
+        {
+            v *= scalar;
+        }
+        return *this;
+    }
+
+    /**
+     * Divide another vector in place pairwise
+     */
+    template<usize M> requires (M <= N)
+    constexpr Vec& operator/=(const Vec<M>& other)
+    {
+        f32* l = vals;
+        for (const f32& r : other)
+        {
+            HG_ASSERT(r != 0.0f);
+            *(l++) /= r;
+        }
+        return *this;
+    }
+
+    /**
+     * Divide by a scalar in place
+     */
+    constexpr Vec& operator/=(f32 scalar)
+    {
+        HG_ASSERT(scalar != 0.0f);
+        for (f32& v : vals)
+        {
+            v /= scalar;
+        }
+        return *this;
+    }
 };
 
 /**
  * A 2D vector
  */
-struct Vec2 {
-    /**
-     * The vector components
-     */
-    f32 x, y;
-
-    /**
-     * Construct uninitialized
-     */
-    Vec2() = default;
-
-    /**
-     * Construct from a list of values
-     */
-    constexpr Vec2(f32 xVal, f32 yVal) : x{xVal}, y{yVal} {}
-
-    /**
-     * Construct from a single scalar
-     */
-    explicit constexpr Vec2(f32 scalar) : x{scalar}, y{scalar} {}
-
-    /**
-     * Add another vector in place
-     */
-    Vec2& operator+=(Vec2 other);
-
-    /**
-     * Subtract another vector in place
-     */
-    Vec2& operator-=(Vec2 other);
-
-    /**
-     * Multiply another vector in place
-     */
-    Vec2& operator*=(Vec2 other);
-
-    /**
-     * Divide another vector in place
-     */
-    Vec2& operator/=(Vec2 other);
-
-    /**
-     * Access by index
-     */
-    constexpr f32& operator[](u32 idx)
-    {
-        HG_ASSERT(idx < 2);
-        return *(&x + idx);
-    }
-
-    constexpr const f32& operator[](u32 idx) const
-    {
-        HG_ASSERT(idx < 2);
-        return *(&x + idx);
-    }
-};
+using Vec2 = Vec<2>;
 
 /**
  * A 3D vector
  */
-struct Vec3 {
-    /**
-     * The vector components
-     */
-    f32 x, y, z;
-
-    /**
-     * Construct uninitialized
-     */
-    Vec3() = default;
-
-    /**
-     * Construct from a list of values
-     */
-    constexpr Vec3(f32 xVal, f32 yVal, f32 zVal) : x{xVal}, y{yVal}, z{zVal} {}
-
-    /**
-     * Construct from a single scalar
-     */
-    explicit constexpr Vec3(f32 scalar) : x{scalar}, y{scalar}, z{scalar} {}
-
-    /**
-     * Construct from a Vec2 and scalar
-     */
-    explicit constexpr Vec3(Vec2 other, f32 zVal) : x{other.x}, y{other.y}, z{zVal} {}
-
-    /**
-     * Downsize to Vec2
-     */
-    explicit constexpr operator Vec2() const
-    {
-        return {x, y};
-    }
-
-    /**
-     * Add another vector in place
-     */
-    Vec3& operator+=(Vec3 other);
-
-    /**
-     * Subtract another vector in place
-     */
-    Vec3& operator-=(Vec3 other);
-
-    /**
-     * Multiply another vector in place
-     */
-    Vec3& operator*=(Vec3 other);
-
-    /**
-     * Divide another vector in place
-     */
-    Vec3& operator/=(Vec3 other);
-
-    /**
-     * Access by index
-     */
-    constexpr f32& operator[](u32 idx)
-    {
-        HG_ASSERT(idx < 3);
-        return *(&x + idx);
-    }
-
-    constexpr const f32& operator[](u32 idx) const
-    {
-        HG_ASSERT(idx < 3);
-        return *(&x + idx);
-    }
-};
+using Vec3 = Vec<3>;
 
 /**
  * A 4D vector
  */
-struct Vec4 {
+using Vec4 = Vec<4>;
+
+/**
+ * A column major matrix
+ */
+template<usize W, usize H = W>
+struct Mat {
     /**
-     * The vector components
+     * A tag to check in templates
      */
-    f32 x, y, z, w;
+    static constexpr bool isMat = true;
 
     /**
-     * Construct uninitialized
+     * The width
      */
-    Vec4() = default;
+    static constexpr usize width = W;
+
+    /**
+     * The height
+     */
+    static constexpr usize height = H;
+
+    /**
+     * The columns
+     */
+    Vec<H> cols[W];
+
+    /**
+     * Construct empty
+     */
+    constexpr Mat() noexcept = default;
+
+    /**
+     * Copy construct
+     */
+    constexpr Mat(const Mat& other) noexcept = default;
+
+    /**
+     * Copy assign
+     */
+    constexpr Mat& operator=(const Mat& other) noexcept = default;
+
+    /**
+     * Construct from a scalar
+     */
+    explicit constexpr Mat(f32 scalar)
+    {
+        static_assert(W == H);
+        usize i = 0;
+        for (Vec<H>& c : cols)
+        {
+            c = {};
+            c[i++] = scalar;
+        }
+    }
 
     /**
      * Construct from a list of values
      */
-    constexpr Vec4(f32 xVal, f32 yVal, f32 zVal, f32 wVal) : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
-
-    /**
-     * Construct from a single scalar
-     */
-    explicit constexpr Vec4(f32 scalar) : x{scalar}, y{scalar}, z{scalar}, w{scalar} {}
-
-    /**
-     * Construct from a Vec2 and scalars
-     */
-    explicit constexpr Vec4(Vec2 other, f32 zVal, f32 wVal) : x{other.x}, y{other.y}, z{zVal}, w{wVal} {}
-
-    /**
-     * Construct from a Vec3 and scalar
-     */
-    explicit constexpr Vec4(Vec3 other, f32 wVal) : x{other.x}, y{other.y}, z{other.z}, w{wVal} {}
-
-    /**
-     * Downsize to Vec2
-     */
-    explicit constexpr operator Vec2() const
+    template<typename... Vs> requires (sizeof...(Vs) == W * H && (std::convertible_to<f32, Vs> && ...))
+    constexpr Mat(Vs... vs)
     {
-        return {x, y};
+        usize i = 0;
+        ((cols[i / H][i % H] = static_cast<f32>(vs), ++i), ...);
     }
-
-    /**
-     * Downsize to Vec3
-     */
-    explicit constexpr operator Vec3() const
-    {
-        return {x, y, z};
-    }
-
-    /**
-     * Add another vector in place
-     */
-    Vec4& operator+=(Vec4 other);
-
-    /**
-     * Subtract another vector in place
-     */
-    Vec4& operator-=(Vec4 other);
-
-    /**
-     * Multiply another vector in place
-     */
-    Vec4& operator*=(Vec4 other);
-
-    /**
-     * Divide another vector in place
-     */
-    Vec4& operator/=(Vec4 other);
-
-    /**
-     * Access by index
-     */
-    constexpr f32& operator[](u32 idx)
-    {
-        HG_ASSERT(idx < 4);
-        return *(&x + idx);
-    }
-
-    constexpr const f32& operator[](u32 idx) const
-    {
-        HG_ASSERT(idx < 4);
-        return *(&x + idx);
-    }
-};
-
-/**
- * A 2x2 matrix
- */
-struct Mat2 {
-    /**
-     * The matrix components
-     */
-    Vec2 x, y;
-
-    /**
-     * Construct uninitialized
-     */
-    Mat2() = default;
 
     /**
      * Construct from a list of vectors
      */
-    constexpr Mat2(Vec2 xVal, Vec2 yVal) : x{xVal}, y{yVal} {}
+    template<typename... Vs> requires (sizeof...(Vs) == W && ((Vs::isVec && Vs::n == H) && ...))
+    constexpr Mat(Vs... vs)
+    {
+        Vec<H>* v = cols;
+        ((*(v++) = Vec<H>{vs}), ...);
+    }
 
     /**
-     * Construct from a single scalar
+     * Construct from other
      */
-    explicit constexpr Mat2(f32 scalar) : x{scalar, 0}, y{0, scalar} {}
-
-    /**
-     * Construct from a list of values
-     */
-    explicit constexpr Mat2(f32 xx, f32 xy, f32 yx, f32 yy) : x{xx, xy}, y{yx, yy} {}
-
-    /**
-     * Add another matrix in place
-     */
-    Mat2& operator+=(const Mat2& other);
-
-    /**
-     * Subtract another matrix in place
-     */
-    Mat2& operator-=(const Mat2& other);
+    template<usize WO, usize HO>
+    explicit constexpr Mat(const Mat<WO, HO>& other)
+    {
+        constexpr usize count = W < WO ? W : WO;
+        for (usize c = 0; c < count; ++c)
+        {
+            cols[c] = Vec<H>{other.cols[c]};
+        }
+        for (usize c = count; c < W; ++c)
+        {
+            cols[c] = {};
+            if constexpr (W == H && WO == HO)
+                cols[c][c] = 1.0f;
+        }
+    }
 
     /**
      * Access by index
      */
-    constexpr Vec2& operator[](u32 idx)
+    constexpr Vec<H>& operator[](usize idx)
     {
-        HG_ASSERT(idx < 2);
-        return *(&x + idx);
+        HG_ASSERT(idx < W);
+        return cols[idx];
     }
 
-    constexpr const Vec2& operator[](u32 idx) const
+    constexpr const Vec<H>& operator[](usize idx) const
     {
-        HG_ASSERT(idx < 2);
-        return *(&x + idx);
+        HG_ASSERT(idx < W);
+        return cols[idx];
     }
-};
-
-/**
- * A 3x3 matrix
- */
-struct Mat3 {
-    /**
-     * The matrix components
-     */
-    Vec3 x, y, z;
 
     /**
-     * Construct uninitialized
+     * The x component, if it exists
      */
-    Mat3() = default;
-
-    /**
-     * Construct from a list of vectors
-     */
-    constexpr Mat3(Vec3 xVal, Vec3 yVal, Vec3 zVal)
-        : x{xVal}, y{yVal}, z{zVal} {}
-
-    /**
-     * Construct from a single scalar
-     */
-    explicit constexpr Mat3(f32 scalar)
-        : x{scalar, 0, 0}, y{0, scalar, 0}, z{0, 0, scalar} {}
-
-    /**
-     * Construct from a Mat2
-     */
-    explicit constexpr Mat3(const Mat2& other)
-        : x{other.x, 0}, y{other.y, 0}, z{0, 0, 1} {}
-
-    /**
-     * Downsize to Mat2
-     */
-    explicit constexpr operator Mat2() const
+    constexpr Vec<H>& x()
     {
-        return Mat2{Vec2{x}, Vec2{y}};
+        static_assert(W >= 1);
+        return cols[0];
+    }
+
+    /**
+     * The x component, if it exists
+     */
+    constexpr const Vec<H>& x() const
+    {
+        static_assert(W >= 1);
+        return cols[0];
+    }
+
+    /**
+     * The y component, if it exists
+     */
+    constexpr Vec<H>& y()
+    {
+        static_assert(W >= 2);
+        return cols[1];
+    }
+
+    /**
+     * The y component, if it exists
+     */
+    constexpr const Vec<H>& y() const
+    {
+        static_assert(W >= 2);
+        return cols[1];
+    }
+
+    /**
+     * The z component, if it exists
+     */
+    constexpr Vec<H>& z()
+    {
+        static_assert(W >= 3);
+        return cols[2];
+    }
+
+    /**
+     * The z component, if it exists
+     */
+    constexpr const Vec<H>& z() const
+    {
+        static_assert(W >= 3);
+        return cols[2];
+    }
+
+    /**
+     * The w component, if it exists
+     */
+    constexpr Vec<H>& w()
+    {
+        static_assert(W >= 4);
+        return cols[3];
+    }
+
+    /**
+     * The w component, if it exists
+     */
+    constexpr const Vec<H>& w() const
+    {
+        static_assert(W >= 4);
+        return cols[3];
+    }
+
+    /**
+     * C++ style loops
+     */
+    constexpr Vec<H>* begin()
+    {
+        return cols;
+    }
+
+    /**
+     * C++ style loops
+     */
+    constexpr const Vec<H>* begin() const
+    {
+        return cols;
+    }
+
+    /**
+     * C++ style loops
+     */
+    constexpr Vec<H>* end()
+    {
+        return cols + W;
+    }
+
+    /**
+     * C++ style loops
+     */
+    constexpr const Vec<H>* end() const
+    {
+        return cols + W;
     }
 
     /**
      * Add another matrix in place
      */
-    Mat3& operator+=(const Mat3& other);
+    template<usize WO, usize HO> requires (WO <= W && HO <= H)
+    constexpr Mat& operator+=(const Mat<WO, HO>& other)
+    {
+        for (u32 c = 0; c < WO; ++c)
+        {
+            for (u32 r = 0; r < HO; ++r)
+            {
+                cols[c][r] += other.cols[c][r];
+            }
+        }
+        return *this;
+    }
 
     /**
      * Subtract another matrix in place
      */
-    Mat3& operator-=(const Mat3& other);
-
-    /**
-     * Access by index
-     */
-    constexpr Vec3& operator[](u32 idx)
+    template<usize WO, usize HO> requires (WO <= W && HO <= H)
+    constexpr Mat& operator-=(const Mat<WO, HO>& other)
     {
-        HG_ASSERT(idx < 3);
-        return *(&x + idx);
+        for (u32 c = 0; c < WO; ++c)
+        {
+            for (u32 r = 0; r < HO; ++r)
+            {
+                cols[c][r] -= other.cols[c][r];
+            }
+        }
+        return *this;
     }
 
-    constexpr const Vec3& operator[](u32 idx) const
+    /**
+     * Multiply by a scalar in place
+     */
+    constexpr Mat& operator*=(f32 scalar)
     {
-        HG_ASSERT(idx < 3);
-        return *(&x + idx);
+        for (Vec<H>& c : cols)
+        {
+            c *= scalar;
+        }
+        return *this;
+    }
+
+    /**
+     * Divide by a scalar in place
+     */
+    constexpr Mat& operator/=(f32 scalar)
+    {
+        for (Vec<H>& c : cols)
+        {
+            c /= scalar;
+        }
+        return *this;
     }
 };
 
 /**
- * A 4x4 matrix
+ * A 2D matrix
  */
-struct Mat4 {
-    /**
-     * The matrix components
-     */
-    Vec4 x, y, z, w;
+using Mat2 = Mat<2>;
 
-    /**
-     * Construct uninitialized
-     */
-    Mat4() = default;
+/**
+ * A 3D matrix
+ */
+using Mat3 = Mat<3>;
 
-    /**
-     * Construct from a list of vectors
-     */
-    constexpr Mat4(Vec4 xVal, Vec4 yVal, Vec4 zVal, Vec4 wVal)
-        : x{xVal}, y{yVal}, z{zVal}, w{wVal} {}
-
-    /**
-     * Construct from a single scalar
-     */
-    explicit constexpr Mat4(f32 scalar)
-        : x{scalar, 0, 0, 0}, y{0, scalar, 0, 0}, z{0, 0, scalar, 0}, w{0, 0, 0, scalar} {}
-
-    /**
-     * Construct from a Mat2
-     */
-    explicit constexpr Mat4(const Mat2& other)
-        : x{other.x, 0, 0}, y{other.y, 0, 0}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
-
-    /**
-     * Construct from a Mat3
-     */
-    explicit constexpr Mat4(const Mat3& other)
-        : x{other.x, 0}, y{other.y, 0}, z{other.z, 0}, w{0, 0, 0, 1} {}
-
-    /**
-     * Downsize to Mat2
-     */
-    explicit constexpr operator Mat2() const
-    {
-        return Mat2{Vec2{x}, Vec2{y}};
-    }
-
-    /**
-     * Downsize to Mat3
-     */
-    explicit constexpr operator Mat3() const
-    {
-        return Mat3{Vec3{x}, Vec3{y}, Vec3{z}};
-    }
-
-    /**
-     * Add another matrix in place
-     */
-    Mat4& operator+=(const Mat4& other);
-
-    /**
-     * Subtract another matrix in place
-     */
-    Mat4& operator-=(const Mat4& other);
-
-    /**
-     * Access by index
-     */
-    constexpr Vec4& operator[](u32 idx)
-    {
-        HG_ASSERT(idx < 4);
-        return *(&x + idx);
-    }
-
-    constexpr const Vec4& operator[](u32 idx) const
-    {
-        HG_ASSERT(idx < 4);
-        return *(&x + idx);
-    }
-};
+/**
+ * A 4D matrix
+ */
+using Mat4 = Mat<4>;
 
 /**
  * A complex number
@@ -545,26 +710,76 @@ struct Complex {
     /**
      * Construct uninitialized
      */
-    Complex() = default;
+    constexpr Complex() = default;
 
     /**
      * Construct from just a real value
      */
-    constexpr Complex(f32 rVal) : r{rVal}, i{0} {}
+    constexpr Complex(f32 rVal)
+        : r{rVal}, i{0}
+    {}
 
     /**
      * Construct from a list of values
      */
-    constexpr Complex(f32 rVal, f32 iVal) : r{rVal}, i{iVal} {}
+    constexpr Complex(f32 rVal, f32 iVal)
+        : r{rVal}, i{iVal}
+    {}
+
+    /**
+     * Constexpr from a vector
+     */
+    explicit constexpr Complex(Vec2 vec)
+        : r{vec.x()}, i{vec.y()}
+    {}
+
+    /**
+     * Convert to a vector
+     */
+    explicit constexpr operator Vec2() const
+    {
+        return {r, i};
+    }
 
     /**
      * Add another complex number in place
      */
-    Complex& operator+=(Complex other);
+    constexpr Complex& operator+=(Complex other)
+    {
+        r += other.r;
+        i += other.i;
+        return* this;
+    }
+
     /**
      * Subtract another complex number in place
      */
-    Complex& operator-=(Complex other);
+    constexpr Complex& operator-=(Complex other)
+    {
+        r -= other.r;
+        i -= other.i;
+        return* this;
+    }
+
+    /**
+     * Multiply by a scalar in place
+     */
+    constexpr Complex& operator*=(f32 scalar)
+    {
+        r *= scalar;
+        i *= scalar;
+        return *this;
+    }
+
+    /**
+     * Divide by a scalar in place
+     */
+    constexpr Complex& operator/=(f32 scalar)
+    {
+        r /= scalar;
+        i /= scalar;
+        return *this;
+    }
 };
 
 /**
@@ -583,153 +798,129 @@ struct Quat {
     /**
      * Construct uninitialized
      */
-    Quat() = default;
+    constexpr Quat() = default;
 
     /**
      * Construct from just a real value
      */
-    constexpr Quat(f32 rVal) : r{rVal}, i{0}, j{0}, k{0} {}
+    constexpr Quat(f32 rVal)
+        : r{rVal}, i{0}, j{0}, k{0}
+    {}
 
     /**
      * Construct from a list of values
      */
-    constexpr Quat(f32 rVal, f32 iVal, f32 jVal, f32 kVal) : r{rVal}, i{iVal}, j{jVal}, k{kVal} {}
+    constexpr Quat(f32 rVal, f32 iVal, f32 jVal, f32 kVal)
+        : r{rVal}, i{iVal}, j{jVal}, k{kVal}
+    {}
+
+    /**
+     * Constexpr from a real part 3d vector imaginary part
+     */
+    explicit constexpr Quat(f32 rVal, Vec3 vec)
+        : r{rVal}, i{vec.x()}, j{vec.y()}, k{vec.z()}
+    {}
+
+    /**
+     * Constexpr from a 4d vector
+     */
+    explicit constexpr Quat(Vec4 vec)
+        : r{vec.x()}, i{vec.y()}, j{vec.z()}, k{vec.w()}
+    {}
+
+    /**
+     * Convert to a 3d vector from imaginary parts
+     */
+    explicit constexpr operator Vec3() const
+    {
+        return {i, j, k};
+    }
+
+    /**
+     * Convert to a 4d vector
+     */
+    explicit constexpr operator Vec4() const
+    {
+        return {r, i, j, k};
+    }
 
     /**
      * Add another quaternion in place
      */
-    Quat& operator+=(Quat other);
+    constexpr Quat& operator+=(Quat other)
+    {
+        r += other.r;
+        i += other.i;
+        j += other.j;
+        k += other.k;
+        return* this;
+    }
 
     /**
      * Subtract another quaternion in place
      */
-    Quat& operator-=(Quat other);
+    constexpr Quat& operator-=(Quat other)
+    {
+        r -= other.r;
+        i -= other.i;
+        j -= other.j;
+        k -= other.k;
+        return* this;
+    }
+
+    /**
+     * Multiply by a scalar in place
+     */
+    constexpr Quat& operator*=(f32 scalar)
+    {
+        r *= scalar;
+        i *= scalar;
+        j *= scalar;
+        k *= scalar;
+        return* this;
+    }
+
+    /**
+     * Divide by a scalar in place
+     */
+    constexpr Quat& operator/=(f32 scalar)
+    {
+        r /= scalar;
+        i /= scalar;
+        j /= scalar;
+        k /= scalar;
+        return* this;
+    }
 };
 
 /**
  * Compare vectors
  */
-constexpr bool operator==(Vec2 lhs, Vec2 rhs)
+template<usize N>
+constexpr bool operator==(const Vec<N>& lhs, const Vec<N>& rhs)
 {
-    return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
-/**
- * Compare vectors
- */
-constexpr bool operator!=(Vec2 lhs, Vec2 rhs)
-{
-    return lhs.x != rhs.x || lhs.y != rhs.y;
-}
-
-/**
- * Compare vectors
- */
-constexpr bool operator==(Vec3 lhs, Vec3 rhs)
-{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
-}
-
-/**
- * Compare vectors
- */
-constexpr bool operator!=(Vec3 lhs, Vec3 rhs)
-{
-    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
-}
-
-/**
- * Compare vectors
- */
-constexpr bool operator==(Vec4 lhs, Vec4 rhs)
-{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
-}
-
-/**
- * Compare vectors
- */
-constexpr bool operator!=(Vec4 lhs, Vec4 rhs)
-{
-    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
-}
-
-/**
- * Compare vectors, treating values within epsilon as the same
- */
-inline bool vecEq2(Vec2 lhs, Vec2 rhs)
-{
-    return std::abs(lhs.x - rhs.x) < 1e-6 &&
-           std::abs(lhs.y - rhs.y) < 1e-6;
-}
-
-/**
- * Compare vectors, treating values within epsilon as the same
- */
-inline bool vecEq3(Vec3 lhs, Vec3 rhs)
-{
-    return std::abs(lhs.x - rhs.x) < 1e-6 &&
-           std::abs(lhs.y - rhs.y) < 1e-6 &&
-           std::abs(lhs.z - rhs.z) < 1e-6;
-}
-
-/**
- * Compare vectors, treating values within epsilon as the same
- */
-inline bool vecEq4(Vec4 lhs, Vec4 rhs)
-{
-    return std::abs(lhs.x - rhs.x) < 1e-6 &&
-           std::abs(lhs.y - rhs.y) < 1e-6 &&
-           std::abs(lhs.z - rhs.z) < 1e-6 &&
-           std::abs(lhs.w - rhs.w) < 1e-6;
+    const f32* r = rhs.vals;
+    for (const f32& l : lhs)
+    {
+        if (l != *(r++))
+            return false;
+    }
+    return true;
 }
 
 /**
  * Compare matrices
  */
-constexpr bool operator==(const Mat2& lhs, const Mat2& rhs)
+template<usize W, usize H>
+constexpr bool operator==(const Mat<W, H>& lhs, const Mat<W, H>& rhs)
 {
-    return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
-/**
- * Compare matrices
- */
-constexpr bool operator!=(const Mat2& lhs, const Mat2& rhs)
-{
-    return lhs.x != rhs.x || lhs.y != rhs.y;
-}
-
-/**
- * Compare matrices
- */
-constexpr bool operator==(const Mat3& lhs, const Mat3& rhs)
-{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
-}
-
-/**
- * Compare matrices
- */
-constexpr bool operator!=(const Mat3& lhs, const Mat3& rhs)
-{
-    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
-}
-
-/**
- * Compare matrices
- */
-constexpr bool operator==(const Mat4& lhs, const Mat4& rhs)
-{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
-}
-
-/**
- * Compare matrices
- */
-constexpr bool operator!=(const Mat4& lhs, const Mat4& rhs)
-{
-    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
+    const Vec<H>* r = rhs.cols;
+    for (const Vec<H>& l : lhs)
+    {
+        if (l != *(r++))
+            return false;
+    }
+    return true;
 }
 
 /**
@@ -741,412 +932,45 @@ constexpr bool operator==(Complex lhs, Complex rhs)
 }
 
 /**
- * Compare complex numbers
- */
-constexpr bool operator!=(Complex lhs, Complex rhs)
-{
-    return lhs.r != rhs.r || lhs.i != rhs.i;
-}
-
-/**
  * Compare quaternions
  */
-constexpr bool operator==(Quat lhs, Quat rhs)
+constexpr bool operator==(const Quat& lhs, const Quat& rhs)
 {
     return lhs.r == rhs.r && lhs.i == rhs.i && lhs.j == rhs.j && lhs.k == rhs.k;
 }
 
 /**
- * Compare quaternions
+ * Add vectors
  */
-constexpr bool operator!=(Quat lhs, Quat rhs)
+template<usize N, usize M> requires (N >= M)
+constexpr Vec<N> operator+(const Vec<N>& lhs, const Vec<M>& rhs)
 {
-    return lhs.r != rhs.r || lhs.i != rhs.i || lhs.j != rhs.j || lhs.k != rhs.k;
+    Vec<N> ret = lhs;
+    ret += rhs;
+    return ret;
 }
 
 /**
- * Add 2D vectors
+ * Add vectors
  */
-constexpr Vec2 operator+(Vec2 lhs, Vec2 rhs)
+template<usize N, usize M> requires (N < M)
+constexpr Vec<M> operator+(const Vec<N>& lhs, const Vec<M>& rhs)
 {
-    return {lhs.x + rhs.x, lhs.y + rhs.y};
+    Vec<M> ret = rhs;
+    ret += lhs;
+    return ret;
 }
 
 /**
- * Add 3D vectors
+ * Add matrices
  */
-constexpr Vec3 operator+(Vec3 lhs, Vec3 rhs)
+template<usize W, usize H>
+constexpr Mat<W, H> operator+(const Mat<W, H>& lhs, const Mat<W, H>& rhs)
 {
-    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
+    Mat<W, H> ret = lhs;
+    ret += rhs;
+    return ret;
 }
-
-/**
- * Add 4D vectors
- */
-constexpr Vec4 operator+(Vec4 lhs, Vec4 rhs)
-{
-    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
-}
-
-/**
- * Subtract 2D vectors
- */
-constexpr Vec2 operator-(Vec2 lhs, Vec2 rhs)
-{
-    return {lhs.x - rhs.x, lhs.y - rhs.y};
-}
-
-/**
- * Subtract 3D vectors
- */
-constexpr Vec3 operator-(Vec3 lhs, Vec3 rhs)
-{
-    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
-}
-
-/**
- * Subtract 4D vectors
- */
-constexpr Vec4 operator-(Vec4 lhs, Vec4 rhs)
-{
-    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
-}
-
-/**
- * Multiple a 2D vector by -1
- */
-constexpr Vec2 operator-(Vec2 v)
-{
-    return {-v.x, -v.y};
-}
-
-/**
- * Multiple a 3D vector by -1
- */
-constexpr Vec3 operator-(Vec3 v)
-{
-    return {-v.x, -v.y, -v.z};
-}
-
-/**
- * Multiple a 4D vector by -1
- */
-constexpr Vec4 operator-(Vec4 v)
-{
-    return {-v.x, -v.y, -v.z, -v.w};
-}
-
-/**
- * Multiply pairwise 2D vectors
- */
-constexpr Vec2 operator*(Vec2 lhs, Vec2 rhs)
-{
-    return {lhs.x * rhs.x, lhs.y * rhs.y};
-}
-
-/**
- * Multiply pairwise 3D vectors
- */
-constexpr Vec3 operator*(Vec3 lhs, Vec3 rhs)
-{
-    return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
-}
-
-/**
- * Multiply pairwise 4D vectors
- */
-constexpr Vec4 operator*(Vec4 lhs, Vec4 rhs)
-{
-    return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
-}
-
-/**
- * Multiply a scalar and a 2D vector
- */
-constexpr Vec2 operator*(f32 scalar, Vec2 vec)
-{
-    return {scalar * vec.x, scalar * vec.y};
-}
-
-/**
- * Multiply a scalar and a 2D vector
- */
-constexpr Vec2 operator*(Vec2 vec, f32 scalar)
-{
-    return {scalar * vec.x, scalar * vec.y};
-}
-
-/**
- * Multiply a scalar and a 3D vector
- */
-constexpr Vec3 operator*(f32 scalar, Vec3 vec)
-{
-    return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
-}
-
-/**
- * Multiply a scalar and a 3D vector
- */
-constexpr Vec3 operator*(Vec3 vec, f32 scalar)
-{
-    return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
-}
-
-/**
- * Multiply a scalar and a 4D vector
- */
-constexpr Vec4 operator*(f32 scalar, Vec4 vec)
-{
-    return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
-}
-
-/**
- * Multiply a scalar and a 4D vector
- */
-constexpr Vec4 operator*(Vec4 vec, f32 scalar)
-{
-    return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
-}
-
-/**
- * Divide pairwise 2D vectors
- *
- * Note, cannot divide by 0
- */
-constexpr Vec2 operator/(Vec2 lhs, Vec2 rhs)
-{
-    HG_ASSERT(rhs.x != 0 && rhs.y != 0);
-    return {lhs.x / rhs.x, lhs.y / rhs.y};
-}
-
-/**
- * Divide pairwise 3D vectors
- *
- * Note, cannot divide by 0
- */
-constexpr Vec3 operator/(Vec3 lhs, Vec3 rhs)
-{
-    HG_ASSERT(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
-    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
-}
-
-/**
- * Divide pairwise 4D vectors
- *
- * Note, cannot divide by 0
- */
-constexpr Vec4 operator/(Vec4 lhs, Vec4 rhs)
-{
-    HG_ASSERT(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
-    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
-}
-
-/**
- * Divide a 2D vector by a scalar
- *
- * Note, cannot divide by 0
- */
-constexpr Vec2 operator/(Vec2 vec, f32 scalar)
-{
-    HG_ASSERT(scalar != 0);
-    return {vec.x / scalar, vec.y / scalar};
-}
-
-/**
- * Divide a 3D vector by a scalar
- *
- * Note, cannot divide by 0
- */
-constexpr Vec3 operator/(Vec3 vec, f32 scalar)
-{
-    HG_ASSERT(scalar != 0);
-    return {vec.x / scalar, vec.y / scalar, vec.z / scalar};
-}
-
-/**
- * Divide a 4D vector by a scalar
- *
- * Note, cannot divide by 0
- */
-constexpr Vec4 operator/(Vec4 vec, f32 scalar)
-{
-    HG_ASSERT(scalar != 0);
-    return {vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
-}
-
-/**
- * Compute the dot product of 2D vectors
- */
-constexpr f32 vecDot2(Vec2 lhs, Vec2 rhs)
-{
-    return lhs.x * rhs.x + lhs.y * rhs.y;
-}
-
-/**
- * Compute the dot product of 3D vectors
- */
-constexpr f32 vecDot3(Vec3 lhs, Vec3 rhs)
-{
-    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
-}
-
-/**
- * Compute the dot product of 4D vectors
- */
-constexpr f32 vecDot4(Vec4 lhs, Vec4 rhs)
-{
-    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
-}
-
-/**
- * Compute the length squared of a 2D vector
- */
-constexpr f32 vecLenSqr2(Vec2 vec)
-{
-    return vecDot2(vec, vec);
-}
-
-/**
- * Compute the length squared of a 3D vector
- */
-constexpr f32 vecLenSqr3(Vec3 vec)
-{
-    return vecDot3(vec, vec);
-}
-
-/**
- * Compute the length squared of a 4D vector
- */
-constexpr f32 vecLenSqr4(Vec4 vec)
-{
-    return vecDot4(vec, vec);
-}
-
-/**
- * Compute the length of a 2D vector
- */
-f32 vecLen2(Vec2 vec);
-
-/**
- * Compute the length of a 3D vector
- */
-f32 vecLen3(Vec3 vec);
-
-/**
- * Compute the length of a 4D vector
- */
-f32 vecLen4(Vec4 vec);
-
-/**
- * Normalize a 2D vector
- *
- * Note, cannot normalize 0
- */
-Vec2 vecNorm2(Vec2 vec);
-
-/**
- * Normalize a 3D vector
- *
- * Note, cannot normalize 0
- */
-Vec3 vecNorm3(Vec3 vec);
-
-/**
- * Normalize a 4D vector
- *
- * Note, cannot normalize 0
- */
-Vec4 vecNorm4(Vec4 vec);
-
-/**
- * Compute the cross product of 2D vectors
- */
-f32 vecCross2(Vec2 lhs, Vec2 rhs);
-
-/**
- * Compute the cross product of 3D vectors
- */
-Vec3 vecCross3(Vec3 lhs, Vec3 rhs);
-
-/**
- * Add 2x2 matrices
- */
-Mat2 operator+(const Mat2& lhs, const Mat2& rhs);
-
-/**
- * Add 3x3 matrices
- */
-Mat3 operator+(const Mat3& lhs, const Mat3& rhs);
-
-/**
- * Add 4x4 matrices
- */
-Mat4 operator+(const Mat4& lhs, const Mat4& rhs);
-
-/**
- * Subtract 2x2 matrices
- */
-Mat2 operator-(const Mat2& lhs, const Mat2& rhs);
-
-/**
- * Subtract 3x3 matrices
- */
-Mat3 operator-(const Mat3& lhs, const Mat3& rhs);
-
-/**
- * Subtract 4x4 matrices
- */
-Mat4 operator-(const Mat4& lhs, const Mat4& rhs);
-
-/**
- * Multiply 2x2 matrices
- */
-Mat2 operator*(const Mat2& lhs, const Mat2& rhs);
-
-/**
- * Multiply 3x3 matrices
- */
-Mat3 operator*(const Mat3& lhs, const Mat3& rhs);
-
-/**
- * Multiply 4x4 matrices
- */
-Mat4 operator*(const Mat4& lhs, const Mat4& rhs);
-
-/**
- * Multiply a 2x2 matrix and a 2D vector
- */
-Vec2 operator*(const Mat2& lhs, Vec2 rhs);
-
-/**
- * Multiply a 3x3 matrix and a 3D vector
- */
-Vec3 operator*(const Mat3& lhs, Vec3 rhs);
-
-/**
- * Multiply a 4x4 matrix and a 4D vector
- */
-Vec4 operator*(const Mat4& lhs, Vec4 rhs);
-
-/**
- * Transpose the matrix
- */
-void matTranspose(u32 width, u32 height, f32* dst, const f32* mat);
-
-/**
- * Transpose the matrix
- */
-Mat2 matTranspose2(const Mat2& mat);
-
-/**
- * Transpose the matrix
- */
-Mat3 matTranspose3(const Mat3& mat);
-
-/**
- * Transpose the matrix
- */
-Mat4 matTranspose4(const Mat4& mat);
 
 /**
  * Add complex numbers
@@ -1154,6 +978,47 @@ Mat4 matTranspose4(const Mat4& mat);
 constexpr Complex operator+(Complex lhs, Complex rhs)
 {
     return Complex{lhs.r + rhs.r, lhs.i + rhs.i};
+}
+
+/**
+ * Add quaternions
+ */
+constexpr Quat operator+(Quat lhs, Quat rhs)
+{
+    return Quat{lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
+}
+
+/**
+ * Subtract vectors
+ */
+template<usize N, usize M> requires (N >= M)
+constexpr Vec<N> operator-(const Vec<N>& lhs, const Vec<M>& rhs)
+{
+    Vec<N> ret = lhs;
+    ret -= rhs;
+    return ret;
+}
+
+/**
+ * Subtract vectors
+ */
+template<usize N, usize M> requires (N < M)
+constexpr Vec<M> operator-(const Vec<N>& lhs, const Vec<M>& rhs)
+{
+    Vec<M> ret = rhs;
+    ret -= lhs;
+    return ret;
+}
+
+/**
+ * Subtract matrices
+ */
+template<usize W, usize H>
+constexpr Mat<W, H> operator-(const Mat<W, H>& lhs, const Mat<W, H>& rhs)
+{
+    Mat<W, H> ret = lhs;
+    ret -= rhs;
+    return ret;
 }
 
 /**
@@ -1165,50 +1030,6 @@ constexpr Complex operator-(Complex lhs, Complex rhs)
 }
 
 /**
- * Multiply complex numbers
- */
-constexpr Complex operator*(Complex lhs, Complex rhs)
-{
-    return Complex{lhs.r * rhs.r - lhs.i * rhs.i, lhs.r * rhs.i + lhs.i * rhs.r};
-}
-
-/**
- * Compute the conjugate of a complex number
- */
-constexpr Complex complexConj(Complex comp)
-{
-    return Complex{comp.r, -comp.i};
-}
-
-/**
- * Compute the absolute value squared of a complex number
- */
-f32 complexAbsSqr(Complex comp);
-
-/**
- * Compute the absolute value of a complex number
- */
-f32 complexAbs(Complex comp);
-
-/**
- * Normalize a complex number
- */
-Complex complexNorm(Complex comp);
-
-/**
- * Rotate a 2D vector using a complex number
- */
-Vec2 vecRot2(Complex lhs, Vec2 rhs);
-
-/**
- * Add quaternions
- */
-constexpr Quat operator+(Quat lhs, Quat rhs)
-{
-    return Quat{lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
-}
-
-/**
  * Subtract quaternions
  */
 constexpr Quat operator-(Quat lhs, Quat rhs)
@@ -1217,14 +1038,372 @@ constexpr Quat operator-(Quat lhs, Quat rhs)
 }
 
 /**
+ * Negate a vector
+ */
+template<usize N>
+constexpr Vec<N> operator-(const Vec<N>& vec)
+{
+    Vec<N> ret = vec;
+    ret *= -1.0f;
+    return ret;
+}
+
+/**
+ * Negate a matrix
+ */
+template<usize W, usize H>
+constexpr Mat<W, H> operator-(const Mat<W, H>& mat)
+{
+    Mat<W, H> ret = mat;
+    ret *= -1.0f;
+    return ret;
+}
+
+/**
+ * Negate a complex number
+ */
+constexpr Complex operator-(Complex c)
+{
+    return {-c.r, -c.i};
+}
+
+/**
+ * Negate a quaternion
+ */
+constexpr Quat operator-(Quat q)
+{
+    return {-q.r, -q.i, -q.j, -q.k};
+}
+
+/**
+ * Multiply vectors pairwise
+ */
+template<usize N, usize M> requires (N >= M)
+constexpr Vec<N> operator*(const Vec<N>& lhs, const Vec<M>& rhs)
+{
+    Vec<N> ret = lhs;
+    ret *= rhs;
+    return ret;
+}
+
+/**
+ * Multiply vectors pairwise
+ */
+template<usize N, usize M> requires (N < M)
+constexpr Vec<M> operator*(const Vec<N>& lhs, const Vec<M>& rhs)
+{
+    Vec<M> ret = rhs;
+    ret *= lhs;
+    return ret;
+}
+
+/**
+ * Multiply a scalar and a vector
+ */
+template<usize N>
+constexpr Vec<N> operator*(f32 s, const Vec<N>& vec)
+{
+    Vec<N> ret = vec;
+    ret *= s;
+    return ret;
+}
+
+/**
+ * Multiply a vector and a scalar
+ */
+template<usize N>
+constexpr Vec<N> operator*(const Vec<N>& vec, f32 s)
+{
+    Vec<N> ret = vec;
+    ret *= s;
+    return ret;
+}
+
+/**
+ * Multiply matrices
+ */
+template<usize WL, usize HL, usize WR, usize HR> requires (WL == HR)
+constexpr Mat<WR, HL> operator*(const Mat<WL, HL>& lhs, const Mat<WR, HR>& rhs)
+{
+    Mat<WR, HL> ret;
+    for (u32 col = 0; col < WR; ++col)
+    {
+        for (u32 row = 0; row < HL; ++row)
+        {
+            ret[col][row] = 0.0f;
+            for (u32 k = 0; k < WL; ++k)
+            {
+                ret[col][row] += lhs[k][row] * rhs[col][k];
+            }
+        }
+    }
+    return ret;
+}
+
+/**
+ * Multiply a matrix and a vector
+ */
+template<usize W, usize H>
+constexpr Vec<H> operator*(const Mat<W, H>& mat, const Vec<W>& vec)
+{
+    Vec<H> ret;
+    for (u32 i = 0; i < H; ++i)
+    {
+        ret[i] = 0.0f;
+        for (u32 j = 0; j < W; ++j)
+        {
+            ret[i] += mat[j][i] * vec[j];
+        }
+    }
+    return ret;
+}
+
+/**
+ * Multiply a matrix and a scalar
+ */
+template<usize W, usize H>
+constexpr Mat<W, H> operator*(const Mat<W, H>& mat, f32 scalar)
+{
+    Mat<W, H> ret = mat;
+    ret *= scalar;
+    return ret;
+}
+
+/**
+ * Multiply a scalar and a matrix
+ */
+template<usize W, usize H>
+constexpr Mat<W, H> operator*(f32 scalar, const Mat<W, H>& mat)
+{
+    Mat<W, H> ret = mat;
+    ret *= scalar;
+    return ret;
+}
+
+/**
+ * Divide a matrix and a scalar
+ */
+template<usize W, usize H>
+constexpr Mat<W, H> operator/(const Mat<W, H>& mat, f32 scalar)
+{
+    Mat<W, H> ret = mat;
+    ret /= scalar;
+    return ret;
+}
+
+/**
+ * Multiply complex numbers
+ */
+constexpr Complex operator*(Complex lhs, Complex rhs)
+{
+    return {
+        lhs.r * rhs.r - lhs.i * rhs.i,
+        lhs.r * rhs.i + lhs.i * rhs.r
+    };
+}
+
+/**
  * Multiply quaternions
  */
-Quat operator*(Quat lhs, Quat rhs);
+constexpr Quat operator*(const Quat& lhs, const Quat& rhs)
+{
+    return {
+        lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
+        lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
+        lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
+        lhs.r * rhs.k + lhs.i * rhs.j - lhs.j * rhs.i + lhs.k * rhs.r,
+    };
+}
+
+/**
+ * Multiply a quaternion and a scalar
+ */
+constexpr Quat operator*(Quat lhs, f32 rhs)
+{
+    lhs *= rhs;
+    return lhs;
+}
+
+/**
+ * Divide vectors pairwise
+ */
+template<usize N, usize M> requires (N >= M)
+constexpr Vec<N> operator/(const Vec<N>& lhs, const Vec<M>& rhs)
+{
+    Vec<N> ret = lhs;
+    ret /= rhs;
+    return ret;
+}
+
+/**
+ * Divide vectors pairwise
+ */
+template<usize N, usize M> requires (N < M)
+constexpr Vec<M> operator/(const Vec<N>& lhs, const Vec<M>& rhs)
+{
+    Vec<M> ret = rhs;
+    ret /= lhs;
+    return ret;
+}
+
+/**
+ * Divide a vector and a scalar
+ */
+template<usize N>
+constexpr Vec<N> operator/(const Vec<N>& vec, f32 s)
+{
+    Vec<N> ret = vec;
+    ret /= s;
+    return ret;
+}
+
+/**
+ * Divide a complex number and a scalar
+ */
+constexpr Complex operator/(Complex lhs, f32 rhs)
+{
+    lhs /= rhs;
+    return lhs;
+}
+
+/**
+ * Divide a quaternion and a scalar
+ */
+constexpr Quat operator/(Quat lhs, f32 rhs)
+{
+    lhs /= rhs;
+    return lhs;
+}
+
+/**
+ * Compute the vector dot product
+ */
+template<usize N>
+constexpr f32 dot(Vec<N> lhs, Vec<N> rhs)
+{
+    f32 ret = 0.0f;
+    f32* l = lhs.vals;
+    for (f32 r : rhs)
+    {
+        ret += *(l++) * r;
+    }
+    return ret;
+}
+
+/**
+ * Compute the length squared of a vector
+ */
+template<usize N>
+constexpr f32 lengthSquared(Vec<N> vec)
+{
+    return dot(vec, vec);
+}
+
+/**
+ * Compute the length of a vector
+ */
+template<usize N>
+f32 length(Vec<N> vec)
+{
+    return std::sqrt(lengthSquared(vec));
+}
+
+/**
+ * Normalize a 2D vector
+ *
+ * Note, cannot normalize 0
+ */
+template<usize N>
+Vec<N> normalize(const Vec<N>& vec)
+{
+    f32 len = length(vec);
+    HG_ASSERT(len != 0.0f);
+    return vec / len;
+}
+
+/**
+ * Compute the cross product of 2D vectors
+ */
+constexpr f32 cross(Vec<2> lhs, Vec<2> rhs)
+{
+    return lhs.x() * rhs.y() - lhs.y() * rhs.x();
+}
+
+/**
+ * Compute the cross product of 3D vectors
+ */
+constexpr Vec<3> cross(Vec<3> lhs, Vec<3> rhs)
+{
+    return {
+        lhs[1] * rhs[2] - lhs[2] * rhs[1],
+        lhs[2] * rhs[0] - lhs[0] * rhs[2],
+        lhs[0] * rhs[1] - lhs[1] * rhs[0],
+    };
+}
+
+/**
+ * Transpose the matrix
+ */
+template<usize W, usize H>
+constexpr Mat<H, W> transpose(const Mat<W, H>& mat)
+{
+    Mat<H, W> ret;
+    for (u32 i = 0; i < W; ++i)
+    {
+        for (u32 j = 0; j < H; ++j)
+        {
+            ret[j][i] = mat[i][j];
+        }
+    }
+    return ret;
+}
+
+/**
+ * Compute the conjugate of a complex number
+ */
+constexpr Complex conjugate(Complex comp)
+{
+    return Complex{comp.r, -comp.i};
+}
+
+/**
+ * Compute the absolute value squared of a complex number
+ */
+constexpr f32 absSqr(Complex c)
+{
+    return c.r * c.r + c.i * c.i;
+}
+
+/**
+ * Compute the absolute value squared of a complex number
+ */
+inline f32 abs(Complex c)
+{
+    return std::sqrt(absSqr(c));
+}
+
+/**
+ * Normalize a complex number
+ */
+inline Complex normalize(Complex c)
+{
+    f32 len = abs(c);
+    HG_ASSERT(len != 0.0f);
+    return c / len;
+}
+
+/**
+ * Rotate a 2D vector using a complex number
+ */
+constexpr Vec<2> rotate(Complex lhs, Vec<2> rhs)
+{
+    return Vec<2>{lhs * Complex{rhs}};
+}
 
 /**
  * Compute the conjugate of a quaternion
  */
-constexpr Quat quatConj(Quat quat)
+constexpr Quat conjugate(Quat quat)
 {
     return Quat{quat.r, -quat.i, -quat.j, -quat.k};
 }
@@ -1232,37 +1411,89 @@ constexpr Quat quatConj(Quat quat)
 /**
  * Return the absolute value squared of a quaternion
  */
-f32 quatAbsSqr(Quat quat);
+constexpr f32 absSqr(Quat quat)
+{
+    return quat.r * quat.r + quat.i * quat.i + quat.j * quat.j + quat.k * quat.k;
+}
 
 /**
  * Return the absolute value of a quaternion
  */
-f32 quatAbs(Quat quat);
+inline f32 abs(Quat quat)
+{
+    return std::sqrt(absSqr(quat));
+}
 
 /**
  * Return a normalized quaternion
  */
-Quat quatNorm(Quat q);
+inline Quat normalize(Quat q)
+{
+    f32 len = abs(q);
+    HG_ASSERT(len != 0.0f);
+    return q / len;
+}
 
 /**
  * Create a rotation quaternion from an axis and angle
  */
-Quat quatAxisAngle(Vec3 axis, f32 angle);
+inline Quat quatAxisAngle(Vec<3> axis, f32 angle)
+{
+    f32 halfAngle = angle * 0.5f;
+    f32 sinHalfAngle = std::sin(halfAngle);
+    return Quat{std::cos(halfAngle), axis * sinHalfAngle};
+}
+
 
 /**
  * Create a rotation quaternion between two directions
  */
-Quat quatBetween(Vec3 from, Vec3 to);
+inline Quat quatBetween(Vec<3> from, Vec<3> to)
+{
+    HG_ASSERT(from != Vec<3>{0.0f});
+    HG_ASSERT(to != Vec<3>{0.0f});
+
+    from = normalize(from);
+    to = normalize(to);
+
+    f32 dot = hg::dot(from, to);
+
+    if (dot > 1 - epsilonf)
+    {
+        return Quat{1};
+    }
+
+    if (dot < -1 + epsilonf)
+    {
+        Vec<3> axis = std::abs(from.x()) >= 1 - epsilonf
+            ? cross(from, {0, 1, 0})
+            : cross(from, {1, 0, 0});
+        return normalize(Quat(0, axis));
+    }
+
+    Vec<3> axis = cross(from, to);
+    return normalize(Quat{dot + 1, axis});
+}
 
 /**
  * Rotate a 3D vector using a quaternion
  */
-Vec3 vecRot3(Quat lhs, Vec3 rhs);
+constexpr Vec<3> rotate(Quat quat, Vec<3> vec)
+{
+    return Vec<3>{quat * Quat{0, vec} * conjugate(quat)};
+}
 
 /**
  * Rotate a 3x3 matrix using a quaternion
  */
-Mat3 matRot3(Quat lhs, Mat3 rhs);
+constexpr Mat<3> rotate(Quat quat, Mat<3> mat)
+{
+    return Mat<3>{
+        rotate(quat, mat.x()),
+        rotate(quat, mat.y()),
+        rotate(quat, mat.z()),
+    };
+}
 
 /**
  * Coordinate conventions for the rendering math in this header
@@ -1345,4 +1576,3 @@ Mat4 matOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far
 Mat4 matPerspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 } // namespace hg
-

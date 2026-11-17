@@ -24,7 +24,7 @@ TEST(testSphereClosestPoint)
 {
     Sphere s{{0, 0, 0}, 5};
     Vec3 p = closestPointSphere({10, 0, 0}, s);
-    ASSERT(std::abs(p.x - 5.0f) < FLT_EPSILON);
+    ASSERT(std::abs(p.x() - 5.0f) < FLT_EPSILON);
 }
 
 TEST(testSphereIntersect)
@@ -59,7 +59,7 @@ TEST(testBoxContainsClosestPoint)
     ASSERT(containsPointBox({10, 10, 10}, b));
     ASSERT(!containsPointBox({-0.01f, 5, 5}, b));
     Vec3 p = closestPointBox({-5, 5, 5}, b);
-    ASSERT(p.x == 0 && p.y == 5 && p.z == 5);
+    ASSERT(p.x() == 0 && p.y() == 5 && p.z() == 5);
 }
 
 TEST(testBoxIntersect)
@@ -83,7 +83,7 @@ TEST(testBoxSphereIntersect)
 TEST(testPlaneFromPoint)
 {
     Plane p = planeFromPoint({0, 5, 0}, {0, 1, 0});
-    ASSERT(vecEq3(p.normal, {0, 1, 0}));
+    ASSERT((p.normal == Vec3{0, 1, 0}));
     ASSERT(std::abs(p.dist - 5.0f) < FLT_EPSILON);
 }
 
@@ -253,7 +253,7 @@ TEST(testBoxClosestPointInside)
 {
     Box b{{0, 0, 0}, {10, 10, 10}};
     Vec3 p = closestPointBox({5, 5, 5}, b);
-    ASSERT(p.x == 5 && p.y == 5 && p.z == 5);
+    ASSERT(p.x() == 5 && p.y() == 5 && p.z() == 5);
 }
 
 TEST(testIntersectRayTriMiss)
@@ -266,14 +266,14 @@ TEST(testIntersectRayTriMiss)
 TEST(testPlaneFromPointNormal)
 {
     Plane p = planeFromPoint({3, 7, 2}, {1, 0, 0});
-    ASSERT(vecEq3(p.normal, {1, 0, 0}));
+    ASSERT((p.normal == Vec3{1, 0, 0}));
     ASSERT(std::abs(p.dist - 3.0f) < FLT_EPSILON);
 }
 
 TEST(testTriNormal)
 {
     Tri tri{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
-    ASSERT(vecEq3(tri.a, {1, 0, 0}));
-    ASSERT(vecEq3(tri.b, {0, 1, 0}));
-    ASSERT(vecEq3(tri.c, {0, 0, 1}));
+    ASSERT((tri.a == Vec3{1, 0, 0}));
+    ASSERT((tri.b == Vec3{0, 1, 0}));
+    ASSERT((tri.c == Vec3{0, 0, 1}));
 }

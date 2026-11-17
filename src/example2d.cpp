@@ -67,8 +67,8 @@ int main()
         if (input->isButtonDown(Button_lmouse))
         {
             Vec2 md = input->mouseDelta();
-            camera.position.x -= md.x;
-            camera.position.y -= md.y;
+            camera.position.x() -= md.x();
+            camera.position.y() -= md.y();
         }
         camera.update();
 
@@ -79,7 +79,7 @@ int main()
         if (spriteMove != Vec2{0.0f})
         {
             f32 moveSpeed = 0.3f;
-            spritePos += vecNorm2(spriteMove) * moveSpeed * static_cast<f32>(delta);
+            spritePos += normalize(spriteMove) * moveSpeed * static_cast<f32>(delta);
         }
 
         spriteRot += (input->isButtonDown(Button_e) - input->isButtonDown(Button_q)) * 2.0f * static_cast<f32>(delta);

@@ -38,7 +38,7 @@ struct MeshVertex {
      * Construct the vertex
      */
     MeshVertex(Vec3 pos, Vec3 norm, Vec4 tan, Vec2 uv)
-        : pos{pos}, uvU{uv.x}, norm{norm}, uvV{uv.y}, tan{tan}
+        : pos{pos}, uvU{uv.x()}, norm{norm}, uvV{uv.y()}, tan{tan}
     {}
 };
 

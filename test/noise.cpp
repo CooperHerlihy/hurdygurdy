@@ -36,7 +36,7 @@ TEST(testNoiseVec1DRange)
 TEST(testNoiseVec2DUnitLength)
 {
     Vec2 v = noiseVec2D(42, {3.14f, 2.72f});
-    ASSERT(std::abs(vecLen2(v) - 1.0f) < FLT_EPSILON);
+    ASSERT(std::abs(length(v) - 1.0f) < FLT_EPSILON);
 }
 
 TEST(testNoiseNorm2DRange)
