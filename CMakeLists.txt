@@ -114,38 +114,41 @@ add_custom_target(resources DEPENDS ${RESOURCE_HEADERS})
 add_executable(embed src/embed.c)
 
 set(SHADERS
-    render2d.vert
-    render2d.frag
-    render3d.vert
-    render3d.frag
-    compute.comp
-    tri.vert
-    tri.frag
-    sampler.frag
-    mul.comp
-    buf_to_img.comp
-    uniform.vert
-    uniform.frag
-    storage_img.comp
-    depth.vert
-    depth.frag
-    instance.vert
-    instance.frag
-    blur.comp
-    invert.frag
-    noise.comp
+    src/shaders/render2d.vert
+    src/shaders/render2d.frag
+    src/shaders/render3d.vert
+    src/shaders/render3d.frag
+    test/shaders/compute.comp
+    test/shaders/tri.vert
+    test/shaders/tri.frag
+    test/shaders/sampler.frag
+    test/shaders/mul.comp
+    test/shaders/buf_to_img.comp
+    test/shaders/uniform.vert
+    test/shaders/uniform.frag
+    test/shaders/storage_img.comp
+    test/shaders/depth.vert
+    test/shaders/depth.frag
+    test/shaders/instance.vert
+    test/shaders/instance.frag
+    test/shaders/blur.comp
+    test/shaders/invert.frag
+    test/shaders/noise.comp
 )
 
 set(SHADER_HEADERS)
 foreach(shader ${SHADERS})
-    set(shader_src ${CMAKE_CURRENT_SOURCE_DIR}/shaders/${shader})
-    set(spv ${CMAKE_CURRENT_BINARY_DIR}/shaders/${shader}.spv)
-    set(spv_h ${CMAKE_CURRENT_BINARY_DIR}/shaders/${shader}.spv.h)
+    set(shader_src ${CMAKE_CURRENT_SOURCE_DIR}/${shader})
+    set(shader_dir ${CMAKE_CURRENT_BINARY_DIR}/${shader})
+    get_filename_component(shader_dir ${shader_dir} DIRECTORY)
+    get_filename_component(shader_name ${shader} NAME)
+    set(spv ${shader_dir}/${shader_name}.spv)
+    set(spv_h ${shader_dir}/${shader_name}.spv.h)
     add_custom_command(
         OUTPUT ${spv_h}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_dir}
         COMMAND glslc -o ${spv} ${shader_src} -I${CMAKE_CURRENT_SOURCE_DIR}/include
-        COMMAND embed ${spv} ${shader}.spv ${spv_h}
+        COMMAND embed ${spv} ${shader_name}.spv ${spv_h}
         DEPENDS embed ${shader_src}
             ${CMAKE_CURRENT_SOURCE_DIR}/include/hurdygurdy.glsl
         COMMENT "Compiling ${shader}"
@@ -238,6 +241,7 @@ add_dependencies(hurdygurdy_core shaders resources)
 target_include_directories(hurdygurdy_core
     PUBLIC
         ${INCLUDE_DIRS}
+        ${CMAKE_CURRENT_BINARY_DIR}/src
         ${VulkanHeaders_INCLUDE_DIR}
 )
 
@@ -302,6 +306,7 @@ add_executable(tests
     test/ecs.cpp
 )
 target_link_libraries(tests hurdygurdy)
+target_include_directories(tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/test)
 target_precompile_headers(tests PRIVATE <hurdygurdy.hpp>)
 target_compile_options(tests PRIVATE ${STRICT_FLAGS} ${TESTS_EXCEPTION_FLAG})
 target_compile_definitions(tests PRIVATE HG_LOGGING=1)

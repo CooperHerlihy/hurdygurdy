@@ -11,7 +11,7 @@ namespace hg {
 std::optional<Library> Library::load(std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
 
     std::optional<Library> lib = std::make_optional<Library>();
     lib->lib = dlopen(p.c_str(), RTLD_LAZY);
@@ -33,7 +33,7 @@ Library::~Library() noexcept
 std::optional<void*> Library::loadSymbol(std::string_view name)
 {
     ArenaScope scratch = getScratch();
-    string_temp n{name, scratch};
+    StringTemp n{name, scratch};
 
     std::optional<void*> fn = dlsym(lib, n.c_str());
     if (*fn == nullptr)

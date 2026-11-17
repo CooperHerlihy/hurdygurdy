@@ -1,10 +1,10 @@
 #include "tests.hpp"
-#include "hg/window.hpp"
 #include "hg/time.hpp"
+#include "hg/gpu.hpp"
 
 using namespace hg;
 
-static constexpr i32 maxTests = 4096;
+static constexpr i32 maxTests = 1 << 16;
 
 struct TestEntry {
     const char* name;
@@ -29,9 +29,7 @@ static i32 failCount = 0;
 
 int main()
 {
-    std::unique_ptr<InputDevice> input = InputDevice::create();
-
-    if (!initGpu(input->getVulkanExtensions()))
+    if (!initGpu({}))
         HG_PANIC("Could not initialize GPU\n");
     HG_DEFER(deinitGpu());
 

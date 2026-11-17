@@ -267,12 +267,12 @@ bool operator==(const ArenaAllocator<T>& lhs, const ArenaAllocator<U>& rhs) noex
 /**
  * A string using an arena allocator
  */
-using string_temp = std::basic_string<char, std::char_traits<char>, ArenaAllocator<char>>;
+using StringTemp = std::basic_string<char, std::char_traits<char>, ArenaAllocator<char>>;
 
 /**
  * A vector using an arena allocator
  */
 template<typename T>
-using vector_temp = std::vector<T, ArenaAllocator<T>>;
+using VectorTemp = std::vector<T, ArenaAllocator<T>>;
 
 } // namespace hg

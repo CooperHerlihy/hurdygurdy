@@ -14,7 +14,7 @@ namespace hg {
 std::optional<std::vector<u8>> loadFile(std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
     const char* cPath = p.c_str();
 
     struct stat st;
@@ -56,7 +56,7 @@ std::optional<std::vector<u8>> loadFile(std::string_view path)
 bool storeFile(std::span<u8> bin, std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
     const char* cPath = p.c_str();
 
     int fd = open(cPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);

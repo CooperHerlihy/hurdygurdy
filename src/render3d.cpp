@@ -170,7 +170,7 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
     if (dirLights.size() > 0)
     {
         ArenaScope scratch = getScratch();
-        vector_temp<Light> dirBuf{scratch};
+        VectorTemp<Light> dirBuf{scratch};
         dirBuf.reserve(dirLights.size());
 
         for (LightData& light : dirLights)
@@ -183,7 +183,7 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
     if (pointLights.size() > 0)
     {
         ArenaScope scratch = getScratch();
-        vector_temp<Light> pointBuf{scratch};
+        VectorTemp<Light> pointBuf{scratch};
         pointBuf.reserve(pointLights.size());
 
         for (LightData& light : pointLights)

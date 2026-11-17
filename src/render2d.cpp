@@ -144,7 +144,7 @@ bool assetLoadImpl(AssetData<TextureData>* data)
 bool storeTexturePng(const TextureData& texture, std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
 
     if (!stbi_write_png(
          p.c_str(),
@@ -163,7 +163,7 @@ bool storeTexturePng(const TextureData& texture, std::string_view path)
 bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
 
     if (!stbi_write_jpg(
          p.c_str(),
@@ -182,7 +182,7 @@ bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view p
 bool storeTextureHdr(const TextureData& texture, std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
 
     if (!stbi_write_hdr(
          p.c_str(),

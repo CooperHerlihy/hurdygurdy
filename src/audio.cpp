@@ -190,7 +190,7 @@ bool storeSoundWav(const Sound& sound, std::string_view path)
     }
 
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
     const char* cPath = p.c_str();
 
     drwav_data_format format{};

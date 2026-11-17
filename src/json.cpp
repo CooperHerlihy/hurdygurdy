@@ -3,7 +3,6 @@
 #include "hg/macros.hpp"
 #include "hg/error.hpp"
 #include "hg/memory.hpp"
-#include "hg/strings.hpp"
 
 #include <optional>
 #include <string_view>
@@ -434,7 +433,7 @@ static bool readJsonString(std::string& val, std::string_view str, u32& head)
         return false;
 
     ArenaScope scratch = getScratch();
-    string_temp temp{scratch};
+    StringTemp temp{scratch};
 
     ++count;
     if (count == str.length())

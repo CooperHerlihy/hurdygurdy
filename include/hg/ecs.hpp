@@ -728,11 +728,11 @@ struct EntitySerializer {
     /**
      * The indices of entities, if writing
      */
-    vector_temp<u32> entityToIdx{};
+    VectorTemp<u32> entityToIdx{};
     /**
      * The entities by index, if reading
      */
-    vector_temp<Entity> idxToEntity{};
+    VectorTemp<Entity> idxToEntity{};
 
     /**
      * Initialize with arena

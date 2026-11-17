@@ -3,7 +3,6 @@
 #include "hg/inttypes.hpp"
 #include "hg/macros.hpp"
 #include "hg/hash.hpp"
-// #include "hg/memory.hpp"
 
 namespace hg {
 

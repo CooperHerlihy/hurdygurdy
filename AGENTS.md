@@ -2,15 +2,26 @@
 
 Modern C++20 game development library
 
-## Hard Rules
+## Rules
 
 **Always inform. Never act without approval.**
-- Never run scripts without backups
-- No exceptions, RTTI, third-party code, or reformatting
+- never run scripts without backups
+- never use exceptions or RTTI
+- never introduce third-party code
+- use `i8`, `u32`, `f64`, etc., not `int`, `float`, `std::size_t`, etc.
+- use `HG_ASSERT` for assertions, assert all preconditions and invariants
+- use `setError("msg")` and return `std::optional` for recoverable errors
+- use `HG_PANIC` for unrecoverable errors
+- use RAII, generally delete copy constructors, and constructors must not fail
+- use `HG_DEFER` to defer C-style destructor functions
+- prefer `StringTemp` and `VectorTemp`, or `getScratch()`, for temporary allocations
+- prefer `forPar()` and `callPar()` for concurrency
+- use `HG_LOG` for temporary log statements
+- otherwise, prefer to use the standard library
+
+- when writing tests, read AGENTS-test.md
 
 ## Build
-
-### Linux / macOS
 
 ```
 debug:
@@ -43,101 +54,5 @@ valgrind:
   valgrind --leak-check=full ./build/tests
 ```
 
-### Windows
+Windows: open a **Visual Studio 2022 x64 developer shell** first, then cmake
 
-Open a **Visual Studio 2022 x64 developer shell** first, then cmake
-
-## Conventions
-
-- 4-space indent
-- Braces: next line for code blocks, same line for struct/initialization
-- `hg` namespace, PascalCase types, camelCase fns/vars, `HG_UPPER_CASE` macros
-- Integer types: use `inttypes.hpp`, not `int`, `float`, `std::size_t`, etc.
-- RAII, no failing constructors, use static create() with std::optional, generally delete copy ctors
-- Assertions: `HG_ASSERT`, Recoverable errors: `setError()` and `std::optional`, Unrecoverable errors: `HG_PANIC`
-- Memory: prefer `ArenaScope scratch = getScratch()` and `string_temp`/`vector_temp` > std:: containers
-- Concurrency: forPar() > callPar() > std:: primitives
-
-## Contents
-
-`include/` - public headers:
-- `hurdygurdy.hpp`
-- `hurdygurdy.glsl`
-- `hg/inttypes.hpp` - `i8`, `u32`, `f64`, `usize`, etc.
-- `hg/macros.hpp` - HG_DEFER, HG_LOG, HG_WARN
-- `hg/error.hpp`
-- `hg/init.hpp`
-- `hg/utility.hpp`
-- `hg/strings.hpp`
-- `hg/memory.hpp` - ArenaScope, getScratch(), string_temp, vector_temp
-- `hg/concurrency.hpp`
-- `hg/math.hpp`
-- `hg/geometry2d.hpp`
-- `hg/geometry3d.hpp`
-- `hg/noise.hpp`
-- `hg/hash.hpp`
-- `hg/serialization.hpp`
-- `hg/json.hpp`
-- `hg/assets.hpp`
-- `hg/time.hpp`
-- `hg/dynlib.hpp`
-- `hg/gpu.hpp`
-- `hg/window.hpp`
-- `hg/audio.hpp`
-- `hg/render2d.hpp`
-- `hg/render3d.hpp`
-- `hg/ecs.hpp`
-- `hg/imgui.hpp` - ImGui impl for HurdyGurdy
-
-`src/` - implementation:
-- `stb.c` - stb library impl
-- `vk_mem_alloc.cpp` - Vulkan Memory Allocator impl
-- `embed.c` - build tool: converts a file into a C byte array
-- `internal.hpp` - internal declarations
-- `platform_test.cpp` - manual test app: windows, input, audio, ImGui, profiler
-- `example2d.cpp` - standalone 2D demo app
-- `example3d.cpp` - standalone 3D demo app
-- `*.cpp` - remaining implementations, named like headers
-
-`src/vulkan/` - Vulkan implementation:
-- `vulkan_internal.hpp` - internal header, Gpu*Data structs, VulkanState, Frame, inline enum converters
-- `vulkan.cpp` - internal infrastructure: rglobals VulkanState, init/deinit
-- `loader.cpp` - VulkanFuncs struct, dynamic library loading, vk* wrapper thunks
-- `gpu.cpp` - public API impl: GpuBuffer/Image/View/Pipeline, cmds, barriers, render/compute passes, frame begin/end
-
-`src/wayland/` - Wayland window implementation:
-- `wayland_platform.hpp` - internal api header
-- `wayland.cpp` - Wayland window management, input handling
-- `wayland-protocol.h` - hand-written Wayland protocol types, listener structs, interface externs
-- `wayland-protocol.c` - hand-written Wayland protocol interface data tables
-- `wayland-version.h` - generated version header (committed, do not regenerate)
-
-Note: the protocol functions in `wayland.cpp` call through the `wlFuncs` function pointer struct
-(see top of `wayland.cpp`). The `wl_*_interface` data globals come from `wayland-protocol.c`.
-
-`src/x11/` - X11 window implementation:
-- `x11_platform.hpp` - internal api header
-- `x11.cpp`
-
-`src/pipewire/` - PipeWire audio implementation:
-- `pipewire_platform.hpp` - internal api header
-- `pipewire.cpp`
-
-`src/win32/` - Windows (Win32) window/input and WASAPI audio implementation:
-- `win32_window.hpp` - internal api header, InputDeviceWin32, WindowWin32
-- `win32_audio.hpp` - internal api header, AudioDeviceWasapi
-- `win32.cpp`
-
-`src/sdl/` - SDL implementation:
-- `sdl_platform.hpp` - internal api header
-- `sdl.cpp`
-
-`shaders/` - GLSL shaders:
-- `render2d.vert`/`render2d.frag` - 2D sprite rendering
-- `render3d.vert`/`render3d.frag` - 3D model rendering
-- `skybox.vert`/`skybox.frag` - skybox rendering
-
-`test/` - tests:
-- `tests.hpp` - test framework: TEST/ASSERT registration macros, LifecycleT helper
-- `tests.cpp` - runs all tests
-- `*.cpp` - remaining tests, named like headers

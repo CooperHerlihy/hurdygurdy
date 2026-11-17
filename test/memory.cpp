@@ -306,7 +306,7 @@ TEST(testArenaAllocatorString)
 {
     Arena a{256};
     ArenaScope scope{&a};
-    string_temp s{ArenaAllocator<char>{scope}};
+    StringTemp s{ArenaAllocator<char>{scope}};
     s = "hello";
     s += " world";
     ASSERT(s == "hello world");
@@ -316,7 +316,7 @@ TEST(testArenaAllocatorLongString)
 {
     Arena a{256};
     ArenaScope scope{&a};
-    string_temp s{ArenaAllocator<char>{scope}};
+    StringTemp s{ArenaAllocator<char>{scope}};
     s.assign(64, 'x');
     ASSERT(s.size() == 64);
     ASSERT(s[0] == 'x');
@@ -327,7 +327,7 @@ TEST(testArenaAllocatorVector)
 {
     Arena a{256};
     ArenaScope scope{&a};
-    vector_temp<u32> v{ArenaAllocator<u32>{&a}};
+    VectorTemp<u32> v{ArenaAllocator<u32>{&a}};
     v.push_back(1);
     v.push_back(2);
     v.push_back(3);
@@ -343,7 +343,7 @@ TEST(testArenaAllocatorVectorScopeRestore)
     ASSERT(reserved != nullptr);
     {
         ArenaScope scope{&a};
-        vector_temp<u32> v{ArenaAllocator<u32>{scope}};
+        VectorTemp<u32> v{ArenaAllocator<u32>{scope}};
         v.resize(16);
         ASSERT(v.size() == 16);
     }

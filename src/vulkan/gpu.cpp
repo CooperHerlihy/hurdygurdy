@@ -838,7 +838,7 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     depthStencilState.minDepthBounds = 0.0f;
     depthStencilState.maxDepthBounds = 1.0f;
 
-    vector_temp<VkPipelineColorBlendAttachmentState> colorBlendAttachments{scratch};
+    VectorTemp<VkPipelineColorBlendAttachmentState> colorBlendAttachments{scratch};
     colorBlendAttachments.reserve(config.colorAttachmentFormats.size());
 
     for (u32 i = 0; i < config.colorAttachmentFormats.size(); ++i)
@@ -877,7 +877,7 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     dynamicState.dynamicStateCount = static_cast<u32>(std::size(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
-    vector_temp<VkFormat> colorFormats{scratch};
+    VectorTemp<VkFormat> colorFormats{scratch};
     colorFormats.reserve(static_cast<u32>(config.colorAttachmentFormats.size()));
     for (u32 i = 0; i < config.colorAttachmentFormats.size(); ++i)
     {
@@ -1079,9 +1079,9 @@ void gpuMemoryBarrier(
 {
     ArenaScope scratch = getScratch();
 
-    vector_temp<VkBufferMemoryBarrier2> vkBufferBarriers{scratch};
+    VectorTemp<VkBufferMemoryBarrier2> vkBufferBarriers{scratch};
     vkBufferBarriers.reserve(static_cast<u32>(bufferBarriers.size()));
-    vector_temp<VkImageMemoryBarrier2> vkImageBarriers{scratch};
+    VectorTemp<VkImageMemoryBarrier2> vkImageBarriers{scratch};
     vkImageBarriers.reserve(static_cast<u32>(imageBarriers.size()));
 
     for (const GpuBufferBarrier& barrier : bufferBarriers)
@@ -1137,9 +1137,9 @@ void gpuComputePass(GpuCmd* cmd, const GpuPass& pass)
 {
     ArenaScope scratch = getScratch();
 
-    vector_temp<VkBufferMemoryBarrier2> bufferBarriers{scratch};
+    VectorTemp<VkBufferMemoryBarrier2> bufferBarriers{scratch};
     bufferBarriers.reserve(32);
-    vector_temp<VkImageMemoryBarrier2> imageBarriers{scratch};
+    VectorTemp<VkImageMemoryBarrier2> imageBarriers{scratch};
     imageBarriers.reserve(32);
 
     for (u32 i = 0; i < pass.uniformBuffers.size(); ++i)
@@ -1238,9 +1238,9 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 {
     ArenaScope scratch = getScratch();
 
-    vector_temp<VkBufferMemoryBarrier2> bufferBarriers{scratch};
+    VectorTemp<VkBufferMemoryBarrier2> bufferBarriers{scratch};
     bufferBarriers.reserve(32);
-    vector_temp<VkImageMemoryBarrier2> imageBarriers{scratch};
+    VectorTemp<VkImageMemoryBarrier2> imageBarriers{scratch};
     imageBarriers.reserve(32);
 
     for (u32 i = 0; i < pass.uniformBuffers.size(); ++i)
@@ -1416,7 +1416,7 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 
-    vector_temp<VkRenderingAttachmentInfo> colorAttachments{scratch};
+    VectorTemp<VkRenderingAttachmentInfo> colorAttachments{scratch};
     colorAttachments.reserve(static_cast<u32>(pass.colorAttachments.size()));
 
     for (u32 i = 0; i < pass.colorAttachments.size(); ++i)
@@ -1542,7 +1542,7 @@ static Format findSwapchainFormat(VkSurfaceKHR surface)
     u32 formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(
         vk.physicalDevice, surface, &formatCount, nullptr);
-    vector_temp<VkSurfaceFormatKHR> formats{scratch};
+    VectorTemp<VkSurfaceFormatKHR> formats{scratch};
     formats.resize(formatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(
         vk.physicalDevice, surface, &formatCount, formats.data());
@@ -1571,7 +1571,7 @@ static GpuPresentMode findSwapchainPresentMode(
     u32 modeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(
         vk.physicalDevice, surface, &modeCount, nullptr);
-    vector_temp<VkPresentModeKHR> presentModes{scratch};
+    VectorTemp<VkPresentModeKHR> presentModes{scratch};
     presentModes.resize(modeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(
         vk.physicalDevice, surface, &modeCount, presentModes.data());
@@ -1662,7 +1662,7 @@ void GpuSwapchain::resize(u32 newWidth, u32 newHeight)
             data->readyToPresent.resize(swapImageCount);
         }
 
-        vector_temp<VkImage> swapImages{scratch};
+        VectorTemp<VkImage> swapImages{scratch};
         swapImages.resize(swapImageCount);
         vkGetSwapchainImagesKHR(
             vk.device, data->swapchain, &swapImageCount, swapImages.data());
@@ -1842,7 +1842,7 @@ void gpuEndFrame(GpuCmd* cmd)
 
     Frame* frame = &vk.frames[vk.currentFrame];
 
-    vector_temp<GpuImageBarrier> presentBarriers{scratch};
+    VectorTemp<GpuImageBarrier> presentBarriers{scratch};
     presentBarriers.reserve(frame->swapchains.size());
     for (GpuSwapchain* swap : frame->swapchains)
     {
@@ -1854,16 +1854,16 @@ void gpuEndFrame(GpuCmd* cmd)
 
     vkEndCommandBuffer(reinterpret_cast<VkCommandBuffer>(cmd));
 
-    vector_temp<VkPipelineStageFlags> waitStages{scratch};
+    VectorTemp<VkPipelineStageFlags> waitStages{scratch};
     waitStages.reserve(frame->swapchains.size());
-    vector_temp<VkSemaphore> imageAvailableSemaphores{scratch};
+    VectorTemp<VkSemaphore> imageAvailableSemaphores{scratch};
     imageAvailableSemaphores.reserve(frame->swapchains.size());
-    vector_temp<VkSemaphore> readyToPresentSemaphores{scratch};
+    VectorTemp<VkSemaphore> readyToPresentSemaphores{scratch};
     readyToPresentSemaphores.reserve(frame->swapchains.size());
 
-    vector_temp<VkSwapchainKHR> swapchains{scratch};
+    VectorTemp<VkSwapchainKHR> swapchains{scratch};
     swapchains.reserve(frame->swapchains.size());
-    vector_temp<u32> imageIndices{scratch};
+    VectorTemp<u32> imageIndices{scratch};
     imageIndices.reserve(frame->swapchains.size());
 
     for (GpuSwapchain* swap : frame->swapchains)

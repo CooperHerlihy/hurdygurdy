@@ -221,7 +221,7 @@ static bool isDebugMessengerAvailable()
 
     u32 layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    vector_temp<VkLayerProperties> layers{layerCount, scratch};
+    VectorTemp<VkLayerProperties> layers{layerCount, scratch};
     vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
     for (VkLayerProperties& layer : layers)
@@ -234,7 +234,7 @@ layerFound:
 
     u32 extCount;
     vkEnumerateInstanceExtensionProperties(nullptr, &extCount, nullptr);
-    vector_temp<VkExtensionProperties> exts{extCount, scratch};
+    VectorTemp<VkExtensionProperties> exts{extCount, scratch};
     vkEnumerateInstanceExtensionProperties(nullptr, &extCount, exts.data());
 
     for (VkExtensionProperties& ext : exts)
@@ -276,9 +276,9 @@ static VkInstance createInstance(std::span<std::string_view> extensions)
         instanceInfo.ppEnabledLayerNames = layers;
     }
 
-    vector_temp<string_temp> extStrs{scratch};
+    VectorTemp<StringTemp> extStrs{scratch};
     extStrs.reserve(extensions.size());
-    vector_temp<const char*> extCStrs{scratch};
+    VectorTemp<const char*> extCStrs{scratch};
     extCStrs.reserve(extensions.size() + 1);
     for (u32 i = 0; i < extensions.size(); ++i)
     {
@@ -323,7 +323,7 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
 
     u32 familyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, nullptr);
-    vector_temp<VkQueueFamilyProperties> families{familyCount, scratch};
+    VectorTemp<VkQueueFamilyProperties> families{familyCount, scratch};
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.data());
 
     for (u32 i = 0; i < familyCount; ++i)
@@ -348,10 +348,10 @@ static VkPhysicalDevice findPhysicalDevice()
 
     u32 gpuCount;
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, nullptr);
-    vector_temp<VkPhysicalDevice> gpus{gpuCount, scratch};
+    VectorTemp<VkPhysicalDevice> gpus{gpuCount, scratch};
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, gpus.data());
 
-    vector_temp<VkExtensionProperties> extProps{scratch};
+    VectorTemp<VkExtensionProperties> extProps{scratch};
 
     for (VkPhysicalDevice gpu : gpus)
     {

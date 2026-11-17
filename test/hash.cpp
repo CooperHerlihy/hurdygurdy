@@ -1,6 +1,5 @@
 #include "tests.hpp"
 #include "hg/hash.hpp"
-#include "hg/strings.hpp"
 
 #include <string>
 #include <string_view>
