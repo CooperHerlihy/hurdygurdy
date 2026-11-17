@@ -151,7 +151,7 @@ std::string floatToString(f64 num, u32 precision)
         buffer + sizeof(buffer),
         num,
         std::chars_format::general,
-        static_cast<i32>(precision));
+        assertCast<i32>(precision));
     *res.ptr = '\0';
 
     HG_ASSERT(res.ec == std::errc{});

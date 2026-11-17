@@ -287,6 +287,7 @@ endif()
 
 add_executable(tests
     test/tests.cpp
+    test/error.cpp
     test/utility.cpp
     test/memory.cpp
     test/concurrency.cpp

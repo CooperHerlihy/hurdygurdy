@@ -29,7 +29,7 @@ TEST(testSoundSerialRoundTrip)
     original.channels = 2;
     original.data.resize(6);
     for (u64 i = 0; i < original.data.size(); ++i)
-        original.data[i] = static_cast<f32>(i) * 0.25f - 0.5f;
+        original.data[i] = assertCast<f32>(i) * 0.25f - 0.5f;
 
     std::string path = makePath("serial_roundtrip");
     ASSERT(store(original, path));

@@ -208,7 +208,7 @@ TEST(testForParCallback)
     u32 ints[count]{};
     forPar(u64{0}, u64{count}, ints, [](void* data, u64 idx)
     {
-        static_cast<u32*>(data)[idx] = static_cast<u32>(idx + 1);
+        static_cast<u32*>(data)[idx] = assertCast<u32>(idx + 1);
     });
     for (u64 i = 0; i < count; ++i)
         ASSERT(ints[i] == i + 1);
@@ -231,7 +231,7 @@ TEST(testForParReferenceCapture)
     u32 vals[count]{};
     forPar(u64{0}, u64{count}, [&](u64 idx)
     {
-        vals[idx] = static_cast<u32>(idx * 2);
+        vals[idx] = assertCast<u32>(idx * 2);
     });
     for (u64 i = 0; i < count; ++i)
         ASSERT(vals[i] == i * 2);

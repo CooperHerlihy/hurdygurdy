@@ -24,7 +24,7 @@ std::optional<std::vector<u8>> loadFile(std::string_view path)
         return {};
     }
 
-    u64 fileSize = static_cast<u64>(st.st_size);
+    u64 fileSize = assertCast<u64>(st.st_size);
 
     int fd = open(cPath, O_RDONLY);
     if (fd < 0)
@@ -46,7 +46,7 @@ std::optional<std::vector<u8>> loadFile(std::string_view path)
             setError("Failed to read file: {}", cPath);
             return {};
         }
-        remaining -= static_cast<u64>(bytesRead);
+        remaining -= assertCast<u64>(bytesRead);
         ptr += bytesRead;
     }
 
@@ -77,7 +77,7 @@ bool storeFile(std::span<u8> bin, std::string_view path)
             setError("Failed to write file: {}", cPath);
             return false;
         }
-        remaining -= static_cast<u64>(bytesWritten);
+        remaining -= assertCast<u64>(bytesWritten);
         ptr += bytesWritten;
     }
 
@@ -107,9 +107,9 @@ static bool win32PathToWide(std::string_view path, wchar_t* wPath, u64 capacity)
         CP_UTF8,
         0,
         path.data(),
-        static_cast<int>(path.length()),
+        assertCast<int>(path.length()),
         wPath,
-        static_cast<int>(capacity) - 1);
+        assertCast<int>(capacity) - 1);
     if (wlen <= 0)
         return false;
     wPath[wlen] = L'\0';
@@ -143,7 +143,7 @@ std::optional<std::vector<u8>> loadFile(std::string_view path)
         return {};
     }
 
-    u64 fileSize = static_cast<u64>(size.QuadPart);
+    u64 fileSize = assertCast<u64>(size.QuadPart);
 
     std::optional<std::vector<u8>> bin = std::vector<u8>(fileSize);
 
@@ -151,14 +151,14 @@ std::optional<std::vector<u8>> loadFile(std::string_view path)
     u8* ptr = bin->data();
     while (remaining > 0)
     {
-        DWORD bytesToRead = remaining > 0xFFFFFFFF ? 0xFFFFFFFF : static_cast<DWORD>(remaining);
+        DWORD bytesToRead = remaining > 0xFFFFFFFF ? 0xFFFFFFFF : assertCast<DWORD>(remaining);
         DWORD bytesRead = 0;
         if (!ReadFile(file, ptr, bytesToRead, &bytesRead, nullptr) || bytesRead == 0)
         {
             setError("Failed to read file: {}", p.c_str());
             return {};
         }
-        remaining -= static_cast<u64>(bytesRead);
+        remaining -= assertCast<u64>(bytesRead);
         ptr += bytesRead;
     }
 
@@ -189,14 +189,14 @@ bool storeFile(std::span<u8> bin, std::string_view path)
     const u8* ptr = bin.data();
     while (remaining > 0)
     {
-        DWORD bytesToWrite = remaining > 0xFFFFFFFF ? 0xFFFFFFFF : static_cast<DWORD>(remaining);
+        DWORD bytesToWrite = remaining > 0xFFFFFFFF ? 0xFFFFFFFF : assertCast<DWORD>(remaining);
         DWORD bytesWritten = 0;
         if (!WriteFile(file, ptr, bytesToWrite, &bytesWritten, nullptr) || bytesWritten == 0)
         {
             setError("Failed to write file: {}", p.c_str());
             return false;
         }
-        remaining -= static_cast<u64>(bytesWritten);
+        remaining -= assertCast<u64>(bytesWritten);
         ptr += bytesWritten;
     }
 

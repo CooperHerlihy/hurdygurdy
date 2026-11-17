@@ -53,7 +53,7 @@ bool serializeBegin(Serializer* s, u32* size)
         s->current = s->current->children[s->current->currentChild++].get();
 
         if (size != nullptr)
-            *size = static_cast<u32>(s->current->children.size());
+            *size = assertCast<u32>(s->current->children.size());
     }
     return true;
 }
@@ -167,9 +167,9 @@ static void serialBinWriteNode(std::vector<u8>* bin, u32 idx, SerialNode* node)
     SerialBinNode out{};
     out.isObject = node->children.empty() ? 0 : 1;
     out.count = out.isObject
-        ? static_cast<u32>(node->children.size())
-        : static_cast<u32>(node->data.size());
-    out.begin = static_cast<u32>(bin->size());
+        ? assertCast<u32>(node->children.size())
+        : assertCast<u32>(node->data.size());
+    out.begin = assertCast<u32>(bin->size());
     bin->resize(bin->size() + (out.isObject
         ? out.count * sizeof(SerialBinNode)
         : out.count));
@@ -180,7 +180,7 @@ static void serialBinWriteNode(std::vector<u8>* bin, u32 idx, SerialNode* node)
         for (u32 i = 0; i < out.count; ++i)
         {
             serialBinWriteNode(
-                bin, out.begin + i * static_cast<u32>(sizeof(SerialBinNode)), node->children[i].get());
+                bin, out.begin + i * assertCast<u32>(sizeof(SerialBinNode)), node->children[i].get());
         }
     }
     else if (out.count > 0)
@@ -223,7 +223,7 @@ static bool serialBinReadNode(std::span<const u8> bin, u64 idx, Serializer* s)
         serializeBegin(s);
         for (u32 i = 0; i < node.count; ++i)
         {
-            u64 childIdx = node.begin + static_cast<u64>(i) * sizeof(SerialBinNode);
+            u64 childIdx = node.begin + assertCast<u64>(i) * sizeof(SerialBinNode);
             if (!serialBinReadNode(bin, childIdx, s))
             {
                 serializeEnd(s);
@@ -234,7 +234,7 @@ static bool serialBinReadNode(std::span<const u8> bin, u64 idx, Serializer* s)
     }
     else
     {
-        if (bin.size() < node.begin + static_cast<u64>(node.count))
+        if (bin.size() < node.begin + assertCast<u64>(node.count))
         {
             setError("Serial binary is truncated");
             return false;
@@ -279,7 +279,7 @@ std::optional<Serializer> readSerialBinary(std::span<const u8> bin)
         return std::nullopt;
     }
 
-    if (bin.size() < static_cast<u64>(header.nodeBegin) + sizeof(SerialBinNode))
+    if (bin.size() < assertCast<u64>(header.nodeBegin) + sizeof(SerialBinNode))
     {
         setError("Serial binary is truncated");
         return std::nullopt;
@@ -293,14 +293,14 @@ std::optional<Serializer> readSerialBinary(std::span<const u8> bin)
     {
         for (u32 i = 0; i < rootNode.count; ++i)
         {
-            u64 childIdx = rootNode.begin + static_cast<u64>(i) * sizeof(SerialBinNode);
+            u64 childIdx = rootNode.begin + assertCast<u64>(i) * sizeof(SerialBinNode);
             if (!serialBinReadNode(bin, childIdx, &writer))
                 return std::nullopt;
         }
     }
     else
     {
-        if (bin.size() < rootNode.begin + static_cast<u64>(rootNode.count))
+        if (bin.size() < rootNode.begin + assertCast<u64>(rootNode.count))
         {
             setError("Serial binary is truncated");
             return std::nullopt;

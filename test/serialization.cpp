@@ -614,7 +614,7 @@ TEST(testReadSerialBinaryRejectsTruncation)
     // Every truncation must fail: the loader validates node and leaf ranges
     for (u64 cut = 1; cut < bin.size(); ++cut)
     {
-        std::vector<u8> trunc(bin.begin(), bin.end() - static_cast<i64>(cut));
+        std::vector<u8> trunc(bin.begin(), bin.end() - assertCast<i64>(cut));
         setError("");
         ASSERT(!readSerialBinary(trunc).has_value());
         ASSERT(getError().length() > 0);

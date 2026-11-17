@@ -1,4 +1,5 @@
 #include "hg/error.hpp"
+#include "hg/utility.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -15,7 +16,7 @@ std::string_view getError()
 
 void setError(std::string_view error)
 {
-    u32 newLength = static_cast<u32>(std::min(error.length(), (sizeof(errorData) - 1)));
+    u32 newLength = assertCast<u32>(std::min(error.length(), (sizeof(errorData) - 1)));
     std::memcpy(errorData, error.data(), newLength);
     errorData[newLength] = '\0';
     errorLength = newLength;

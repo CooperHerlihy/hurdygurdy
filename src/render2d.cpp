@@ -123,7 +123,7 @@ bool assetLoadImpl(AssetData<TextureData>* data)
     int x, y, channels;
     data->asset.pixels = stbi_load_from_memory(
         bin->data(),
-        static_cast<int>(bin->size()),
+        assertCast<int>(bin->size()),
         &x,
         &y,
         &channels,
@@ -134,8 +134,8 @@ bool assetLoadImpl(AssetData<TextureData>* data)
         setError("Could not decode image: {}", data->path.c_str());
         return false;
     }
-    data->asset.width = static_cast<u32>(x);
-    data->asset.height = static_cast<u32>(y);
+    data->asset.width = assertCast<u32>(x);
+    data->asset.height = assertCast<u32>(y);
     data->asset.depth = 1;
     data->asset.format = Format_rgba8_srgb;
     return true;
@@ -148,11 +148,11 @@ bool storeTexturePng(const TextureData& texture, std::string_view path)
 
     if (!stbi_write_png(
          p.c_str(),
-         static_cast<int>(texture.width),
-         static_cast<int>(texture.height),
+         assertCast<int>(texture.width),
+         assertCast<int>(texture.height),
          4,
          texture.pixels,
-         static_cast<int>(texture.width * sizeof(u32))))
+         assertCast<int>(texture.width * sizeof(u32))))
     {
         setError("Could not store image: {}", p.c_str());
         return false;
@@ -167,11 +167,11 @@ bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view p
 
     if (!stbi_write_jpg(
          p.c_str(),
-         static_cast<int>(texture.width),
-         static_cast<int>(texture.height),
+         assertCast<int>(texture.width),
+         assertCast<int>(texture.height),
          4,
          texture.pixels,
-         static_cast<int>(quality)))
+         assertCast<int>(quality)))
     {
         setError("Could not store image: {}", p.c_str());
         return false;
@@ -186,8 +186,8 @@ bool storeTextureHdr(const TextureData& texture, std::string_view path)
 
     if (!stbi_write_hdr(
          p.c_str(),
-         static_cast<int>(texture.width),
-         static_cast<int>(texture.height),
+         assertCast<int>(texture.width),
+         assertCast<int>(texture.height),
          4,
          static_cast<f32*>(texture.pixels)))
     {
@@ -213,7 +213,7 @@ Texture uploadTextureToGpu(const TextureData& data)
     tex.image = GpuImage::createEx(imageInfo);
     tex.view = GpuView::create(tex.image, GpuAspect_color, GpuFilter_nearest);
 
-    u64 size = static_cast<u64>(data.width) * data.height * data.depth * formatToSize(data.format);
+    u64 size = assertCast<u64>(data.width) * data.height * data.depth * formatToSize(data.format);
     tex.view.write(std::span<const std::byte>{static_cast<const std::byte*>(data.pixels), size});
 
     return tex;
@@ -227,7 +227,7 @@ TextureData downloadTextureFromGpu(const Texture& tex)
     data.depth = tex.view.depth();
     data.format = tex.view.format();
 
-    u64 size = static_cast<u64>(data.width) * data.height * data.depth * formatToSize(data.format);
+    u64 size = assertCast<u64>(data.width) * data.height * data.depth * formatToSize(data.format);
     data.pixels = std::malloc(size);
 
     tex.view.read(std::span{static_cast<std::byte*>(data.pixels), size});
@@ -293,7 +293,7 @@ static void deinitPixelFont()
 
 u32 TextureAtlas::addEmpty(u32 count)
 {
-    u32 idx = static_cast<u32>(sprites.size());
+    u32 idx = assertCast<u32>(sprites.size());
     for (u32 i = 0; i < count; ++i)
     {
         sprites.emplace_back(rectEmpty());
@@ -303,16 +303,16 @@ u32 TextureAtlas::addEmpty(u32 count)
 
 u32 TextureAtlas::add(Rect sprite)
 {
-    u32 idx = static_cast<u32>(sprites.size());
+    u32 idx = assertCast<u32>(sprites.size());
     sprites.emplace_back(sprite);
     return idx;
 }
 
 u32 TextureAtlas::addGrid(Rect grid, u32 width, u32 height, u32 count, f32 marginX, f32 marginY)
 {
-    u32 idx = static_cast<u32>(sprites.size());
+    u32 idx = assertCast<u32>(sprites.size());
 
-    Vec2 subdivSize = (grid.end - grid.begin) / Vec2{static_cast<f32>(width), static_cast<f32>(height)};
+    Vec2 subdivSize = (grid.end - grid.begin) / Vec2{assertCast<f32>(width), assertCast<f32>(height)};
     Vec2 spriteSize = subdivSize * (Vec2{1} - Vec2{marginX, marginY});
 
     count = std::min(count, width * height);
@@ -423,13 +423,13 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
 
     if (box.width == INFINITY)
     {
-        Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
+        Rect firstRect = box.font->sprites[assertCast<u32>(text[0])];
         Vec2 firstSize = firstRect.end - firstRect.begin;
 
         factor = box.height / firstSize.y();
         for (char c : text)
         {
-            Rect cRect = box.font->sprites[static_cast<u32>(c)];
+            Rect cRect = box.font->sprites[assertCast<u32>(c)];
             Vec2 size = cRect.end - cRect.begin;
             bounds.end.x() += size.x() * factor;
         }
@@ -437,13 +437,13 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
     }
     else if (box.height == INFINITY)
     {
-        Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
+        Rect firstRect = box.font->sprites[assertCast<u32>(text[0])];
         Vec2 firstSize = firstRect.end - firstRect.begin;
 
         f32 width = 0;
         for (char c : text)
         {
-            Rect cRect = box.font->sprites[static_cast<u32>(c)];
+            Rect cRect = box.font->sprites[assertCast<u32>(c)];
             Vec2 size = cRect.end - cRect.begin;
             width += size.x();
         }
@@ -454,14 +454,14 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
     }
     else
     {
-        Rect firstRect = box.font->sprites[static_cast<u32>(text[0])];
+        Rect firstRect = box.font->sprites[assertCast<u32>(text[0])];
         Vec2 firstSize = firstRect.end - firstRect.begin;
 
         bounds.end.y() = firstSize.y();
 
         for (char c : text)
         {
-            Rect cRect = box.font->sprites[static_cast<u32>(c)];
+            Rect cRect = box.font->sprites[assertCast<u32>(c)];
             Vec2 size = cRect.end - cRect.begin;
             bounds.end.x() += size.x();
         }
@@ -493,7 +493,7 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
             if (*c == ' ')
                 lastSpace = c;
 
-            Rect cRect = box.font->sprites[static_cast<u32>(*c)];
+            Rect cRect = box.font->sprites[assertCast<u32>(*c)];
             Vec2 size = cRect.end - cRect.begin;
 
             if (width + size.x() > box.cutoff)
@@ -504,7 +504,7 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
             }
             width += size.x();
         }
-        toDraw = std::string_view{text.data(), static_cast<usize>(c - text.data())};
+        toDraw = std::string_view{text.data(), assertCast<usize>(c - text.data())};
     }
 
     Vec2 size = bounds.end - bounds.begin;
@@ -516,7 +516,7 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
         if (pos.x() > bounds.end.x())
             break;
 
-        Rect sprite = box.font->get(static_cast<u32>(c));
+        Rect sprite = box.font->get(assertCast<u32>(c));
         Vec2 spriteSize = (sprite.end - sprite.begin) * factor;
 
         Rect dst = {pos, pos + spriteSize};
@@ -611,7 +611,7 @@ void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
 
                 layer->instanceBuffer = GpuBuffer::create(layer->instances.capacity() * sizeof(Layer2D::Instance),
                     GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
-                layer->instanceCapacity = static_cast<u32>(layer->instances.capacity());
+                layer->instanceCapacity = assertCast<u32>(layer->instances.capacity());
             }
 
             layer->instanceBuffer.write(std::as_bytes(std::span{layer->instances}), 0);
@@ -628,7 +628,7 @@ void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
 
         gpuPushConstants(cmd, pipeline, push);
 
-        gpuDraw(cmd, 0, 6, 0, static_cast<u32>(layer->instances.size()));
+        gpuDraw(cmd, 0, 6, 0, assertCast<u32>(layer->instances.size()));
     }
 
     layerQueue.clear();

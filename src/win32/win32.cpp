@@ -6,6 +6,7 @@
 
 #include "hg/error.hpp"
 #include "hg/hash.hpp"
+#include "hg/utility.hpp"
 
 #include <span>
 #include <string_view>
@@ -220,12 +221,12 @@ std::unique_ptr<InputDeviceWin32> InputDeviceWin32::create()
         DisplayInfo info{};
         info.posX = mi.rcMonitor.left;
         info.posY = mi.rcMonitor.top;
-        info.sizeW = static_cast<u32>(mi.rcMonitor.right - mi.rcMonitor.left);
-        info.sizeH = static_cast<u32>(mi.rcMonitor.bottom - mi.rcMonitor.top);
+        info.sizeW = assertCast<u32>(mi.rcMonitor.right - mi.rcMonitor.left);
+        info.sizeH = assertCast<u32>(mi.rcMonitor.bottom - mi.rcMonitor.top);
         info.workPosX = mi.rcWork.left;
         info.workPosY = mi.rcWork.top;
-        info.workSizeW = static_cast<u32>(mi.rcWork.right - mi.rcWork.left);
-        info.workSizeH = static_cast<u32>(mi.rcWork.bottom - mi.rcWork.top);
+        info.workSizeW = assertCast<u32>(mi.rcWork.right - mi.rcWork.left);
+        info.workSizeH = assertCast<u32>(mi.rcWork.bottom - mi.rcWork.top);
         info.dpiScale = 1.0f;
 
         if (data->getDpiForMonitor != nullptr)
@@ -233,7 +234,7 @@ std::unique_ptr<InputDeviceWin32> InputDeviceWin32::create()
             u32 dpiX = 96;
             u32 dpiY = 96;
             if (SUCCEEDED(data->getDpiForMonitor(hmon, 0, &dpiX, &dpiY)))
-                info.dpiScale = static_cast<f32>(dpiX) / 96.0f;
+                info.dpiScale = assertCast<f32>(dpiX) / 96.0f;
         }
 
         data->displays->push_back(info);
@@ -245,8 +246,8 @@ std::unique_ptr<InputDeviceWin32> InputDeviceWin32::create()
     if (device->displays.empty())
     {
         DisplayInfo info{};
-        info.sizeW = static_cast<u32>(GetSystemMetrics(SM_CXSCREEN));
-        info.sizeH = static_cast<u32>(GetSystemMetrics(SM_CYSCREEN));
+        info.sizeW = assertCast<u32>(GetSystemMetrics(SM_CXSCREEN));
+        info.sizeH = assertCast<u32>(GetSystemMetrics(SM_CYSCREEN));
         info.workSizeW = info.sizeW;
         info.workSizeH = info.sizeH;
         info.dpiScale = 1.0f;
@@ -326,8 +327,8 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
         }
         case WM_SIZE:
         {
-            u32 width = static_cast<u32>(LOWORD(lParam));
-            u32 height = static_cast<u32>(HIWORD(lParam));
+            u32 width = assertCast<u32>(LOWORD(lParam));
+            u32 height = assertCast<u32>(HIWORD(lParam));
             if (width == 0 || height == 0 || dev == nullptr)
                 return 0;
 
@@ -383,7 +384,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             if (dev == nullptr)
                 return 0;
 
-            Vec2 newPos{static_cast<f32>(GET_X_LPARAM(lParam)), static_cast<f32>(GET_Y_LPARAM(lParam))};
+            Vec2 newPos{assertCast<f32>(GET_X_LPARAM(lParam)), assertCast<f32>(GET_Y_LPARAM(lParam))};
             Vec2 delta = newPos - w->mouse;
             w->mouse = newPos;
             dev->mouseDeltaAccum += delta;
@@ -395,7 +396,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             event.type = EventType_mouseMoved;
             event.mouse.delta = delta;
             event.mouse.pos = newPos;
-            event.mouse.globalPos = Vec2{static_cast<f32>(globalPt.x), static_cast<f32>(globalPt.y)};
+            event.mouse.globalPos = Vec2{assertCast<f32>(globalPt.x), assertCast<f32>(globalPt.y)};
             dev->events.push_back(event);
             w->eventQueue.push_back(event);
             return 0;
@@ -405,7 +406,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             if (dev == nullptr)
                 return 0;
 
-            f32 delta = static_cast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
+            f32 delta = assertCast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
             dev->wheelDeltaAccum.y += delta;
 
             Event event{};
@@ -420,7 +421,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             if (dev == nullptr)
                 return 0;
 
-            f32 delta = static_cast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
+            f32 delta = assertCast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
             dev->wheelDeltaAccum.x += delta;
 
             Event event{};
@@ -483,7 +484,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             if (dev == nullptr)
                 return 0;
 
-            Button button = win32VirtKeyToButton(static_cast<u32>(wParam));
+            Button button = win32VirtKeyToButton(assertCast<u32>(wParam));
             if (button != Button_none)
             {
                 dev->isKeyDown[button] = true;
@@ -502,7 +503,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             if (dev == nullptr)
                 return 0;
 
-            Button button = win32VirtKeyToButton(static_cast<u32>(wParam));
+            Button button = win32VirtKeyToButton(assertCast<u32>(wParam));
             if (button != Button_none)
             {
                 dev->isKeyDown[button] = false;
@@ -520,7 +521,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             if (dev == nullptr)
                 return 0;
 
-            wchar_t ch = static_cast<wchar_t>(wParam);
+            wchar_t ch = assertCast<wchar_t>(wParam);
             if (ch >= 0x20 && ch != 0x7F)
             {
                 static wchar_t pendingHigh = 0;
@@ -547,7 +548,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
                         Event event{};
                         event.type = EventType_text;
                         std::memset(event.text, 0, sizeof(event.text));
-                        std::memcpy(event.text, utf8, static_cast<u64>(utf8Len) < sizeof(event.text) ? static_cast<u64>(utf8Len) : sizeof(event.text));
+                        std::memcpy(event.text, utf8, assertCast<u64>(utf8Len) < sizeof(event.text) ? assertCast<u64>(utf8Len) : sizeof(event.text));
                         dev->events.push_back(event);
                         w->eventQueue.push_back(event);
                     }
@@ -628,7 +629,7 @@ std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& confi
         titleStr.c_str(),
         -1,
         wtitle,
-        static_cast<int>(sizeof(wtitle) / sizeof(wchar_t)) - 1);
+        assertCast<int>(sizeof(wtitle) / sizeof(wchar_t)) - 1);
 
     win->hwnd = CreateWindowExW(
         0,
@@ -636,8 +637,8 @@ std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& confi
         wtitle,
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
-        static_cast<int>(width),
-        static_cast<int>(height),
+        assertCast<int>(width),
+        assertCast<int>(height),
         nullptr, nullptr,
         hInstance,
         win.get());
@@ -652,8 +653,8 @@ std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& confi
 
     RECT rect{};
     GetClientRect(win->hwnd, &rect);
-    win->width = static_cast<u32>(rect.right - rect.left);
-    win->height = static_cast<u32>(rect.bottom - rect.top);
+    win->width = assertCast<u32>(rect.right - rect.left);
+    win->height = assertCast<u32>(rect.bottom - rect.top);
     win->focused = (GetFocus() == win->hwnd);
 
     VkWin32SurfaceCreateInfoKHR createInfo{};
@@ -720,14 +721,14 @@ Vec2 InputDeviceWin32::mousePos()
 Vec2 InputDeviceWin32::mouseDelta()
 {
     if (activeWindow != nullptr)
-        return mouseDeltaAccum / static_cast<f32>(activeWindow->height);
+        return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
 
     if (windows.count == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](u64, WindowWin32* wd)
         {
-            ret = ret / static_cast<f32>(wd->height);
+            ret = ret / assertCast<f32>(wd->height);
         });
         return ret;
     }
@@ -780,7 +781,7 @@ void WindowWin32::setTitle(std::string_view title)
     buf[len] = '\0';
 
     wchar_t wbuf[256]{};
-    MultiByteToWideChar(CP_UTF8, 0, buf, static_cast<int>(len), wbuf, 255);
+    MultiByteToWideChar(CP_UTF8, 0, buf, assertCast<int>(len), wbuf, 255);
     SetWindowTextW(hwnd, wbuf);
 }
 
@@ -833,7 +834,7 @@ void WindowWin32::setFullscreen(bool set)
         savedPlacement.length = sizeof(WINDOWPLACEMENT);
         GetWindowPlacement(hwnd, &savedPlacement);
 
-        DWORD style = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
+        DWORD style = assertCast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
         style &= ~WS_OVERLAPPEDWINDOW;
         style |= WS_POPUP;
         SetWindowLongPtrW(hwnd, GWL_STYLE, style);
@@ -851,7 +852,7 @@ void WindowWin32::setFullscreen(bool set)
     }
     else
     {
-        DWORD style = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
+        DWORD style = assertCast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
         style &= ~WS_POPUP;
         style |= WS_OVERLAPPEDWINDOW;
         SetWindowLongPtrW(hwnd, GWL_STYLE, style);
@@ -865,8 +866,8 @@ void WindowWin32::setFullscreen(bool set)
 
     RECT rect{};
     GetClientRect(hwnd, &rect);
-    u32 w = static_cast<u32>(rect.right - rect.left);
-    u32 h = static_cast<u32>(rect.bottom - rect.top);
+    u32 w = assertCast<u32>(rect.right - rect.left);
+    u32 h = assertCast<u32>(rect.bottom - rect.top);
     if (w > 0 && h > 0)
     {
         width = w;
@@ -882,7 +883,7 @@ Vec2 WindowWin32::mousePos() const
 
 Vec2 WindowWin32::mouseDelta() const
 {
-    return static_cast<InputDeviceWin32*>(device)->mouseDeltaAccum / static_cast<f32>(height);
+    return static_cast<InputDeviceWin32*>(device)->mouseDeltaAccum / assertCast<f32>(height);
 }
 
 std::unique_ptr<AudioDeviceWasapi> AudioDeviceWasapi::create()
@@ -1002,11 +1003,11 @@ DWORD WINAPI AudioDeviceWasapi::audioThreadProc(LPVOID param)
         if (FAILED(audio->renderClient->GetBuffer(availableFrames, &data)))
             continue;
 
-        std::memset(data, 0, static_cast<u64>(availableFrames) * sizeof(f32) * audio->callbackConfig.channels);
+        std::memset(data, 0, assertCast<u64>(availableFrames) * sizeof(f32) * audio->callbackConfig.channels);
 
         if (audio->callback != nullptr)
         {
-            u64 totalSamples = static_cast<u64>(availableFrames) * audio->callbackConfig.channels;
+            u64 totalSamples = assertCast<u64>(availableFrames) * audio->callbackConfig.channels;
             audio->callback(std::span<f32>{reinterpret_cast<f32*>(data), totalSamples}, audio->callbackConfig);
         }
 
@@ -1074,8 +1075,8 @@ void AudioDeviceWasapi::setCallback(AudioCallback newCallback, const AudioConfig
     }
 
     // Update callback config to match what the system provides
-    config.sampleRate = static_cast<u32>(mixFormat->nSamplesPerSec);
-    config.channels = static_cast<u32>(mixFormat->nChannels);
+    config.sampleRate = assertCast<u32>(mixFormat->nSamplesPerSec);
+    config.channels = assertCast<u32>(mixFormat->nChannels);
 
     audioEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (audioEvent == nullptr)

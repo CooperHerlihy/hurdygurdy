@@ -26,7 +26,7 @@ int main()
 
     u32 winW, winH;
     window->size(&winW, &winH);
-    f32 aspect = static_cast<f32>(winW) / static_cast<f32>(winH);
+    f32 aspect = assertCast<f32>(winW) / assertCast<f32>(winH);
 
     Camera camera{Orthographic{{{0, 0}, {aspect, 1.0f}}}};
 
@@ -70,7 +70,7 @@ int main()
         if (window->wasResized())
         {
             window->size(&winW, &winH);
-            aspect = static_cast<f32>(winW) / static_cast<f32>(winH);
+            aspect = assertCast<f32>(winW) / assertCast<f32>(winH);
             camera.projection = Orthographic{{{0, 0}, {aspect, 1.0f}}};
         }
 
@@ -83,16 +83,16 @@ int main()
         camera.update();
 
         Vec2 spriteMove = {
-            static_cast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a)),
-            static_cast<f32>(input->isButtonDown(Button_s) - input->isButtonDown(Button_w)),
+            assertCast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a)),
+            assertCast<f32>(input->isButtonDown(Button_s) - input->isButtonDown(Button_w)),
         };
         if (spriteMove != Vec2{0.0f})
         {
             f32 moveSpeed = 0.3f;
-            spritePos += normalize(spriteMove) * moveSpeed * static_cast<f32>(delta);
+            spritePos += normalize(spriteMove) * moveSpeed * assertCast<f32>(delta);
         }
 
-        spriteRot += (input->isButtonDown(Button_e) - input->isButtonDown(Button_q)) * 2.0f * static_cast<f32>(delta);
+        spriteRot += (input->isButtonDown(Button_e) - input->isButtonDown(Button_q)) * 2.0f * assertCast<f32>(delta);
 
         f32 sq = aspect < 1.0f ? aspect : 1.0f;
         f32 ox = (aspect - sq) / 2.0f;
@@ -118,15 +118,15 @@ int main()
         i32 cols = 5, rows = 4;
         f32 cellW = sq * 0.14f;
         f32 cellH = gridH * 0.2f;
-        f32 gapX = (sq - static_cast<f32>(cols) * cellW) / static_cast<f32>(cols + 1);
-        f32 gapY = (gridH - static_cast<f32>(rows) * cellH) / static_cast<f32>(rows + 1);
+        f32 gapX = (sq - assertCast<f32>(cols) * cellW) / assertCast<f32>(cols + 1);
+        f32 gapY = (gridH - assertCast<f32>(rows) * cellH) / assertCast<f32>(rows + 1);
         for (i32 y = 0; y < rows; ++y)
         {
             for (i32 x = 0; x < cols; ++x)
             {
                 Vec2 p = {
-                    ox + gapX + static_cast<f32>(x) * (cellW + gapX),
-                    gridTop + gapY + static_cast<f32>(y) * (cellH + gapY),
+                    ox + gapX + assertCast<f32>(x) * (cellW + gapX),
+                    gridTop + gapY + assertCast<f32>(y) * (cellH + gapY),
                 };
                 layer.drawRect(colors[(x + y * 3) % 6], {p, p + Vec2{cellW, cellH}});
             }

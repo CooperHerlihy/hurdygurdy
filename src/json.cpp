@@ -119,7 +119,7 @@ bool& JsonArray::pushBoolean(bool val)
 JsonValue JsonArray::removeValue(u64 idx)
 {
     JsonValue ret = std::move(values[idx]);
-    values.erase(values.begin() + static_cast<i64>(idx));
+    values.erase(values.begin() + assertCast<i64>(idx));
     return ret;
 }
 
@@ -504,7 +504,7 @@ static bool readJsonNum(f64& val, std::string_view str, u32& head)
 
     if (isInteger(valStr))
     {
-        val = static_cast<f64>(stringToInteger(valStr));
+        val = assertCast<f64>(stringToInteger(valStr));
         head = count;
         return true;
     }

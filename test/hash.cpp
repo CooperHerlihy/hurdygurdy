@@ -572,7 +572,7 @@ TEST(testMapForEach)
     map.add(1, 10.0f);
     map.add(2, 20.0f);
     f64 sum = 0;
-    map.forEach([&](const u32& k, f32& v) { sum += static_cast<f64>(k) + v; });
+    map.forEach([&](const u32& k, f32& v) { sum += assertCast<f64>(k) + v; });
     ASSERT(sum == 33.0);
 }
 
@@ -587,7 +587,7 @@ TEST(testMapForEachConst)
     cmap.forEach([&](const u32& k, const f32& v)
     {
         ++count;
-        sum += static_cast<f64>(k) + v;
+        sum += assertCast<f64>(k) + v;
     });
     ASSERT(count == 2);
     ASSERT(sum == 33.0);
@@ -620,7 +620,7 @@ TEST(testMapForEachModify)
     map.add(1, 10.0f);
     map.add(2, 20.0f);
     map.add(3, 30.0f);
-    map.forEach([](const u32& k, f32& v) { v += static_cast<f32>(k); });
+    map.forEach([](const u32& k, f32& v) { v += assertCast<f32>(k); });
     ASSERT(*map.get(1u) == 11.0f);
     ASSERT(*map.get(2u) == 22.0f);
     ASSERT(*map.get(3u) == 33.0f);

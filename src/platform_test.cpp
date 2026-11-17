@@ -193,7 +193,7 @@ static void audioCallback(std::span<f32> buf, AudioConfig config)
             f32 val = std::sin(toneT * 440.0f * pif * 2.0f) * 0.3f;
             for (u32 c = 0; c < config.channels; ++c)
                 buf[i + c] += val;
-            toneT += 1.0f / static_cast<f32>(config.sampleRate);
+            toneT += 1.0f / assertCast<f32>(config.sampleRate);
         }
     }
 }
@@ -297,7 +297,7 @@ static void switchInputBackend(InputBackend backend)
     inputBackendError = usedFallback ? "requested backend failed: " + firstError : std::string{};
 
     window->size(&width, &height);
-    camera.projection = Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}};
+    camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(width) / assertCast<f32>(height), 1.0f}}};
     camera.update();
 
     initImGui(*window, *input, window->swapchainFormat());
@@ -362,7 +362,7 @@ int main()
     HG_DEFER(if (audioDevice) audioDevice->unsetCallback());
 
     window->size(&width, &height);
-    camera.projection = Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}};
+    camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(width) / assertCast<f32>(height), 1.0f}}};
 
     bool showEvents = true;
     bool showKeyboard = true;
@@ -385,7 +385,7 @@ int main()
                     goto quit;
 
                 window->size(&width, &height);
-                camera.projection = Orthographic{{{0, 0}, {static_cast<f32>(width) / static_cast<f32>(height), 1.0f}}};
+                camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(width) / assertCast<f32>(height), 1.0f}}};
                 camera.update();
 
                 beginImGuiFrame();
@@ -417,7 +417,7 @@ int main()
                 if (ImGui::Begin("Events", &showEvents))
                 {
                     std::span<Event> events = input->getEvents();
-                    ImGui::Text("Event count: %d", (int)events.size());
+                    ImGui::Text("Event count: %d", assertCast<int>(events.size()));
                     if (ImGui::BeginTable("events", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0, 200)))
                     {
                         ImGui::TableSetupColumn("Type");
@@ -591,7 +591,7 @@ int main()
 
                     std::span<Event> wevts = window->events();
                     ImGui::Text("Window Events");
-                    ImGui::Text("Count: %d", (int)wevts.size());
+                    ImGui::Text("Count: %d", assertCast<int>(wevts.size()));
                 }
                 ImGui::End();
             }
@@ -628,7 +628,7 @@ int main()
 
                             for (u64 i = 0; i < 8000; ++i)
                             {
-                                f32 t = static_cast<f32>(i) * pif * 2.0f / 8000.0f;
+                                f32 t = assertCast<f32>(i) * pif * 2.0f / 8000.0f;
                                 snd->data.emplace_back(noiseNorm(42u, t) / (t + 0.1f));
                             }
                         }
@@ -647,11 +647,11 @@ int main()
 
                             for (u64 i = 0; i < 48000 * 2; ++i)
                             {
-                                f32 t = static_cast<f32>(i) * pif * 2.0f / 48000.0f;
+                                f32 t = assertCast<f32>(i) * pif * 2.0f / 48000.0f;
                                 f32 val = 0;
                                 for (u32 j = 1; j <= 8; ++j)
                                 {
-                                    f32 x = static_cast<f32>(j);
+                                    f32 x = assertCast<f32>(j);
                                     val += 0.3f / x * std::sin(220.f * t * x);
                                 }
                                 mus->data.emplace_back(val);
@@ -734,10 +734,10 @@ int main()
                 if (ImGui::Begin("Display", &showDisplay))
                 {
                     std::span<DisplayInfo> displays = input->displayInfo();
-                    ImGui::Text("Count: %d", (int)displays.size());
+                    ImGui::Text("Count: %d", assertCast<int>(displays.size()));
                     for (u64 i = 0; i < displays.size(); ++i)
                     {
-                        if (ImGui::TreeNodeEx((void*)i, 0, "Display %d", (int)i))
+                        if (ImGui::TreeNodeEx((void*)i, 0, "Display %d", assertCast<int>(i)))
                         {
                             const DisplayInfo& d = displays[i];
                             ImGui::Text("pos: %d, %d  size: %u, %u", d.posX, d.posY, d.sizeW, d.sizeH);
@@ -778,11 +778,11 @@ int main()
                 ImGui::Separator();
                 Profiler::forEachTimer([&](const std::string& name, f64 time)
                 {
-                    ImGui::Text("%.*s: %.3fms", (int)name.length(), name.data(), time * 1.e3f);
+                    ImGui::Text("%.*s: %.3fms", assertCast<int>(name.length()), name.data(), time * 1.e3f);
                 });
                 Profiler::forEachCounter([&](const std::string& name, u32 count)
                 {
-                    ImGui::Text("%.*s: %d", (int)name.length(), name.data(), count);
+                    ImGui::Text("%.*s: %d", assertCast<int>(name.length()), name.data(), count);
                 });
                 Profiler::clear();
             }

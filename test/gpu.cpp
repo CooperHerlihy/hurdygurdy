@@ -190,8 +190,8 @@ TEST(testGpuBufferWriteReadOffsets)
         // Cross-boundary read: 8 bytes starting at offset 60
         u64 cross = 0;
         buf.read(std::as_writable_bytes(std::span{&cross, 1}), 60);
-        u32 tail = static_cast<u32>(cross & 0xFFFFFFFF);
-        u32 head = static_cast<u32>((cross >> 32) & 0xFFFFFFFF);
+        u32 tail = assertCast<u32>(cross & 0xFFFFFFFF);
+        u32 head = assertCast<u32>((cross >> 32) & 0xFFFFFFFF);
         ASSERT(tail == 0x11111111);
         ASSERT(head == 0x22222222);
     }
@@ -220,8 +220,8 @@ TEST(testGpuBufferWriteReadOffsets)
 
         u64 cross = 0;
         buf.read(std::as_writable_bytes(std::span{&cross, 1}), 60);
-        u32 tail = static_cast<u32>(cross & 0xFFFFFFFF);
-        u32 head = static_cast<u32>((cross >> 32) & 0xFFFFFFFF);
+        u32 tail = assertCast<u32>(cross & 0xFFFFFFFF);
+        u32 head = assertCast<u32>((cross >> 32) & 0xFFFFFFFF);
         ASSERT(tail == 0x11111111);
         ASSERT(head == 0x22222222);
     }
@@ -552,11 +552,11 @@ TEST(testCombinedBufferImageBarrier)
     u32 pixelData[imgSize * imgSize] = {};
     for (u32 i = 0; i < imgSize * imgSize; ++i)
     {
-        u8 r = static_cast<u8>((i * 37) & 0xFF);
-        u8 g = static_cast<u8>((i * 71) & 0xFF);
-        u8 b = static_cast<u8>((i * 101) & 0xFF);
-        pixelData[i] = r | (static_cast<u32>(g) << 8)
-                     | (static_cast<u32>(b) << 16) | (0xFFu << 24);
+        u8 r = assertCast<u8>((i * 37) & 0xFF);
+        u8 g = assertCast<u8>((i * 71) & 0xFF);
+        u8 b = assertCast<u8>((i * 101) & 0xFF);
+        pixelData[i] = r | (assertCast<u32>(g) << 8)
+                     | (assertCast<u32>(b) << 16) | (0xFFu << 24);
     }
     storageBuf.write(std::as_bytes(std::span{pixelData}), 0);
 
@@ -1855,9 +1855,9 @@ TEST(testUniformBufferVertexShader)
     for (u32 i = 0; i < imgSize * imgSize; ++i)
     {
         // Allow small rounding differences
-        u8 r = static_cast<u8>((pixels[i] >> 0) & 0xFF);
-        u8 g = static_cast<u8>((pixels[i] >> 8) & 0xFF);
-        u8 b = static_cast<u8>((pixels[i] >> 16) & 0xFF);
+        u8 r = assertCast<u8>((pixels[i] >> 0) & 0xFF);
+        u8 g = assertCast<u8>((pixels[i] >> 8) & 0xFF);
+        u8 b = assertCast<u8>((pixels[i] >> 16) & 0xFF);
         ASSERT(r >= 125 && r <= 130);
         ASSERT(g >= 74 && g <= 79);
         ASSERT(b >= 176 && b <= 181);
@@ -2115,7 +2115,7 @@ TEST(testGpuLoadOpLoadPreservesContent)
     gpuBindPipeline(cmd, pipe);
 
     // Viewport covers left half only; right half should retain original red
-    gpuSetViewport(cmd, 0.0f, 0.0f, static_cast<f32>(halfW), static_cast<f32>(h));
+    gpuSetViewport(cmd, 0.0f, 0.0f, assertCast<f32>(halfW), assertCast<f32>(h));
     gpuSetScissor(cmd, 0, 0, halfW, h);
     gpuDraw(cmd, 0, 3, 0, 1);
 

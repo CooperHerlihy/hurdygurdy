@@ -2,6 +2,7 @@
 
 #include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
+#include "hg/utility.hpp"
 
 #include <cmath>
 
@@ -15,7 +16,7 @@ static constexpr f64 pi = 3.1415926535897932;
 /**
  * The value of Pi
  */
-static constexpr f32 pif = static_cast<f32>(pi);
+static constexpr f32 pif = assertCast<f32>(pi);
 
 /**
  * The value of Euler's number
@@ -25,7 +26,7 @@ static constexpr f64 euler = 2.7182818284590452;
 /**
  * The value of Euler's number
  */
-static constexpr f32 eulerf = static_cast<f32>(euler);
+static constexpr f32 eulerf = assertCast<f32>(euler);
 
 /**
  * The value of square root 2
@@ -35,7 +36,7 @@ static constexpr f64 root2 = 1.4142135623730951;
 /**
  * The value of square root 2
  */
-static constexpr f32 root2f = static_cast<f32>(root2);
+static constexpr f32 root2f = assertCast<f32>(root2);
 
 /**
  * The value of square root 3
@@ -45,7 +46,7 @@ static constexpr f64 root3 = 1.7320508075688772;
 /**
  * The value of square root 3
  */
-static constexpr f32 root3f = static_cast<f32>(root3);
+static constexpr f32 root3f = assertCast<f32>(root3);
 
 /**
  * The value of square root 3
@@ -156,7 +157,7 @@ struct Vec {
     constexpr Vec(Vs... vs)
     {
         f32* v = vals;
-        ((*(v++) = static_cast<f32>(vs)), ...);
+        ((*(v++) = assertCast<f32>(vs)), ...);
     }
 
     /**
@@ -187,7 +188,7 @@ struct Vec {
         {
             *(v++) = o;
         }
-        ((*(v++) = static_cast<f32>(vs)), ...);
+        ((*(v++) = assertCast<f32>(vs)), ...);
     }
 
     /**
@@ -471,7 +472,7 @@ struct Mat {
     constexpr Mat(Vs... vs)
     {
         usize i = 0;
-        ((cols[i / H][i % H] = static_cast<f32>(vs), ++i), ...);
+        ((cols[i / H][i % H] = assertCast<f32>(vs), ++i), ...);
     }
 
     /**

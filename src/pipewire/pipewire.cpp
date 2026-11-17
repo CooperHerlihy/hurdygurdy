@@ -2,6 +2,7 @@
 
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"
+#include "hg/utility.hpp"
 
 extern "C" {
 void pw_init(int* argc, char** argv[]);
@@ -208,9 +209,9 @@ void AudioDevicePipewire::streamProcess(void* userData)
         audio->callback(buffer, audio->callbackConfig);
 
     buf->datas[0].chunk->offset = 0;
-    buf->datas[0].chunk->size = static_cast<uint32_t>(buffer.size() * sizeof(f32));
-    buf->datas[0].chunk->stride = static_cast<int32_t>(sizeof(f32) * audio->callbackConfig.channels);
-    pwBuf->size = static_cast<uint32_t>(frames);
+    buf->datas[0].chunk->size = assertCast<uint32_t>(buffer.size() * sizeof(f32));
+    buf->datas[0].chunk->stride = assertCast<int32_t>(sizeof(f32) * audio->callbackConfig.channels);
+    pwBuf->size = assertCast<uint32_t>(frames);
 
     pipewire::pwFuncs.pw_stream_queue_buffer(audio->stream, pwBuf);
 }
@@ -241,8 +242,8 @@ void AudioDevicePipewire::paramChanged(void* userData, uint32_t id, const struct
     spa_pod_builder_add(&builder,
         SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(2, 1, 64),
         SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1),
-        SPA_PARAM_BUFFERS_size, SPA_POD_Int(256 * static_cast<int>(sizeof(f32) * info.channels)),
-        SPA_PARAM_BUFFERS_stride, SPA_POD_Int(static_cast<int>(sizeof(f32) * info.channels)),
+        SPA_PARAM_BUFFERS_size, SPA_POD_Int(256 * assertCast<int>(sizeof(f32) * info.channels)),
+        SPA_PARAM_BUFFERS_stride, SPA_POD_Int(assertCast<int>(sizeof(f32) * info.channels)),
         0);
     params[1] = spa_pod_builder_pop(&builder, &frame);
 
@@ -313,8 +314,8 @@ void AudioDevicePipewire::setCallback(AudioCallback callback, const AudioConfig&
     spa_pod_builder_add(&builder,
         SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(2, 1, 64),
         SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1),
-        SPA_PARAM_BUFFERS_size, SPA_POD_Int(256 * static_cast<int>(sizeof(f32) * callbackConfig.channels)),
-        SPA_PARAM_BUFFERS_stride, SPA_POD_Int(static_cast<int>(sizeof(f32) * callbackConfig.channels)),
+        SPA_PARAM_BUFFERS_size, SPA_POD_Int(256 * assertCast<int>(sizeof(f32) * callbackConfig.channels)),
+        SPA_PARAM_BUFFERS_stride, SPA_POD_Int(assertCast<int>(sizeof(f32) * callbackConfig.channels)),
         0);
     params[1] = spa_pod_builder_pop(&builder, &frame);
 

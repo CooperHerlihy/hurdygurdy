@@ -28,7 +28,7 @@ static TextureData makePattern(u32 width, u32 height)
     tex.height = height;
     tex.depth = 1;
     tex.format = Format_rgba8_srgb;
-    tex.pixels = std::malloc(static_cast<u64>(width) * height * sizeof(u32));
+    tex.pixels = std::malloc(assertCast<u64>(width) * height * sizeof(u32));
     u32* pixels = static_cast<u32*>(tex.pixels);
     for (u32 y = 0; y < height; ++y)
     {

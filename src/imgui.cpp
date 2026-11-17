@@ -158,23 +158,23 @@ void initImGui(
             continue;
 
         monitor.MainPos = monitor.WorkPos = ImVec2(
-            static_cast<f32>(displays[i].posX),
-            static_cast<f32>(displays[i].posY));
+            assertCast<f32>(displays[i].posX),
+            assertCast<f32>(displays[i].posY));
         monitor.MainSize = monitor.WorkSize = ImVec2(
-            static_cast<f32>(displays[i].sizeW),
-            static_cast<f32>(displays[i].sizeH));
+            assertCast<f32>(displays[i].sizeW),
+            assertCast<f32>(displays[i].sizeH));
 
         if (displays[i].workSizeW > 0 && displays[i].workSizeH > 0)
         {
             monitor.WorkPos = ImVec2(
-                static_cast<f32>(displays[i].workPosX),
-                static_cast<f32>(displays[i].workPosY));
+                assertCast<f32>(displays[i].workPosX),
+                assertCast<f32>(displays[i].workPosY));
             monitor.WorkSize = ImVec2(
-                static_cast<f32>(displays[i].workSizeW),
-                static_cast<f32>(displays[i].workSizeH));
+                assertCast<f32>(displays[i].workSizeW),
+                assertCast<f32>(displays[i].workSizeH));
         }
 
-        monitor.PlatformHandle = reinterpret_cast<void*>(static_cast<intptr_t>(i));
+        monitor.PlatformHandle = reinterpret_cast<void*>(assertCast<intptr_t>(i));
 
         pio.Monitors.push_back(monitor);
     }
@@ -275,9 +275,9 @@ void beginImGuiFrame()
 
     u32 width, height;
     state.window->size(&width, &height);
-    io.DisplaySize = ImVec2(static_cast<f32>(width), static_cast<f32>(height));
+    io.DisplaySize = ImVec2(assertCast<f32>(width), assertCast<f32>(height));
 
-    io.DeltaTime = static_cast<f32>(state.clock.tick());
+    io.DeltaTime = assertCast<f32>(state.clock.tick());
     if (io.DeltaTime <= 0.0f)
         io.DeltaTime = 1.0f / 60.0f;
 

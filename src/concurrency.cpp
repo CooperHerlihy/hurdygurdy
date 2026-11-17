@@ -2,6 +2,7 @@
 
 #include "hg/memory.hpp"
 #include "hg/time.hpp"
+#include "hg/utility.hpp"
 
 #include <cmath>
 #include <vector>
@@ -97,7 +98,7 @@ struct ThreadPoolState {
         do {
             if (idx == head.load())
                 return false;
-        } while (!workingTail.compare_exchange_weak(idx, (idx + 1) & (static_cast<u32>(work.size()) - 1)));
+        } while (!workingTail.compare_exchange_weak(idx, (idx + 1) & (assertCast<u32>(work.size()) - 1)));
 
         ThreadWork w = work[idx];
         hasWork[idx].store(false);
@@ -105,7 +106,7 @@ struct ThreadPoolState {
         u32 t = tail.load();
         while (t != head.load() && !hasWork[t].load())
         {
-            u32 next = (t + 1) & (static_cast<u32>(work.size()) - 1);
+            u32 next = (t + 1) & (assertCast<u32>(work.size()) - 1);
             tail.compare_exchange_strong(t, next);
             t = next;
         }
@@ -125,7 +126,7 @@ struct ThreadPoolState {
 static ThreadPoolState& threadPool()
 {
     static ThreadPoolState pool{4096, std::max(
-        static_cast<u32>(1), std::thread::hardware_concurrency() - 1)};
+        assertCast<u32>(1), std::thread::hardware_concurrency() - 1)};
     return pool;
 }
 
@@ -157,7 +158,7 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     if (fence != nullptr)
         fence->add();
 
-    u32 idx = pool.workingHead.fetch_add(1) & (static_cast<u32>(pool.work.size()) - 1);
+    u32 idx = pool.workingHead.fetch_add(1) & (assertCast<u32>(pool.work.size()) - 1);
 
     pool.work[idx].fence = fence;
     pool.work[idx].data = data;
@@ -167,7 +168,7 @@ void callPar(Fence* fence, void* data, void (*fn)(void* data))
     u32 h = pool.head.load();
     while (pool.hasWork[h].load())
     {
-        u32 next = (h + 1) & (static_cast<u32>(pool.work.size()) - 1);
+        u32 next = (h + 1) & (assertCast<u32>(pool.work.size()) - 1);
         pool.head.compare_exchange_strong(h, next);
         h = next;
     }
@@ -183,7 +184,7 @@ void forPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
 
     ArenaScope scratch = getScratch();
 
-    u64 chunkSize = static_cast<u64>(std::ceil(static_cast<f64>(end - begin) / (8.0 * static_cast<f64>(threadPool().threads.size()))));
+    u64 chunkSize = assertCast<u64>(std::ceil(assertCast<f64>(end - begin) / (8.0 * assertCast<f64>(threadPool().threads.size()))));
 
     Fence fence{};
     for (u64 i = begin; i < end; i += chunkSize)

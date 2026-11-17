@@ -43,6 +43,44 @@ consteval u64 idxInPack()
 }
 
 /**
+ * Cast between number types, asserting unsafe behavior in debug mode
+ *
+ * Note, float to integer still truncates down
+ */
+template<typename To, typename From> requires (std::is_arithmetic_v<To> && std::is_arithmetic_v<From>)
+constexpr To assertCast(const From& from)
+{
+    if constexpr (std::is_floating_point_v<From>)
+    {
+        if constexpr (std::is_floating_point_v<To>)
+        {
+            if constexpr (std::numeric_limits<To>::max() < std::numeric_limits<From>::max())
+                HG_ASSERT(from <= std::numeric_limits<To>::max());
+            if constexpr (std::numeric_limits<To>::lowest() > std::numeric_limits<From>::lowest())
+                HG_ASSERT(from >= std::numeric_limits<To>::lowest());
+        }
+        else
+        {
+            HG_ASSERT(from <= static_cast<From>(std::numeric_limits<To>::max()));
+            HG_ASSERT(from >= static_cast<From>(std::numeric_limits<To>::lowest()));
+        }
+    }
+    else if constexpr (std::is_integral_v<To>)
+    {
+        if constexpr (std::numeric_limits<To>::max() < std::numeric_limits<From>::max())
+            HG_ASSERT(from <= static_cast<From>(std::numeric_limits<To>::max()));
+        if constexpr (std::is_signed_v<From> && std::is_signed_v<To>)
+        {
+            if constexpr (std::numeric_limits<To>::lowest() > std::numeric_limits<From>::lowest())
+                HG_ASSERT(from >= static_cast<From>(std::numeric_limits<To>::lowest()));
+        }
+        if constexpr (std::is_signed_v<From> && std::is_unsigned_v<To>)
+            HG_ASSERT(from >= From(0));
+    }
+    return static_cast<To>(from);
+}
+
+/**
  * Aligns a value up to the nearest aligned value
  */
 constexpr uptr alignUp(uptr val, uptr align)

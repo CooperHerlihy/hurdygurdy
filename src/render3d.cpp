@@ -17,9 +17,9 @@ Mesh uploadMeshToGpu(const MeshData& data)
 {
     Mesh mesh{};
 
-    mesh.vertexCount = static_cast<u32>(data.vertices.size());
+    mesh.vertexCount = assertCast<u32>(data.vertices.size());
     mesh.vertexWidth = sizeof(MeshVertex);
-    mesh.indexCount = static_cast<u32>(data.indices.size());
+    mesh.indexCount = assertCast<u32>(data.indices.size());
 
     mesh.vertexBuffer = GpuBuffer::create(
         mesh.vertexCount * mesh.vertexWidth, GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
@@ -203,12 +203,12 @@ void Renderer3D::renderScene(GpuCmd* cmd, Camera& camera)
         if (dirLights.size() > 0)
         {
             push.dirLights = dirLightBuffer.storageDescriptor();
-            push.dirLightCount = static_cast<u32>(dirLights.size());
+            push.dirLightCount = assertCast<u32>(dirLights.size());
         }
         if (pointLights.size() > 0)
         {
             push.pointLights = pointLightBuffer.storageDescriptor();
-            push.pointLightCount = static_cast<u32>(pointLights.size());
+            push.pointLightCount = assertCast<u32>(pointLights.size());
         }
         push.colorMap = model.colorMap->view.samplerDescriptor();
         push.normalMap = model.normalMap->view.samplerDescriptor();

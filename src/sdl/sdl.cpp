@@ -7,6 +7,7 @@
 #include "hg/error.hpp"
 #include "hg/memory.hpp"
 #include "hg/hash.hpp"
+#include "hg/utility.hpp"
 
 #include <span>
 #include <string_view>
@@ -198,7 +199,7 @@ std::unique_ptr<InputDeviceSdl3> InputDeviceSdl3::create()
     }
     HG_DEFER(SDL_free(ids));
 
-    device->displays.resize(static_cast<u64>(count));
+    device->displays.resize(assertCast<u64>(count));
     for (u32 i = 0; i < device->displays.size(); i++)
     {
         DisplayInfo& info = device->displays[i];
@@ -206,17 +207,17 @@ std::unique_ptr<InputDeviceSdl3> InputDeviceSdl3::create()
         SDL_DisplayID displayId = ids[i];
         SDL_Rect r;
         SDL_GetDisplayBounds(displayId, &r);
-        info.posX = static_cast<i32>(r.x);
-        info.posY = static_cast<i32>(r.y);
-        info.sizeW = static_cast<u32>(r.w);
-        info.sizeH = static_cast<u32>(r.h);
+        info.posX = assertCast<i32>(r.x);
+        info.posY = assertCast<i32>(r.y);
+        info.sizeW = assertCast<u32>(r.w);
+        info.sizeH = assertCast<u32>(r.h);
 
         if (SDL_GetDisplayUsableBounds(displayId, &r) && r.w > 0 && r.h > 0)
         {
-            info.workPosX = static_cast<i32>(r.x);
-            info.workPosY = static_cast<i32>(r.y);
-            info.workSizeW = static_cast<u32>(r.w);
-            info.workSizeH = static_cast<u32>(r.h);
+            info.workPosX = assertCast<i32>(r.x);
+            info.workPosY = assertCast<i32>(r.y);
+            info.workSizeW = assertCast<u32>(r.w);
+            info.workSizeH = assertCast<u32>(r.h);
         }
         else
         {
@@ -425,8 +426,8 @@ void InputDeviceSdl3::processEvents()
             } break;
             case SDL_EVENT_WINDOW_RESIZED:
             {
-                u32 width = static_cast<u32>(sdlEvent.window.data1);
-                u32 height = static_cast<u32>(sdlEvent.window.data2);
+                u32 width = assertCast<u32>(sdlEvent.window.data1);
+                u32 height = assertCast<u32>(sdlEvent.window.data2);
 
                 Event event{};
                 event.type = EventType_windowResized;
@@ -471,8 +472,8 @@ std::unique_ptr<Window> InputDeviceSdl3::createWindow(const WindowConfig& config
 
     win->sdlWindow = SDL_CreateWindow(
         title.c_str(),
-        static_cast<int>(width),
-        static_cast<int>(height),
+        assertCast<int>(width),
+        assertCast<int>(height),
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     if (win->sdlWindow == nullptr)
         HG_PANIC("SDL could not create window: {}\n", SDL_GetError());
@@ -532,14 +533,14 @@ Vec2 InputDeviceSdl3::mousePos()
 Vec2 InputDeviceSdl3::mouseDelta()
 {
     if (activeWindow != nullptr)
-        return mouseDeltaAccum / static_cast<f32>(activeWindow->height);
+        return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
 
     if (windows.count == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](SDL_WindowID, WindowSdl3* wd)
         {
-            ret = ret / static_cast<f32>(wd->height);
+            ret = ret / assertCast<f32>(wd->height);
         });
         return ret;
     }
@@ -687,7 +688,7 @@ Vec2 WindowSdl3::mousePos() const
 
 Vec2 WindowSdl3::mouseDelta() const
 {
-    return static_cast<InputDeviceSdl3*>(device)->mouseDeltaAccum / static_cast<f32>(height);
+    return static_cast<InputDeviceSdl3*>(device)->mouseDeltaAccum / assertCast<f32>(height);
 }
 
 std::unique_ptr<AudioDeviceSdl3> AudioDeviceSdl3::create()
@@ -750,13 +751,13 @@ void AudioDeviceSdl3::sdlCallback(
 
     AudioDeviceSdl3* audio = static_cast<AudioDeviceSdl3*>(userData);
 
-    void* buf = scratch.alloc(static_cast<u64>(additionalAmount), alignof(f32));
-    std::memset(buf, 0, static_cast<u64>(additionalAmount));
+    void* buf = scratch.alloc(assertCast<u64>(additionalAmount), alignof(f32));
+    std::memset(buf, 0, assertCast<u64>(additionalAmount));
 
     if (audio->callback != nullptr)
     {
         audio->callback(
-            {static_cast<f32*>(buf), static_cast<u64>(additionalAmount) / sizeof(f32)},
+            {static_cast<f32*>(buf), assertCast<u64>(additionalAmount) / sizeof(f32)},
             audio->callbackConfig);
     }
 
@@ -774,8 +775,8 @@ void AudioDeviceSdl3::setCallback(AudioCallback callbackVal, const AudioConfig& 
 
     SDL_AudioSpec audioSpec{};
     audioSpec.format = SDL_AUDIO_F32;
-    audioSpec.freq = static_cast<int>(config.sampleRate);
-    audioSpec.channels = static_cast<int>(config.channels);
+    audioSpec.freq = assertCast<int>(config.sampleRate);
+    audioSpec.channels = assertCast<int>(config.channels);
 
     if (!SDL_SetAudioStreamFormat(stream, &audioSpec, nullptr))
         HG_PANIC("SDL could not set audio stream format: {}\n", SDL_GetError());

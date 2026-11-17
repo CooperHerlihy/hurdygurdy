@@ -114,7 +114,7 @@ struct EcsComponent {
         }
 
         u64 idx = entities.size();
-        indices[e.idx()] = static_cast<u32>(idx);
+        indices[e.idx()] = assertCast<u32>(idx);
         entities.emplace_back(e);
         return components.emplace_back();
     }
@@ -139,7 +139,7 @@ struct EcsComponent {
         }
 
         u64 idx = entities.size();
-        indices[e.idx()] = static_cast<u32>(idx);
+        indices[e.idx()] = assertCast<u32>(idx);
         entities.push_back(e);
         return components.emplace_back(val);
     }
@@ -164,7 +164,7 @@ struct EcsComponent {
         }
 
         u64 idx = entities.size();
-        indices[e.idx()] = static_cast<u32>(idx);
+        indices[e.idx()] = assertCast<u32>(idx);
         entities.push_back(e);
         return components.emplace_back(std::move(val));
     }
@@ -225,7 +225,7 @@ struct EcsComponent {
      */
     Entity getEntity(const T& c) const
     {
-        return entities[static_cast<u32>(&c - components.data())];
+        return entities[assertCast<u32>(&c - components.data())];
     }
 };
 
@@ -797,7 +797,7 @@ bool serializeEcsSystem(Serializer* s, Sys& sys, EntitySerializer* es, EcsT* ecs
 
     if (s->writing)
     {
-        u32 cCount = static_cast<u32>(sys.components.size());
+        u32 cCount = assertCast<u32>(sys.components.size());
         if (!serialize(s, &cCount))
             return false;
 

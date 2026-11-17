@@ -1,13 +1,131 @@
 #include "tests.hpp"
 #include "hg/utility.hpp"
-#include "hg/error.hpp"
 
 #include <cfloat>
-
+#include <limits>
 #include <string>
-#include <vector>
 
 using namespace hg;
+
+struct IdxTypeA {};
+struct IdxTypeB {};
+struct IdxTypeC {};
+
+TEST(testIdxOfFirst)
+{
+    ASSERT((idxInPack<IdxTypeA, IdxTypeA, IdxTypeB, IdxTypeC>()) == 0);
+}
+
+TEST(testIdxOfMiddle)
+{
+    ASSERT((idxInPack<IdxTypeB, IdxTypeA, IdxTypeB, IdxTypeC>()) == 1);
+}
+
+TEST(testIdxOfLast)
+{
+    ASSERT((idxInPack<IdxTypeC, IdxTypeA, IdxTypeB, IdxTypeC>()) == 2);
+}
+
+TEST(testAssertCastIdentity)
+{
+    static_assert(assertCast<i8>(i8(-5)) == -5);
+    static_assert(assertCast<u32>(7u) == 7u);
+    static_assert(assertCast<f64>(2.5) == 2.5);
+    ASSERT(assertCast<i64>(-5) == -5);
+    ASSERT(assertCast<u32>(7u) == 7u);
+    ASSERT(assertCast<f64>(2.5) == 2.5);
+    ASSERT(assertCast<f32>(-0.5f) == -0.5f);
+}
+
+TEST(testAssertCastWiden)
+{
+    static_assert(assertCast<i64>(i8(-100)) == -100);
+    static_assert(assertCast<u32>(u8(200)) == 200u);
+    static_assert(assertCast<f64>(1.5f) == 1.5);
+    ASSERT(assertCast<i64>(i8(-100)) == -100);
+    ASSERT(assertCast<u64>(u8(200)) == 200u);
+    ASSERT(assertCast<f64>(1.5f) == 1.5);
+    ASSERT(assertCast<i32>(u8(255)) == 255);
+}
+
+TEST(testAssertCastNarrow)
+{
+    static_assert(assertCast<i32>(100LL) == 100);
+    static_assert(assertCast<u8>(42u) == 42u);
+    static_assert(assertCast<f32>(2.5) == 2.5f);
+    ASSERT(assertCast<i32>(100LL) == 100);
+    ASSERT(assertCast<i16>(-30000) == -30000);
+    ASSERT(assertCast<u8>(42u) == 42u);
+    ASSERT(assertCast<f32>(2.5) == 2.5f);
+}
+
+TEST(testAssertCastUpperBoundary)
+{
+    static_assert(assertCast<i64>(std::numeric_limits<u32>::max()) == 4294967295LL);
+    static_assert(assertCast<i32>(2147483647LL) == std::numeric_limits<i32>::max());
+    static_assert(assertCast<u8>(255u) == 255u);
+    static_assert(assertCast<f32>(std::numeric_limits<f32>::max()) == std::numeric_limits<f32>::max());
+    ASSERT(assertCast<i64>(std::numeric_limits<u32>::max()) == 4294967295LL);
+    ASSERT(assertCast<i32>(2147483647LL) == std::numeric_limits<i32>::max());
+    ASSERT(assertCast<u8>(255u) == 255u);
+    ASSERT(assertCast<i8>(127) == std::numeric_limits<i8>::max());
+    ASSERT(assertCast<f32>(std::numeric_limits<f32>::max()) == std::numeric_limits<f32>::max());
+}
+
+TEST(testAssertCastLowerBoundary)
+{
+    static_assert(assertCast<i32>(-2147483648LL) == std::numeric_limits<i32>::min());
+    static_assert(assertCast<i8>(-128) == std::numeric_limits<i8>::min());
+    static_assert(assertCast<u32>(0u) == 0u);
+    static_assert(assertCast<u64>(0LL) == 0uLL);
+    ASSERT(assertCast<i32>(-2147483648LL) == std::numeric_limits<i32>::min());
+    ASSERT(assertCast<i8>(-128) == std::numeric_limits<i8>::min());
+    ASSERT(assertCast<u32>(0u) == 0u);
+    ASSERT(assertCast<u64>(0LL) == 0uLL);
+    ASSERT(assertCast<f64>(std::numeric_limits<f32>::lowest()) == std::numeric_limits<f32>::lowest());
+}
+
+TEST(testAssertCastSignedUnsigned)
+{
+    static_assert(assertCast<u32>(123) == 123u);
+    static_assert(assertCast<i32>(123u) == 123);
+    static_assert(assertCast<u64>(-0) == 0u);
+    ASSERT(assertCast<u32>(123) == 123u);
+    ASSERT(assertCast<i32>(123u) == 123);
+    ASSERT(assertCast<u64>(i64(1)) == 1u);
+    ASSERT(assertCast<i64>(1u) == 1);
+    ASSERT(assertCast<u32>(i32(0)) == 0u);
+    ASSERT(assertCast<u8>(i32(0)) == 0u);
+}
+
+TEST(testAssertCastFloatToInt)
+{
+    static_assert(assertCast<i32>(3.0) == 3);
+    static_assert(assertCast<i64>(-4.0) == -4);
+    ASSERT(assertCast<i32>(3.0) == 3);
+    ASSERT(assertCast<i64>(-4.0) == -4);
+    ASSERT(assertCast<u32>(7.0) == 7u);
+    ASSERT(assertCast<i32>(3.9) == 3);
+    ASSERT(assertCast<i32>(-3.9) == -3);
+}
+
+TEST(testAssertCastIntToFloat)
+{
+    static_assert(assertCast<f64>(-3) == -3.0);
+    static_assert(assertCast<f32>(100) == 100.0f);
+    ASSERT(assertCast<f64>(-3) == -3.0);
+    ASSERT(assertCast<f32>(100) == 100.0f);
+    ASSERT(assertCast<f64>(1LL << 53) == 9007199254740992.0);
+    ASSERT(assertCast<f64>(1LL << 62) == 4611686018427387904.0);
+}
+
+TEST(testAssertCastReferenceBinding)
+{
+    const f64 val = 4.5;
+    ASSERT(assertCast<i32>(val) == 4);
+    const i64 small = 1000;
+    ASSERT(assertCast<u16>(small) == 1000u);
+}
 
 TEST(testAlignUpAlreadyAligned)
 {
@@ -55,40 +173,6 @@ TEST(testEndianReverse64)
     ASSERT(endianReverse64(0xFFFFFFFFFFFFFFFFull) == 0xFFFFFFFFFFFFFFFFull);
 }
 
-TEST(testSizeContainer)
-{
-    std::vector<u32> vec;
-    vec.push_back(10);
-    vec.push_back(20);
-    vec.push_back(30);
-    ASSERT(vec.size() == 3);
-}
-
-TEST(testSizeCArray)
-{
-    i32 arr[5] = {1, 2, 3, 4, 5};
-    ASSERT(std::size(arr) == 5);
-}
-
-struct IdxTypeA {};
-struct IdxTypeB {};
-struct IdxTypeC {};
-
-TEST(testIdxOfFirst)
-{
-    ASSERT((idxInPack<IdxTypeA, IdxTypeA, IdxTypeB, IdxTypeC>()) == 0);
-}
-
-TEST(testIdxOfMiddle)
-{
-    ASSERT((idxInPack<IdxTypeB, IdxTypeA, IdxTypeB, IdxTypeC>()) == 1);
-}
-
-TEST(testIdxOfLast)
-{
-    ASSERT((idxInPack<IdxTypeC, IdxTypeA, IdxTypeB, IdxTypeC>()) == 2);
-}
-
 TEST(testAlignUpLargeValues)
 {
     ASSERT(alignUp(0xFFFFFFFFFFFFFFFEull, 4) == 0ull);
@@ -117,110 +201,41 @@ TEST(testEndianReverse64SingleByte)
     ASSERT(endianReverse64(0x0000000000000001ull) == 0x0100000000000000ull);
 }
 
-TEST(testErrorSetGet)
+struct MatchVisitor
 {
-    setError("test error");
-    std::string_view err = getError();
-    ASSERT(err == "test error");
+    i32 operator()(i32 v) const { return v * 3; }
+    i32 operator()(const std::string& s) const { return i32(s.size()); }
+};
+
+TEST(testMatch)
+{
+    std::variant<i32, f64, std::string> var = 42;
+    ASSERT(match(var, [](i32 v) { return i64(v) * 2; }, [](f64 v) { return i64(v); }, [](const std::string& s) { return i64(s.size()) * 2; }) == 84);
+    var = 1.5;
+    ASSERT(match(var, [](i32 v) { return i64(v) * 2; }, [](f64 v) { return i64(v); }, [](const std::string& s) { return i64(s.size()) * 2; }) == 1);
+    var = "hello";
+    ASSERT(match(var, [](i32 v) { return i64(v) * 2; }, [](f64 v) { return i64(v); }, [](const std::string& s) { return i64(s.size()) * 2; }) == 10);
+
+    ASSERT(match(var, MatchVisitor{}) == 5);
+    ASSERT(match(var, [](auto v) { return i64(std::is_same_v<decltype(v), std::string>); }) == 1);
+
+    const std::variant<i32, std::string> cvar = std::string("hi");
+    ASSERT(match(cvar, [](i32) { return 1; }, [](const std::string& s) { return i32(s.size()); }) == 2);
+
+    std::variant<i32, bool> var2 = true;
+    std::string out;
+    match(var2, [&out](i32) { out = "int"; }, [&out](bool) { out = "bool"; });
+    ASSERT(out == "bool");
+    var2 = 3;
+    match(var2, [&out](i32) { out = "int"; }, [&out](bool) { out = "bool"; });
+    ASSERT(out == "int");
 }
 
-TEST(testErrorReplace)
+TEST(testMatchMutate)
 {
-    setError("first error");
-    setError("second error");
-    std::string_view err = getError();
-    ASSERT(err == "second error");
-}
-
-TEST(testErrorClear)
-{
-    setError("something");
-    setError("");
-    std::string_view err = getError();
-    ASSERT(err.length() == 0);
-}
-
-TEST(testErrorAtBoundary)
-{
-    std::string longStr(4095, 'x');
-    ASSERT(longStr.length() == 4095);
-
-    setError(longStr);
-    std::string_view err = getError();
-    ASSERT(err.length() == 4095);
-}
-
-TEST(testErrorExceedsBoundary)
-{
-    std::string longStr(5000, 'x');
-    ASSERT(longStr.length() == 5000);
-
-    setError(longStr);
-    std::string_view err = getError();
-    ASSERT(err.length() == 4095);
-}
-
-TEST(testErrorFormatInt)
-{
-    setError("error code {}", 42);
-    std::string_view err = getError();
-    ASSERT(err == "error code 42");
-}
-
-TEST(testErrorFormatString)
-{
-    setError("failed to load \"{}\"", "texture.png");
-    std::string_view err = getError();
-    ASSERT(err == "failed to load \"texture.png\"");
-}
-
-TEST(testErrorFormatMultiple)
-{
-    setError("{}:{}: {}", "file.txt", 128, "unexpected token");
-    std::string_view err = getError();
-    ASSERT(err == "file.txt:128: unexpected token");
-}
-
-TEST(testErrorFormatTruncated)
-{
-    std::string longStr(4090, 'x');
-
-    setError("{}", longStr);
-    std::string_view err = getError();
-    ASSERT(err.length() == 4090);
-
-    std::string tooLong(5000, 'x');
-
-    setError("{}", tooLong);
-    err = getError();
-    ASSERT(err.length() == 4095);
-}
-
-TEST(testErrorFreshState)
-{
-    setError("");
-    std::string_view err = getError();
-    ASSERT(err.length() == 0);
-    ASSERT(err.data() != nullptr);
-}
-
-TEST(testLogErrorNormal)
-{
-    setError("log test message");
-    logError();
-}
-
-TEST(testLogErrorEmpty)
-{
-    setError("");
-    logError();
-}
-
-TEST(testLogErrorLong)
-{
-    std::string longStr(512, 'x');
-    setError(longStr);
-    logError();
+    std::variant<i32, std::string> var = 21;
+    match(var, [](i32& v) { v *= 2; }, [](std::string&) {});
+    ASSERT(std::get<i32>(var) == 42);
 }
 
 TEST(testIsWhitespace)

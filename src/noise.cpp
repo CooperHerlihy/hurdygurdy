@@ -33,44 +33,44 @@ u32 noise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
 
 f32 noiseNorm(u32 seed, f32 pos)
 {
-    return static_cast<f32>(
+    return assertCast<f32>(
         noise(
             seed,
             std::bit_cast<u32>(pos)))
-        / static_cast<f32>(UINT32_MAX);
+        / assertCast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm2D(u32 seed, Vec2 pos)
 {
-    return static_cast<f32>(
+    return assertCast<f32>(
         noise2D(
             seed,
             std::bit_cast<u32>(pos.x()),
             std::bit_cast<u32>(pos.y())))
-        / static_cast<f32>(UINT32_MAX);
+        / assertCast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm3D(u32 seed, Vec3 pos)
 {
-    return static_cast<f32>(
+    return assertCast<f32>(
         noise3D(
             seed,
             std::bit_cast<u32>(pos.x()),
             std::bit_cast<u32>(pos.y()),
             std::bit_cast<u32>(pos.z())))
-        / static_cast<f32>(UINT32_MAX);
+        / assertCast<f32>(UINT32_MAX);
 }
 
 f32 noiseNorm4D(u32 seed, Vec4 pos)
 {
-    return static_cast<f32>(
+    return assertCast<f32>(
         noise4D(
             seed,
             std::bit_cast<u32>(pos.x()),
             std::bit_cast<u32>(pos.y()),
             std::bit_cast<u32>(pos.z()),
             std::bit_cast<u32>(pos.w()))
-        ) / static_cast<f32>(UINT32_MAX);
+        ) / assertCast<f32>(UINT32_MAX);
 }
 
 f32 noiseVec1D(u32 seed, f32 pos)
@@ -97,7 +97,7 @@ u32 Rng::next()
 
 u64 Rng::next64()
 {
-    return (static_cast<u64>(next()) << 32) | static_cast<u64>(next());
+    return (assertCast<u64>(next()) << 32) | assertCast<u64>(next());
 }
 
 } // namespace hg

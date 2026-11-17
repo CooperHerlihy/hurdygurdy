@@ -4,6 +4,7 @@
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"
 #include "hg/hash.hpp"
+#include "hg/utility.hpp"
 
 #include <vector>
 #include <string_view>
@@ -358,9 +359,9 @@ void InputDeviceX11::updateDisplayInfo()
     if (res == nullptr)
         return;
 
-    displays.resize(static_cast<u64>(res->ncrtc));
+    displays.resize(assertCast<u64>(res->ncrtc));
 
-    for (u32 i = 0; i < static_cast<u32>(res->ncrtc); i++)
+    for (u32 i = 0; i < assertCast<u32>(res->ncrtc); i++)
     {
         DisplayInfo& info = displays[i];
 
@@ -456,17 +457,17 @@ std::unique_ptr<InputDeviceX11> InputDeviceX11::create()
     }
 
     // Create default cursors
-    device->cursors[CursorType_arrow] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_left_ptr));
-    device->cursors[CursorType_textInput] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_xterm));
-    device->cursors[CursorType_resizeAll] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_fleur));
-    device->cursors[CursorType_resizeNESW] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_plus));
-    device->cursors[CursorType_resizeNS] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_sb_v_double_arrow));
-    device->cursors[CursorType_resizeNWSE] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_plus));
-    device->cursors[CursorType_resizeEW] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_sb_h_double_arrow));
-    device->cursors[CursorType_hand] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_hand2));
-    device->cursors[CursorType_wait] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_watch));
-    device->cursors[CursorType_progress] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_watch));
-    device->cursors[CursorType_notAllowed] = xlibFuncs.XCreateFontCursor(device->display,static_cast<unsigned int>(XC_X_cursor));
+    device->cursors[CursorType_arrow] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_left_ptr));
+    device->cursors[CursorType_textInput] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_xterm));
+    device->cursors[CursorType_resizeAll] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_fleur));
+    device->cursors[CursorType_resizeNESW] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_plus));
+    device->cursors[CursorType_resizeNS] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_sb_v_double_arrow));
+    device->cursors[CursorType_resizeNWSE] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_plus));
+    device->cursors[CursorType_resizeEW] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_sb_h_double_arrow));
+    device->cursors[CursorType_hand] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_hand2));
+    device->cursors[CursorType_wait] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_watch));
+    device->cursors[CursorType_progress] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_watch));
+    device->cursors[CursorType_notAllowed] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_X_cursor));
 
     // Enumerate displays
     device->updateDisplayInfo();
@@ -590,7 +591,7 @@ void InputDeviceX11::processEvents()
                         Event e{};
                         e.type = EventType_text;
                         std::memset(e.text, 0, sizeof(e.text));
-                        std::memcpy(e.text, buf, static_cast<u64>(len));
+                        std::memcpy(e.text, buf, assertCast<u64>(len));
                         events.push_back(e);
                     }
                 }
@@ -644,7 +645,7 @@ void InputDeviceX11::processEvents()
                 if (found != nullptr)
                 {
                     WindowX11* window = *found;
-                    Vec2 newPos{static_cast<f32>(event.xmotion.x), static_cast<f32>(event.xmotion.y)};
+                    Vec2 newPos{assertCast<f32>(event.xmotion.x), assertCast<f32>(event.xmotion.y)};
                     Vec2 delta = newPos - window->mouse;
                     window->mouse = newPos;
                     mouseDeltaAccum += delta;
@@ -653,7 +654,7 @@ void InputDeviceX11::processEvents()
                     e.type = EventType_mouseMoved;
                     e.mouse.delta = delta;
                     e.mouse.pos = newPos;
-                    e.mouse.globalPos = Vec2{static_cast<f32>(event.xmotion.x_root), static_cast<f32>(event.xmotion.y_root)};
+                    e.mouse.globalPos = Vec2{assertCast<f32>(event.xmotion.x_root), assertCast<f32>(event.xmotion.y_root)};
                     events.push_back(e);
                 }
                 break;
@@ -696,8 +697,8 @@ void InputDeviceX11::processEvents()
                 if (found != nullptr)
                 {
                     WindowX11* window = *found;
-                    u32 newW = static_cast<u32>(event.xconfigure.width);
-                    u32 newH = static_cast<u32>(event.xconfigure.height);
+                    u32 newW = assertCast<u32>(event.xconfigure.width);
+                    u32 newH = assertCast<u32>(event.xconfigure.height);
 
                     if (newW != window->width || newH != window->height)
                     {
@@ -804,7 +805,7 @@ void InputDeviceX11::processEvents()
                                 8,
                                 PropModeReplace,
                                 reinterpret_cast<const unsigned char*>(clipboard.data()),
-                                static_cast<int>(clipboard.size())
+                                assertCast<int>(clipboard.size())
                             );
                             reply.xselection.property = event.xselectionrequest.property;
                         }
@@ -858,7 +859,7 @@ std::unique_ptr<Window> InputDeviceX11::createWindow(const WindowConfig& config)
         display,
         root,
         0, 0,
-        static_cast<u16>(width), static_cast<u16>(height),
+        assertCast<u16>(width), assertCast<u16>(height),
         0,
         CopyFromParent,
         InputOutput,
@@ -967,14 +968,14 @@ Vec2 InputDeviceX11::mousePos()
 Vec2 InputDeviceX11::mouseDelta()
 {
     if (activeWindow != nullptr)
-        return mouseDeltaAccum / static_cast<f32>(activeWindow->height);
+        return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
 
     if (windows.count == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](::Window, WindowX11* wd)
         {
-            ret = ret / static_cast<f32>(wd->height);
+            ret = ret / assertCast<f32>(wd->height);
         });
         return ret;
     }
@@ -1098,7 +1099,7 @@ void WindowX11::setFullscreen(bool set)
     event.xclient.message_type = dev->wmStateAtom;
     event.xclient.format = 32;
     event.xclient.data.l[0] = set ? 1 : 0; // _NET_WM_STATE_ADD or _NET_WM_STATE_REMOVE
-    event.xclient.data.l[1] = static_cast<long>(dev->wmStateFullscreen);
+    event.xclient.data.l[1] = assertCast<long>(dev->wmStateFullscreen);
     event.xclient.data.l[2] = 0;
     event.xclient.data.l[3] = 1;
 

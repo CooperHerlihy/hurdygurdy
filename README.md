@@ -88,9 +88,9 @@ Complete runnable versions live in [src/example2d.cpp](src/example2d.cpp) and
 
 ## Integration
 
-With [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html):
+With CMake and [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html):
 
-```cmake
+```cmake CMakeLists.txt
 include(FetchContent)
 FetchContent_Declare(hurdygurdy
     GIT_REPOSITORY https://github.com/CooperHerlihy/hurdygurdy
@@ -103,7 +103,7 @@ target_link_libraries(my_game hurdygurdy)
 
 Or clone and use `add_subdirectory`:
 
-```cmake
+```cmake CMakeLists.txt
 add_subdirectory(path/to/hurdygurdy)
 target_link_libraries(my_game hurdygurdy)
 ```

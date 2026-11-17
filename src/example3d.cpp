@@ -24,7 +24,7 @@ int main()
 
     u32 width, height;
     window->size(&width, &height);
-    f32 aspect = height == 0 ? 1 : static_cast<f32>(width) / static_cast<f32>(height);
+    f32 aspect = height == 0 ? 1 : assertCast<f32>(width) / assertCast<f32>(height);
 
     Renderer3D renderer{window->swapchainFormat(), Format_d32_sfloat};
 
@@ -132,7 +132,7 @@ int main()
         if (window->wasResized())
         {
             window->size(&width, &height);
-            aspect = static_cast<f32>(width) / static_cast<f32>(height);
+            aspect = assertCast<f32>(width) / assertCast<f32>(height);
             camera.projection = Perspective{aspect, pif / 2.0f, 0.1f, 100.0f};
 
             depthImg = GpuImage::create(width, height, Format_d32_sfloat,
@@ -150,23 +150,23 @@ int main()
         }
 
         Vec3 movement = Vec3{0.0f};
-        movement.y() += static_cast<f32>(input->isButtonDown(Button_space) - input->isButtonDown(Button_lshift));
-        movement.x() += static_cast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a));
-        movement.z() += static_cast<f32>(input->isButtonDown(Button_w) - input->isButtonDown(Button_s));
+        movement.y() += assertCast<f32>(input->isButtonDown(Button_space) - input->isButtonDown(Button_lshift));
+        movement.x() += assertCast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a));
+        movement.z() += assertCast<f32>(input->isButtonDown(Button_w) - input->isButtonDown(Button_s));
 
         if (movement != Vec3{0.0f})
         {
-            f32 moveSpeed = 1.5f * static_cast<f32>(delta);
+            f32 moveSpeed = 1.5f * assertCast<f32>(delta);
             Vec3 rotated = rotate(camera.rotation, {movement.x(), 0.0f, movement.z()});;
             camera.position += normalize(Vec3{rotated.x(), movement.y(), rotated.z()}) * moveSpeed;
         }
 
-        modelRot += static_cast<f32>(delta) * 0.5f;
+        modelRot += assertCast<f32>(delta) * 0.5f;
         camera.update();
 
         renderer.drawDirectionalLight(Vec3{0.03f}, {-0.3f, 0.8f, 0.5f});
 
-        f32 time = static_cast<f32>(elapsed);
+        f32 time = assertCast<f32>(elapsed);
         Vec3 lightPos1{std::sin(time) * 3.0f, 1.5f, std::cos(time) * 3.0f};
         Vec3 lightPos2{std::sin(time + 2.094f) * 3.0f, 1.5f, std::cos(time + 2.094f) * 3.0f};
         Vec3 lightPos3{std::sin(time + 4.188f) * 3.0f, 1.5f, std::cos(time + 4.188f) * 3.0f};
@@ -188,8 +188,8 @@ int main()
             {
                 if (x == 0 && z == 0)
                     continue;
-                f32 hx = static_cast<f32>(x) * 2.0f;
-                f32 hz = static_cast<f32>(z) * 2.0f;
+                f32 hx = assertCast<f32>(x) * 2.0f;
+                f32 hz = assertCast<f32>(z) * 2.0f;
                 Mat4 t = matModel3D(Vec3{hx, 0.0f, hz}, Vec3{0.6f}, 1.0f);
                 renderer.drawModel(mesh, whiteTex, normalTex, 0.7f, 32.0f, t);
             }

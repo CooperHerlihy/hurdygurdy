@@ -4,6 +4,7 @@
 #include "hg/error.hpp"
 #include "hg/dynlib.hpp"
 #include "hg/hash.hpp"
+#include "hg/utility.hpp"
 
 #include <vector>
 #include <string_view>
@@ -724,7 +725,7 @@ void InputDeviceWayland::keyboardKey(void* data, struct wl_keyboard* keyboard,
             Event event{};
             event.type = EventType_text;
             std::memset(event.text, 0, sizeof(event.text));
-            std::memcpy(event.text, buf, static_cast<u64>(len));
+            std::memcpy(event.text, buf, assertCast<u64>(len));
             wlDevice->events.push_back(event);
         }
     }
@@ -777,8 +778,8 @@ void InputDeviceWayland::pointerEnter(void* data, struct wl_pointer* pointer,
     WindowWayland** found = wlDevice->windows.get(surfaceKey(surface));
     if (found != nullptr)
     {
-        (*found)->mouse.x() = static_cast<f32>(wl_fixed_to_double(sx));
-        (*found)->mouse.y() = static_cast<f32>(wl_fixed_to_double(sy));
+        (*found)->mouse.x() = assertCast<f32>(wl_fixed_to_double(sx));
+        (*found)->mouse.y() = assertCast<f32>(wl_fixed_to_double(sy));
     }
 }
 
@@ -807,7 +808,7 @@ void InputDeviceWayland::pointerMotion(void* data, struct wl_pointer* pointer,
     WindowWayland** found = wlDevice->windows.get(surfaceKey(wlDevice->pointerFocus));
     if (found != nullptr)
     {
-        Vec2 newPos{static_cast<f32>(wl_fixed_to_double(sx)), static_cast<f32>(wl_fixed_to_double(sy))};
+        Vec2 newPos{assertCast<f32>(wl_fixed_to_double(sx)), assertCast<f32>(wl_fixed_to_double(sy))};
         Vec2 delta = newPos - (*found)->mouse;
         (*found)->mouse = newPos;
         wlDevice->mouseDeltaAccum += delta;
@@ -852,7 +853,7 @@ void InputDeviceWayland::pointerAxis(void* data, struct wl_pointer* pointer,
     (void)time;
 
     Vec2 delta{};
-    f32 amount = static_cast<f32>(wl_fixed_to_double(value));
+    f32 amount = assertCast<f32>(wl_fixed_to_double(value));
 
     if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
         delta.y() = amount;
@@ -942,7 +943,7 @@ void InputDeviceWayland::outputGeometry(void* data, struct wl_output* output,
         if (wlDevice->outputs[i] == output)
         {
             if (wlDevice->displays.size() <= i)
-                wlDevice->displays.resize(static_cast<u64>(i + 1));
+                wlDevice->displays.resize(assertCast<u64>(i + 1));
             wlDevice->displays[i].posX = x;
             wlDevice->displays[i].posY = y;
             break;
@@ -964,9 +965,9 @@ void InputDeviceWayland::outputMode(void* data, struct wl_output* output,
         if (wlDevice->outputs[i] == output)
         {
             if (wlDevice->displays.size() <= i)
-                wlDevice->displays.resize(static_cast<u64>(i + 1));
-            wlDevice->displays[i].sizeW = static_cast<u32>(width);
-            wlDevice->displays[i].sizeH = static_cast<u32>(height);
+                wlDevice->displays.resize(assertCast<u64>(i + 1));
+            wlDevice->displays[i].sizeW = assertCast<u32>(width);
+            wlDevice->displays[i].sizeH = assertCast<u32>(height);
             wlDevice->displays[i].workPosX = wlDevice->displays[i].posX;
             wlDevice->displays[i].workPosY = wlDevice->displays[i].posY;
             wlDevice->displays[i].workSizeW = wlDevice->displays[i].sizeW;
@@ -992,8 +993,8 @@ void InputDeviceWayland::outputScale(void* data, struct wl_output* output, int32
         if (wlDevice->outputs[i] == output)
         {
             if (wlDevice->displays.size() <= i)
-                wlDevice->displays.resize(static_cast<u64>(i + 1));
-            wlDevice->displays[i].dpiScale = static_cast<f32>(factor);
+                wlDevice->displays.resize(assertCast<u64>(i + 1));
+            wlDevice->displays[i].dpiScale = assertCast<f32>(factor);
             break;
         }
     }
@@ -1117,8 +1118,8 @@ void InputDeviceWayland::xdgToplevelConfigure(void* data, struct xdg_toplevel* t
 
     if (width > 0 && height > 0)
     {
-        u32 newW = static_cast<u32>(width);
-        u32 newH = static_cast<u32>(height);
+        u32 newW = assertCast<u32>(width);
+        u32 newH = assertCast<u32>(height);
 
         if (newW != window->width || newH != window->height)
         {
@@ -1319,8 +1320,8 @@ void InputDeviceWayland::readClipboard()
     while ((n = read(clipboardFd, buf, sizeof(buf))) > 0)
     {
         u64 old = clipboardIncoming.size();
-        clipboardIncoming.resize(old + static_cast<u64>(n));
-        std::memcpy(clipboardIncoming.data() + old, buf, static_cast<u64>(n));
+        clipboardIncoming.resize(old + assertCast<u64>(n));
+        std::memcpy(clipboardIncoming.data() + old, buf, assertCast<u64>(n));
     }
     if (n == 0)
         eof = true;
@@ -1526,14 +1527,14 @@ Vec2 InputDeviceWayland::mousePos()
 Vec2 InputDeviceWayland::mouseDelta()
 {
     if (activeWindow != nullptr)
-        return mouseDeltaAccum / static_cast<f32>(activeWindow->height);
+        return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
 
     if (windows.count == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](u64, WindowWayland* wd)
         {
-            ret = ret / static_cast<f32>(wd->height);
+            ret = ret / assertCast<f32>(wd->height);
         });
         return ret;
     }
@@ -1752,7 +1753,7 @@ Vec2 WindowWayland::mousePos() const
 
 Vec2 WindowWayland::mouseDelta() const
 {
-    return static_cast<InputDeviceWayland*>(device)->mouseDeltaAccum / static_cast<f32>(height);
+    return static_cast<InputDeviceWayland*>(device)->mouseDeltaAccum / assertCast<f32>(height);
 }
 
 } // namespace hg

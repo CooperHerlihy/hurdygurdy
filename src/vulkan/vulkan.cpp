@@ -3,6 +3,7 @@
 #include "internal.hpp"
 #include "hg/error.hpp"
 #include "hg/memory.hpp"
+#include "hg/utility.hpp"
 
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
@@ -272,7 +273,7 @@ static VkInstance createInstance(std::span<std::string_view> extensions)
         const char* layers[]{
             "VK_LAYER_KHRONOS_validation",
         };
-        instanceInfo.enabledLayerCount = static_cast<u32>(std::size(layers));
+        instanceInfo.enabledLayerCount = assertCast<u32>(std::size(layers));
         instanceInfo.ppEnabledLayerNames = layers;
     }
 
@@ -287,7 +288,7 @@ static VkInstance createInstance(std::span<std::string_view> extensions)
     }
     if (vk.enableDebugMessenger)
         extCStrs.emplace_back("VK_EXT_debug_utils");
-    instanceInfo.enabledExtensionCount = static_cast<u32>(extCStrs.size());
+    instanceInfo.enabledExtensionCount = assertCast<u32>(extCStrs.size());
     instanceInfo.ppEnabledExtensionNames = extCStrs.data();
 
     VkInstance instance = nullptr;
@@ -362,7 +363,7 @@ static VkPhysicalDevice findPhysicalDevice()
         extProps.resize(propCount);
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &propCount, extProps.data());
 
-        for (u32 j = 0; j < static_cast<u32>(std::size(deviceExtensions)); j++)
+        for (u32 j = 0; j < assertCast<u32>(std::size(deviceExtensions)); j++)
         {
             for (u32 k = 0; k < propCount; k++)
             {
@@ -443,7 +444,7 @@ static VkDevice createDevice()
     deviceInfo.pEnabledFeatures = &features;
     if (vk.surfaceExtensions)
     {
-        deviceInfo.enabledExtensionCount = static_cast<u32>(std::size(deviceExtensions));
+        deviceInfo.enabledExtensionCount = assertCast<u32>(std::size(deviceExtensions));
         deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     }
 
@@ -488,7 +489,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     info.maxSets = 1;
-    info.poolSizeCount = static_cast<u32>(std::size(sizes));
+    info.poolSizeCount = assertCast<u32>(std::size(sizes));
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
@@ -515,14 +516,14 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    flagsInfo.bindingCount = static_cast<u32>(std::size(bindings));
+    flagsInfo.bindingCount = assertCast<u32>(std::size(bindings));
     flagsInfo.pBindingFlags = flags;
 
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &flagsInfo;
     info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    info.bindingCount = static_cast<u32>(std::size(bindings));
+    info.bindingCount = assertCast<u32>(std::size(bindings));
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;

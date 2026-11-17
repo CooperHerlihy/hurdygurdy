@@ -108,7 +108,7 @@ TEST(testLoadAndStoreLargeFile)
     u64 size = 65536;
     std::vector<u8> data(size);
     for (u64 i = 0; i < size; ++i)
-        data[i] = static_cast<u8>(i & 0xFF);
+        data[i] = assertCast<u8>(i & 0xFF);
 
     ASSERT(storeFile(data, path));
 
@@ -117,7 +117,7 @@ TEST(testLoadAndStoreLargeFile)
     ASSERT(loaded->size() == size);
     for (u64 i = 0; i < size; ++i)
     {
-        ASSERT((*loaded)[i] == static_cast<u8>(i & 0xFF));
+        ASSERT((*loaded)[i] == assertCast<u8>(i & 0xFF));
     }
     cleanupTestDir();
 }

@@ -219,10 +219,10 @@ GpuImage GpuImage::createEx(const GpuImageCreateInfo& create)
     img.data->width = create.width;
     img.data->height = create.height;
     img.data->depth = create.dimensions >= 3 ? create.depth : 1;
-    img.data->dimensions = static_cast<u8>(create.dimensions);
-    img.data->mipLevels = static_cast<u8>(create.mipLevels);
-    img.data->arrayLayers = static_cast<u8>(create.arrayLayers);
-    img.data->msaaSamples = static_cast<u8>(create.msaaSamples);
+    img.data->dimensions = assertCast<u8>(create.dimensions);
+    img.data->mipLevels = assertCast<u8>(create.mipLevels);
+    img.data->arrayLayers = assertCast<u8>(create.arrayLayers);
+    img.data->msaaSamples = assertCast<u8>(create.msaaSamples);
 
     return img;
 }
@@ -318,10 +318,10 @@ GpuView GpuView::createEx(const GpuViewCreateInfo& config)
     view.data->usage = image->usage;
     view.data->type = config.type;
     view.data->aspectFlags = config.aspectFlags;
-    view.data->baseMipLevel = static_cast<u8>(config.baseMipLevel);
-    view.data->levelCount = static_cast<u8>(config.levelCount);
-    view.data->baseArrayLayer = static_cast<u8>(config.baseArrayLayer);
-    view.data->layerCount = static_cast<u8>(config.layerCount);
+    view.data->baseMipLevel = assertCast<u8>(config.baseMipLevel);
+    view.data->levelCount = assertCast<u8>(config.levelCount);
+    view.data->baseArrayLayer = assertCast<u8>(config.baseArrayLayer);
+    view.data->layerCount = assertCast<u8>(config.layerCount);
 
     return view;
 }
@@ -380,7 +380,7 @@ u32 GpuView::storageDescriptor() const
 
 void GpuView::write(std::span<const std::byte> src)
 {
-    u64 size = static_cast<u64>(data->image->width)
+    u64 size = assertCast<u64>(data->image->width)
              * data->image->height
              * data->image->depth
              * formatToSize(data->image->format);
@@ -438,7 +438,7 @@ void GpuView::writeCubemap(std::span<const std::byte> src)
     HG_ASSERT(data->baseArrayLayer == 0);
     HG_ASSERT(data->layerCount >= 6);
 
-    u64 size = static_cast<u64>(data->image->width) * data->image->height * formatToSize(data->image->format);
+    u64 size = assertCast<u64>(data->image->width) * data->image->height * formatToSize(data->image->format);
 
     HG_ASSERT(src.size() == size * 4 * 3);
 
@@ -513,7 +513,7 @@ void GpuView::writeCubemap(std::span<const std::byte> src)
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = static_cast<u32>(std::size(transferBarriers));
+    transferDep.imageMemoryBarrierCount = assertCast<u32>(std::size(transferBarriers));
     transferDep.pImageMemoryBarriers = transferBarriers;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &transferDep);
@@ -521,37 +521,37 @@ void GpuView::writeCubemap(std::span<const std::byte> src)
     VkImageCopy regions[6]{};
 
     regions[0].srcSubresource = {gpuAspectToVk(data->aspectFlags), 0, 0, 1};
-    regions[0].srcOffset = {static_cast<int>(data->image->width) * 2, static_cast<int>(data->image->height) * 1, 0};
+    regions[0].srcOffset = {assertCast<int>(data->image->width) * 2, assertCast<int>(data->image->height) * 1, 0};
     regions[0].dstSubresource = {gpuAspectToVk(data->aspectFlags), data->baseMipLevel, 0, 1};
     regions[0].dstOffset = {};
     regions[0].extent = {data->image->width, data->image->height, 1};
 
     regions[1].srcSubresource = {gpuAspectToVk(data->aspectFlags), 0, 0, 1};
-    regions[1].srcOffset = {static_cast<int>(data->image->width) * 0, static_cast<int>(data->image->height) * 1, 0};
+    regions[1].srcOffset = {assertCast<int>(data->image->width) * 0, assertCast<int>(data->image->height) * 1, 0};
     regions[1].dstSubresource = {gpuAspectToVk(data->aspectFlags), data->baseMipLevel, 1, 1};
     regions[1].dstOffset = {};
     regions[1].extent = {data->image->width, data->image->height, 1};
 
     regions[2].srcSubresource = {gpuAspectToVk(data->aspectFlags), 0, 0, 1};
-    regions[2].srcOffset = {static_cast<int>(data->image->width) * 1, static_cast<int>(data->image->height) * 2, 0};
+    regions[2].srcOffset = {assertCast<int>(data->image->width) * 1, assertCast<int>(data->image->height) * 2, 0};
     regions[2].dstSubresource = {gpuAspectToVk(data->aspectFlags), data->baseMipLevel, 2, 1};
     regions[2].dstOffset = {};
     regions[2].extent = {data->image->width, data->image->height, 1};
 
     regions[3].srcSubresource = {gpuAspectToVk(data->aspectFlags), 0, 0, 1};
-    regions[3].srcOffset = {static_cast<int>(data->image->width) * 1, static_cast<int>(data->image->height) * 0, 0};
+    regions[3].srcOffset = {assertCast<int>(data->image->width) * 1, assertCast<int>(data->image->height) * 0, 0};
     regions[3].dstSubresource = {gpuAspectToVk(data->aspectFlags), data->baseMipLevel, 3, 1};
     regions[3].dstOffset = {};
     regions[3].extent = {data->image->width, data->image->height, 1};
 
     regions[4].srcSubresource = {gpuAspectToVk(data->aspectFlags), 0, 0, 1};
-    regions[4].srcOffset = {static_cast<int>(data->image->width) * 1, static_cast<int>(data->image->height) * 1, 0};
+    regions[4].srcOffset = {assertCast<int>(data->image->width) * 1, assertCast<int>(data->image->height) * 1, 0};
     regions[4].dstSubresource = {gpuAspectToVk(data->aspectFlags), data->baseMipLevel, 4, 1};
     regions[4].dstOffset = {};
     regions[4].extent = {data->image->width, data->image->height, 1};
 
     regions[5].srcSubresource = {gpuAspectToVk(data->aspectFlags), 0, 0, 1};
-    regions[5].srcOffset = {static_cast<int>(data->image->width) * 3, static_cast<int>(data->image->height) * 1, 0};
+    regions[5].srcOffset = {assertCast<int>(data->image->width) * 3, assertCast<int>(data->image->height) * 1, 0};
     regions[5].dstSubresource = {gpuAspectToVk(data->aspectFlags), data->baseMipLevel, 5, 1};
     regions[5].dstOffset = {};
     regions[5].extent = {data->image->width, data->image->height, 1};
@@ -562,7 +562,7 @@ void GpuView::writeCubemap(std::span<const std::byte> src)
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         data->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        static_cast<u32>(std::size(regions)),
+        assertCast<u32>(std::size(regions)),
         regions);
 
     gpuCmdEnd(cmd);
@@ -583,7 +583,7 @@ void GpuView::read(std::span<std::byte> dst) const
     if (mipH < 1) mipH = 1;
     if (mipD < 1) mipD = 1;
 
-    u64 size = static_cast<u64>(mipW) * mipH * mipD * formatToSize(data->image->format);
+    u64 size = assertCast<u64>(mipW) * mipH * mipD * formatToSize(data->image->format);
 
     HG_ASSERT(dst.size() == size);
 
@@ -645,9 +645,9 @@ void GpuView::genMipmaps()
     GpuCmd* cmd = gpuCmdBegin();
 
     VkOffset3D mipOffset{};
-    mipOffset.x = static_cast<i32>(data->image->width);
-    mipOffset.y = static_cast<i32>(data->image->height);
-    mipOffset.z = static_cast<i32>(data->image->depth);
+    mipOffset.x = assertCast<i32>(data->image->width);
+    mipOffset.y = assertCast<i32>(data->image->height);
+    mipOffset.z = assertCast<i32>(data->image->depth);
 
     VkImageMemoryBarrier2 barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -669,7 +669,7 @@ void GpuView::genMipmaps()
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 
-    for (u32 level = 0; level < static_cast<u32>(data->levelCount) - 1; ++level)
+    for (u32 level = 0; level < assertCast<u32>(data->levelCount) - 1; ++level)
     {
         barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
         barrier.srcAccessMask = VK_ACCESS_NONE;
@@ -727,7 +727,7 @@ u32 getMaxMipmaps(u32 width, u32 height, u32 depth)
 {
     u32 max = width > height ? width : height;
     max = max > depth ? max : depth;
-    return max == 0 ? 0 : static_cast<u32>(std::log2(static_cast<f32>(max))) + 1;
+    return max == 0 ? 0 : assertCast<u32>(std::log2(assertCast<f32>(max))) + 1;
 }
 
 static VkShaderModule createShaderModule(std::span<const u8> spirvCode)
@@ -864,7 +864,7 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlendState.logicOpEnable = VK_FALSE;
     colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    colorBlendState.attachmentCount = static_cast<u32>(colorBlendAttachments.size());
+    colorBlendState.attachmentCount = assertCast<u32>(colorBlendAttachments.size());
     colorBlendState.pAttachments = colorBlendAttachments.data();
     for (float& blendConstant : colorBlendState.blendConstants)
     {
@@ -874,11 +874,11 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = static_cast<u32>(std::size(dynamicStates));
+    dynamicState.dynamicStateCount = assertCast<u32>(std::size(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
     VectorTemp<VkFormat> colorFormats{scratch};
-    colorFormats.reserve(static_cast<u32>(config.colorAttachmentFormats.size()));
+    colorFormats.reserve(assertCast<u32>(config.colorAttachmentFormats.size()));
     for (u32 i = 0; i < config.colorAttachmentFormats.size(); ++i)
     {
         colorFormats.push_back(formatToVk(config.colorAttachmentFormats[i]));
@@ -888,7 +888,7 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
 
     VkPipelineRenderingCreateInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    renderingInfo.colorAttachmentCount = static_cast<u32>(colorFormats.size());
+    renderingInfo.colorAttachmentCount = assertCast<u32>(colorFormats.size());
     renderingInfo.pColorAttachmentFormats = colorFormats.data();
     renderingInfo.depthAttachmentFormat = depthFormat;
     renderingInfo.stencilAttachmentFormat = stencilFormat;
@@ -896,7 +896,7 @@ GpuPipeline GpuPipeline::graphics(const GpuGraphicsPipelineCreateInfo& config)
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = static_cast<u32>(std::size(shaderStages));
+    pipelineInfo.stageCount = assertCast<u32>(std::size(shaderStages));
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputState;
     pipelineInfo.pInputAssemblyState = &inputAssemblyState;
@@ -1058,7 +1058,7 @@ void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, std::span<const 
             ? VK_SHADER_STAGE_COMPUTE_BIT
             : VK_SHADER_STAGE_ALL,
         0,
-        static_cast<u32>(push.size()),
+        assertCast<u32>(push.size()),
         push.data());
 }
 
@@ -1080,9 +1080,9 @@ void gpuMemoryBarrier(
     ArenaScope scratch = getScratch();
 
     VectorTemp<VkBufferMemoryBarrier2> vkBufferBarriers{scratch};
-    vkBufferBarriers.reserve(static_cast<u32>(bufferBarriers.size()));
+    vkBufferBarriers.reserve(assertCast<u32>(bufferBarriers.size()));
     VectorTemp<VkImageMemoryBarrier2> vkImageBarriers{scratch};
-    vkImageBarriers.reserve(static_cast<u32>(imageBarriers.size()));
+    vkImageBarriers.reserve(assertCast<u32>(imageBarriers.size()));
 
     for (const GpuBufferBarrier& barrier : bufferBarriers)
     {
@@ -1125,9 +1125,9 @@ void gpuMemoryBarrier(
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = static_cast<u32>(vkBufferBarriers.size());
+    dep.bufferMemoryBarrierCount = assertCast<u32>(vkBufferBarriers.size());
     dep.pBufferMemoryBarriers = vkBufferBarriers.data();
-    dep.imageMemoryBarrierCount = static_cast<u32>(vkImageBarriers.size());
+    dep.imageMemoryBarrierCount = assertCast<u32>(vkImageBarriers.size());
     dep.pImageMemoryBarriers = vkImageBarriers.data();
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
@@ -1226,9 +1226,9 @@ void gpuComputePass(GpuCmd* cmd, const GpuPass& pass)
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.size());
+    dep.bufferMemoryBarrierCount = assertCast<u32>(bufferBarriers.size());
     dep.pBufferMemoryBarriers = bufferBarriers.data();
-    dep.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.size());
+    dep.imageMemoryBarrierCount = assertCast<u32>(imageBarriers.size());
     dep.pImageMemoryBarriers = imageBarriers.data();
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
@@ -1261,7 +1261,7 @@ void gpuCopyBuffer(GpuCmd* cmd, const GpuBuffer& dst, usize dstOffset, const Gpu
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = static_cast<u32>(std::size(barriers));
+    dep.bufferMemoryBarrierCount = assertCast<u32>(std::size(barriers));
     dep.pBufferMemoryBarriers = barriers;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
@@ -1288,12 +1288,12 @@ void gpuCopyImage(GpuCmd* cmd, const GpuView& dst, Vec3 dstOffset, const GpuView
     HG_ASSERT(srcOffset.x() >= 0.0f && srcOffset.y() >= 0.0f && srcOffset.z() >= 0.0f);
     HG_ASSERT(dstOffset.x() >= 0.0f && dstOffset.y() >= 0.0f && dstOffset.z() >= 0.0f);
 
-    f32 srcMipW = static_cast<f32>(src.data->image->width >> src.data->baseMipLevel);
-    f32 srcMipH = static_cast<f32>(src.data->image->height >> src.data->baseMipLevel);
-    f32 srcMipD = static_cast<f32>(src.data->image->depth >> src.data->baseMipLevel);
-    f32 dstMipW = static_cast<f32>(dst.data->image->width >> dst.data->baseMipLevel);
-    f32 dstMipH = static_cast<f32>(dst.data->image->height >> dst.data->baseMipLevel);
-    f32 dstMipD = static_cast<f32>(dst.data->image->depth >> dst.data->baseMipLevel);
+    [[maybe_unused]] f32 srcMipW = assertCast<f32>(src.data->image->width >> src.data->baseMipLevel);
+    [[maybe_unused]] f32 srcMipH = assertCast<f32>(src.data->image->height >> src.data->baseMipLevel);
+    [[maybe_unused]] f32 srcMipD = assertCast<f32>(src.data->image->depth >> src.data->baseMipLevel);
+    [[maybe_unused]] f32 dstMipW = assertCast<f32>(dst.data->image->width >> dst.data->baseMipLevel);
+    [[maybe_unused]] f32 dstMipH = assertCast<f32>(dst.data->image->height >> dst.data->baseMipLevel);
+    [[maybe_unused]] f32 dstMipD = assertCast<f32>(dst.data->image->depth >> dst.data->baseMipLevel);
 
     HG_ASSERT(
         srcOffset.x() + size.x() <= srcMipW
@@ -1333,7 +1333,7 @@ void gpuCopyImage(GpuCmd* cmd, const GpuView& dst, Vec3 dstOffset, const GpuView
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.imageMemoryBarrierCount = static_cast<u32>(std::size(barriers));
+    dep.imageMemoryBarrierCount = assertCast<u32>(std::size(barriers));
     dep.pImageMemoryBarriers = barriers;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
@@ -1345,22 +1345,22 @@ void gpuCopyImage(GpuCmd* cmd, const GpuView& dst, Vec3 dstOffset, const GpuView
         src.data->baseArrayLayer,
         src.data->layerCount};
     region.srcOffset = {
-        static_cast<i32>(srcOffset.x()),
-        static_cast<i32>(srcOffset.y()),
-        static_cast<i32>(srcOffset.z())};
+        assertCast<i32>(srcOffset.x()),
+        assertCast<i32>(srcOffset.y()),
+        assertCast<i32>(srcOffset.z())};
     region.dstSubresource = {
         gpuAspectToVk(dst.data->aspectFlags),
         dst.data->baseMipLevel,
         dst.data->baseArrayLayer,
         dst.data->layerCount};
     region.dstOffset = {
-        static_cast<i32>(dstOffset.x()),
-        static_cast<i32>(dstOffset.y()),
-        static_cast<i32>(dstOffset.z())};
+        assertCast<i32>(dstOffset.x()),
+        assertCast<i32>(dstOffset.y()),
+        assertCast<i32>(dstOffset.z())};
     region.extent = {
-        static_cast<u32>(size.x()),
-        static_cast<u32>(size.y()),
-        static_cast<u32>(size.z())};
+        assertCast<u32>(size.x()),
+        assertCast<u32>(size.y()),
+        assertCast<u32>(size.z())};
 
     vkCmdCopyImage(
         reinterpret_cast<VkCommandBuffer>(cmd),
@@ -1465,12 +1465,12 @@ void gpuBlitImage(GpuCmd* cmd, const GpuView& dst, Box dstBox, const GpuView& sr
     HG_ASSERT(srcBox.begin.x() >= 0.0f && srcBox.begin.y() >= 0.0f && srcBox.begin.z() >= 0.0f);
     HG_ASSERT(dstBox.begin.x() >= 0.0f && dstBox.begin.y() >= 0.0f && dstBox.begin.z() >= 0.0f);
 
-    f32 srcMipW = static_cast<f32>(src.data->image->width >> src.data->baseMipLevel);
-    f32 srcMipH = static_cast<f32>(src.data->image->height >> src.data->baseMipLevel);
-    f32 srcMipD = static_cast<f32>(src.data->image->depth >> src.data->baseMipLevel);
-    f32 dstMipW = static_cast<f32>(dst.data->image->width >> dst.data->baseMipLevel);
-    f32 dstMipH = static_cast<f32>(dst.data->image->height >> dst.data->baseMipLevel);
-    f32 dstMipD = static_cast<f32>(dst.data->image->depth >> dst.data->baseMipLevel);
+    [[maybe_unused]] f32 srcMipW = assertCast<f32>(src.data->image->width >> src.data->baseMipLevel);
+    [[maybe_unused]] f32 srcMipH = assertCast<f32>(src.data->image->height >> src.data->baseMipLevel);
+    [[maybe_unused]] f32 srcMipD = assertCast<f32>(src.data->image->depth >> src.data->baseMipLevel);
+    [[maybe_unused]] f32 dstMipW = assertCast<f32>(dst.data->image->width >> dst.data->baseMipLevel);
+    [[maybe_unused]] f32 dstMipH = assertCast<f32>(dst.data->image->height >> dst.data->baseMipLevel);
+    [[maybe_unused]] f32 dstMipD = assertCast<f32>(dst.data->image->depth >> dst.data->baseMipLevel);
 
     HG_ASSERT(
         srcBox.end.x() <= srcMipW
@@ -1510,7 +1510,7 @@ void gpuBlitImage(GpuCmd* cmd, const GpuView& dst, Box dstBox, const GpuView& sr
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.imageMemoryBarrierCount = static_cast<u32>(std::size(barriers));
+    dep.imageMemoryBarrierCount = assertCast<u32>(std::size(barriers));
     dep.pImageMemoryBarriers = barriers;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
@@ -1522,26 +1522,26 @@ void gpuBlitImage(GpuCmd* cmd, const GpuView& dst, Box dstBox, const GpuView& sr
         src.data->baseArrayLayer,
         src.data->layerCount};
     region.srcOffsets[0] = {
-        static_cast<i32>(srcBox.begin.x()),
-        static_cast<i32>(srcBox.begin.y()),
-        static_cast<i32>(srcBox.begin.z())};
+        assertCast<i32>(srcBox.begin.x()),
+        assertCast<i32>(srcBox.begin.y()),
+        assertCast<i32>(srcBox.begin.z())};
     region.srcOffsets[1] = {
-        static_cast<i32>(srcBox.end.x()),
-        static_cast<i32>(srcBox.end.y()),
-        static_cast<i32>(srcBox.end.z())};
+        assertCast<i32>(srcBox.end.x()),
+        assertCast<i32>(srcBox.end.y()),
+        assertCast<i32>(srcBox.end.z())};
     region.dstSubresource = {
         gpuAspectToVk(dst.data->aspectFlags),
         dst.data->baseMipLevel,
         dst.data->baseArrayLayer,
         dst.data->layerCount};
     region.dstOffsets[0] = {
-        static_cast<i32>(dstBox.begin.x()),
-        static_cast<i32>(dstBox.begin.y()),
-        static_cast<i32>(dstBox.begin.z())};
+        assertCast<i32>(dstBox.begin.x()),
+        assertCast<i32>(dstBox.begin.y()),
+        assertCast<i32>(dstBox.begin.z())};
     region.dstOffsets[1] = {
-        static_cast<i32>(dstBox.end.x()),
-        static_cast<i32>(dstBox.end.y()),
-        static_cast<i32>(dstBox.end.z())};
+        assertCast<i32>(dstBox.end.x()),
+        assertCast<i32>(dstBox.end.y()),
+        assertCast<i32>(dstBox.end.z())};
 
     vkCmdBlitImage(
         reinterpret_cast<VkCommandBuffer>(cmd),
@@ -1595,7 +1595,7 @@ void gpuBlitImageWhole(GpuCmd* cmd, const GpuView& dst, const GpuView& src)
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.imageMemoryBarrierCount = static_cast<u32>(std::size(barriers));
+    dep.imageMemoryBarrierCount = assertCast<u32>(std::size(barriers));
     dep.pImageMemoryBarriers = barriers;
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
@@ -1607,18 +1607,18 @@ void gpuBlitImageWhole(GpuCmd* cmd, const GpuView& dst, const GpuView& src)
         src.data->baseArrayLayer,
         src.data->layerCount};
     region.srcOffsets[1] = {
-        static_cast<i32>(src.data->image->width),
-        static_cast<i32>(src.data->image->height),
-        static_cast<i32>(src.data->image->depth)};
+        assertCast<i32>(src.data->image->width),
+        assertCast<i32>(src.data->image->height),
+        assertCast<i32>(src.data->image->depth)};
     region.dstSubresource = {
         gpuAspectToVk(dst.data->aspectFlags),
         dst.data->baseMipLevel,
         dst.data->baseArrayLayer,
         dst.data->layerCount};
     region.dstOffsets[1] = {
-        static_cast<i32>(dst.data->image->width),
-        static_cast<i32>(dst.data->image->height),
-        static_cast<i32>(dst.data->image->depth)};
+        assertCast<i32>(dst.data->image->width),
+        assertCast<i32>(dst.data->image->height),
+        assertCast<i32>(dst.data->image->depth)};
 
     vkCmdBlitImage(
         reinterpret_cast<VkCommandBuffer>(cmd),
@@ -1811,15 +1811,15 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.size());
+    dep.bufferMemoryBarrierCount = assertCast<u32>(bufferBarriers.size());
     dep.pBufferMemoryBarriers = bufferBarriers.data();
-    dep.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.size());
+    dep.imageMemoryBarrierCount = assertCast<u32>(imageBarriers.size());
     dep.pImageMemoryBarriers = imageBarriers.data();
 
     vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep);
 
     VectorTemp<VkRenderingAttachmentInfo> colorAttachments{scratch};
-    colorAttachments.reserve(static_cast<u32>(pass.colorAttachments.size()));
+    colorAttachments.reserve(assertCast<u32>(pass.colorAttachments.size()));
 
     for (u32 i = 0; i < pass.colorAttachments.size(); ++i)
     {
@@ -1876,7 +1876,7 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderingInfo.renderArea.extent = {width, height};
     renderingInfo.layerCount = pass.layerCount;
-    renderingInfo.colorAttachmentCount = static_cast<u32>(pass.colorAttachments.size());
+    renderingInfo.colorAttachmentCount = assertCast<u32>(pass.colorAttachments.size());
     renderingInfo.pColorAttachments = colorAttachments.data();
     renderingInfo.pDepthAttachment = pass.depthAttachment != nullptr
         ? &depthAttachment
@@ -1887,7 +1887,7 @@ void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass)
 
     vkCmdBeginRendering(reinterpret_cast<VkCommandBuffer>(cmd), &renderingInfo);
 
-    gpuSetViewport(cmd, 0, 0, static_cast<f32>(width), static_cast<f32>(height));
+    gpuSetViewport(cmd, 0, 0, assertCast<f32>(width), assertCast<f32>(height));
     gpuSetScissor(cmd, 0, 0, width, height);
 }
 
@@ -2176,7 +2176,7 @@ void GpuSwapchain::size(u32* width, u32* height) const
 
 u32 GpuSwapchain::imageCount() const
 {
-    return data != nullptr ? static_cast<u32>(data->images.size()) : 0;
+    return data != nullptr ? assertCast<u32>(data->images.size()) : 0;
 }
 
 GpuView* GpuSwapchain::renderTarget() const
@@ -2280,12 +2280,12 @@ void gpuEndFrame(GpuCmd* cmd)
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.waitSemaphoreCount = static_cast<u32>(imageAvailableSemaphores.size());
+    submit.waitSemaphoreCount = assertCast<u32>(imageAvailableSemaphores.size());
     submit.pWaitSemaphores = imageAvailableSemaphores.data();
     submit.pWaitDstStageMask = waitStages.data();
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = reinterpret_cast<VkCommandBuffer*>(&cmd);
-    submit.signalSemaphoreCount = static_cast<u32>(readyToPresentSemaphores.size());
+    submit.signalSemaphoreCount = assertCast<u32>(readyToPresentSemaphores.size());
     submit.pSignalSemaphores = readyToPresentSemaphores.data();
 
     vkQueueSubmit(vk.queue, 1, &submit, frame->fence);
@@ -2294,9 +2294,9 @@ void gpuEndFrame(GpuCmd* cmd)
     {
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.waitSemaphoreCount = static_cast<u32>(readyToPresentSemaphores.size());
+        presentInfo.waitSemaphoreCount = assertCast<u32>(readyToPresentSemaphores.size());
         presentInfo.pWaitSemaphores = readyToPresentSemaphores.data();
-        presentInfo.swapchainCount = static_cast<u32>(swapchains.size());
+        presentInfo.swapchainCount = assertCast<u32>(swapchains.size());
         presentInfo.pSwapchains = swapchains.data();
         presentInfo.pImageIndices = imageIndices.data();
 

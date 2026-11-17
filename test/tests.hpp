@@ -154,13 +154,13 @@ inline bool serialize(Serializer* s, Lifecycle* val)
 {
     serializeBegin(s);
     HG_DEFER(serializeEnd(s));
-    i64 id = static_cast<i64>(val->id);
+    i64 id = assertCast<i64>(val->id);
     if (!serialize(s, &id))
         return false;
     if (!serialize(s, &val->valid))
         return false;
     if (!s->writing)
-        val->id = static_cast<u64>(id);
+        val->id = assertCast<u64>(id);
     return true;
 }
 

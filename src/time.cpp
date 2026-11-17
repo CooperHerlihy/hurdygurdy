@@ -1,4 +1,5 @@
 #include "hg/time.hpp"
+#include "hg/utility.hpp"
 
 #include <ctime>
 #include <chrono>
@@ -11,7 +12,7 @@ f64 Clock::tick()
     f64 prev = time;
     timespec ts;
     timespec_get(&ts, TIME_UTC);
-    time = static_cast<f64>(ts.tv_sec) + static_cast<f64>(ts.tv_nsec) * 1e-9;
+    time = assertCast<f64>(ts.tv_sec) + assertCast<f64>(ts.tv_nsec) * 1e-9;
     return time - prev;
 }
 

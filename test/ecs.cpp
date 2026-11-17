@@ -378,7 +378,7 @@ TEST(testForEachMultiType)
     u64 visits = 0;
     ecs.forEach<u32, f32>([&](Entity e, u32& a, f32& b)
     {
-        sum += a + static_cast<u64>(b);
+        sum += a + assertCast<u64>(b);
         visits++;
         (void)e;
     });
@@ -386,7 +386,7 @@ TEST(testForEachMultiType)
     ASSERT(visits == 2);
 
     sum = 0;
-    ecs.forEach<u32, f32>([&](u32& a, f32& b) { sum += a + static_cast<u64>(b); });
+    ecs.forEach<u32, f32>([&](u32& a, f32& b) { sum += a + assertCast<u64>(b); });
     ASSERT(sum == 33);
 
     sum = 0;
@@ -448,7 +448,7 @@ TEST(testForEachParMultiType)
     ecs.forEachPar<u32, f32>([&](Entity e, u32& a, f32& b)
     {
         SpinLockScope scope{lk};
-        sum += a + static_cast<u64>(b);
+        sum += a + assertCast<u64>(b);
         (void)e;
     });
     ASSERT(sum == 33);
@@ -509,7 +509,7 @@ TEST(testConstQuery)
     sum = 0;
     cecs.forEach<u32, f32>([&](Entity e, const u32& a, const f32& b)
     {
-        sum += a + static_cast<u64>(b);
+        sum += a + assertCast<u64>(b);
         (void)e;
     });
     ASSERT(sum == (10 + 1) + (20 + 2));
@@ -564,7 +564,7 @@ TEST(testSerializeEcsRoundtrip)
     u64 sum = 0;
     copy.forEach<u32, f32>([&](Entity ce, u32& a, f32& b)
     {
-        sum += a + static_cast<u64>(b);
+        sum += a + assertCast<u64>(b);
         (void)ce;
     });
     ASSERT(sum == 33);
@@ -699,7 +699,7 @@ TEST(testSerializeEcsBinaryRoundtrip)
     u64 sum = 0;
     copy.forEach<u32, f32>([&](Entity ce, u32& a, f32& b)
     {
-        sum += a + static_cast<u64>(b);
+        sum += a + assertCast<u64>(b);
         (void)ce;
     });
     ASSERT(sum == 33);
