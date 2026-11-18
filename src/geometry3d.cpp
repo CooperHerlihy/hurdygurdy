@@ -5,17 +5,17 @@
 
 namespace hg {
 
-bool containsPointSphere(Vec3 point, Sphere sphere)
+bool containsPoint(Vec3 point, Sphere sphere)
 {
-    return distPointSphere(point, sphere) <= 0;
+    return distance(point, sphere) <= 0;
 }
 
-f32 distPointSphere(Vec3 point, Sphere sphere)
+f32 distance(Vec3 point, Sphere sphere)
 {
     return length(point - sphere.pos) - sphere.radius;
 }
 
-Vec3 closestPointSphere(Vec3 pos, Sphere sphere)
+Vec3 closestPoint(Vec3 pos, Sphere sphere)
 {
     Vec3 rel = pos - sphere.pos;
     if (lengthSquared(rel) <= sphere.radius + epsilonf)
@@ -23,17 +23,17 @@ Vec3 closestPointSphere(Vec3 pos, Sphere sphere)
     return sphere.pos + sphere.radius * normalize(rel);
 }
 
-bool intersectSpheres(Sphere a, Sphere b)
+bool intersect(Sphere a, Sphere b)
 {
-    return distSpheres(a, b) <= 0;
+    return distance(a, b) <= 0;
 }
 
-f32 distSpheres(Sphere a, Sphere b)
+f32 distance(Sphere a, Sphere b)
 {
     return length(a.pos - b.pos) - a.radius - b.radius;
 }
 
-Box boxEmpty()
+Box emptyBox()
 {
     return {
         Vec3{INFINITY},
@@ -53,14 +53,14 @@ Box boxAddPoint(Box box, Vec3 point)
     return newBox;
 }
 
-bool containsPointBox(Vec3 point, Box box)
+bool containsPoint(Vec3 point, Box box)
 {
     return point.x() >= box.begin.x() && point.x() <= box.end.x()
         && point.y() >= box.begin.y() && point.y() <= box.end.y()
         && point.z() >= box.begin.z() && point.z() <= box.end.z();
 }
 
-Vec3 closestPointBox(Vec3 pos, Box box)
+Vec3 closestPoint(Vec3 pos, Box box)
 {
     return {
         std::clamp(pos.x(), box.begin.x(), box.end.x()),
@@ -69,16 +69,16 @@ Vec3 closestPointBox(Vec3 pos, Box box)
     };
 }
 
-bool intersectBox(Box a, Box b)
+bool intersect(Box a, Box b)
 {
     return a.end.x() >= b.begin.x() && a.begin.x() <= b.end.x()
         && a.end.y() >= b.begin.y() && a.begin.y() <= b.end.y()
         && a.end.z() >= b.begin.z() && a.begin.z() <= b.end.z();
 }
 
-bool intersectBoxSphere(Box box, Sphere sphere)
+bool intersect(Box box, Sphere sphere)
 {
-    return containsPointSphere(closestPointBox(sphere.pos, box), sphere);
+    return containsPoint(closestPoint(sphere.pos, box), sphere);
 }
 
 Plane planeFromPoint(Vec3 point, Vec3 normal)
@@ -97,7 +97,7 @@ Plane planeFromTri(Tri tri)
     return plane;
 }
 
-std::optional<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere)
+std::optional<Hit3D> intersect(Ray3D ray, Sphere sphere)
 {
     HG_ASSERT(ray.dir != Vec3{0});
 
@@ -120,13 +120,13 @@ std::optional<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere)
     return std::make_optional<Hit3D>(t, (ray.pos + t * ray.dir - sphere.pos) / sphere.radius);
 }
 
-std::optional<Hit3D> intersectRayBox(Ray3D ray, Box box)
+std::optional<Hit3D> intersect(Ray3D ray, Box box)
 {
     HG_ASSERT(ray.dir != Vec3{0});
     if (box.begin == box.end)
         return {};
 
-    if (containsPointBox(ray.pos, box))
+    if (containsPoint(ray.pos, box))
     {
         return std::make_optional<Hit3D>(0.0f, -ray.dir);
     }
@@ -156,7 +156,7 @@ std::optional<Hit3D> intersectRayBox(Ray3D ray, Box box)
         if (hits[i] < -epsilonf)
             continue;
 
-        if (!containsPointBox(ray.pos + hits[i] * ray.dir, box))
+        if (!containsPoint(ray.pos + hits[i] * ray.dir, box))
             continue;
 
         if (hits[i] < t)
@@ -172,7 +172,7 @@ std::optional<Hit3D> intersectRayBox(Ray3D ray, Box box)
 }
 
 // Moller-Trumbore, Real Time Rendering 4th Edition
-std::optional<Hit3D> intersectRayTri(Ray3D ray, Tri tri)
+std::optional<Hit3D> intersect(Ray3D ray, Tri tri)
 {
     HG_ASSERT(ray.dir != Vec3{0});
 
@@ -208,7 +208,7 @@ std::optional<Hit3D> intersectRayTri(Ray3D ray, Tri tri)
         : normalize(cross(e1, e2)));
 }
 
-std::optional<Hit3D> intersectRayPlane(Ray3D ray, Plane plane)
+std::optional<Hit3D> intersect(Ray3D ray, Plane plane)
 {
     HG_ASSERT(ray.dir != Vec3{0});
     HG_ASSERT(plane.normal != Vec3{0});
@@ -226,7 +226,7 @@ std::optional<Hit3D> intersectRayPlane(Ray3D ray, Plane plane)
         : -plane.normal);
 }
 
-std::optional<Hit3D> intersectLineSphere(Line3D line, Sphere sphere)
+std::optional<Hit3D> intersect(Line3D line, Sphere sphere)
 {
     Vec3 dir = line.end - line.begin;
 
@@ -251,7 +251,7 @@ std::optional<Hit3D> intersectLineSphere(Line3D line, Sphere sphere)
     return std::make_optional<Hit3D>(t, (line.begin + t * dir - sphere.pos) / sphere.radius);
 }
 
-std::optional<Hit3D> intersectLineBox(Line3D line, Box box)
+std::optional<Hit3D> intersect(Line3D line, Box box)
 {
     if (line.begin == line.end || box.begin == box.end)
         return {};
@@ -281,7 +281,7 @@ std::optional<Hit3D> intersectLineBox(Line3D line, Box box)
         if (hits[i] < -epsilonf || hits[i] > 1 + epsilonf)
             continue;
 
-        if (!containsPointBox(line.begin + hits[i] * (line.end - line.begin), box))
+        if (!containsPoint(line.begin + hits[i] * (line.end - line.begin), box))
             continue;
 
         if (hits[i] < t)
@@ -297,7 +297,7 @@ std::optional<Hit3D> intersectLineBox(Line3D line, Box box)
 }
 
 // Moller-Trumbore, Real Time Rendering 4th Edition
-std::optional<Hit3D> intersectLineTri(Line3D line, Tri tri)
+std::optional<Hit3D> intersect(Line3D line, Tri tri)
 {
     if (line.begin == line.end)
         return {};
@@ -336,7 +336,7 @@ std::optional<Hit3D> intersectLineTri(Line3D line, Tri tri)
         : normalize(cross(e1, e2)));
 }
 
-std::optional<Hit3D> intersectLinePlane(Line3D line, Plane plane)
+std::optional<Hit3D> intersect(Line3D line, Plane plane)
 {
     if (line.begin == line.end)
         return {};

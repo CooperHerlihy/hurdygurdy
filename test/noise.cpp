@@ -117,20 +117,15 @@ TEST(testNoiseVec1DRangeMulti)
     }
 }
 
-TEST(testRngDefault)
-{
-    Rng rng;
-    ASSERT(rng.seed == 0);
-    ASSERT(rng.pos == 0);
-}
-
 TEST(testRngSeeded)
 {
     Rng rng(12345);
-    ASSERT(rng.seed == 12345);
-    ASSERT(rng.pos == 0);
-    u32 v = rng.next();
-    ASSERT(v != 0);
+    u32 a = rng.next();
+    u32 b = rng.next();
+    ASSERT(a != b);
+    u64 c = rng.next64();
+    u64 d = rng.next64();
+    ASSERT(c != d);
 }
 
 TEST(testRngNextDeterministic)

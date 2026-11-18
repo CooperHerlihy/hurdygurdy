@@ -2,7 +2,6 @@
 #include "hg/render2d.hpp"
 #include "hg/error.hpp"
 
-#include <cstring>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -79,7 +78,7 @@ TEST(testTextureLoadUndecodable)
     ensureTestDir();
     std::string path = makePath("garbage.bin");
     std::vector<u8> garbage{'n', 'o', 't', ' ', 'a', 'n', ' ', 'i', 'm', 'a', 'g', 'e'};
-    ASSERT(storeFile(garbage, path));
+    ASSERT(fileStore(garbage, path));
 
     setError("");
     Asset<TextureData> loaded = load<TextureData>(path);

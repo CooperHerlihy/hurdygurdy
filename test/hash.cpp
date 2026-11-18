@@ -177,16 +177,14 @@ TEST(testHashDistinctStrings)
 TEST(testSetDefault)
 {
     HashSet<u32> set;
-    ASSERT(set.hasVal == nullptr);
-    ASSERT(set.capacity == 0);
-    ASSERT(set.count == 0);
+    ASSERT(set.size() == 0);
+    ASSERT(!set.has(0u));
 }
 
 TEST(testSetInitialCapacity)
 {
     HashSet<u32> set{16};
-    ASSERT(set.capacity == 16);
-    ASSERT(set.count == 0);
+    ASSERT(set.size() == 0);
 }
 
 TEST(testSetAddHas)
@@ -195,7 +193,7 @@ TEST(testSetAddHas)
     set.add(10);
     set.add(20);
     set.add(30);
-    ASSERT(set.count == 3);
+    ASSERT(set.size() == 3);
     ASSERT(set.has(10u));
     ASSERT(set.has(20u));
     ASSERT(set.has(30u));
@@ -207,7 +205,7 @@ TEST(testSetDuplicateAdd)
     HashSet<u32> set;
     set.add(42);
     set.add(42);
-    ASSERT(set.count == 1);
+    ASSERT(set.size() == 1);
 }
 
 TEST(testSetRemove)
@@ -217,7 +215,7 @@ TEST(testSetRemove)
     set.add(2);
     set.add(3);
     set.remove(2u);
-    ASSERT(set.count == 2);
+    ASSERT(set.size() == 2);
     ASSERT(!set.has(2u));
     ASSERT(set.has(1u));
     ASSERT(set.has(3u));
@@ -228,7 +226,7 @@ TEST(testSetRemoveNonExistent)
     HashSet<u32> set;
     set.add(5u);
     set.remove(99u);
-    ASSERT(set.count == 1);
+    ASSERT(set.size() == 1);
 }
 
 TEST(testSetCollision)
@@ -237,7 +235,7 @@ TEST(testSetCollision)
     set.add(0u);
     set.add(8u);
     set.add(16u);
-    ASSERT(set.count == 3);
+    ASSERT(set.size() == 3);
     ASSERT(set.has(0u));
     ASSERT(set.has(8u));
     ASSERT(set.has(16u));
@@ -260,7 +258,7 @@ TEST(testSetClear)
     set.add(Lifecycle{});
     ASSERT(Lifecycle::stats.alive == 2);
     set.clear();
-    ASSERT(set.count == 0);
+    ASSERT(set.size() == 0);
     ASSERT(Lifecycle::stats.alive == 0);
 }
 
@@ -270,8 +268,7 @@ TEST(testSetResize)
     set.add(1);
     set.add(2);
     set.reserve(32);
-    ASSERT(set.capacity == 32);
-    ASSERT(set.count == 2);
+    ASSERT(set.size() == 2);
     ASSERT(set.has(1u));
     ASSERT(set.has(2u));
 }
@@ -304,11 +301,10 @@ TEST(testSetMoveConstruct)
     HashSet<u32> a;
     a.add(1);
     a.add(2);
-    bool* oldHasVal = a.hasVal;
     HashSet<u32> b = std::move(a);
-    ASSERT(a.hasVal == nullptr);
-    ASSERT(b.hasVal == oldHasVal);
-    ASSERT(b.count == 2);
+    ASSERT(a.size() == 0);
+    ASSERT(!a.has(1u));
+    ASSERT(b.size() == 2);
     ASSERT(b.has(1u));
     ASSERT(b.has(2u));
 }
@@ -320,6 +316,7 @@ TEST(testSetMoveAssign)
     HashSet<u32> b;
     b = std::move(a);
     ASSERT(b.has(99u));
+    ASSERT(a.size() == 0);
 }
 
 TEST(testSetString)
@@ -328,7 +325,7 @@ TEST(testSetString)
     set.add(std::string{"apple"});
     set.add(std::string{"banana"});
     set.add(std::string{"cherry"});
-    ASSERT(set.count == 3);
+    ASSERT(set.size() == 3);
 
     ASSERT(set.has(std::string{"banana"}));
     ASSERT(set.has(std::string_view{"apple"}));
@@ -341,11 +338,11 @@ TEST(testSetString)
 
     set.remove(std::string_view{"banana"});
     ASSERT(!set.has("banana"));
-    ASSERT(set.count == 2);
+    ASSERT(set.size() == 2);
 
     set.remove("apple");
     ASSERT(!set.has(std::string_view{"apple"}));
-    ASSERT(set.count == 1);
+    ASSERT(set.size() == 1);
     ASSERT(set.has("cherry"));
 }
 
@@ -355,7 +352,7 @@ TEST(testSetStringView)
     set.add("apple");
     set.add("banana");
     set.add("cherry");
-    ASSERT(set.count == 3);
+    ASSERT(set.size() == 3);
 
     ASSERT(set.has(std::string_view{"apple"}));
     const char* b = "banana";
@@ -366,11 +363,11 @@ TEST(testSetStringView)
 
     set.remove(std::string_view{"banana"});
     ASSERT(!set.has("banana"));
-    ASSERT(set.count == 2);
+    ASSERT(set.size() == 2);
 
     set.remove("apple");
     ASSERT(!set.has(std::string_view{"apple"}));
-    ASSERT(set.count == 1);
+    ASSERT(set.size() == 1);
     ASSERT(set.has("cherry"));
 }
 
@@ -383,7 +380,7 @@ TEST(testSetStringCollision)
     };
     for (u32 i = 0; i < 10; ++i)
         set.add(std::string{vals[i]});
-    ASSERT(set.count == 10);
+    ASSERT(set.size() == 10);
     for (u32 i = 0; i < 10; ++i)
     {
         ASSERT(set.has(vals[i]));
@@ -413,8 +410,7 @@ TEST(testSetResizeSame)
     set.add(1);
     set.add(2);
     set.reserve(8);
-    ASSERT(set.capacity == 8);
-    ASSERT(set.count == 2);
+    ASSERT(set.size() == 2);
     ASSERT(set.has(1u));
     ASSERT(set.has(2u));
 }
@@ -423,7 +419,7 @@ TEST(testSetClearEmpty)
 {
     HashSet<u32> set{8};
     set.clear();
-    ASSERT(set.count == 0);
+    ASSERT(set.size() == 0);
     ASSERT(!set.has(0u));
 }
 
@@ -432,10 +428,10 @@ TEST(testSetAddManyThenRemoveAll)
     HashSet<u32> set;
     for (u32 i = 0; i < 100; ++i)
         set.add(i);
-    ASSERT(set.count == 100);
+    ASSERT(set.size() == 100);
     for (u32 i = 0; i < 100; ++i)
         set.remove(i);
-    ASSERT(set.count == 0);
+    ASSERT(set.size() == 0);
     for (u32 i = 0; i < 100; ++i)
         ASSERT(!set.has(i));
 }
@@ -454,29 +450,27 @@ TEST(testSetStringViewComparison)
 
     set.remove(std::string_view{"beta"});
     ASSERT(!set.has("beta"));
-    ASSERT(set.count == 2);
+    ASSERT(set.size() == 2);
 
     ASSERT(set.has("alpha"));
     ASSERT(!set.has("beta"));
 
     set.add("beta");
     ASSERT(set.has(std::string_view{"beta"}));
-    ASSERT(set.count == 3);
+    ASSERT(set.size() == 3);
 }
 
 TEST(testMapDefault)
 {
     HashMap<u32, f32> map;
-    ASSERT(map.hasVal == nullptr);
-    ASSERT(map.capacity == 0);
-    ASSERT(map.count == 0);
+    ASSERT(map.size() == 0);
+    ASSERT(!map.has(0u));
 }
 
 TEST(testMapInitialCapacity)
 {
     HashMap<u32, f32> map{16};
-    ASSERT(map.capacity == 16);
-    ASSERT(map.count == 0);
+    ASSERT(map.size() == 0);
 }
 
 TEST(testMapAddGetHas)
@@ -485,7 +479,7 @@ TEST(testMapAddGetHas)
     map.add(1, 1.5f);
     map.add(2, 2.5f);
     map.add(3, 3.5f);
-    ASSERT(map.count == 3);
+    ASSERT(map.size() == 3);
     ASSERT(map.has(1u));
     ASSERT(map.has(2u));
     ASSERT(map.has(3u));
@@ -501,7 +495,7 @@ TEST(testMapDuplicateOverwrite)
     HashMap<u32, f32> map;
     map.add(1, 1.0f);
     map.add(1, 2.0f);
-    ASSERT(map.count == 1);
+    ASSERT(map.size() == 1);
     ASSERT(*map.get(1u) == 2.0f);
 }
 
@@ -531,7 +525,7 @@ TEST(testMapCollision)
     map.add(0, 0.0f);
     map.add(8, 8.0f);
     map.add(16, 16.0f);
-    ASSERT(map.count == 3);
+    ASSERT(map.size() == 3);
     ASSERT(*map.get(0u) == 0.0f);
     ASSERT(*map.get(8u) == 8.0f);
     ASSERT(*map.get(16u) == 16.0f);
@@ -550,7 +544,7 @@ TEST(testMapClear)
     map.add(2, Lifecycle{});
     ASSERT(Lifecycle::stats.alive == 2);
     map.clear();
-    ASSERT(map.count == 0);
+    ASSERT(map.size() == 0);
     ASSERT(Lifecycle::stats.alive == 0);
 }
 
@@ -560,8 +554,7 @@ TEST(testMapResize)
     map.add(1, 1.0f);
     map.add(2, 2.0f);
     map.reserve(32);
-    ASSERT(map.capacity == 32);
-    ASSERT(map.count == 2);
+    ASSERT(map.size() == 2);
     ASSERT(*map.get(1u) == 1.0f);
     ASSERT(*map.get(2u) == 2.0f);
 }
@@ -597,11 +590,10 @@ TEST(testMapMoveConstruct)
 {
     HashMap<u32, f32> a;
     a.add(1, 1.0f);
-    bool* oldHasVal = a.hasVal;
     HashMap<u32, f32> b = std::move(a);
-    ASSERT(a.hasVal == nullptr);
-    ASSERT(b.hasVal == oldHasVal);
-    ASSERT(b.count == 1);
+    ASSERT(a.size() == 0);
+    ASSERT(!a.has(1u));
+    ASSERT(b.size() == 1);
     ASSERT(*b.get(1u) == 1.0f);
 }
 
@@ -611,7 +603,9 @@ TEST(testMapMoveAssign)
     a.add(5, 5.0f);
     HashMap<u32, f32> b;
     b = std::move(a);
+    ASSERT(b.size() == 1);
     ASSERT(*b.get(5u) == 5.0f);
+    ASSERT(a.size() == 0);
 }
 
 TEST(testMapForEachModify)
@@ -631,10 +625,8 @@ TEST(testMapResizeSame)
     HashMap<u32, f32> map{16};
     map.add(1, 1.0f);
     map.add(2, 2.0f);
-    u64 oldCapacity = map.capacity;
     map.reserve(16);
-    ASSERT(map.capacity == oldCapacity);
-    ASSERT(map.count == 2);
+    ASSERT(map.size() == 2);
     ASSERT(*map.get(1u) == 1.0f);
     ASSERT(*map.get(2u) == 2.0f);
 }
@@ -643,12 +635,10 @@ TEST(testMapClearEmpty)
 {
     HashMap<u32, f32> map;
     map.clear();
-    ASSERT(map.count == 0);
-    ASSERT(map.capacity == 0);
+    ASSERT(map.size() == 0);
     HashMap<u32, f32> map2{8};
     map2.clear();
-    ASSERT(map2.count == 0);
-    ASSERT(map2.capacity == 8);
+    ASSERT(map2.size() == 0);
 }
 
 TEST(testMapAddManyThenRemoveAll)
@@ -656,10 +646,10 @@ TEST(testMapAddManyThenRemoveAll)
     HashMap<u32, u32> map;
     for (u32 i = 0; i < 100; ++i)
         map.add(i, i * 10);
-    ASSERT(map.count == 100);
+    ASSERT(map.size() == 100);
     for (u32 i = 0; i < 100; ++i)
         ASSERT(map.remove(i));
-    ASSERT(map.count == 0);
+    ASSERT(map.size() == 0);
     for (u32 i = 0; i < 100; ++i)
         ASSERT(!map.has(i));
 }
@@ -681,7 +671,7 @@ TEST(testMapRemoveNonExistentKey)
     map.add(1, 1.0f);
     ASSERT(!map.remove(99u));
     ASSERT(!map.remove(0u));
-    ASSERT(map.count == 1);
+    ASSERT(map.size() == 1);
 }
 
 TEST(testMapLifecycleValues)

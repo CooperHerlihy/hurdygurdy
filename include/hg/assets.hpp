@@ -14,12 +14,12 @@ namespace hg {
 /**
  * Load a file into memory
  */
-std::optional<std::vector<u8>> loadFile(std::string_view path);
+std::optional<std::vector<u8>> fileLoad(std::string_view path);
 
 /**
  * Store a file to disc
  */
-bool storeFile(std::span<u8> bin, std::string_view path);
+bool fileStore(std::span<u8> bin, std::string_view path);
 
 /**
  * The data associated with assets
@@ -220,11 +220,11 @@ Asset<T> newAsset(T&& val)
 template<typename T>
 bool assetStoreImpl(const T& asset, std::string_view path)
 {
-    Serializer s = serialWriter();
+    Serializer s = Serializer::writer();
     serialize(&s, const_cast<T*>(&asset));
 
-    std::vector<u8> bin = writeSerialBinary(&s);
-    return storeFile(bin, path);
+    std::vector<u8> bin = s.writeBinary();
+    return fileStore(bin, path);
 }
 
 /**
@@ -244,17 +244,17 @@ bool store(const T& asset, std::string_view path)
 template<typename T>
 bool assetLoadImpl(AssetData<T>* data)
 {
-    std::optional<std::vector<u8>> bin = loadFile(data->path);
+    std::optional<std::vector<u8>> bin = fileLoad(data->path);
     if (!bin.has_value())
     {
         setError("Could not load asset file: {}", data->path.c_str());
         return false;
     }
 
-    if (isSerialData(*bin))
+    std::optional<Serializer> s = Serializer::readBinary(*bin);
+    if (s.has_value())
     {
-        std::optional<Serializer> s = readSerialBinary(*bin);
-        if (!s.has_value() || !serialize(&*s, &data->asset))
+        if (!serialize(&*s, &data->asset))
         {
             setError("Could not deserialize serial data from file: {}", data->path.c_str());
             return false;
@@ -334,7 +334,7 @@ bool reload(std::string_view path)
 template<typename T>
 bool serialize(Serializer* s, Asset<T>* asset)
 {
-    if (s->writing)
+    if (s->isWriting())
     {
         serialize(s, &asset->data->path);
     }

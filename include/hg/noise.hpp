@@ -65,7 +65,8 @@ u32 trueRandom();
 /**
  * A pseudo random number generator
  */
-struct Rng {
+class Rng {
+private:
     /**
      * The generator seed
      */
@@ -75,6 +76,7 @@ struct Rng {
      */
     u32 pos = 0;
 
+public:
     /**
      * Construct without seeding
      */

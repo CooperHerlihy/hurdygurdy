@@ -9,12 +9,14 @@ namespace hg {
 /**
  * A dynamically loaded library
  */
-struct Library {
+class Library {
+private:
     /**
      * The library data
      */
     void* lib = nullptr;
 
+public:
     /**
      * Construct empty
      */
@@ -60,4 +62,3 @@ struct Library {
 };
 
 } // namespace hg
-

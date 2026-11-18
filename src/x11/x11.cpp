@@ -953,7 +953,7 @@ Vec2 InputDeviceX11::mousePos()
     if (activeWindow != nullptr)
         return activeWindow->mouse;
 
-    if (windows.count == 1)
+    if (windows.size() == 1)
     {
         Vec2 ret{};
         windows.forEach([&](::Window, WindowX11* wd)
@@ -970,7 +970,7 @@ Vec2 InputDeviceX11::mouseDelta()
     if (activeWindow != nullptr)
         return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
 
-    if (windows.count == 1)
+    if (windows.size() == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](::Window, WindowX11* wd)

@@ -14,16 +14,30 @@ namespace hg {
 /**
  * An entity in the ecs
  */
-struct Entity {
+class Entity {
+private:
     /**
      * The entity handle
      */
     u32 handle = static_cast<u32>(-1);
 
+public:
     /**
      * The number of bits in a handle used for the index
      */
     static constexpr u32 idxBits = 24;
+
+    /**
+     * Construct null
+     */
+    constexpr Entity() noexcept = default;
+
+    /**
+     * Construct from handle
+     */
+    explicit constexpr Entity(u32 handleVal)
+        : handle{handleVal}
+    {}
 
     /**
      * Get the index from a handle
@@ -31,6 +45,16 @@ struct Entity {
     constexpr u32 idx() const
     {
         return handle & ((u32{1} << idxBits) - u32{1});
+    }
+
+    /**
+     * Returns a new handle at the same index
+     */
+    constexpr Entity nextIdx() const
+    {
+        Entity next;
+        next.handle = handle + u32{1};
+        return next;
     }
 
     /**
@@ -46,7 +70,17 @@ struct Entity {
      */
     constexpr Entity nextGeneration() const
     {
-        return {handle + (u32{1} << idxBits)};
+        Entity next;
+        next.handle = handle + (u32{1} << idxBits);
+        return next;
+    }
+
+    /**
+     * Compare entities
+     */
+    constexpr bool operator==(Entity other)
+    {
+        return handle == other.handle;
     }
 };
 
@@ -54,22 +88,6 @@ struct Entity {
  * The null entity
  */
 static constexpr Entity nullEntity = Entity{};
-
-/**
- * Compare entities
- */
-constexpr bool operator==(Entity lhs, Entity rhs)
-{
-    return lhs.handle == rhs.handle;
-}
-
-/**
- * Compare entities
- */
-constexpr bool operator!=(Entity lhs, Entity rhs)
-{
-    return lhs.handle != rhs.handle;
-}
 
 /**
  * A component in an entity component system
@@ -300,7 +318,7 @@ struct Ecs {
         if (freeEntities.empty())
         {
             Entity e = nextEntity;
-            nextEntity.handle++;
+            nextEntity = e.nextIdx();
             entities.emplace_back(e);
             return e;
         }
@@ -774,7 +792,7 @@ void ecsSerialize(Serializer* s, T* val, EntitySerializer*)
 template<>
 inline void ecsSerialize(Serializer* s, Entity* e, EntitySerializer* ecs)
 {
-    if (s->writing)
+    if (s->isWriting())
     {
         u32 idx = ecs->getIdx(*e);
         serializeObject(s, &idx);
@@ -795,7 +813,7 @@ bool serializeEcsSystem(Serializer* s, Sys& sys, EntitySerializer* es, EcsT* ecs
 {
     using T = typename std::remove_cvref_t<Sys>::Type;
 
-    if (s->writing)
+    if (s->isWriting())
     {
         u32 cCount = assertCast<u32>(sys.components.size());
         if (!serialize(s, &cCount))
@@ -835,13 +853,13 @@ bool serializeEcsSystem(Serializer* s, Sys& sys, EntitySerializer* es, EcsT* ecs
 template<typename... Ts>
 bool serialize(Serializer* s, Ecs<Ts...>* ecs)
 {
-    serializeBegin(s);
-    HG_DEFER(serializeEnd(s));
+    s->beginObject();
+    HG_DEFER(s->endObject());
 
     ArenaScope scratch = getScratch();
     EntitySerializer es{scratch};
 
-    if (s->writing)
+    if (s->isWriting())
     {
         es.entityToIdx.resize(ecs->entities.size());
 

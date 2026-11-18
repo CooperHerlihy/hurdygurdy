@@ -139,7 +139,8 @@ bool serialize(Serializer* s, Material3D* material);
 /**
  * A basic 3D renderer
  */
-struct Renderer3D {
+class Renderer3D {
+private:
     /**
      * The light data
      */
@@ -209,6 +210,7 @@ struct Renderer3D {
      */
     std::vector<ModelData> models{};
 
+public:
     /**
      * Create uninitialized
      */

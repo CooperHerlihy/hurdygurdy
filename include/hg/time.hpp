@@ -9,12 +9,14 @@ namespace hg {
 /**
  * A high precision clock for timers and game deltas
  */
-struct Clock {
+class Clock {
+private:
     /**
      * The begin time
      */
     f64 time = 0.0;
 
+public:
     /**
      * Begin the clock;
      */
@@ -93,7 +95,8 @@ struct Profiler {
 /**
  * Time a scope, and set the value at the end
  */
-struct ScopeTimer {
+class ScopeTimer {
+private:
     /**
      * The timer for the scope
      */
@@ -103,6 +106,7 @@ struct ScopeTimer {
      */
     f64* out = nullptr;
 
+public:
     /**
      * Begin a scope timer
      */
@@ -126,24 +130,51 @@ struct ScopeTimer {
 };
 
 /**
- * Time a scope and add it to the global registry
+ * Time a scope, and add it to the global registry
  */
-struct ProfilerScopeTimer : public ScopeTimer {
+class ProfilerScopeTimer {
+private:
+    /**
+     * The timer for the scope
+     */
+    Clock timer{};
+    /**
+     * Where to store the result
+     */
+    f64* out = nullptr;
+
+public:
     /**
      * Add a new timer to the name in the registry
      */
     ProfilerScopeTimer(std::string_view name)
-        : ScopeTimer{Profiler::timers.get(name)}
     {
+        out = Profiler::timers.get(name);
         if (out == nullptr)
             out = Profiler::timers.add(std::string{name}, 0.0f);
     }
+
+    /**
+     * Record the time
+     */
+    ~ProfilerScopeTimer()
+    {
+        if (out != nullptr)
+            *out += timer.tick();
+    }
+
+    ProfilerScopeTimer(const ProfilerScopeTimer& other) = delete;
+    ProfilerScopeTimer& operator=(const ProfilerScopeTimer& other) = delete;
+    ProfilerScopeTimer(ProfilerScopeTimer&&) = delete;
+    ProfilerScopeTimer& operator=(ProfilerScopeTimer&&) = delete;
 };
+
 
 /**
  * Time a scope and log to stdout
  */
-struct ScopeTimerLog {
+class ScopeTimerLog {
+private:
     /**
      * The timer for the scope
      */
@@ -153,6 +184,7 @@ struct ScopeTimerLog {
      */
     std::string_view name{};
 
+public:
     /**
      * Begin a scope timer
      *

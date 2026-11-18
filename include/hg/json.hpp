@@ -13,9 +13,9 @@
 
 namespace hg {
 
-struct JsonValue;
-struct JsonObject;
-struct JsonArray;
+class JsonValue;
+class JsonObject;
+class JsonArray;
 
 /**
  * Make a JsonValue from a string, number, bool, object or array
@@ -26,12 +26,14 @@ JsonValue makeJsonValue(T&& val);
 /**
  * A json object
  */
-struct JsonObject {
+class JsonObject {
+private:
     /**
      * The named values
      */
     HashMap<std::string, JsonValue> values{};
 
+public:
     /**
      * Construct with an arena and alternating name-value pairs
      */
@@ -63,7 +65,7 @@ struct JsonObject {
      */
     u64 count() const
     {
-        return values.count;
+        return values.size();
     }
 
     /**
@@ -148,12 +150,14 @@ struct JsonObject {
 /**
  * A json array
  */
-struct JsonArray {
+class JsonArray {
+private:
     /**
      * The values
      */
     std::vector<JsonValue> values;
 
+public:
     /**
      * Construct empty
      */
@@ -297,12 +301,14 @@ struct JsonArray {
 /**
  * A json value, an object, array, string, number or boolean
  */
-struct JsonValue {
+class JsonValue {
+private:
     /**
      * The value
      */
     std::variant<JsonObject, JsonArray, std::string, f64, bool> val;
 
+public:
     /**
      * Construct empty
      */

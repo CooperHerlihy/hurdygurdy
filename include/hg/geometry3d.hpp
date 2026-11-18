@@ -25,31 +25,31 @@ struct Sphere {
 /**
  * Returns whether the sphere contains the point
  */
-bool containsPointSphere(Vec3 point, Sphere sphere);
+bool containsPoint(Vec3 point, Sphere sphere);
 
 /**
  * Returns the distance squared between the point and the sphere
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 distPointSphere(Vec3 point, Sphere sphere);
+f32 distance(Vec3 point, Sphere sphere);
 
 /**
  * Returns the closest point to pos which lies on the sphere
  */
-Vec3 closestPointSphere(Vec3 pos, Sphere sphere);
+Vec3 closestPoint(Vec3 pos, Sphere sphere);
 
 /**
  * Returns whether two spheres intersect or not (includes touching)
  */
-bool intersectSpheres(Sphere a, Sphere b);
+bool intersect(Sphere a, Sphere b);
 
 /**
  * Returns the distance squared between the spheres
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 distSpheres(Sphere a, Sphere b);
+f32 distance(Sphere a, Sphere b);
 
 /**
  * A 3D box
@@ -68,7 +68,7 @@ struct Box {
 /**
  * Returns an empty box
  */
-Box boxEmpty();
+Box emptyBox();
 
 /**
  * Expands the box to include the point
@@ -78,22 +78,22 @@ Box boxAddPoint(Box box, Vec3 point);
 /**
  * Returns whether the box contains the point
  */
-bool containsPointBox(Vec3 point, Box box);
+bool containsPoint(Vec3 point, Box box);
 
 /**
  * Returns the closest point to pos which lies on the box
  */
-Vec3 closestPointBox(Vec3 pos, Box box);
+Vec3 closestPoint(Vec3 pos, Box box);
 
 /**
  * Returns whether two boxs intersect or not (includes touching)
  */
-bool intersectBox(Box a, Box b);
+bool intersect(Box a, Box b);
 
 /**
  * Returns whether a box and a sphere intersect or not (includes touching)
  */
-bool intersectBoxSphere(Box box, Sphere sphere);
+bool intersect(Box box, Sphere sphere);
 
 /**
  * 3D intersection info
@@ -185,42 +185,41 @@ Plane planeFromTri(Tri tri);
 /**
  * Intersect a ray and a sphere
  */
-std::optional<Hit3D> intersectRaySphere(Ray3D ray, Sphere sphere);
+std::optional<Hit3D> intersect(Ray3D ray, Sphere sphere);
 
 /**
  * Intersect a ray and a box
  */
-std::optional<Hit3D> intersectRayBox(Ray3D ray, Box box);
+std::optional<Hit3D> intersect(Ray3D ray, Box box);
 
 /**
  * Intersect a ray and a triangle
  */
-std::optional<Hit3D> intersectRayTri(Ray3D ray, Tri tri);
+std::optional<Hit3D> intersect(Ray3D ray, Tri tri);
 
 /**
  * Intersect a ray and a plane
  */
-std::optional<Hit3D> intersectRayPlane(Ray3D ray, Plane plane);
+std::optional<Hit3D> intersect(Ray3D ray, Plane plane);
 
 /**
  * Intersect a line and a sphere
  */
-std::optional<Hit3D> intersectLineSphere(Line3D line, Sphere sphere);
+std::optional<Hit3D> intersect(Line3D line, Sphere sphere);
 
 /**
  * Intersect a line and a box
  */
-std::optional<Hit3D> intersectLineBox(Line3D line, Box box);
+std::optional<Hit3D> intersect(Line3D line, Box box);
 
 /**
  * Intersect a line and a triangle
  */
-std::optional<Hit3D> intersectLineTri(Line3D line, Tri tri);
+std::optional<Hit3D> intersect(Line3D line, Tri tri);
 
 /**
  * Intersect a line and a plane
  */
-std::optional<Hit3D> intersectLinePlane(Line3D line, Plane plane);
+std::optional<Hit3D> intersect(Line3D line, Plane plane);
 
 } // namespace hg
-

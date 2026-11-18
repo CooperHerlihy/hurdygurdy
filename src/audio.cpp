@@ -101,24 +101,16 @@ bool serialize(Serializer* s, Sound* sound)
 template<>
 bool assetLoadImpl(AssetData<Sound>* data)
 {
-    std::optional<std::vector<u8>> bin = loadFile(data->path);
+    std::optional<std::vector<u8>> bin = fileLoad(data->path);
     if (!bin.has_value())
     {
         setError("Could not load audio asset file: {}", data->path.c_str());
         return false;
     }
 
-    if (isSerialData(*bin))
-    {
-        std::optional<Serializer> s = readSerialBinary(*bin);
-        if (!s.has_value() || !serialize(&*s, &data->asset))
-        {
-            setError("Could not deserialize serial data from audio file: {}", data->path.c_str());
-            return false;
-        }
-
+    std::optional<Serializer> s = Serializer::readBinary(*bin);
+    if (s.has_value() && serialize(&*s, &data->asset))
         return true;
-    }
 
     if (bin->size() > 12 &&
         std::memcmp("RIFF", &(*bin)[0], 4) == 0 &&

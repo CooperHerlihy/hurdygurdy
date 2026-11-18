@@ -1,9 +1,6 @@
 #pragma once
 
-// #include "hg/memory.hpp"
 #include "hg/gpu.hpp"
-
-#include <string_view>
 
 namespace hg {
 

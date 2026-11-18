@@ -175,7 +175,8 @@ constexpr u64 hash(const char (&str)[N])
  * A hash set
  */
 template<typename V>
-struct HashSet {
+class HashSet {
+private:
     /**
      * Whether each index has a value
      */
@@ -193,6 +194,7 @@ struct HashSet {
      */
     u64 count = 0;
 
+public:
     /**
      * Construct empty
      */
@@ -222,6 +224,14 @@ struct HashSet {
         , count{0}
     {
         std::memset(hasVal, 0, capacity);
+    }
+
+    /**
+     * Get the number of elements in the set
+     */
+    usize size() const
+    {
+        return count;
     }
 
     /**
@@ -333,6 +343,8 @@ struct HashSet {
     template<typename T>
     void remove(const T& val)
     {
+        if (capacity == 0)
+            return;
         u64 idx = static_cast<u64>(hash(val) % capacity);
         while (hasVal[idx])
         {
@@ -365,6 +377,8 @@ struct HashSet {
     template<typename T>
     bool has(const T& val) const
     {
+        if (capacity == 0)
+            return false;
         for (u64 idx = static_cast<u64>(hash(val) % capacity); hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (vals[idx] == val)
@@ -430,7 +444,8 @@ struct HashSet {
  * A key-value hash map
  */
 template<typename K, typename V>
-struct HashMap {
+class HashMap {
+private:
     /**
      * Whether each index has a value
      */
@@ -452,6 +467,7 @@ struct HashMap {
      */
     u64 count = 0;
 
+public:
     /**
      * Construct empty
      */
@@ -486,6 +502,14 @@ struct HashMap {
         , count{0}
     {
         std::memset(hasVal, 0, capacity);
+    }
+
+    /**
+     * The the number of key value pairs in the map
+     */
+    usize size() const
+    {
+        return count;
     }
 
     /**

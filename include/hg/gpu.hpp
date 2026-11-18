@@ -2,7 +2,6 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/math.hpp"
-#include "hg/geometry2d.hpp"
 #include "hg/geometry3d.hpp"
 
 #include <concepts>

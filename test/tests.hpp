@@ -152,14 +152,14 @@ inline u64 hash(const Lifecycle& val)
 template<>
 inline bool serialize(Serializer* s, Lifecycle* val)
 {
-    serializeBegin(s);
-    HG_DEFER(serializeEnd(s));
+    s->beginObject();
+    HG_DEFER(s->endObject());
     i64 id = assertCast<i64>(val->id);
     if (!serialize(s, &id))
         return false;
     if (!serialize(s, &val->valid))
         return false;
-    if (!s->writing)
+    if (s->isReading())
         val->id = assertCast<u64>(id);
     return true;
 }

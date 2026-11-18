@@ -1511,7 +1511,7 @@ Vec2 InputDeviceWayland::mousePos()
     if (activeWindow != nullptr)
         return activeWindow->mouse;
 
-    if (windows.count == 1)
+    if (windows.size() == 1)
     {
         Vec2 ret;
         windows.forEach([&](u64, WindowWayland* wd)
@@ -1529,7 +1529,7 @@ Vec2 InputDeviceWayland::mouseDelta()
     if (activeWindow != nullptr)
         return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
 
-    if (windows.count == 1)
+    if (windows.size() == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](u64, WindowWayland* wd)

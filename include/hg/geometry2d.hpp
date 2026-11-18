@@ -24,31 +24,31 @@ struct Circle {
 /**
  * Returns whether the circle contains the point
  */
-bool containsPointCircle(Vec2 point, Circle circle);
+bool containsPoint(Vec2 point, Circle circle);
 
 /**
  * Returns the distance between the point and the circle
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 distPointCircle(Vec2 point, Circle circle);
+f32 distance(Vec2 point, Circle circle);
 
 /**
  * Returns the closest point to pos which lies on the circle
  */
-Vec2 closestPointCircle(Vec2 pos, Circle circle);
+Vec2 closestPoint(Vec2 pos, Circle circle);
 
 /**
  * Returns whether two circles intersect or not (includes touching)
  */
-bool intersectCircles(Circle a, Circle b);
+bool intersect(Circle a, Circle b);
 
 /**
  * Returns the distance squared between the circles
  *
  * Notes returns 0 if touching, and negative if overlapping
  */
-f32 distCircles(Circle a, Circle b);
+f32 distance(Circle a, Circle b);
 
 /**
  * A 2D rectangle
@@ -67,7 +67,7 @@ struct Rect {
 /**
  * Returns an empty rect
  */
-Rect rectEmpty();
+Rect emptyRect();
 
 /**
  * Expands the rect to include the point
@@ -77,22 +77,22 @@ Rect rectAddPoint(Rect rect, Vec2 point);
 /**
  * Returns whether the rect contains the point
  */
-bool containsPointRect(Vec2 point, Rect rect);
+bool containsPoint(Vec2 point, Rect rect);
 
 /**
  * Returns the closest point to pos which lies on the rect
  */
-Vec2 closestPointRect(Vec2 pos, Rect rect);
+Vec2 closestPoint(Vec2 pos, Rect rect);
 
 /**
  * Returns whether two rects intersect or not (includes touching)
  */
-bool intersectRects(Rect a, Rect b);
+bool intersect(Rect a, Rect b);
 
 /**
  * Returns whether a rect and a circle intersect or not (includes touching)
  */
-bool intersectRectCircle(Rect rect, Circle circle);
+bool intersect(Rect rect, Circle circle);
 
 /**
  * 2D intersection info
@@ -142,42 +142,41 @@ struct Line2D {
 /**
  * Intersect two rays
  */
-std::optional<Hit2D> intersectRays2D(Ray2D ray, Ray2D other);
+std::optional<Hit2D> intersect(Ray2D ray, Ray2D other);
 
 /**
  * Intersect a ray and a line
  */
-std::optional<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line);
+std::optional<Hit2D> intersect(Ray2D ray, Line2D line);
 
 /**
  * Intersect a ray and a circle
  */
-std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle);
+std::optional<Hit2D> intersect(Ray2D ray, Circle circle);
 
 /**
  * Intersect a ray and a rect
  */
-std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect);
+std::optional<Hit2D> intersect(Ray2D ray, Rect rect);
 
 /**
  * Intersect two lines
  */
-std::optional<Hit2D> intersectLines2D(Line2D line, Line2D other);
+std::optional<Hit2D> intersect(Line2D line, Line2D other);
 
 /**
  * Intersect a line and a ray
  */
-std::optional<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray);
+std::optional<Hit2D> intersect(Line2D line, Ray2D ray);
 
 /**
  * Intersect a line and a circle
  */
-std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle);
+std::optional<Hit2D> intersect(Line2D line, Circle circle);
 
 /**
  * Intersect a line and a rect
  */
-std::optional<Hit2D> intersectLineRect(Line2D line, Rect rect);
+std::optional<Hit2D> intersect(Line2D line, Rect rect);
 
 } // namespace hg
-

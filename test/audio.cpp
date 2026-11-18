@@ -106,7 +106,7 @@ TEST(testSoundLoadUnknownType)
     ensureTestDir();
     std::string path = makePath("unknown_type");
     std::vector<u8> hello{'h', 'e', 'l', 'l', 'o'};
-    ASSERT(storeFile(hello, path));
+    ASSERT(fileStore(hello, path));
 
     Asset<Sound> a = load<Sound>(path);
     ASSERT(a->frequency == 0);
@@ -132,11 +132,11 @@ TEST(testSoundLoadBadSerialData)
     std::string path = makePath("bad_serial");
 
     // Valid serial binary, but with a structure that does not match a Sound
-    Serializer w = serialWriter();
+    Serializer w = Serializer::writer();
     i64 wrong = 5;
     ASSERT(serialize(&w, &wrong));
-    std::vector<u8> bin = writeSerialBinary(&w);
-    ASSERT(storeFile(bin, path));
+    std::vector<u8> bin = w.writeBinary();
+    ASSERT(fileStore(bin, path));
 
     Asset<Sound> a = load<Sound>(path);
     ASSERT(a->frequency == 0);

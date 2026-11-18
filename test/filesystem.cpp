@@ -32,9 +32,9 @@ TEST(testLoadFile)
     std::string path = testPath("loadme.bin");
     u32 val = 0xDEADBEEF;
     std::vector<u8> bin{reinterpret_cast<u8*>(&val), reinterpret_cast<u8*>(&val) + sizeof(val)};
-    ASSERT(storeFile(bin, path));
+    ASSERT(fileStore(bin, path));
 
-    std::optional<std::vector<u8>> loaded = loadFile(path);
+    std::optional<std::vector<u8>> loaded = fileLoad(path);
     ASSERT(loaded.has_value());
     ASSERT(loaded->size() == sizeof(val));
     u32 result = 0;
@@ -46,7 +46,7 @@ TEST(testLoadFile)
 TEST(testLoadFileNonexistent)
 {
     setError("");
-    std::optional<std::vector<u8>> loaded = loadFile("/tmp/hg_nonexistent_file_12345.bin");
+    std::optional<std::vector<u8>> loaded = fileLoad("/tmp/hg_nonexistent_file_12345.bin");
     ASSERT(!loaded.has_value());
     ASSERT(getError().length() > 0);
 }
@@ -57,7 +57,7 @@ TEST(testStoreFileBadDirectory)
     std::vector<u8> bin{'h', 'e', 'l', 'l', 'o'};
 
     setError("");
-    ASSERT(!storeFile(bin, path));
+    ASSERT(!fileStore(bin, path));
     ASSERT(getError().length() > 0);
 }
 
@@ -66,7 +66,7 @@ TEST(testStoreFile)
     setupTestDir();
     std::string path = testPath("store.bin");
     std::vector<u8> bin{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'};
-    ASSERT(storeFile(bin, path));
+    ASSERT(fileStore(bin, path));
 
     auto info = std::filesystem::file_size(path);
     ASSERT(info == 11);
@@ -79,12 +79,12 @@ TEST(testStoreFileOverwrite)
     std::string path = testPath("overwrite.bin");
     std::vector<u8> first{'f', 'i', 'r', 's', 't'};
     std::vector<u8> second{'s', 'e', 'c', 'o', 'n', 'd'};
-    ASSERT(storeFile(first, path));
-    ASSERT(storeFile(second, path));
+    ASSERT(fileStore(first, path));
+    ASSERT(fileStore(second, path));
 
     ASSERT(std::filesystem::file_size(path) == 6);
 
-    std::optional<std::vector<u8>> loaded = loadFile(path);
+    std::optional<std::vector<u8>> loaded = fileLoad(path);
     ASSERT(loaded.has_value());
     ASSERT(memcmp(loaded->data(), "second", 6) == 0);
     cleanupTestDir();
@@ -94,7 +94,7 @@ TEST(testStoreFileEmpty)
 {
     setupTestDir();
     std::string path = testPath("empty.bin");
-    ASSERT(storeFile({}, path));
+    ASSERT(fileStore({}, path));
 
     ASSERT(std::filesystem::file_size(path) == 0);
     cleanupTestDir();
@@ -110,9 +110,9 @@ TEST(testLoadAndStoreLargeFile)
     for (u64 i = 0; i < size; ++i)
         data[i] = assertCast<u8>(i & 0xFF);
 
-    ASSERT(storeFile(data, path));
+    ASSERT(fileStore(data, path));
 
-    std::optional<std::vector<u8>> loaded = loadFile(path);
+    std::optional<std::vector<u8>> loaded = fileLoad(path);
     ASSERT(loaded.has_value());
     ASSERT(loaded->size() == size);
     for (u64 i = 0; i < size; ++i)

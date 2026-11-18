@@ -11,7 +11,7 @@
 
 namespace hg {
 
-std::optional<std::vector<u8>> loadFile(std::string_view path)
+std::optional<std::vector<u8>> fileLoad(std::string_view path)
 {
     ArenaScope scratch = getScratch();
     StringTemp p{path, scratch};
@@ -53,7 +53,7 @@ std::optional<std::vector<u8>> loadFile(std::string_view path)
     return bin;
 }
 
-bool storeFile(std::span<u8> bin, std::string_view path)
+bool fileStore(std::span<u8> bin, std::string_view path)
 {
     ArenaScope scratch = getScratch();
     StringTemp p{path, scratch};

@@ -81,8 +81,8 @@ TextureData::~TextureData() noexcept
 template<>
 bool serialize(Serializer* s, TextureData* tex)
 {
-    serializeBegin(s);
-    HG_DEFER(serializeEnd(s));
+    s->beginObject();
+    HG_DEFER(s->endObject());
 
     if (!serialize(s, &tex->width))
         return false;
@@ -94,31 +94,24 @@ bool serialize(Serializer* s, TextureData* tex)
         return false;
 
     u64 size = tex->width * tex->height * tex->depth * formatToSize(tex->format);
-    if (!s->writing)
+    if (!s->isWriting())
         tex->pixels = std::malloc(size);
-    return serializeVoid(s, {static_cast<u8*>(tex->pixels), size});
+    return s->serializeData({static_cast<u8*>(tex->pixels), size});
 }
 
 template<>
 bool assetLoadImpl(AssetData<TextureData>* data)
 {
-    std::optional<std::vector<u8>> bin = loadFile(data->path);
+    std::optional<std::vector<u8>> bin = fileLoad(data->path);
     if (!bin.has_value())
     {
         setError("Could not load asset file: {}", data->path.c_str());
         return false;
     }
 
-    if (isSerialData(*bin))
-    {
-        std::optional<Serializer> s = readSerialBinary(*bin);
-        if (!s.has_value() || !serialize(&*s, &data->asset))
-        {
-            setError("Could not deserialize serial data from file: {}", data->path.c_str());
-            return false;
-        }
+    std::optional<Serializer> s = Serializer::readBinary(*bin);
+    if (s.has_value() && serialize(&*s, &data->asset))
         return true;
-    }
 
     int x, y, channels;
     data->asset.pixels = stbi_load_from_memory(
@@ -262,18 +255,18 @@ void convertPixelFont()
 
     Asset<TextureData> fontData = load<TextureData>("resources/pixel_font.png");
 
-    Serializer s = serialWriter();
+    Serializer s = Serializer::writer();
     serialize(&s, &*fontData);
 
-    std::vector<u8> bin = writeSerialBinary(&s);
-    storeFile(bin, "resources/pixel_font.hg");
+    std::vector<u8> bin = s.writeBinary();
+    fileStore(bin, "resources/pixel_font.hg");
 }
 
 } // namespace internal
 
 static void initPixelFont()
 {
-    std::optional<Serializer> s = readSerialBinary(resources_pixel_font_hg);
+    std::optional<Serializer> s = Serializer::readBinary(resources_pixel_font_hg);
 
     TextureData fontData{};
     if (!s.has_value() || !serialize(&*s, &fontData))
@@ -296,7 +289,7 @@ u32 TextureAtlas::addEmpty(u32 count)
     u32 idx = assertCast<u32>(sprites.size());
     for (u32 i = 0; i < count; ++i)
     {
-        sprites.emplace_back(rectEmpty());
+        sprites.emplace_back(emptyRect());
     }
     return idx;
 }

@@ -516,7 +516,8 @@ struct TextBuilder2D {
 /**
  * A 2D render layer
  */
-struct Layer2D {
+class Layer2D {
+private:
     /**
      * Instance data for the 2D renderer
      */
@@ -575,6 +576,12 @@ struct Layer2D {
      * Whether the gpu data needs to be updated
      */
     bool changed = false;
+
+public:
+    /**
+     * The renderer can access the layer
+     */
+    friend class Renderer2D;
 
     /**
      * Remove all drawings from the layer
@@ -642,7 +649,8 @@ struct Layer2D {
 /**
  * A layer based 2D renderer
  */
-struct Renderer2D {
+class Renderer2D {
+private:
     /**
      * The render pipeline
      */
@@ -652,6 +660,12 @@ struct Renderer2D {
      */
     std::vector<Layer2D*> layerQueue{};
 
+    /**
+     * Whether this instance holds a reference to the default pixel font
+     */
+    bool fontOwned = false;
+
+public:
     /**
      * Construct without init
      */
@@ -663,30 +677,10 @@ struct Renderer2D {
     Renderer2D(Format colorFormat);
 
     /**
-     * Move construct, keeping the default pixel font initialized
-     */
-    Renderer2D(Renderer2D&& other) noexcept;
-
-    /**
-     * Move assign
-     */
-    Renderer2D& operator=(Renderer2D&& other) noexcept;
-
-    /**
      * Deinitialize the renderer and the default pixel font if unused
      */
     ~Renderer2D() noexcept;
 
-    Renderer2D(const Renderer2D&) = delete;
-    Renderer2D& operator=(const Renderer2D&) = delete;
-
-private:
-    /**
-     * Whether this instance holds a reference to the default pixel font
-     */
-    bool fontOwned = false;
-
-public:
     /**
      * Queue a layer to draw this frame
      */
@@ -696,6 +690,19 @@ public:
      * Issue draw commands
      */
     void render(GpuCmd* cmd, const Camera& camera);
+
+    /**
+     * Move construct, keeping the default pixel font initialized
+     */
+    Renderer2D(Renderer2D&& other) noexcept;
+
+    /**
+     * Move assign
+     */
+    Renderer2D& operator=(Renderer2D&& other) noexcept;
+
+    Renderer2D(const Renderer2D&) = delete;
+    Renderer2D& operator=(const Renderer2D&) = delete;
 };
 
 } // namespace hg

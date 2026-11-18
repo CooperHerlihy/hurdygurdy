@@ -8,6 +8,7 @@ Modern C++20 game development library
 - never run scripts without backups
 - never use exceptions or RTTI
 - never introduce third-party code
+- prefer not to use auto
 - use `i8`, `u32`, `f64`, etc., not `int`, `float`, `std::size_t`, etc.
 - use `HG_ASSERT` for assertions, assert all preconditions and invariants
 - use `setError("msg")` and return `std::optional` for recoverable errors

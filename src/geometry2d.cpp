@@ -5,32 +5,32 @@
 
 namespace hg {
 
-bool containsPointCircle(Vec2 point, Circle circle)
+bool containsPoint(Vec2 point, Circle circle)
 {
-    return distPointCircle(point, circle) <= epsilonf;
+    return distance(point, circle) <= epsilonf;
 }
 
-f32 distPointCircle(Vec2 point, Circle circle)
+f32 distance(Vec2 point, Circle circle)
 {
     return length(point - circle.pos) - circle.radius;
 }
 
-Vec2 closestPointCircle(Vec2 pos, Circle circle)
+Vec2 closestPoint(Vec2 pos, Circle circle)
 {
     return circle.pos + circle.radius * normalize(pos - circle.pos);
 }
 
-bool intersectCircles(Circle a, Circle b)
+bool intersect(Circle a, Circle b)
 {
-    return distCircles(a, b) <= epsilonf;
+    return distance(a, b) <= epsilonf;
 }
 
-f32 distCircles(Circle a, Circle b)
+f32 distance(Circle a, Circle b)
 {
     return length(a.pos - b.pos) - a.radius - b.radius;
 }
 
-Rect rectEmpty()
+Rect emptyRect()
 {
     return {
         Vec2{INFINITY},
@@ -48,13 +48,13 @@ Rect rectAddPoint(Rect rect, Vec2 point)
     return newRect;
 }
 
-bool containsPointRect(Vec2 point, Rect rect)
+bool containsPoint(Vec2 point, Rect rect)
 {
     return point.x() >= rect.begin.x() - epsilonf && point.x() <= rect.end.x() + epsilonf
         && point.y() >= rect.begin.y() - epsilonf && point.y() <= rect.end.y() + epsilonf;
 }
 
-Vec2 closestPointRect(Vec2 pos, Rect rect)
+Vec2 closestPoint(Vec2 pos, Rect rect)
 {
     return {
         std::clamp(pos.x(), rect.begin.x(), rect.end.x()),
@@ -62,18 +62,18 @@ Vec2 closestPointRect(Vec2 pos, Rect rect)
     };
 }
 
-bool intersectRects(Rect a, Rect b)
+bool intersect(Rect a, Rect b)
 {
     return a.end.x() >= b.begin.x() && a.begin.x() <= b.end.x()
         && a.end.y() >= b.begin.y() && a.begin.y() <= b.end.y();
 }
 
-bool intersectRectCircle(Rect rect, Circle circle)
+bool intersect(Rect rect, Circle circle)
 {
-    return containsPointCircle(closestPointRect(circle.pos, rect), circle);
+    return containsPoint(closestPoint(circle.pos, rect), circle);
 }
 
-std::optional<Hit2D> intersectRays2D(Ray2D ray, Ray2D other)
+std::optional<Hit2D> intersect(Ray2D ray, Ray2D other)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     HG_ASSERT(other.dir != Vec2{0});
@@ -97,7 +97,7 @@ std::optional<Hit2D> intersectRays2D(Ray2D ray, Ray2D other)
         : normalize(Vec2{-other.dir.y(), other.dir.x()}));
 }
 
-std::optional<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line)
+std::optional<Hit2D> intersect(Ray2D ray, Line2D line)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     if (line.begin == line.end)
@@ -124,7 +124,7 @@ std::optional<Hit2D> intersectRayLine2D(Ray2D ray, Line2D line)
         : normalize(Vec2{-lineDir.y(), lineDir.x()}));
 }
 
-std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
+std::optional<Hit2D> intersect(Ray2D ray, Circle circle)
 {
     HG_ASSERT(ray.dir != Vec2{0});
 
@@ -147,13 +147,13 @@ std::optional<Hit2D> intersectRayCircle(Ray2D ray, Circle circle)
     return std::make_optional<Hit2D>(t, (ray.pos + t * ray.dir - circle.pos) / circle.radius);
 }
 
-std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
+std::optional<Hit2D> intersect(Ray2D ray, Rect rect)
 {
     HG_ASSERT(ray.dir != Vec2{0});
     if (rect.begin == rect.end)
         return {};
 
-    if (containsPointRect(ray.pos, rect))
+    if (containsPoint(ray.pos, rect))
     {
         return std::make_optional<Hit2D>(0.0f, -ray.dir);
     }
@@ -179,7 +179,7 @@ std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
         if (hits[i] < -epsilonf)
             continue;
 
-        if (!containsPointRect(ray.pos + hits[i] * ray.dir, rect))
+        if (!containsPoint(ray.pos + hits[i] * ray.dir, rect))
             continue;
 
         if (hits[i] < t)
@@ -194,7 +194,7 @@ std::optional<Hit2D> intersectRayRect(Ray2D ray, Rect rect)
     return std::make_optional<Hit2D>(t, norm);
 }
 
-std::optional<Hit2D> intersectLines2D(Line2D line, Line2D other)
+std::optional<Hit2D> intersect(Line2D line, Line2D other)
 {
     if (line.begin == line.end || (other.begin ==  other.end))
         return {};
@@ -221,7 +221,7 @@ std::optional<Hit2D> intersectLines2D(Line2D line, Line2D other)
         : normalize(Vec2{-otherDir.y(), otherDir.x()}));
 }
 
-std::optional<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray)
+std::optional<Hit2D> intersect(Line2D line, Ray2D ray)
 {
     if (line.begin == line.end)
         return {};
@@ -248,7 +248,7 @@ std::optional<Hit2D> intersectLineRay2D(Line2D line, Ray2D ray)
         : normalize(Vec2{-ray.dir.y(), ray.dir.x()}));
 }
 
-std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle)
+std::optional<Hit2D> intersect(Line2D line, Circle circle)
 {
     Vec2 dir = line.end - line.begin;
 
@@ -273,7 +273,7 @@ std::optional<Hit2D> intersectLineCircle(Line2D line, Circle circle)
     return std::make_optional<Hit2D>(t, (line.begin + t * dir - circle.pos) / circle.radius);
 }
 
-std::optional<Hit2D> intersectLineRect(Line2D line, Rect rect)
+std::optional<Hit2D> intersect(Line2D line, Rect rect)
 {
     if (line.begin == line.end || rect.begin == rect.end)
         return {};
@@ -299,7 +299,7 @@ std::optional<Hit2D> intersectLineRect(Line2D line, Rect rect)
         if (hits[i] < -epsilonf || hits[i] > 1 + epsilonf)
             continue;
 
-        if (!containsPointRect(line.begin + hits[i] * (line.end - line.begin), rect))
+        if (!containsPoint(line.begin + hits[i] * (line.end - line.begin), rect))
             continue;
 
         if (hits[i] < t)
