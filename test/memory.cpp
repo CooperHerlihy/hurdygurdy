@@ -1,6 +1,6 @@
 #include "tests.hpp"
 #include "hg/memory.hpp"
-#include "hg/error.hpp"
+#include "hg/utility.hpp"
 
 #include <cstring>
 
@@ -23,7 +23,7 @@ TEST(testArenaAlignment)
     a.alloc(1, 1);
     void* p = a.alloc(4, 4);
     ASSERT(p != nullptr);
-    ASSERT((reinterpret_cast<uptr>(p) & 3) == 0);
+    ASSERT((reinterpret_cast<usize>(p) & 3) == 0);
 }
 
 TEST(testArenaLargeAlignment)
@@ -31,7 +31,7 @@ TEST(testArenaLargeAlignment)
     Arena a{256};
     void* p = a.alloc(1, 16);
     ASSERT(p != nullptr);
-    ASSERT((reinterpret_cast<uptr>(p) & 15) == 0);
+    ASSERT((reinterpret_cast<usize>(p) & 15) == 0);
 }
 
 TEST(testArenaExactCapacity)

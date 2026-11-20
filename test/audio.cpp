@@ -1,6 +1,6 @@
 #include "tests.hpp"
 #include "hg/audio.hpp"
-#include "hg/error.hpp"
+#include "hg/utility.hpp"
 
 #include <filesystem>
 #include <string>
@@ -32,10 +32,11 @@ TEST(testSoundSerialRoundTrip)
         original.data[i] = assertCast<f32>(i) * 0.25f - 0.5f;
 
     std::string path = makePath("serial_roundtrip");
-    ASSERT(store(original, path));
+    std::vector<byte> bin = serialStoreToBinary(original);
+    ASSERT(binaryStore(bin, path));
 
-    Asset<Sound> a = load<Sound>(path);
-    ASSERT(a.data != nullptr);
+    std::optional<Sound> a = soundLoad(path);
+    ASSERT(a.has_value());
     ASSERT(a->frequency == 48000);
     ASSERT(a->channels == 2);
     ASSERT(a->data.size() == 6);
@@ -56,9 +57,10 @@ TEST(testSoundWavStoreLoadMono)
         original.data[i] = samples[i];
 
     std::string path = makePath("wav_mono");
-    ASSERT(storeSoundWav(original, path));
+    ASSERT(soundStoreWav(original, path));
 
-    Asset<Sound> a = load<Sound>(path);
+    std::optional<Sound> a = soundLoad(path);
+    ASSERT(a.has_value());
     ASSERT(a->frequency == 22050);
     ASSERT(a->channels == 1);
     ASSERT(a->data.size() == 8);
@@ -79,9 +81,10 @@ TEST(testSoundWavStoreLoadStereo)
         original.data[i] = samples[i];
 
     std::string path = makePath("wav_stereo");
-    ASSERT(storeSoundWav(original, path));
+    ASSERT(soundStoreWav(original, path));
 
-    Asset<Sound> a = load<Sound>(path);
+    std::optional<Sound> a = soundLoad(path);
+    ASSERT(a.has_value());
     ASSERT(a->frequency == 44100);
     ASSERT(a->channels == 2);
     ASSERT(a->data.size() == 8);
@@ -97,7 +100,7 @@ TEST(testSoundWavStoreNoChannels)
 
     std::string path = makePath("wav_no_channels");
     setError("");
-    ASSERT(!storeSoundWav(original, path));
+    ASSERT(!soundStoreWav(original, path));
     ASSERT(getError().length() > 0);
 }
 
@@ -105,13 +108,13 @@ TEST(testSoundLoadUnknownType)
 {
     ensureTestDir();
     std::string path = makePath("unknown_type");
-    std::vector<u8> hello{'h', 'e', 'l', 'l', 'o'};
-    ASSERT(fileStore(hello, path));
+    std::vector<byte> hello{static_cast<byte>('h'), static_cast<byte>('e'), static_cast<byte>('l'),
+        static_cast<byte>('l'), static_cast<byte>('o')};
+    ASSERT(binaryStore(hello, path));
 
-    Asset<Sound> a = load<Sound>(path);
-    ASSERT(a->frequency == 0);
-    ASSERT(a->channels == 0);
-    ASSERT(a->data.size() == 0);
+    setError("");
+    std::optional<Sound> a = soundLoad(path);
+    ASSERT(!a.has_value());
     ASSERT(getError().length() > 0);
 }
 
@@ -119,10 +122,9 @@ TEST(testSoundLoadMissing)
 {
     std::string path = makePath("missing_file");
 
-    Asset<Sound> a = load<Sound>(path);
-    ASSERT(a->frequency == 0);
-    ASSERT(a->channels == 0);
-    ASSERT(a->data.size() == 0);
+    setError("");
+    std::optional<Sound> a = soundLoad(path);
+    ASSERT(!a.has_value());
     ASSERT(getError().length() > 0);
 }
 
@@ -135,12 +137,11 @@ TEST(testSoundLoadBadSerialData)
     Serializer w = Serializer::writer();
     i64 wrong = 5;
     ASSERT(serialize(&w, &wrong));
-    std::vector<u8> bin = w.writeBinary();
-    ASSERT(fileStore(bin, path));
+    std::vector<byte> bin = w.writeBinary();
+    ASSERT(binaryStore(bin, path));
 
-    Asset<Sound> a = load<Sound>(path);
-    ASSERT(a->frequency == 0);
-    ASSERT(a->channels == 0);
-    ASSERT(a->data.size() == 0);
+    setError("");
+    std::optional<Sound> a = soundLoad(path);
+    ASSERT(!a.has_value());
     ASSERT(getError().length() > 0);
 }

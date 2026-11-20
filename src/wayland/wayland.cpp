@@ -1,12 +1,9 @@
 #include "wayland_window.hpp"
 
 #include "internal.hpp"
-#include "hg/error.hpp"
-#include "hg/dynlib.hpp"
-#include "hg/hash.hpp"
 #include "hg/utility.hpp"
+#include "hg/dynlib.hpp"
 
-#include <vector>
 #include <string_view>
 #include <memory>
 
@@ -454,121 +451,121 @@ static Button xkbKeysymToButton(uint32_t keysym)
 {
     switch (keysym)
     {
-        case XKB_KEY_Escape: return Button_escape;
-        case XKB_KEY_Return: return Button_enter;
-        case XKB_KEY_Tab: return Button_tab;
-        case XKB_KEY_BackSpace: return Button_backspace;
-        case XKB_KEY_space: return Button_space;
+        case XKB_KEY_Escape: return Button::escape;
+        case XKB_KEY_Return: return Button::enter;
+        case XKB_KEY_Tab: return Button::tab;
+        case XKB_KEY_BackSpace: return Button::backspace;
+        case XKB_KEY_space: return Button::space;
 
-        case XKB_KEY_Caps_Lock: return Button_capslock;
-        case XKB_KEY_Num_Lock: return Button_numlock;
-        case XKB_KEY_Scroll_Lock: return Button_scrolllock;
+        case XKB_KEY_Caps_Lock: return Button::capslock;
+        case XKB_KEY_Num_Lock: return Button::numlock;
+        case XKB_KEY_Scroll_Lock: return Button::scrolllock;
 
-        case XKB_KEY_Control_L: return Button_lctrl;
-        case XKB_KEY_Control_R: return Button_rctrl;
-        case XKB_KEY_Shift_L: return Button_lshift;
-        case XKB_KEY_Shift_R: return Button_rshift;
-        case XKB_KEY_Alt_L: return Button_lalt;
-        case XKB_KEY_Alt_R: return Button_ralt;
-        case XKB_KEY_Super_L: return Button_lsuper;
-        case XKB_KEY_Super_R: return Button_rsuper;
+        case XKB_KEY_Control_L: return Button::lctrl;
+        case XKB_KEY_Control_R: return Button::rctrl;
+        case XKB_KEY_Shift_L: return Button::lshift;
+        case XKB_KEY_Shift_R: return Button::rshift;
+        case XKB_KEY_Alt_L: return Button::lalt;
+        case XKB_KEY_Alt_R: return Button::ralt;
+        case XKB_KEY_Super_L: return Button::lsuper;
+        case XKB_KEY_Super_R: return Button::rsuper;
 
-        case XKB_KEY_Up: return Button_up;
-        case XKB_KEY_Down: return Button_down;
-        case XKB_KEY_Left: return Button_left;
-        case XKB_KEY_Right: return Button_right;
+        case XKB_KEY_Up: return Button::up;
+        case XKB_KEY_Down: return Button::down;
+        case XKB_KEY_Left: return Button::left;
+        case XKB_KEY_Right: return Button::right;
 
-        case XKB_KEY_F1: return Button_f1;
-        case XKB_KEY_F2: return Button_f2;
-        case XKB_KEY_F3: return Button_f3;
-        case XKB_KEY_F4: return Button_f4;
-        case XKB_KEY_F5: return Button_f5;
-        case XKB_KEY_F6: return Button_f6;
-        case XKB_KEY_F7: return Button_f7;
-        case XKB_KEY_F8: return Button_f8;
-        case XKB_KEY_F9: return Button_f9;
-        case XKB_KEY_F10: return Button_f10;
-        case XKB_KEY_F11: return Button_f11;
-        case XKB_KEY_F12: return Button_f12;
+        case XKB_KEY_F1: return Button::f1;
+        case XKB_KEY_F2: return Button::f2;
+        case XKB_KEY_F3: return Button::f3;
+        case XKB_KEY_F4: return Button::f4;
+        case XKB_KEY_F5: return Button::f5;
+        case XKB_KEY_F6: return Button::f6;
+        case XKB_KEY_F7: return Button::f7;
+        case XKB_KEY_F8: return Button::f8;
+        case XKB_KEY_F9: return Button::f9;
+        case XKB_KEY_F10: return Button::f10;
+        case XKB_KEY_F11: return Button::f11;
+        case XKB_KEY_F12: return Button::f12;
 
-        case XKB_KEY_a: return Button_a;
-        case XKB_KEY_b: return Button_b;
-        case XKB_KEY_c: return Button_c;
-        case XKB_KEY_d: return Button_d;
-        case XKB_KEY_e: return Button_e;
-        case XKB_KEY_f: return Button_f;
-        case XKB_KEY_g: return Button_g;
-        case XKB_KEY_h: return Button_h;
-        case XKB_KEY_i: return Button_i;
-        case XKB_KEY_j: return Button_j;
-        case XKB_KEY_k: return Button_k;
-        case XKB_KEY_l: return Button_l;
-        case XKB_KEY_m: return Button_m;
-        case XKB_KEY_n: return Button_n;
-        case XKB_KEY_o: return Button_o;
-        case XKB_KEY_p: return Button_p;
-        case XKB_KEY_q: return Button_q;
-        case XKB_KEY_r: return Button_r;
-        case XKB_KEY_s: return Button_s;
-        case XKB_KEY_t: return Button_t;
-        case XKB_KEY_u: return Button_u;
-        case XKB_KEY_v: return Button_v;
-        case XKB_KEY_w: return Button_w;
-        case XKB_KEY_x: return Button_x;
-        case XKB_KEY_y: return Button_y;
-        case XKB_KEY_z: return Button_z;
+        case XKB_KEY_a: return Button::a;
+        case XKB_KEY_b: return Button::b;
+        case XKB_KEY_c: return Button::c;
+        case XKB_KEY_d: return Button::d;
+        case XKB_KEY_e: return Button::e;
+        case XKB_KEY_f: return Button::f;
+        case XKB_KEY_g: return Button::g;
+        case XKB_KEY_h: return Button::h;
+        case XKB_KEY_i: return Button::i;
+        case XKB_KEY_j: return Button::j;
+        case XKB_KEY_k: return Button::k;
+        case XKB_KEY_l: return Button::l;
+        case XKB_KEY_m: return Button::m;
+        case XKB_KEY_n: return Button::n;
+        case XKB_KEY_o: return Button::o;
+        case XKB_KEY_p: return Button::p;
+        case XKB_KEY_q: return Button::q;
+        case XKB_KEY_r: return Button::r;
+        case XKB_KEY_s: return Button::s;
+        case XKB_KEY_t: return Button::t;
+        case XKB_KEY_u: return Button::u;
+        case XKB_KEY_v: return Button::v;
+        case XKB_KEY_w: return Button::w;
+        case XKB_KEY_x: return Button::x;
+        case XKB_KEY_y: return Button::y;
+        case XKB_KEY_z: return Button::z;
 
-        case XKB_KEY_0: return Button_0;
-        case XKB_KEY_1: return Button_1;
-        case XKB_KEY_2: return Button_2;
-        case XKB_KEY_3: return Button_3;
-        case XKB_KEY_4: return Button_4;
-        case XKB_KEY_5: return Button_5;
-        case XKB_KEY_6: return Button_6;
-        case XKB_KEY_7: return Button_7;
-        case XKB_KEY_8: return Button_8;
-        case XKB_KEY_9: return Button_9;
+        case XKB_KEY_0: return Button::b0;
+        case XKB_KEY_1: return Button::b1;
+        case XKB_KEY_2: return Button::b2;
+        case XKB_KEY_3: return Button::b3;
+        case XKB_KEY_4: return Button::b4;
+        case XKB_KEY_5: return Button::b5;
+        case XKB_KEY_6: return Button::b6;
+        case XKB_KEY_7: return Button::b7;
+        case XKB_KEY_8: return Button::b8;
+        case XKB_KEY_9: return Button::b9;
 
-        case XKB_KEY_minus: return Button_minus;
-        case XKB_KEY_equal: return Button_equal;
-        case XKB_KEY_bracketleft: return Button_lbracket;
-        case XKB_KEY_bracketright: return Button_rbracket;
-        case XKB_KEY_backslash: return Button_backslash;
-        case XKB_KEY_semicolon: return Button_semicolon;
-        case XKB_KEY_apostrophe: return Button_apostrophe;
-        case XKB_KEY_grave: return Button_grave;
-        case XKB_KEY_comma: return Button_comma;
-        case XKB_KEY_period: return Button_period;
-        case XKB_KEY_slash: return Button_slash;
+        case XKB_KEY_minus: return Button::minus;
+        case XKB_KEY_equal: return Button::equal;
+        case XKB_KEY_bracketleft: return Button::lbracket;
+        case XKB_KEY_bracketright: return Button::rbracket;
+        case XKB_KEY_backslash: return Button::backslash;
+        case XKB_KEY_semicolon: return Button::semicolon;
+        case XKB_KEY_apostrophe: return Button::apostrophe;
+        case XKB_KEY_grave: return Button::grave;
+        case XKB_KEY_comma: return Button::comma;
+        case XKB_KEY_period: return Button::period;
+        case XKB_KEY_slash: return Button::slash;
 
-        case XKB_KEY_Home: return Button_home;
-        case XKB_KEY_End: return Button_end;
-        case XKB_KEY_Page_Up: return Button_pageup;
-        case XKB_KEY_Page_Down: return Button_pagedown;
-        case XKB_KEY_Delete: return Button_kdelete;
-        case XKB_KEY_Insert: return Button_insert;
-        case XKB_KEY_Print: return Button_printscreen;
-        case XKB_KEY_Pause: return Button_pause;
-        case XKB_KEY_Menu: return Button_context;
+        case XKB_KEY_Home: return Button::home;
+        case XKB_KEY_End: return Button::end;
+        case XKB_KEY_Page_Up: return Button::pageup;
+        case XKB_KEY_Page_Down: return Button::pagedown;
+        case XKB_KEY_Delete: return Button::kdelete;
+        case XKB_KEY_Insert: return Button::insert;
+        case XKB_KEY_Print: return Button::printscreen;
+        case XKB_KEY_Pause: return Button::pause;
+        case XKB_KEY_Menu: return Button::context;
 
-        case XKB_KEY_KP_0: return Button_numpad0;
-        case XKB_KEY_KP_1: return Button_numpad1;
-        case XKB_KEY_KP_2: return Button_numpad2;
-        case XKB_KEY_KP_3: return Button_numpad3;
-        case XKB_KEY_KP_4: return Button_numpad4;
-        case XKB_KEY_KP_5: return Button_numpad5;
-        case XKB_KEY_KP_6: return Button_numpad6;
-        case XKB_KEY_KP_7: return Button_numpad7;
-        case XKB_KEY_KP_8: return Button_numpad8;
-        case XKB_KEY_KP_9: return Button_numpad9;
-        case XKB_KEY_KP_Decimal: return Button_numpaddecimal;
-        case XKB_KEY_KP_Divide: return Button_numpaddiv;
-        case XKB_KEY_KP_Multiply: return Button_numpadmul;
-        case XKB_KEY_KP_Subtract: return Button_numpadminus;
-        case XKB_KEY_KP_Add: return Button_numpadplus;
-        case XKB_KEY_KP_Enter: return Button_numpadenter;
+        case XKB_KEY_KP_0: return Button::numpad0;
+        case XKB_KEY_KP_1: return Button::numpad1;
+        case XKB_KEY_KP_2: return Button::numpad2;
+        case XKB_KEY_KP_3: return Button::numpad3;
+        case XKB_KEY_KP_4: return Button::numpad4;
+        case XKB_KEY_KP_5: return Button::numpad5;
+        case XKB_KEY_KP_6: return Button::numpad6;
+        case XKB_KEY_KP_7: return Button::numpad7;
+        case XKB_KEY_KP_8: return Button::numpad8;
+        case XKB_KEY_KP_9: return Button::numpad9;
+        case XKB_KEY_KP_Decimal: return Button::numpaddecimal;
+        case XKB_KEY_KP_Divide: return Button::numpaddiv;
+        case XKB_KEY_KP_Multiply: return Button::numpadmul;
+        case XKB_KEY_KP_Subtract: return Button::numpadminus;
+        case XKB_KEY_KP_Add: return Button::numpadplus;
+        case XKB_KEY_KP_Enter: return Button::numpadenter;
 
-        default: return Button_count;
+        default: return Button::count;
     }
 }
 
@@ -576,12 +573,12 @@ static Button pointerButtonToHgButton(uint32_t button)
 {
     switch (button)
     {
-        case BTN_LEFT: return Button_mouse1;
-        case BTN_RIGHT: return Button_mouse2;
-        case BTN_MIDDLE: return Button_mouse3;
-        case BTN_SIDE: return Button_mouse4;
-        case BTN_EXTRA: return Button_mouse5;
-        default: return Button_count;
+        case BTN_LEFT: return Button::mouse1;
+        case BTN_RIGHT: return Button::mouse2;
+        case BTN_MIDDLE: return Button::mouse3;
+        case BTN_SIDE: return Button::mouse4;
+        case BTN_EXTRA: return Button::mouse5;
+        default: return Button::count;
     }
 }
 
@@ -647,7 +644,7 @@ void InputDeviceWayland::keyboardEnter(void* data, struct wl_keyboard* keyboard,
         wlDevice->activeWindow = *found;
 
         Event event{};
-        event.type = EventType_windowFocused;
+        event.type = EventType::windowFocused;
         wlDevice->events.push_back(event);
         (*found)->eventQueue.push_back(event);
     }
@@ -673,7 +670,7 @@ void InputDeviceWayland::keyboardLeave(void* data, struct wl_keyboard* keyboard,
             wlDevice->activeWindow = nullptr;
 
         Event event{};
-        event.type = EventType_windowUnfocused;
+        event.type = EventType::windowUnfocused;
         wlDevice->events.push_back(event);
         (*found)->eventQueue.push_back(event);
     }
@@ -693,7 +690,7 @@ void InputDeviceWayland::keyboardKey(void* data, struct wl_keyboard* keyboard,
     // Buttons represent physical keys, so map the level 0 (unmodified)
     // keysym of the active layout instead of the modifier-dependent keysym:
     // press/release must resolve to the same button with or without shift.
-    Button button = Button_count;
+    Button button = Button::count;
     if (wlDevice->xkbState != nullptr)
     {
         xkb_layout_index_t layout =
@@ -705,12 +702,12 @@ void InputDeviceWayland::keyboardKey(void* data, struct wl_keyboard* keyboard,
             button = xkbKeysymToButton(syms[0]);
     }
 
-    if (button < Button_count)
+    if (button < Button::count)
     {
-        wlDevice->isKeyDown[button] = pressed;
+        wlDevice->isKeyDown[static_cast<u32>(button)] = pressed;
 
         Event event{};
-        event.type = pressed ? EventType_keyPress : EventType_keyRelease;
+        event.type = pressed ? EventType::keyPress : EventType::keyRelease;
         event.button = button;
         wlDevice->events.push_back(event);
     }
@@ -723,7 +720,7 @@ void InputDeviceWayland::keyboardKey(void* data, struct wl_keyboard* keyboard,
         {
             buf[len] = '\0';
             Event event{};
-            event.type = EventType_text;
+            event.type = EventType::text;
             std::memset(event.text, 0, sizeof(event.text));
             std::memcpy(event.text, buf, assertCast<u64>(len));
             wlDevice->events.push_back(event);
@@ -814,7 +811,7 @@ void InputDeviceWayland::pointerMotion(void* data, struct wl_pointer* pointer,
         wlDevice->mouseDeltaAccum += delta;
 
         Event event{};
-        event.type = EventType_mouseMoved;
+        event.type = EventType::mouseMoved;
         event.mouse.delta = delta;
         event.mouse.pos = newPos;
         event.mouse.globalPos = newPos;
@@ -834,12 +831,12 @@ void InputDeviceWayland::pointerButton(void* data, struct wl_pointer* pointer,
     bool pressed = (state == WL_POINTER_BUTTON_STATE_PRESSED);
     Button hgButton = pointerButtonToHgButton(button);
 
-    if (hgButton < Button_count)
+    if (hgButton < Button::count)
     {
-        wlDevice->isKeyDown[hgButton] = pressed;
+        wlDevice->isKeyDown[static_cast<u32>(hgButton)] = pressed;
 
         Event event{};
-        event.type = pressed ? EventType_keyPress : EventType_keyRelease;
+        event.type = pressed ? EventType::keyPress : EventType::keyRelease;
         event.button = hgButton;
         wlDevice->events.push_back(event);
     }
@@ -865,7 +862,7 @@ void InputDeviceWayland::pointerAxis(void* data, struct wl_pointer* pointer,
         wlDevice->wheelDeltaAccum += delta;
 
         Event event{};
-        event.type = EventType_wheelMoved;
+        event.type = EventType::wheelMoved;
         event.wheel.delta = delta;
         wlDevice->events.push_back(event);
     }
@@ -1124,7 +1121,7 @@ void InputDeviceWayland::xdgToplevelConfigure(void* data, struct xdg_toplevel* t
         if (newW != window->width || newH != window->height)
         {
             // Ignore suggests while creating, before the swapchain exists
-            if (window->swap.data == nullptr)
+            if (window->swap == nullptr)
             {
                 window->width = newW;
                 window->height = newH;
@@ -1135,10 +1132,10 @@ void InputDeviceWayland::xdgToplevelConfigure(void* data, struct xdg_toplevel* t
             window->width = newW;
             window->height = newH;
 
-            window->swap.resize(newW, newH);
+            window->swap->resize(newW, newH);
 
             Event event{};
-            event.type = EventType_windowResized;
+            event.type = EventType::windowResized;
             event.window.window = window;
             event.window.width = newW;
             event.window.height = newH;
@@ -1159,7 +1156,7 @@ void InputDeviceWayland::xdgToplevelClose(void* data, struct xdg_toplevel* tople
     window->closed = true;
 
     Event event{};
-    event.type = EventType_windowClosed;
+    event.type = EventType::windowClosed;
     wlDevice->events.push_back(event);
     window->eventQueue.push_back(event);
 }
@@ -1410,7 +1407,7 @@ void InputDeviceWayland::processEvents()
     readClipboard();
 }
 
-std::span<Event> InputDeviceWayland::getEvents()
+std::span<const Event> InputDeviceWayland::getEvents()
 {
     return events;
 }
@@ -1420,7 +1417,7 @@ bool InputDeviceWayland::wasQuit()
     return quit;
 }
 
-std::unique_ptr<Window> InputDeviceWayland::createWindow(const WindowConfig& config)
+std::unique_ptr<Window> InputDeviceWayland::createWindow(Gpu* gpu, const WindowConfig& config)
 {
     std::unique_ptr<WindowWayland> window = std::make_unique<WindowWayland>(this);
     WindowWayland* wd = window.get();
@@ -1470,11 +1467,11 @@ std::unique_ptr<Window> InputDeviceWayland::createWindow(const WindowConfig& con
 
     using PFN_vkCreateWaylandSurfaceKHR = VkResult(*)(VkInstance, const VkWaylandSurfaceCreateInfoKHR*, const VkAllocationCallbacks*, VkSurfaceKHR*);
     auto vkCreateWaylandSurfaceKHR = reinterpret_cast<PFN_vkCreateWaylandSurfaceKHR>(
-        internal::getVkInstanceProcAddr("vkCreateWaylandSurfaceKHR"));
+        internal::getVkInstanceProcAddr(gpu, "vkCreateWaylandSurfaceKHR"));
 
     VkSurfaceKHR surface;
     VkResult result = vkCreateWaylandSurfaceKHR(
-        static_cast<VkInstance>(internal::getVkInstance()),
+        static_cast<VkInstance>(internal::getVkInstance(gpu)),
         &createInfo,
         nullptr,
         &surface
@@ -1486,24 +1483,24 @@ std::unique_ptr<Window> InputDeviceWayland::createWindow(const WindowConfig& con
         return nullptr;
     }
 
-    wd->swap = GpuSwapchain::create(surface, wd->width, wd->height, config.preferredPresentMode, config.imageUsage);
+    wd->swap = gpu->createSwapchain(surface, wd->width, wd->height, config.preferredPresentMode, config.imageUsage);
 
     return window;
 }
 
 bool InputDeviceWayland::isButtonDown(Button button)
 {
-    return isKeyDown[button];
+    return isKeyDown[static_cast<u32>(button)];
 }
 
 bool InputDeviceWayland::wasButtonPressed(Button button)
 {
-    return !wasKeyDown[button] && isKeyDown[button];
+    return !wasKeyDown[static_cast<u32>(button)] && isKeyDown[static_cast<u32>(button)];
 }
 
 bool InputDeviceWayland::wasButtonReleased(Button button)
 {
-    return wasKeyDown[button] && !isKeyDown[button];
+    return wasKeyDown[static_cast<u32>(button)] && !isKeyDown[static_cast<u32>(button)];
 }
 
 Vec2 InputDeviceWayland::mousePos()
@@ -1686,9 +1683,9 @@ WindowWayland::~WindowWayland()
     }
 }
 
-GpuSwapchain& WindowWayland::swapchain() const
+GpuSwapchain* WindowWayland::swapchain() const
 {
-    return swap;
+    return swap.get();
 }
 
 void WindowWayland::setTitle(std::string_view title)
@@ -1700,7 +1697,7 @@ void WindowWayland::setTitle(std::string_view title)
     xdg_toplevel_set_title(xdgToplevel, buf);
 }
 
-std::span<Event> WindowWayland::events() const
+std::span<const Event> WindowWayland::getEvents() const
 {
     return eventQueue;
 }

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
+#include "hg/math.hpp"
 #include "hg/gpu.hpp"
-#include "hg/error.hpp"
 
 #include <span>
 #include <string_view>
@@ -38,164 +38,164 @@ enum class InputBackend {
 /**
  * The event types
  */
-enum EventType : u32 {
-    EventType_none = 0,
-    EventType_quit,
+enum class EventType : u32 {
+    none = 0,
+    quit,
 
-    EventType_text,
+    text,
 
-    EventType_keyPress,
-    EventType_keyRelease,
+    keyPress,
+    keyRelease,
 
-    EventType_mouseMoved,
-    EventType_wheelMoved,
+    mouseMoved,
+    wheelMoved,
 
-    EventType_windowClosed,
-    EventType_windowFocused,
-    EventType_windowUnfocused,
-    EventType_windowResized,
+    windowClosed,
+    windowFocused,
+    windowUnfocused,
+    windowResized,
 
-    EventType_clipboardUpdate,
+    clipboardUpdate,
 
-    EventType_count,
+    count,
 };
 
 /**
  * The button inputs
  */
-enum Button : u32 {
-    Button_none = 0,
-    Button_0,
-    Button_1,
-    Button_2,
-    Button_3,
-    Button_4,
-    Button_5,
-    Button_6,
-    Button_7,
-    Button_8,
-    Button_9,
-    Button_q,
-    Button_w,
-    Button_e,
-    Button_r,
-    Button_t,
-    Button_y,
-    Button_u,
-    Button_i,
-    Button_o,
-    Button_p,
-    Button_a,
-    Button_s,
-    Button_d,
-    Button_f,
-    Button_g,
-    Button_h,
-    Button_j,
-    Button_k,
-    Button_l,
-    Button_z,
-    Button_x,
-    Button_c,
-    Button_v,
-    Button_b,
-    Button_n,
-    Button_m,
-    Button_semicolon,
-    Button_apostrophe,
-    Button_comma,
-    Button_period,
-    Button_grave,
-    Button_lbracket,
-    Button_rbracket,
-    Button_equal,
-    Button_minus,
-    Button_slash,
-    Button_backslash,
-    Button_up,
-    Button_down,
-    Button_left,
-    Button_right,
-    Button_escape,
-    Button_space,
-    Button_enter,
-    Button_backspace,
-    Button_kdelete,
-    Button_insert,
-    Button_tab,
-    Button_home,
-    Button_end,
-    Button_pageup,
-    Button_pagedown,
-    Button_f1,
-    Button_f2,
-    Button_f3,
-    Button_f4,
-    Button_f5,
-    Button_f6,
-    Button_f7,
-    Button_f8,
-    Button_f9,
-    Button_f10,
-    Button_f11,
-    Button_f12,
-    Button_printscreen,
-    Button_context,
-    Button_numpad0,
-    Button_numpad1,
-    Button_numpad2,
-    Button_numpad3,
-    Button_numpad4,
-    Button_numpad5,
-    Button_numpad6,
-    Button_numpad7,
-    Button_numpad8,
-    Button_numpad9,
-    Button_numpaddecimal,
-    Button_numpaddiv,
-    Button_numpadmul,
-    Button_numpadminus,
-    Button_numpadplus,
-    Button_numpadenter,
-    Button_lshift,
-    Button_rshift,
-    Button_lctrl,
-    Button_rctrl,
-    Button_lalt,
-    Button_ralt,
-    Button_lsuper,
-    Button_rsuper,
-    Button_capslock,
-    Button_numlock,
-    Button_scrolllock,
-    Button_pause,
-    Button_mouse1,
-    Button_mouse2,
-    Button_mouse3,
-    Button_mouse4,
-    Button_mouse5,
-    Button_lmouse = Button_mouse1,
-    Button_rmouse = Button_mouse2,
-    Button_mmouse = Button_mouse3,
-    Button_count,
+enum class Button : u32 {
+    none = 0,
+    b0,
+    b1,
+    b2,
+    b3,
+    b4,
+    b5,
+    b6,
+    b7,
+    b8,
+    b9,
+    q,
+    w,
+    e,
+    r,
+    t,
+    y,
+    u,
+    i,
+    o,
+    p,
+    a,
+    s,
+    d,
+    f,
+    g,
+    h,
+    j,
+    k,
+    l,
+    z,
+    x,
+    c,
+    v,
+    b,
+    n,
+    m,
+    semicolon,
+    apostrophe,
+    comma,
+    period,
+    grave,
+    lbracket,
+    rbracket,
+    equal,
+    minus,
+    slash,
+    backslash,
+    up,
+    down,
+    left,
+    right,
+    escape,
+    space,
+    enter,
+    backspace,
+    kdelete,
+    insert,
+    tab,
+    home,
+    end,
+    pageup,
+    pagedown,
+    f1,
+    f2,
+    f3,
+    f4,
+    f5,
+    f6,
+    f7,
+    f8,
+    f9,
+    f10,
+    f11,
+    f12,
+    printscreen,
+    context,
+    numpad0,
+    numpad1,
+    numpad2,
+    numpad3,
+    numpad4,
+    numpad5,
+    numpad6,
+    numpad7,
+    numpad8,
+    numpad9,
+    numpaddecimal,
+    numpaddiv,
+    numpadmul,
+    numpadminus,
+    numpadplus,
+    numpadenter,
+    lshift,
+    rshift,
+    lctrl,
+    rctrl,
+    lalt,
+    ralt,
+    lsuper,
+    rsuper,
+    capslock,
+    numlock,
+    scrolllock,
+    pause,
+    mouse1,
+    mouse2,
+    mouse3,
+    mouse4,
+    mouse5,
+    lmouse = mouse1,
+    rmouse = mouse2,
+    mmouse = mouse3,
+    count,
 };
 
 /**
  * The types of cursors
  */
-enum CursorType : u32 {
-    CursorType_arrow,
-    CursorType_textInput,
-    CursorType_resizeAll,
-    CursorType_resizeNS,
-    CursorType_resizeEW,
-    CursorType_resizeNESW,
-    CursorType_resizeNWSE,
-    CursorType_hand,
-    CursorType_wait,
-    CursorType_progress,
-    CursorType_notAllowed,
-    CursorType_count,
+enum class CursorType : u32 {
+    arrow,
+    textInput,
+    resizeAll,
+    resizeNS,
+    resizeEW,
+    resizeNESW,
+    resizeNWSE,
+    hand,
+    wait,
+    progress,
+    notAllowed,
+    count,
 };
 
 /**
@@ -336,11 +336,11 @@ struct WindowConfig {
      *
      * Note, will fall back to FIFO if preferred is unavailable
      */
-    GpuPresentMode preferredPresentMode = GpuPresentMode_fifo;
+    GpuPresentMode preferredPresentMode = GpuPresentMode::fifo;
     /**
      * How the swapchain images will be used
      */
-    GpuImageUsageFlags imageUsage = GpuImageUsage_colorAttachment;
+    GpuImageUsageFlags imageUsage = GpuImageUsage::colorAttachment;
 };
 
 /**
@@ -390,7 +390,7 @@ public:
     /**
      * Returns the events processed by processEvents
      */
-    virtual std::span<Event> getEvents() = 0;
+    virtual std::span<const Event> getEvents() = 0;
 
     /**
      * Returns whether the application was quit
@@ -400,7 +400,7 @@ public:
     /**
      * Create a new window
      */
-    virtual std::unique_ptr<Window> createWindow(const WindowConfig& config) = 0;
+    virtual std::unique_ptr<Window> createWindow(Gpu* gpu, const WindowConfig& config) = 0;
 
     /**
      * Get whether a button is currently down
@@ -492,7 +492,7 @@ public:
     /**
      * Returns the events processed by processEvents
      */
-    virtual std::span<Event> getEvents() override
+    virtual std::span<const Event> getEvents() override
     {
         return {};
     }
@@ -508,7 +508,7 @@ public:
     /**
      * Create a new window
      */
-    virtual std::unique_ptr<Window> createWindow(const WindowConfig&) override
+    virtual std::unique_ptr<Window> createWindow(Gpu*, const WindowConfig&) override
     {
         setError("Dummy input device cannot create windows");
         return nullptr;
@@ -603,14 +603,22 @@ public:
     /**
      * Return the window's swapchain for rendering
      */
-    virtual GpuSwapchain& swapchain() const = 0;
+    virtual GpuSwapchain* swapchain() const = 0;
 
     /**
      * Get the current swapchain image view
      */
-    GpuView* renderTarget() const
+    GpuImage* currentImage() const
     {
-        return swapchain().renderTarget();
+        return swapchain()->currentImage();
+    }
+
+    /**
+     * Get the current swapchain image view
+     */
+    GpuView* currentView() const
+    {
+        return swapchain()->currentView();
     }
 
     /**
@@ -618,7 +626,7 @@ public:
      */
     Format swapchainFormat() const
     {
-        return swapchain().format();
+        return swapchain()->format();
     }
 
     /**
@@ -629,7 +637,7 @@ public:
     /**
      * Get events relevant to this window
      */
-    virtual std::span<Event> events() const = 0;
+    virtual std::span<const Event> getEvents() const = 0;
 
     /**
      * Returns whether the window was closed

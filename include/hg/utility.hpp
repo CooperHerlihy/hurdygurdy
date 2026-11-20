@@ -1,45 +1,220 @@
 #pragma once
 
-#include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
 
+#include <cstdio>
+#include <cstdlib>
 #include <bit>
-#include <concepts>
+#include <utility>
+#include <optional>
 #include <variant>
 #include <string_view>
+#include <vector>
+#include <format>
+
+#ifdef __GNUC__
+#define HG_COMPILER_GCC 1
+#endif
+
+#ifdef __clang__
+#define HG_COMPILER_CLANG 1
+#endif
+
+#ifdef _MSC_VER
+#define HG_COMPILER_MSVC 1
+#endif
+
+#ifdef __linux__
+#define HG_PLATFORM_LINUX 1
+#endif
+
+#ifdef _WIN32
+#define HG_PLATFORM_WINDOWS 1
+#endif
+
+#ifdef __APPLE__
+#define HG_PLATFORM_APPLE 1
+#endif
+
+#if !defined(HG_PLATFORM_LINUX) && !defined(HG_PLATFORM_WINDOWS) && !defined(HG_PLATFORM_APPLE)
+#error "Unsupported platfom"
+#endif
+
+#ifdef NDEBUG
+#define HG_RELEASE_MODE 1
+#else
+#define HG_DEBUG_MODE 1
+#endif
+
+#ifdef HG_DEBUG_MODE
+
+#ifndef HG_NO_LOGGING
+#define HG_LOGGING 1
+#endif
+
+#ifndef HG_NO_ASSERTIONS
+#define HG_ASSERTIONS 1
+#endif
+
+#ifndef HG_NO_VK_DEBUG_MESSENGER
+#define HG_VK_DEBUG_MESSENGER 1
+#endif
+
+#endif
+
+#ifdef HG_RELEASE_MODE
+
+#ifndef HG_LOGGING
+#define HG_NO_LOGGING 1
+#endif
+
+#ifndef HG_ASSERTIONS
+#define HG_NO_ASSERTIONS 1
+#endif
+
+#ifndef HG_VK_DEBUG_MESSENGER
+#define HG_NO_VK_DEBUG_MESSENGER 1
+#endif
+
+#endif
+
+#define HG_MACRO_CONCAT_INTERNAL(x, y) x##y
+
+#define HG_MACRO_CONCAT(x, y) HG_MACRO_CONCAT_INTERNAL(x, y)
+
+/**
+ * Defer a block of code to the end of the scope
+ */
+#define HG_DEFER(...) [[maybe_unused]] hg::internal::Defer HG_MACRO_CONCAT(defer_, __LINE__){[&]{ __VA_ARGS__ ;}}
+
+#ifdef HG_ASSERTIONS
+
+/**
+ * Assert a condition, or panic
+ */
+#define HG_ASSERT(cond) do { \
+    if (!(cond)) \
+        ::hg::panic("Assertion failed in {}:{} {}() \"{}\"\n", __FILE__, __LINE__, __func__, #cond); \
+} while(0)
+
+#else
+
+#define HG_ASSERT(cond) do {} while(0)
+
+#endif
 
 namespace hg {
 
-/**
- * Get the first type in a pack
- */
-template<typename... Ts>
-struct FirstInPack {};
+namespace internal {
 
-/**
- * Get the first type in a pack
- */
-template<typename T, typename... Ts>
-struct FirstInPack<T, Ts...> {
-    using Type = T;
+template<typename F>
+struct Defer {
+    F fn;
+
+    Defer(F&& fnVal)
+        : fn(std::forward<F>(fnVal))
+    {}
+
+    ~Defer()
+    {
+        fn();
+    }
 };
 
-/**
- * Get the first type in a pack
- */
-template<typename... Ts>
-using FirstInPackT = FirstInPack<Ts...>::Type;
+} // namespace internal
 
 /**
- * Returns the index of T in a set of types First through Rest
+ * Format a message into a stack buffer
+ *
+ * The buffer is null terminated on write
+ *
+ * Returns
+ * - The number of characters written
  */
-template<typename T, typename First, typename... Rest> requires (std::same_as<T, First> || (std::same_as<T, Rest> || ...))
-consteval u64 idxInPack()
+template<usize N, typename... Ts>
+u64 formatBuffer(char (&buf)[N], std::format_string<Ts...> fmt, Ts&&... args)
 {
-    if constexpr (std::same_as<T, First>)
-        return 0;
-    else
-        return 1 + idxInPack<T, Rest...>();
+    auto res = std::format_to_n(buf, sizeof(buf) - 1, fmt, std::forward<Ts>(args)...);
+    *res.out = '\0';
+    return static_cast<u64>(res.size) < sizeof(buf)
+        ? static_cast<u64>(res.size)
+        : sizeof(buf) - 1;
+}
+
+/**
+ * Set this thread's current error message
+ */
+void setError(std::string_view error);
+
+/**
+ * Format and set this thread's current error message
+ */
+template<typename... Ts> requires (sizeof...(Ts) > 0)
+void setError(std::format_string<Ts...> fmt, Ts&&... args)
+{
+    char buf[4096];
+    u64 len = formatBuffer(buf, fmt, std::forward<Ts>(args)...);
+    setError(std::string_view{buf, len});
+}
+
+/**
+ * Get this thread's current error message
+ */
+std::string_view getError();
+
+/**
+ * Log this thread's current error message to stderr
+ */
+void printError();
+
+/**
+ * Format a log message to stderr
+ */
+template<typename... Ts>
+void log(std::format_string<Ts...> fmt, Ts&&... args)
+{
+#ifdef HG_LOGGING
+    char buf[4096];
+    formatBuffer(buf, fmt, std::forward<Ts>(args)...);
+    std::fprintf(stderr, "HurdyGurdy Log: %s", buf);
+#else
+    (void)fmt;
+    ((void)args, ...);
+#endif
+}
+
+/**
+ * Format a warning to stderr
+ */
+template<typename... Ts>
+void warn(std::format_string<Ts...> fmt, Ts&&... args)
+{
+#ifdef HG_LOGGING
+    char buf[4096];
+    formatBuffer(buf, fmt, std::forward<Ts>(args)...);
+    std::fprintf(stderr, "HurdyGurdy Warn: %s", buf);
+#else
+    (void)fmt;
+    ((void)args, ...);
+#endif
+}
+
+/**
+ * Format a panic message to stderr and abort the program
+ */
+template<typename... Ts>
+[[noreturn]] void panic(std::format_string<Ts...> fmt, Ts&&... args)
+{
+#ifdef HG_LOGGING
+    char buf[4096];
+    formatBuffer(buf, fmt, std::forward<Ts>(args)...);
+    std::fprintf(stderr, "HurdyGurdy Panic: %s", buf);
+    printError();
+#else
+    (void)fmt;
+    ((void)args, ...);
+#endif
+    std::abort();
 }
 
 /**
@@ -83,7 +258,7 @@ constexpr To assertCast(const From& from)
 /**
  * Aligns a value up to the nearest aligned value
  */
-constexpr uptr alignUp(uptr val, uptr align)
+constexpr uintptr_t alignUp(uintptr_t val, uintptr_t align)
 {
     HG_ASSERT(std::has_single_bit(align));
     return (val + align - 1) & ~(align - 1);
@@ -145,13 +320,17 @@ constexpr u64 endianReverse64(u64 val)
 
 #endif
 
-/**
- * An overloaded function set for variant pattern matching
- */
-template<typename... Fs>
-struct Overload : Fs... {
-    using Fs::operator()...;
-};
+namespace internal {
+
+    /**
+     * An overloaded function set for variant pattern matching
+     */
+    template<typename... Fs>
+    struct Overload : Fs... {
+        using Fs::operator()...;
+    };
+
+} // namespace internal
 
 /**
  * Like std::visit, but takes a list of functions and pattern matches
@@ -159,7 +338,7 @@ struct Overload : Fs... {
 template<typename V, typename... Fs>
 auto match(V& variant, Fs&&... fs)
 {
-    return std::visit(Overload{std::forward<Fs>(fs)...}, variant);
+    return std::visit(internal::Overload{std::forward<Fs>(fs)...}, variant);
 }
 
 /**
@@ -196,7 +375,6 @@ f64 stringToFloat(std::string_view str);
  * Create a base 10 string from an integer
  *
  * Parameters
- * - arena The arena to allocate from
  * - num The integer number to create from
  */
 std::string integerToString(i64 num);
@@ -205,10 +383,19 @@ std::string integerToString(i64 num);
  * Create a base 10 string from an integer
  *
  * Parameters
- * - arena The arena to allocate from
  * - num The integer number to create from
  * - precision The number of significant digits
  */
 std::string floatToString(f64 num, u32 precision);
+
+/**
+ * Load a file into memory
+ */
+std::optional<std::vector<byte>> binaryLoad(std::string_view path);
+
+/**
+ * Store a file to disc
+ */
+bool binaryStore(std::span<const byte> bin, std::string_view path);
 
 } // namespace hg

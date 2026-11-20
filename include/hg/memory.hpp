@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/macros.hpp"
+#include "hg/utility.hpp"
 
 #include <utility>
 #include <span>
@@ -20,7 +20,7 @@ private:
     /**
      * A pointer to the memory being allocated
      */
-    std::unique_ptr<u8[]> memory = nullptr;
+    std::unique_ptr<byte[]> memory = nullptr;
     /**
      * The capacity of the memory being allocated
      */
@@ -223,27 +223,18 @@ public:
 
     /**
      * Allocate from the arena
-     *
-     * Note, falls back to the heap when no arena was set
      */
     T* allocate(std::size_t size)
     {
-        if (arena == nullptr)
-            return new T[size];
-
         HG_ASSERT(arena != nullptr);
-        return new (static_cast<T*>(arena->alloc(size * sizeof(T), alignof(T)))) T;
+        return static_cast<T*>(arena->alloc(size * sizeof(T), alignof(T)));
     }
 
     /**
      * Deallocate from the arena
-     *
-     * Note, frees the heap when no arena was set
      */
-    void deallocate(T* ptr, std::size_t)
+    void deallocate(T*, std::size_t)
     {
-        if (arena == nullptr)
-            delete[] ptr;
     }
 
     template <typename U>

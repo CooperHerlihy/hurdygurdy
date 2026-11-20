@@ -442,7 +442,7 @@ TEST(testBinaryRoundTripPrimitive)
     Data copy{};
     Serializer w = Serializer::writer();
     ASSERT(serializeData(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;
@@ -472,7 +472,7 @@ TEST(testBinaryRoundTripString)
     Data copy{};
     Serializer w = Serializer::writer();
     ASSERT(serializeData(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;
@@ -501,7 +501,7 @@ TEST(testBinaryRoundTripTrivialVector)
     Data copy{};
     Serializer w = Serializer::writer();
     ASSERT(serializeData(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;
@@ -518,7 +518,7 @@ TEST(testBinaryRoundTripVector)
 
     Serializer w = Serializer::writer();
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     ASSERT(Serializer::readBinary(bin).has_value());
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
@@ -534,7 +534,7 @@ TEST(testBinaryRoundTripVectorOfStrings)
 
     Serializer w = Serializer::writer();
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;
@@ -551,7 +551,7 @@ TEST(testBinaryRoundTripMap)
     HashMap<std::string, i32> copy{};
     Serializer w = Serializer::writer();
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;
@@ -566,12 +566,12 @@ TEST(testIsSerialData)
     Serializer w = Serializer::writer();
     i32 val = 5;
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     ASSERT(Serializer::readBinary(bin).has_value());
 
     ASSERT(!Serializer::readBinary({}).has_value());
 
-    std::vector<u8> garbage(32, 0);
+    std::vector<byte> garbage(32, byte{0});
     ASSERT(!Serializer::readBinary(garbage).has_value());
 }
 
@@ -581,7 +581,7 @@ TEST(testReadSerialBinaryRejectsGarbage)
     ASSERT(!Serializer::readBinary({}).has_value());
     ASSERT(getError().length() > 0);
 
-    std::vector<u8> garbage(32, 0);
+    std::vector<byte> garbage(32, byte{0});
     setError("");
     ASSERT(!Serializer::readBinary(garbage).has_value());
     ASSERT(getError().length() > 0);
@@ -592,7 +592,7 @@ TEST(testReadSerialBinaryRejectsWrongVersion)
     Serializer w = Serializer::writer();
     i32 val = 5;
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
 
     // The major version follows the 4 byte tag
     u32 version = 1;
@@ -608,13 +608,13 @@ TEST(testReadSerialBinaryRejectsTruncation)
     Serializer w = Serializer::writer();
     std::vector<u32> val{1, 2, 3};
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     ASSERT(Serializer::readBinary(bin).has_value());
 
     // Every truncation must fail: the loader validates node and leaf ranges
     for (u64 cut = 1; cut < bin.size(); ++cut)
     {
-        std::vector<u8> trunc(bin.begin(), bin.end() - assertCast<i64>(cut));
+        std::vector<byte> trunc(bin.begin(), bin.end() - assertCast<i64>(cut));
         setError("");
         ASSERT(!Serializer::readBinary(trunc).has_value());
         ASSERT(getError().length() > 0);
@@ -666,7 +666,7 @@ TEST(testProductRoundTripBinary)
 
     Serializer w = Serializer::writer();
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;
@@ -735,7 +735,7 @@ TEST(testSumRoundTripBinary)
 
     Serializer w = Serializer::writer();
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;
@@ -789,7 +789,7 @@ TEST(testMaybeRoundTripBinary)
 
     Serializer w = Serializer::writer();
     ASSERT(serialize(&w, &val));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;

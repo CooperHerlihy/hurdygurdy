@@ -2,28 +2,118 @@
 #include "hg/utility.hpp"
 
 #include <cfloat>
+#include <cstring>
 #include <limits>
 #include <string>
+#include <vector>
+#include <filesystem>
 
 using namespace hg;
 
-struct IdxTypeA {};
-struct IdxTypeB {};
-struct IdxTypeC {};
-
-TEST(testIdxOfFirst)
+TEST(testErrorSetGet)
 {
-    ASSERT((idxInPack<IdxTypeA, IdxTypeA, IdxTypeB, IdxTypeC>()) == 0);
+    setError("test error");
+    std::string_view err = getError();
+    ASSERT(err == "test error");
 }
 
-TEST(testIdxOfMiddle)
+TEST(testErrorReplace)
 {
-    ASSERT((idxInPack<IdxTypeB, IdxTypeA, IdxTypeB, IdxTypeC>()) == 1);
+    setError("first error");
+    setError("second error");
+    std::string_view err = getError();
+    ASSERT(err == "second error");
 }
 
-TEST(testIdxOfLast)
+TEST(testErrorClear)
 {
-    ASSERT((idxInPack<IdxTypeC, IdxTypeA, IdxTypeB, IdxTypeC>()) == 2);
+    setError("something");
+    setError("");
+    std::string_view err = getError();
+    ASSERT(err.length() == 0);
+}
+
+TEST(testErrorAtBoundary)
+{
+    std::string longStr(4095, 'x');
+    ASSERT(longStr.length() == 4095);
+
+    setError(longStr);
+    std::string_view err = getError();
+    ASSERT(err.length() == 4095);
+}
+
+TEST(testErrorExceedsBoundary)
+{
+    std::string longStr(5000, 'x');
+    ASSERT(longStr.length() == 5000);
+
+    setError(longStr);
+    std::string_view err = getError();
+    ASSERT(err.length() == 4095);
+}
+
+TEST(testErrorFormatInt)
+{
+    setError("error code {}", 42);
+    std::string_view err = getError();
+    ASSERT(err == "error code 42");
+}
+
+TEST(testErrorFormatString)
+{
+    setError("failed to load \"{}\"", "texture.png");
+    std::string_view err = getError();
+    ASSERT(err == "failed to load \"texture.png\"");
+}
+
+TEST(testErrorFormatMultiple)
+{
+    setError("{}:{}: {}", "file.txt", 128, "unexpected token");
+    std::string_view err = getError();
+    ASSERT(err == "file.txt:128: unexpected token");
+}
+
+TEST(testErrorFormatTruncated)
+{
+    std::string longStr(4090, 'x');
+
+    setError("{}", longStr);
+    std::string_view err = getError();
+    ASSERT(err.length() == 4090);
+
+    std::string tooLong(5000, 'x');
+
+    setError("{}", tooLong);
+    err = getError();
+    ASSERT(err.length() == 4095);
+}
+
+TEST(testErrorFreshState)
+{
+    setError("");
+    std::string_view err = getError();
+    ASSERT(err.length() == 0);
+    ASSERT(err.data() != nullptr);
+}
+
+TEST(testLogErrorNormal)
+{
+    setError("log test message");
+    printError();
+}
+
+TEST(testLogErrorEmpty)
+{
+    setError("");
+    printError();
+}
+
+TEST(testLogErrorLong)
+{
+    std::string longStr(512, 'x');
+    setError(longStr);
+    printError();
 }
 
 TEST(testAssertCastIdentity)
@@ -506,4 +596,117 @@ TEST(testFloatToStringIntegerRendersNonFloat)
     ASSERT(!isFloat(floatToString(1.0, 17)));
     ASSERT(!isFloat(floatToString(-1.0, 17)));
     ASSERT(isInteger(floatToString(1.0, 17)));
+}
+
+static constexpr const char* testDir = "/tmp/hg_filesystem_test";
+
+static void setupTestDir()
+{
+    std::filesystem::create_directories(testDir);
+}
+
+static std::string testPath(const char* name)
+{
+    return std::string{testDir} + "/" + name;
+}
+
+static void cleanupTestDir()
+{
+    std::filesystem::remove_all(testDir);
+}
+
+TEST(testLoadFile)
+{
+    setupTestDir();
+    std::string path = testPath("loadme.bin");
+    u32 val = 0xDEADBEEF;
+    std::vector<byte> bin{reinterpret_cast<byte*>(&val), reinterpret_cast<byte*>(&val) + sizeof(val)};
+    ASSERT(binaryStore(bin, path));
+
+    std::optional<std::vector<byte>> loaded = binaryLoad(path);
+    ASSERT(loaded.has_value());
+    ASSERT(loaded->size() == sizeof(val));
+    u32 result = 0;
+    memcpy(&result, loaded->data(), sizeof(result));
+    ASSERT(result == 0xDEADBEEF);
+    cleanupTestDir();
+}
+
+TEST(testLoadFileNonexistent)
+{
+    setError("");
+    std::optional<std::vector<byte>> loaded = binaryLoad("/tmp/hg_nonexistent_file_12345.bin");
+    ASSERT(!loaded.has_value());
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testStoreFileBadDirectory)
+{
+    std::string path = std::string{testDir} + "/hg_nonexistent_dir_12345/store.bin";
+    std::vector<byte> bin{static_cast<byte>('h'), static_cast<byte>('e'), static_cast<byte>('l'), static_cast<byte>('l'), static_cast<byte>('o')};
+
+    setError("");
+    ASSERT(!binaryStore(bin, path));
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testStoreFile)
+{
+    setupTestDir();
+    std::string path = testPath("store.bin");
+    std::vector<byte> bin{static_cast<byte>('h'), static_cast<byte>('e'), static_cast<byte>('l'), static_cast<byte>('l'), static_cast<byte>('o'), static_cast<byte>(' '), static_cast<byte>('w'), static_cast<byte>('o'), static_cast<byte>('r'), static_cast<byte>('l'), static_cast<byte>('d')};
+    ASSERT(binaryStore(bin, path));
+
+    auto info = std::filesystem::file_size(path);
+    ASSERT(info == 11);
+    cleanupTestDir();
+}
+
+TEST(testStoreFileOverwrite)
+{
+    setupTestDir();
+    std::string path = testPath("overwrite.bin");
+    std::vector<byte> first{static_cast<byte>('f'), static_cast<byte>('i'), static_cast<byte>('r'), static_cast<byte>('s'), static_cast<byte>('t')};
+    std::vector<byte> second{static_cast<byte>('s'), static_cast<byte>('e'), static_cast<byte>('c'), static_cast<byte>('o'), static_cast<byte>('n'), static_cast<byte>('d')};
+    ASSERT(binaryStore(first, path));
+    ASSERT(binaryStore(second, path));
+
+    ASSERT(std::filesystem::file_size(path) == 6);
+
+    std::optional<std::vector<byte>> loaded = binaryLoad(path);
+    ASSERT(loaded.has_value());
+    ASSERT(memcmp(loaded->data(), "second", 6) == 0);
+    cleanupTestDir();
+}
+
+TEST(testStoreFileEmpty)
+{
+    setupTestDir();
+    std::string path = testPath("empty.bin");
+    ASSERT(binaryStore({}, path));
+
+    ASSERT(std::filesystem::file_size(path) == 0);
+    cleanupTestDir();
+}
+
+TEST(testLoadAndStoreLargeFile)
+{
+    setupTestDir();
+    std::string path = testPath("large.bin");
+
+    u64 size = 65536;
+    std::vector<byte> data(size);
+    for (u64 i = 0; i < size; ++i)
+        data[i] = static_cast<byte>(i & 0xFF);
+
+    ASSERT(binaryStore(data, path));
+
+    std::optional<std::vector<byte>> loaded = binaryLoad(path);
+    ASSERT(loaded.has_value());
+    ASSERT(loaded->size() == size);
+    for (u64 i = 0; i < size; ++i)
+    {
+        ASSERT((*loaded)[i] == static_cast<byte>(i & 0xFF));
+    }
+    cleanupTestDir();
 }

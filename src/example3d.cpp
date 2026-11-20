@@ -8,25 +8,25 @@ int main()
 {
     std::unique_ptr<InputDevice> input = InputDevice::create();
     if (input == nullptr)
-        HG_PANIC("Could not create input device: {}\n", std::string{getError()}.c_str());
+        panic("Could not create input device: {}\n", std::string{getError()}.c_str());
 
-    if (!initGpu(input->getVulkanExtensions()))
-        HG_PANIC("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
-    HG_DEFER(deinitGpu());
+    std::unique_ptr<Gpu> gpu = Gpu::create(input->getVulkanExtensions());
+    if (gpu == nullptr)
+        panic("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
 
     WindowConfig config{};
-    config.imageUsage |= GpuImageUsage_transferSrc;
+    config.imageUsage |= GpuImageUsage::transferSrc;
 
-    std::unique_ptr<Window> window = input->createWindow(config);
+    std::unique_ptr<Window> window = input->createWindow(gpu.get(), config);
     if (window == nullptr)
-        HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
+        panic("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hurdy Gurdy 3D Example");
 
     u32 width, height;
     window->size(&width, &height);
     f32 aspect = height == 0 ? 1 : assertCast<f32>(width) / assertCast<f32>(height);
 
-    Renderer3D renderer{window->swapchainFormat(), Format_d32_sfloat};
+    Renderer3D renderer{gpu.get(), window->swapchainFormat(), Format::d32_sfloat};
 
     Camera camera{Perspective{aspect, pif / 2.0f, 0.1f, 100.0f}};
     camera.position = Vec3{0.0f, 1.5f, -5.0f};
@@ -74,39 +74,39 @@ int main()
         20, 22, 21, 20, 23, 22,
     };
 
-    mesh.vertexBuffer = GpuBuffer::create(
-        sizeof(vertices), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
-    mesh.indexBuffer = GpuBuffer::create(
-        sizeof(indices), GpuBufferUsage_storageBuffer | GpuBufferUsage_transferDst);
-    mesh.vertexBuffer.write(std::as_bytes(std::span{vertices}), 0);
-    mesh.indexBuffer.write(std::as_bytes(std::span{indices}), 0);
+    mesh.vertexBuffer = gpu->createBuffer(sizeof(vertices),
+        GpuBufferUsage::storageBuffer | GpuBufferUsage::transferDst);
+    mesh.indexBuffer = gpu->createBuffer(sizeof(indices),
+        GpuBufferUsage::storageBuffer | GpuBufferUsage::transferDst);
+    mesh.vertexBuffer->write(std::as_bytes(std::span{vertices}), 0);
+    mesh.indexBuffer->write(std::as_bytes(std::span{indices}), 0);
     mesh.vertexCount = std::size(vertices);
     mesh.vertexWidth = sizeof(MeshVertex);
     mesh.indexCount = std::size(indices);
 
     Texture normalTex{};
     {
-        normalTex.image = GpuImage::create(1, 1, Format_rgba32_sfloat,
-            GpuImageUsage_sampled | GpuImageUsage_transferDst);
-        normalTex.view = GpuView::create(normalTex.image, GpuAspect_color, GpuFilter_linear);
+        normalTex.image = gpu->createImage(1, 1, Format::rgba32_sfloat,
+            GpuImageUsage::sampled | GpuImageUsage::transferDst);
+        normalTex.view = normalTex.image->createView(GpuFilter::linear);
 
         Vec4 normalVals[1] = {{0, 0, 1, 0}};
-        normalTex.view.write(std::as_bytes(std::span{normalVals}));
+        normalTex.image->writeWhole(std::as_bytes(std::span{normalVals}));
     }
 
     Texture whiteTex{};
     {
-        whiteTex.image = GpuImage::create(1, 1, Format_rgba8_srgb,
-            GpuImageUsage_sampled | GpuImageUsage_transferDst);
-        whiteTex.view = GpuView::create(whiteTex.image, GpuAspect_color, GpuFilter_nearest);
+        whiteTex.image = gpu->createImage(1, 1, Format::rgba8_srgb,
+            GpuImageUsage::sampled | GpuImageUsage::transferDst);
+        whiteTex.view = whiteTex.image->createView(GpuFilter::nearest);
 
         u8 whitePixel[4] = {255, 255, 255, 255};
-        whiteTex.view.write(std::as_bytes(std::span{&whitePixel, 1}));
+        whiteTex.image->writeWhole(std::as_bytes(std::span{whitePixel}));
     }
 
-    GpuImage depthImg = GpuImage::create(width, height, Format_d32_sfloat,
-        GpuImageUsage_depthStencilAttachment);
-    GpuView depthView = GpuView::create(depthImg, GpuAspect_depth);
+    std::unique_ptr<GpuImage> depthImg = gpu->createImage(width, height, Format::d32_sfloat,
+        GpuImageUsage::depthStencilAttachment);
+    std::unique_ptr<GpuView> depthView = depthImg->createView();
 
     f32 modelRot = 0.0f;
     Vec3 modelPos{0.0f, 0.0f, 0.0f};
@@ -123,8 +123,8 @@ int main()
         elapsed += delta;
 
         input->processEvents();
-        if (input->wasButtonPressed(Button_s)
-            && (input->isButtonDown(Button_lctrl) || input->isButtonDown(Button_rctrl)))
+        if (input->wasButtonPressed(Button::s)
+            && (input->isButtonDown(Button::lctrl) || input->isButtonDown(Button::rctrl)))
             wantScreenshot = true;
         if (input->wasQuit() || window->wasClosed())
             goto quit;
@@ -135,12 +135,12 @@ int main()
             aspect = assertCast<f32>(width) / assertCast<f32>(height);
             camera.projection = Perspective{aspect, pif / 2.0f, 0.1f, 100.0f};
 
-            depthImg = GpuImage::create(width, height, Format_d32_sfloat,
-                GpuImageUsage_depthStencilAttachment);
-            depthView = GpuView::create(depthImg, GpuAspect_depth);
+            depthImg = gpu->createImage(width, height, Format::d32_sfloat,
+                GpuImageUsage::depthStencilAttachment);
+            depthView = depthImg->createView();
         }
 
-        if (input->isButtonDown(Button_lmouse))
+        if (input->isButtonDown(Button::lmouse))
         {
             f32 rotSpeed = 2.0f;
             Vec2 md = input->mouseDelta();
@@ -150,9 +150,9 @@ int main()
         }
 
         Vec3 movement = Vec3{0.0f};
-        movement.y() += assertCast<f32>(input->isButtonDown(Button_space) - input->isButtonDown(Button_lshift));
-        movement.x() += assertCast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a));
-        movement.z() += assertCast<f32>(input->isButtonDown(Button_w) - input->isButtonDown(Button_s));
+        movement.y() += assertCast<f32>(input->isButtonDown(Button::space) - input->isButtonDown(Button::lshift));
+        movement.x() += assertCast<f32>(input->isButtonDown(Button::d) - input->isButtonDown(Button::a));
+        movement.z() += assertCast<f32>(input->isButtonDown(Button::w) - input->isButtonDown(Button::s));
 
         if (movement != Vec3{0.0f})
         {
@@ -162,7 +162,6 @@ int main()
         }
 
         modelRot += assertCast<f32>(delta) * 0.5f;
-        camera.update();
 
         renderer.drawDirectionalLight(Vec3{0.03f}, {-0.3f, 0.8f, 0.5f});
 
@@ -196,56 +195,58 @@ int main()
         }
 
         Window* windows[] = {window.get()};
-        GpuCmd* cmd = gpuBeginFrame(windows);
+        std::unique_ptr<GpuCommandBuffer> cmd = gpu->beginFrame(windows);
 
-        GpuView* renderTarget = window->renderTarget();
-        if (renderTarget != nullptr)
+        if (window->currentView() != nullptr)
         {
-            GpuAttachment colorAttachment{};
-            colorAttachment.image = renderTarget;
-            colorAttachment.clearColor = Vec4{0.02f, 0.02f, 0.05f, 1.0f};
+            GpuAttachment colorAttachment{.clearColor{0.02f, 0.02f, 0.05f, 1.0f}};
+            colorAttachment.image = window->currentView();
 
             GpuAttachment depthAttachment{};
-            depthAttachment.image = &depthView;
+            depthAttachment.image = depthView.get();
             depthAttachment.clearDepthStencil = {1.0f, 0};
 
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
             pass.depthAttachment = &depthAttachment;
 
-            gpuBeginRenderPass(cmd, pass);
+            cmd->beginRenderPass(pass);
 
-            renderer.renderScene(cmd, camera);
+            renderer.renderScene(cmd.get(), camera);
 
-            gpuEndRenderPass(cmd);
+            cmd->endRenderPass();
 
             if (wantScreenshot)
             {
                 wantScreenshot = false;
-                if (shot.image.data == nullptr || shot.image.width() != renderTarget->width()
-                    || shot.image.height() != renderTarget->height()
-                    || shot.view.format() != renderTarget->format())
+                if (shot.image == nullptr || shot.image->width() != window->currentImage()->width()
+                    || shot.image->height() != window->currentImage()->height()
+                    || shot.view->format() != window->currentImage()->format())
                 {
-                    shot.image = GpuImage::create(renderTarget->width(), renderTarget->height(), Format_rgba8_srgb,
-                        GpuImageUsage_sampled | GpuImageUsage_transferDst | GpuImageUsage_transferSrc);
-                    shot.view = GpuView::create(shot.image, GpuAspect_color);
+                    shot.image = gpu->createImage(
+                        window->currentImage()->width(),
+                        window->currentImage()->height(),
+                        Format::rgba8_srgb,
+                        GpuImageUsage::sampled | GpuImageUsage::transferDst | GpuImageUsage::transferSrc);
+                    shot.view = shot.image->createView();
                 }
-                gpuBlitImageWhole(cmd, shot.view, *renderTarget);
+                cmd->blitImageWhole(shot.image.get(), window->currentImage());
                 shotPending = true;
             }
         }
-        gpuEndFrame(cmd);
+
+        gpu->endFrame(std::move(cmd));
 
         if (shotPending)
         {
             shotPending = false;
-            gpuWaitIdle();
-            if (!storeTexturePng(downloadTextureFromGpu(shot), "screenshot3d.png"))
-                HG_PANIC("Could not save screenshot: {}\n", std::string{getError()}.c_str());
+            gpu->waitIdle();
+            if (!textureStorePng(downloadTextureFromGpu(shot), "screenshot3d.png"))
+                panic("Could not save screenshot: {}\n", std::string{getError()}.c_str());
         }
     }
 
 quit:
     quit = true;
-    gpuWaitIdle();
+    gpu->waitIdle();
 }

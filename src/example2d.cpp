@@ -8,21 +8,21 @@ int main()
 {
     std::unique_ptr<InputDevice> input = InputDevice::create();
     if (input == nullptr)
-        HG_PANIC("Could not create input device: {}\n", std::string{getError()}.c_str());
+        panic("Could not create input device: {}\n", std::string{getError()}.c_str());
 
-    if (!initGpu(input->getVulkanExtensions()))
-        HG_PANIC("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
-    HG_DEFER(deinitGpu());
+    std::unique_ptr<Gpu> gpu = Gpu::create(input->getVulkanExtensions());
+    if (gpu == nullptr)
+        panic("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
 
     WindowConfig config{};
-    config.imageUsage |= GpuImageUsage_transferSrc;
+    config.imageUsage |= GpuImageUsage::transferSrc;
 
-    std::unique_ptr<Window> window = input->createWindow(config);
+    std::unique_ptr<Window> window = input->createWindow(gpu.get(), config);
     if (window == nullptr)
-        HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
+        panic("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hurdy Gurdy 2D Example");
 
-    Renderer2D renderer{window->swapchainFormat()};
+    Renderer2D renderer{gpu.get(), window->swapchainFormat()};
 
     u32 winW, winH;
     window->size(&winW, &winH);
@@ -41,10 +41,10 @@ int main()
     };
 
     Texture spriteTex{};
-    spriteTex.image = GpuImage::create(2, 2, Format_rgba8_srgb,
-        GpuImageUsage_sampled | GpuImageUsage_transferDst);
-    spriteTex.view = GpuView::create(spriteTex.image, GpuAspect_color, GpuFilter_nearest);
-    spriteTex.view.write(std::as_bytes(std::span{defaultColors}));
+    spriteTex.image = gpu->createImage(2, 2, Format::rgba8_srgb,
+        GpuImageUsage::sampled | GpuImageUsage::transferDst);
+    spriteTex.image->writeWhole(std::as_bytes(std::span{defaultColors}));
+    spriteTex.view = spriteTex.image->createView(GpuFilter::nearest);
 
     Vec2 spritePos{0.5f, 0.5f};
     f32 spriteRot = 0.0f;
@@ -61,8 +61,8 @@ int main()
         f64 delta = gameClock.tick();
 
         input->processEvents();
-        if (input->wasButtonPressed(Button_s)
-            && (input->isButtonDown(Button_lctrl) || input->isButtonDown(Button_rctrl)))
+        if (input->wasButtonPressed(Button::s)
+            && (input->isButtonDown(Button::lctrl) || input->isButtonDown(Button::rctrl)))
             wantScreenshot = true;
         if (input->wasQuit() || window->wasClosed())
             goto quit;
@@ -74,17 +74,16 @@ int main()
             camera.projection = Orthographic{{{0, 0}, {aspect, 1.0f}}};
         }
 
-        if (input->isButtonDown(Button_lmouse))
+        if (input->isButtonDown(Button::lmouse))
         {
             Vec2 md = input->mouseDelta();
             camera.position.x() -= md.x();
             camera.position.y() -= md.y();
         }
-        camera.update();
 
         Vec2 spriteMove = {
-            assertCast<f32>(input->isButtonDown(Button_d) - input->isButtonDown(Button_a)),
-            assertCast<f32>(input->isButtonDown(Button_s) - input->isButtonDown(Button_w)),
+            assertCast<f32>(input->isButtonDown(Button::d) - input->isButtonDown(Button::a)),
+            assertCast<f32>(input->isButtonDown(Button::s) - input->isButtonDown(Button::w)),
         };
         if (spriteMove != Vec2{0.0f})
         {
@@ -92,7 +91,7 @@ int main()
             spritePos += normalize(spriteMove) * moveSpeed * assertCast<f32>(delta);
         }
 
-        spriteRot += (input->isButtonDown(Button_e) - input->isButtonDown(Button_q)) * 2.0f * assertCast<f32>(delta);
+        spriteRot += (input->isButtonDown(Button::e) - input->isButtonDown(Button::q)) * 2.0f * assertCast<f32>(delta);
 
         f32 sq = aspect < 1.0f ? aspect : 1.0f;
         f32 ox = (aspect - sq) / 2.0f;
@@ -158,50 +157,52 @@ int main()
         renderer.drawLayer(layer);
 
         Window* windows[] = {window.get()};
-        GpuCmd* cmd = gpuBeginFrame(windows);
+        std::unique_ptr<GpuCommandBuffer> cmd = gpu->beginFrame(windows);
 
-        GpuView* renderTarget = window->renderTarget();
-        if (renderTarget != nullptr)
+        if (window->currentView() != nullptr)
         {
             GpuAttachment colorAttachment{};
-            colorAttachment.image = renderTarget;
+            colorAttachment.image = window->currentView();
 
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
 
-            gpuBeginRenderPass(cmd, pass);
+            cmd->beginRenderPass(pass);
 
-            renderer.render(cmd, camera);
+            renderer.render(cmd.get(), camera);
 
-            gpuEndRenderPass(cmd);
+            cmd->endRenderPass();
 
             if (wantScreenshot)
             {
                 wantScreenshot = false;
-                if (shot.image.data == nullptr || shot.image.width() != renderTarget->width()
-                    || shot.image.height() != renderTarget->height()
-                    || shot.view.format() != renderTarget->format())
+                if (shot.image == nullptr || shot.image->width() != window->currentImage()->width()
+                    || shot.image->height() != window->currentImage()->height()
+                    || shot.view->format() != window->currentImage()->format())
                 {
-                    shot.image = GpuImage::create(renderTarget->width(), renderTarget->height(), Format_rgba8_srgb,
-                        GpuImageUsage_sampled | GpuImageUsage_transferDst | GpuImageUsage_transferSrc);
-                    shot.view = GpuView::create(shot.image, GpuAspect_color);
+                    shot.image = gpu->createImage(
+                        window->currentImage()->width(),
+                        window->currentImage()->height(),
+                        Format::rgba8_srgb,
+                        GpuImageUsage::sampled | GpuImageUsage::transferDst | GpuImageUsage::transferSrc);
+                    shot.view = shot.image->createView();
                 }
-                gpuBlitImageWhole(cmd, shot.view, *renderTarget);
+                cmd->blitImageWhole(shot.image.get(), window->currentImage());
                 shotPending = true;
             }
         }
-        gpuEndFrame(cmd);
+        gpu->endFrame(std::move(cmd));
 
         if (shotPending)
         {
             shotPending = false;
-            gpuWaitIdle();
-            if (!storeTexturePng(downloadTextureFromGpu(shot), "screenshot2d.png"))
-                HG_PANIC("Could not save screenshot: {}\n", std::string{getError()}.c_str());
+            gpu->waitIdle();
+            if (!textureStorePng(downloadTextureFromGpu(shot), "screenshot2d.png"))
+                panic("Could not save screenshot: {}\n", std::string{getError()}.c_str());
         }
     }
 
 quit:
     quit = true;
-    gpuWaitIdle();
+    gpu->waitIdle();
 }

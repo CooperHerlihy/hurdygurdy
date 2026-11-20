@@ -1,6 +1,6 @@
 #include "hg/window.hpp"
 
-#include "hg/error.hpp"
+#include "hg/utility.hpp"
 
 #if defined(HG_PLATFORM_LINUX)
 #include "wayland/wayland_window.hpp"

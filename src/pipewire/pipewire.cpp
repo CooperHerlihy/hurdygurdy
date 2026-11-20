@@ -1,6 +1,6 @@
 #include "pipewire_audio.hpp"
 
-#include "hg/error.hpp"
+#include "hg/utility.hpp"
 #include "hg/dynlib.hpp"
 #include "hg/utility.hpp"
 

@@ -1,6 +1,8 @@
 #include "hg/audio.hpp"
 
+#include "hg/utility.hpp"
 #include "hg/memory.hpp"
+#include "hg/serialization.hpp"
 
 #if defined(HG_PLATFORM_LINUX)
 #include "pipewire/pipewire_audio.hpp"
@@ -98,19 +100,18 @@ bool serialize(Serializer* s, Sound* sound)
         &sound->channels);
 }
 
-template<>
-bool assetLoadImpl(AssetData<Sound>* data)
+std::optional<Sound> soundLoad(std::string_view path)
 {
-    std::optional<std::vector<u8>> bin = fileLoad(data->path);
+    std::optional<std::vector<byte>> bin = binaryLoad(path);
     if (!bin.has_value())
-    {
-        setError("Could not load audio asset file: {}", data->path.c_str());
-        return false;
-    }
+        return std::nullopt;
 
-    std::optional<Serializer> s = Serializer::readBinary(*bin);
-    if (s.has_value() && serialize(&*s, &data->asset))
-        return true;
+    std::optional ret = serialLoadFromBinary<Sound>(*bin);
+    if (ret.has_value())
+        return ret;
+
+    ArenaScope scratch = getScratch();
+    StringTemp p{path, scratch};
 
     if (bin->size() > 12 &&
         std::memcmp("RIFF", &(*bin)[0], 4) == 0 &&
@@ -119,61 +120,63 @@ bool assetLoadImpl(AssetData<Sound>* data)
         unsigned int channels = 0;
         unsigned int sampleRate = 0;
         drwav_uint64 totalPCMFrameCount = 0;
-        f32* pSampleData = drwav_open_file_and_read_pcm_frames_f32(data->path.c_str(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
+        f32* pSampleData = drwav_open_file_and_read_pcm_frames_f32(p.c_str(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
         if (pSampleData == nullptr) {
-            setError("Could not read wav file: {}", data->path.c_str());
-            return false;
+            setError("Could not read wav file: {}", path);
+            return std::nullopt;
         }
         HG_DEFER(drwav_free(pSampleData, NULL));
 
-        data->asset.channels = channels;
-        data->asset.frequency = sampleRate;
-        data->asset.data.resize(totalPCMFrameCount * channels);
-        std::memcpy(data->asset.data.data(), pSampleData, data->asset.data.size() * sizeof(f32));
+        std::optional ret = std::make_optional<Sound>();
+        ret->channels = channels;
+        ret->frequency = sampleRate;
+        ret->data.resize(totalPCMFrameCount * channels);
+        std::memcpy(ret->data.data(), pSampleData, ret->data.size() * sizeof(f32));
+        return ret;
     }
     else if (bin->size() > 3 && memcmp("ID3", bin->data(), 3) == 0)
     {
         drmp3_config config{};
         drmp3_uint64 totalPCMFrameCount = 0;
-        f32* pSampleData = drmp3_open_file_and_read_pcm_frames_f32(data->path.c_str(), &config, &totalPCMFrameCount, nullptr);
+        f32* pSampleData = drmp3_open_file_and_read_pcm_frames_f32(p.c_str(), &config, &totalPCMFrameCount, nullptr);
         if (pSampleData == nullptr) {
-            setError("Could not read mp3 file: {}", data->path.c_str());
-            return false;
+            setError("Could not read mp3 file: {}", path);
+            return std::nullopt;
         }
         HG_DEFER(drmp3_free(pSampleData, nullptr));
 
-        data->asset.channels = config.channels;
-        data->asset.frequency = config.sampleRate;
-        data->asset.data.resize(totalPCMFrameCount * config.channels);
-        std::memcpy(data->asset.data.data(), pSampleData, data->asset.data.size() * sizeof(f32));
+        std::optional ret = std::make_optional<Sound>();
+        ret->channels = config.channels;
+        ret->frequency = config.sampleRate;
+        ret->data.resize(totalPCMFrameCount * config.channels);
+        std::memcpy(ret->data.data(), pSampleData, ret->data.size() * sizeof(f32));
+        return ret;
     }
     else if (bin->size() > 4 && memcmp("fLaC", bin->data(), 4) == 0)
     {
         unsigned int channels = 0;
         unsigned int sampleRate = 0;
         drflac_uint64 totalPCMFrameCount = 0;
-        f32* pSampleData = drflac_open_file_and_read_pcm_frames_f32(data->path.c_str(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
+        f32* pSampleData = drflac_open_file_and_read_pcm_frames_f32(p.c_str(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
         if (pSampleData == nullptr) {
-            setError("Could not read flac file: {}", data->path.c_str());
-            return false;
+            setError("Could not read flac file: {}", path);
+            return std::nullopt;
         }
         HG_DEFER(drwav_free(pSampleData, NULL));
 
-        data->asset.channels = channels;
-        data->asset.frequency = sampleRate;
-        data->asset.data.resize(totalPCMFrameCount * channels);
-        std::memcpy(data->asset.data.data(), pSampleData, totalPCMFrameCount * sizeof(f32) * channels);
-    }
-    else
-    {
-        setError("Unknown audio file type: {}", data->path.c_str());
-        return false;
+        std::optional ret = std::make_optional<Sound>();
+        ret->channels = channels;
+        ret->frequency = sampleRate;
+        ret->data.resize(totalPCMFrameCount * channels);
+        std::memcpy(ret->data.data(), pSampleData, ret->data.size() * sizeof(f32));
+        return ret;
     }
 
-    return true;
+    setError("Unknown audio file type: {}", path);
+    return std::nullopt;
 }
 
-bool storeSoundWav(const Sound& sound, std::string_view path)
+bool soundStoreWav(const Sound& sound, std::string_view path)
 {
     if (sound.channels == 0)
     {
@@ -259,36 +262,36 @@ void AudioPlayer::update(std::span<f32> buf, AudioConfig config)
     }
 }
 
-void AudioPlayer::playSound(const Asset<Sound>& soundSrc, f32 gain)
+void AudioPlayer::playSound(const Sound& soundSrc, f32 gain)
 {
     SpinLockScope scope{lock};
 
-    sounds.emplace_back(soundSrc.clone(), 0, gain, true);
+    sounds.emplace_back(&soundSrc, 0, gain, true);
 }
 
-void AudioPlayer::playMusic(const Asset<Sound>& musicSrc, f32 gain)
+void AudioPlayer::playMusic(const Sound& musicSrc, f32 gain)
 {
     SpinLockScope scope{lock};
 
     for (AudioPlayerSound& m : music)
     {
-        if (m.asset == musicSrc)
+        if (m.asset == &musicSrc)
         {
             m.playing = true;
             return;
         }
     }
 
-    music.emplace_back(musicSrc.clone(), 0, gain, true);
+    music.emplace_back(&musicSrc, 0, gain, true);
 }
 
-void AudioPlayer::killMusic(const Asset<Sound>& musicSrc)
+void AudioPlayer::killMusic(const Sound& musicSrc)
 {
     SpinLockScope scope{lock};
 
     for (u32 i = 0; i < sounds.size(); ++i)
     {
-        if (music[i].asset == musicSrc)
+        if (music[i].asset == &musicSrc)
         {
             music[i--] = std::move(music.back());
             music.pop_back();
@@ -297,13 +300,13 @@ void AudioPlayer::killMusic(const Asset<Sound>& musicSrc)
     }
 }
 
-void AudioPlayer::pauseMusic(const Asset<Sound>& musicSrc)
+void AudioPlayer::pauseMusic(const Sound& musicSrc)
 {
     SpinLockScope scope{lock};
 
     for (AudioPlayerSound& m : music)
     {
-        if (m.asset == musicSrc)
+        if (m.asset == &musicSrc)
         {
             m.playing = false;
             return;
@@ -311,13 +314,13 @@ void AudioPlayer::pauseMusic(const Asset<Sound>& musicSrc)
     }
 }
 
-void AudioPlayer::setMusicGain(const Asset<Sound>& musicSrc, f32 gain)
+void AudioPlayer::setMusicGain(const Sound& musicSrc, f32 gain)
 {
     SpinLockScope scope{lock};
 
     for (AudioPlayerSound& m : music)
     {
-        if (m.asset == musicSrc)
+        if (m.asset == &musicSrc)
         {
             m.gain = gain;
             return;

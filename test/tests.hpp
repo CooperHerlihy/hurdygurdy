@@ -7,6 +7,9 @@
 
 namespace hg {
 
+class Gpu;
+extern Gpu* testGpu;
+
 struct TestFailure {
     const char* file;
     i32 line;

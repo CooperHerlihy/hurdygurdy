@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hg/inttypes.hpp"
 #include "hg/utility.hpp"
 #include "hg/memory.hpp"
 #include "hg/concurrency.hpp"
@@ -78,7 +79,7 @@ public:
     /**
      * Compare entities
      */
-    constexpr bool operator==(Entity other)
+    constexpr bool operator==(Entity other) const
     {
         return handle == other.handle;
     }
@@ -90,172 +91,34 @@ public:
 static constexpr Entity nullEntity = Entity{};
 
 /**
- * A component in an entity component system
- */
-template<typename T>
-struct EcsComponent {
-    /**
-     * The component type
-     */
-    using Type = T;
-
-    /**
-     * indices[e.idx()] is the index into components, or -1 if none
-     */
-    std::vector<u32> indices{};
-    /**
-     * entities[idx] is the entity that owns that index
-     */
-    std::vector<Entity> entities{};
-    /**
-     * The component data
-     */
-    std::vector<T> components{};
-
-    /**
-     * Default-construct a component on an entity
-     *
-     * Note, the entity must not already have the component
-     */
-    T& add(Entity e)
-    {
-        HG_ASSERT(!has(e));
-
-        if (e.idx() >= indices.size())
-        {
-            u64 oldCount = indices.size();
-            indices.resize(e.idx() + 1);
-            for (u64 i = oldCount; i < indices.size(); ++i)
-            {
-                indices[i] = static_cast<u32>(-1);
-            }
-        }
-
-        u64 idx = entities.size();
-        indices[e.idx()] = assertCast<u32>(idx);
-        entities.emplace_back(e);
-        return components.emplace_back();
-    }
-
-    /**
-     * Copy-construct a component on an entity
-     *
-     * Note, the entity must not already have the component
-     */
-    T& add(Entity e, const T& val)
-    {
-        HG_ASSERT(!has(e));
-
-        if (e.idx() >= indices.size())
-        {
-            u64 oldCount = indices.size();
-            indices.resize(e.idx() + 1);
-            for (u64 i = oldCount; i < indices.size(); ++i)
-            {
-                indices[i] = static_cast<u32>(-1);
-            }
-        }
-
-        u64 idx = entities.size();
-        indices[e.idx()] = assertCast<u32>(idx);
-        entities.push_back(e);
-        return components.emplace_back(val);
-    }
-
-    /**
-     * Move-construct a component on an entity
-     *
-     * Note, the entity must not already have the component
-     */
-    T& add(Entity e, T&& val)
-    {
-        HG_ASSERT(!has(e));
-
-        if (e.idx() >= indices.size())
-        {
-            u64 oldCount = indices.size();
-            indices.resize(e.idx() + 1);
-            for (u64 i = oldCount; i < indices.size(); ++i)
-            {
-                indices[i] = static_cast<u32>(-1);
-            }
-        }
-
-        u64 idx = entities.size();
-        indices[e.idx()] = assertCast<u32>(idx);
-        entities.push_back(e);
-        return components.emplace_back(std::move(val));
-    }
-
-    /**
-     * Remove a component from an entity
-     *
-     * Note, the entity must have the component to remove
-     */
-    void remove(Entity e)
-    {
-        u32 idx = indices[e.idx()];
-        indices[e.idx()] = static_cast<u32>(-1);
-        entities[idx] = std::move(entities.back());
-        components[idx] = std::move(components.back());
-        entities.pop_back();
-        components.pop_back();
-
-        if (idx < entities.size())
-        {
-            Entity moved = entities[idx];
-            indices[moved.idx()] = idx;
-        }
-    }
-
-    /**
-     * Returns whether an entity has a component
-     */
-    bool has(Entity e) const
-    {
-        return e.idx() < indices.size() && indices[e.idx()] != static_cast<u32>(-1);
-    }
-
-    /**
-     * Get a component from an entity
-     *
-     * Note, the entity must have the component
-     */
-    T& get(Entity e)
-    {
-        HG_ASSERT(has(e));
-        return components[indices[e.idx()]];
-    }
-
-    /**
-     * Get a component from an entity (const)
-     *
-     * Note, the entity must have the component
-     */
-    const T& get(Entity e) const
-    {
-        HG_ASSERT(has(e));
-        return components[indices[e.idx()]];
-    }
-
-    /**
-     * Get the entity associated with a component
-     */
-    Entity getEntity(const T& c) const
-    {
-        return entities[assertCast<u32>(&c - components.data())];
-    }
-};
-
-/**
  * An entity component system
  */
 template<typename... Ts>
 struct Ecs {
+private:
+    /**
+     * A component in an entity component system
+     */
+    template<typename T>
+    struct System {
+        /**
+         * indices[e.idx()] is the index into components, or -1 if none
+         */
+        std::vector<u32> indices{};
+        /**
+         * entities[idx] is the entity that owns that index
+         */
+        std::vector<Entity> entities{};
+        /**
+         * The component data
+         */
+        std::vector<T> components{};
+    };
+
     /**
      * The component systems
      */
-    std::tuple<EcsComponent<Ts>...> systems{};
+    std::tuple<System<Ts>...> systems{};
     /**
      * The alive entities
      */
@@ -269,30 +132,13 @@ struct Ecs {
      */
     Entity nextEntity{0};
 
-    /**
-     * Get the component system for a type
-     */
-    template<typename T>
-    EcsComponent<T>& getComponentSystem()
-    {
-        return std::get<idxInPack<T, Ts...>()>(systems);
-    }
-
-    /**
-     * Get the component system for a type (const)
-     */
-    template<typename T>
-    const EcsComponent<T>& getComponentSystem() const
-    {
-        return std::get<idxInPack<T, Ts...>()>(systems);
-    }
-
+public:
     /**
      * Despawn all entities
      */
-    void reset()
+    void clearEntities()
     {
-        (clear<Ts>(), ...);
+        (clearComponents<Ts>(), ...);
         entities.clear();
         freeEntities.clear();
         nextEntity = Entity{0};
@@ -301,13 +147,16 @@ struct Ecs {
     /**
      * Remove component type from all entities
      */
-    template<typename T>
-    void clear()
+    template<typename... Us>
+    void clearComponents()
     {
-        EcsComponent<T>& s = getComponentSystem<T>();
-        s.indices.clear();
-        s.entities.clear();
-        s.components.clear();
+        ([&]
+        {
+            System<Us>& s = std::get<System<Us>>(systems);
+            s.indices.clear();
+            s.entities.clear();
+            s.components.clear();
+        }(), ...);
     }
 
     /**
@@ -338,15 +187,11 @@ struct Ecs {
     {
         HG_ASSERT(alive(e));
 
-        std::apply([&](auto&... system)
+        (([&]()
         {
-            ([&]()
-            {
-                if (system.has(e))
-                    system.remove(e);
-            }(), ... );
-        },
-        systems);
+            if (has<Ts>(e))
+                remove<Ts>(e);
+        }()), ...);
         entities[e.idx()] = {};
         freeEntities.push_back(e.nextGeneration());
     }
@@ -364,35 +209,28 @@ struct Ecs {
      *
      * Note, the entity must not already have the component
      */
-    template<typename T>
-    T& add(Entity e)
+    template<typename T, typename... Args>
+    T& add(Entity e, Args&&... args)
     {
         HG_ASSERT(alive(e));
-        return getComponentSystem<T>().add(e);
-    }
+        HG_ASSERT(!has<T>(e));
 
-    /**
-     * Copy-construct a component on an entity
-     *
-     * Note, the entity must not already have the component
-     */
-    template<typename T>
-    T& add(Entity e, const T& val)
-    {
-        HG_ASSERT(alive(e));
-        return getComponentSystem<T>().add(e, val);
-    }
+        System<T>& s = std::get<System<T>>(systems);
 
-    /**
-     * Move-construct a component on an entity
-     *
-     * Note, the entity must not already have the component
-     */
-    template<typename T>
-    T& add(Entity e, T&& val)
-    {
-        HG_ASSERT(alive(e));
-        return getComponentSystem<T>().add(e, std::move(val));
+        if (e.idx() >= s.indices.size())
+        {
+            u64 oldCount = s.indices.size();
+            s.indices.resize(e.idx() + 1);
+            for (u64 i = oldCount; i < s.indices.size(); ++i)
+            {
+                s.indices[i] = static_cast<u32>(-1);
+            }
+        }
+
+        u64 idx = s.entities.size();
+        s.indices[e.idx()] = assertCast<u32>(idx);
+        s.entities.emplace_back(e);
+        return s.components.emplace_back(std::forward<Args>(args)...);
     }
 
     /**
@@ -404,44 +242,22 @@ struct Ecs {
     void remove(Entity e)
     {
         HG_ASSERT(alive(e));
-        getComponentSystem<T>().remove(e);
-    }
+        HG_ASSERT(has<T>(e));
 
-    /**
-     * Default-construct components for multiple types at once
-     *
-     * Note, the entity must not already have any of the components
-     */
-    template<typename... Us> requires (sizeof...(Us) > 1)
-    void add(Entity e)
-    {
-        HG_ASSERT(alive(e));
-        (getComponentSystem<Us>().add(e), ...);
-    }
+        System<T>& s = std::get<System<T>>(systems);
 
-    /**
-     * Forward-construct components for multiple types at once
-     *
-     * Each argument corresponds positionally to a component type.
-     * Note, the entity must not already have any of the components
-     */
-    template<typename... Us> requires (sizeof...(Us) > 1)
-    void add(Entity e, Us&&... vals)
-    {
-        HG_ASSERT(alive(e));
-        (getComponentSystem<Us>().add(e, std::forward<Us>(vals)), ...);
-    }
+        u32 idx = s.indices[e.idx()];
+        s.indices[e.idx()] = static_cast<u32>(-1);
+        s.entities[idx] = std::move(s.entities.back());
+        s.components[idx] = std::move(s.components.back());
+        s.entities.pop_back();
+        s.components.pop_back();
 
-    /**
-     * Remove components for multiple types at once
-     *
-     * Note, the entity must have all the components to remove
-     */
-    template<typename... Us> requires (sizeof...(Us) > 1)
-    void remove(Entity e)
-    {
-        HG_ASSERT(alive(e));
-        (getComponentSystem<Us>().remove(e), ...);
+        if (idx < s.entities.size())
+        {
+            Entity moved = s.entities[idx];
+            s.indices[moved.idx()] = idx;
+        }
     }
 
     /**
@@ -451,7 +267,8 @@ struct Ecs {
     bool has(Entity e) const
     {
         HG_ASSERT(alive(e));
-        return getComponentSystem<T>().has(e);
+        const System<T>& s = std::get<System<T>>(systems);
+        return e.idx() < s.indices.size() && s.indices[e.idx()] != static_cast<u32>(-1);
     }
 
     /**
@@ -483,7 +300,10 @@ struct Ecs {
     T& get(Entity e)
     {
         HG_ASSERT(alive(e));
-        return getComponentSystem<T>().get(e);
+        HG_ASSERT(has<T>(e));
+
+        System<T>& s = std::get<System<T>>(systems);
+        return s.components[s.indices[e.idx()]];
     }
 
     /**
@@ -495,7 +315,10 @@ struct Ecs {
     const T& get(Entity e) const
     {
         HG_ASSERT(alive(e));
-        return getComponentSystem<T>().get(e);
+        HG_ASSERT(has<T>(e));
+
+        const System<T>& s = std::get<System<T>>(systems);
+        return s.components[s.indices[e.idx()]];
     }
 
     /**
@@ -504,16 +327,16 @@ struct Ecs {
     template<typename T>
     Entity getEntity(const T& c) const
     {
-        return getComponentSystem<T>().getEntity(c);
+        const System<T>& s = std::get<System<T>>(systems);
+        return s.entities[assertCast<u32>(&c - s.components.data())];
     }
 
     /**
-     * Returns the number of active components of a type
+     * Returns all entities
      */
-    template<typename T>
-    u64 count() const
+    std::span<const Entity> getEntities() const
     {
-        return getComponentSystem<T>().components.size();
+        return entities;
     }
 
     /**
@@ -522,7 +345,7 @@ struct Ecs {
     template<typename T>
     std::span<const Entity> getEntities() const
     {
-        return getComponentSystem<T>().entities;
+        return std::get<System<T>>(systems).entities;
     }
 
     /**
@@ -531,7 +354,7 @@ struct Ecs {
     template<typename T>
     std::span<T> getComponents()
     {
-        return getComponentSystem<T>().components;
+        return std::get<System<T>>(systems).components;
     }
 
     /**
@@ -540,136 +363,138 @@ struct Ecs {
     template<typename T>
     std::span<const T> getComponents() const
     {
-        return getComponentSystem<T>().components;
+        return std::get<System<T>>(systems).components;
     }
 
     /**
      * Calls a function for each entity with a component type
      */
-    template<typename T, typename F>
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, Entity>
     void forEach(F fn)
     {
-        EcsComponent<T>& s = getComponentSystem<T>();
-
-        if constexpr (std::is_invocable_r_v<void, F, Entity>)
+        System<T>& s = std::get<System<T>>(systems);
+        for (Entity e : s.entities)
         {
-            for (Entity e : s.entities)
-            {
-                fn(e);
-            }
-        }
-        else if constexpr (std::is_invocable_r_v<void, F, T&>)
-        {
-            for (T& c : s.components)
-            {
-                fn(c);
-            }
-        }
-        else if constexpr (std::is_invocable_r_v<void, F, Entity, T&>)
-        {
-            for (u64 i = 0; i < s.components.size(); ++i)
-            {
-                fn(s.entities[i], s.components[i]);
-            }
-        }
-        else
-        {
-            static_assert(sizeof(T) == 0, "Invalid lambda in Ecs forEach()");
+            fn(e);
         }
     }
 
     /**
-     * Calls a function for each entity with a component type (const)
+     * Calls a function for each entity with a component type
      */
-    template<typename T, typename F>
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, T&>
+    void forEach(F fn)
+    {
+        System<T>& s = std::get<System<T>>(systems);
+        for (T& c : s.components)
+        {
+            fn(c);
+        }
+    }
+
+    /**
+     * Calls a function for each entity with a component type
+     */
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, Entity, T&>
+    void forEach(F fn)
+    {
+        System<T>& s = std::get<System<T>>(systems);
+        auto* c = s.components.data();
+        for (Entity e : s.entities)
+        {
+            fn(e, *(c++));
+        }
+    }
+
+    /**
+     * Calls a function for each entity with a component type
+     */
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, Entity>
     void forEach(F fn) const
     {
-        const EcsComponent<T>& s = getComponentSystem<T>();
+        const System<T>& s = std::get<System<T>>(systems);
+        for (Entity e : s.entities)
+        {
+            fn(e);
+        }
+    }
 
-        if constexpr (std::is_invocable_r_v<void, F, Entity>)
+    /**
+     * Calls a function for each entity with a component type
+     */
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, T&>
+    void forEach(F fn) const
+    {
+        const System<T>& s = std::get<System<T>>(systems);
+        for (const T& c : s.components)
         {
-            for (const Entity& e : s.entities)
-            {
-                fn(e);
-            }
+            fn(c);
         }
-        else if constexpr (std::is_invocable_r_v<void, F, const T&>)
+    }
+
+    /**
+     * Calls a function for each entity with a component type
+     */
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, Entity, T&>
+    void forEach(F fn) const
+    {
+        const System<T>& s = std::get<System<T>>(systems);
+        auto* c = s.components.data();
+        for (Entity e : s.entities)
         {
-            for (const T& c : s.components)
-            {
-                fn(c);
-            }
-        }
-        else if constexpr (std::is_invocable_r_v<void, F, Entity, const T&>)
-        {
-            for (u64 i = 0; i < s.components.size(); ++i)
-            {
-                fn(s.entities[i], s.components[i]);
-            }
-        }
-        else
-        {
-            static_assert(sizeof(T) == 0, "Invalid lambda in Ecs forEach() const");
+            fn(e, *(c++));
         }
     }
 
     /**
      * Calls a function in parallel for each entity with a component type
      */
-    template<typename T, typename F>
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, Entity>
     void forEachPar(F fn)
     {
-        EcsComponent<T>& s = getComponentSystem<T>();
-
-        if constexpr (std::is_invocable_r_v<void, F, Entity>)
+        System<T>& s = std::get<System<T>>(systems);
+        forPar(0, s.components.size(), [&](u64 idx)
         {
-            forPar(0, s.components.size(), [&](u64 idx)
-            {
-                fn(s.entities[idx]);
-            });
-        }
-        else if constexpr (std::is_invocable_r_v<void, F, T&>)
-        {
-            forPar(0, s.components.size(), [&](u64 idx)
-            {
-                fn(s.components[idx]);
-            });
-        }
-        else if constexpr (std::is_invocable_r_v<void, F, Entity, T&>)
-        {
-            forPar(0, s.components.size(), [&](u64 idx)
-            {
-                fn(s.entities[idx], s.components[idx]);
-            });
-        }
+            fn(s.entities[idx]);
+        });
     }
 
     /**
-     * Returns the smallest list of entities with at least one of the types
+     * Calls a function in parallel for each entity with a component type
      */
-    template<typename... Us>
-    std::span<Entity> getSmallestEntities()
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, T&>
+    void forEachPar(F fn)
     {
-        std::span<Entity> ret = getComponentSystem<FirstInPackT<Us...>>().entities;
-        ([&]()
+        System<T>& s = std::get<System<T>>(systems);
+        forPar(0, s.components.size(), [&](u64 idx)
         {
-            std::span<Entity> es = getComponentSystem<Us>().entities;
-            if (es.size() < ret.size())
-                ret = es;
-        }(), ...);
-        return ret;
+            fn(s.components[idx]);
+        });
+    }
+
+    /**
+     * Calls a function in parallel for each entity with a component type
+     */
+    template<typename T, typename F> requires std::is_invocable_r_v<void, F, Entity, T&>
+    void forEachPar(F fn)
+    {
+        System<T>& s = std::get<System<T>>(systems);
+        forPar(0, s.components.size(), [&](u64 idx)
+        {
+            fn(s.entities[idx], s.components[idx]);
+        });
     }
 
     /**
      * Returns the smallest list of entities with at least one of the types (const)
      */
-    template<typename... Us>
+    template<typename U, typename... Us>
     std::span<const Entity> getSmallestEntities() const
     {
-        std::span<const Entity> ret = getComponentSystem<FirstInPackT<Us...>>().entities;
+        std::span<const Entity> ret = std::get<System<U>>(systems).entities;
         ([&]()
         {
-            std::span<const Entity> es = getComponentSystem<Us>().entities;
+            std::span<const Entity> es = std::get<System<Us>>(systems).entities;
             if (es.size() < ret.size())
                 ret = es;
         }(), ...);
@@ -742,7 +567,8 @@ struct Ecs {
 /**
  * The serializer for an ecs
  */
-struct EntitySerializer {
+class EntitySerializer {
+private:
     /**
      * The indices of entities, if writing
      */
@@ -752,6 +578,7 @@ struct EntitySerializer {
      */
     VectorTemp<Entity> idxToEntity{};
 
+public:
     /**
      * Initialize with arena
      */
@@ -775,22 +602,28 @@ struct EntitySerializer {
     {
         return idxToEntity[idx];
     }
+
+    /**
+     * The serialize function
+     */
+    template<typename... Ts>
+    friend bool serialize(Serializer* s, Ecs<Ts...>* ecs);
 };
 
 /**
  * The default serialization for a component, may be overridden
  */
 template<typename T>
-void ecsSerialize(Serializer* s, T* val, EntitySerializer*)
+bool ecsSerialize(Serializer* s, T* val, EntitySerializer*)
 {
-    serialize(s, val);
+    return serialize(s, val);
 }
 
 /**
  * Entity ecs serialization
  */
 template<>
-inline void ecsSerialize(Serializer* s, Entity* e, EntitySerializer* ecs)
+inline bool ecsSerialize(Serializer* s, Entity* e, EntitySerializer* ecs)
 {
     if (s->isWriting())
     {
@@ -800,50 +633,62 @@ inline void ecsSerialize(Serializer* s, Entity* e, EntitySerializer* ecs)
     else
     {
         u32 idx;
-        serializeObject(s, &idx);
+        if (!serializeObject(s, &idx))
+            return false;
         *e = ecs->getEntity(idx);
     }
+    return true;
 }
+
+namespace internal {
 
 /**
  * Serialize one component system of an ecs
  */
-template<typename Sys, typename EcsT>
-bool serializeEcsSystem(Serializer* s, Sys& sys, EntitySerializer* es, EcsT* ecs)
+template<typename T, typename EcsT>
+bool serializeEcsSystem(Serializer* s, EntitySerializer* es, EcsT* ecs)
 {
-    using T = typename std::remove_cvref_t<Sys>::Type;
+    std::span<const Entity> entities = ecs->template getEntities<T>();
+    std::span<T> components = ecs->template getComponents<T>();
 
     if (s->isWriting())
     {
-        u32 cCount = assertCast<u32>(sys.components.size());
-        if (!serialize(s, &cCount))
-            return false;
+        u32 cCount = assertCast<u32>(components.size());
+        s->beginObject(&cCount);
+        HG_DEFER(s->endObject());
 
-        for (u32 i = 0; i < sys.components.size(); ++i)
+        for (u32 i = 0; i < components.size(); ++i)
         {
-            u32 idx = es->getIdx(sys.entities[i]);
-            if (!serialize(s, &idx))
+            u32 idx = es->getIdx(entities[i]);
+            s->beginObject();
+            HG_DEFER(s->endObject());
+            if (!serialize(s, &idx) ||
+                !ecsSerialize(s, &components[i], es))
                 return false;
-            ecsSerialize(s, &sys.components[i], es);
         }
         return true;
     }
     else
     {
         u32 cCount;
-        if (!serialize(s, &cCount))
+        if (!s->beginObject(&cCount))
             return false;
+        HG_DEFER(s->endObject());
 
         for (u32 i = 0; i < cCount; ++i)
         {
+            s->beginObject();
+            HG_DEFER(s->endObject());
             u32 idx;
-            if (!serialize(s, &idx))
+            if (!serialize(s, &idx) ||
+                !ecsSerialize(s, &ecs->template add<T>(es->getEntity(idx)), es))
                 return false;
-            ecsSerialize(s, &ecs->template add<T>(es->getEntity(idx)), es);
         }
         return true;
     }
 }
+
+} // namespace internal
 
 /**
  * Ecs serialization
@@ -853,7 +698,8 @@ bool serializeEcsSystem(Serializer* s, Sys& sys, EntitySerializer* es, EcsT* ecs
 template<typename... Ts>
 bool serialize(Serializer* s, Ecs<Ts...>* ecs)
 {
-    s->beginObject();
+    if (!s->beginObject())
+        return false;
     HG_DEFER(s->endObject());
 
     ArenaScope scratch = getScratch();
@@ -861,12 +707,12 @@ bool serialize(Serializer* s, Ecs<Ts...>* ecs)
 
     if (s->isWriting())
     {
-        es.entityToIdx.resize(ecs->entities.size());
+        es.entityToIdx.resize(ecs->getEntities().size());
 
         u32 eCount = 0;
-        for (u32 i = 0; i < ecs->entities.size(); ++i)
+        for (u32 i = 0; i < ecs->getEntities().size(); ++i)
         {
-            if (ecs->entities[i] != nullEntity)
+            if (ecs->getEntities()[i] != nullEntity)
                 es.entityToIdx[i] = eCount++;
             else
                 es.entityToIdx[i] = static_cast<u32>(-1);
@@ -886,11 +732,7 @@ bool serialize(Serializer* s, Ecs<Ts...>* ecs)
         }
     }
 
-    return std::apply([&](auto&... sys)
-    {
-        return (serializeEcsSystem(s, sys, &es, ecs) && ...);
-    },
-    ecs->systems);
+    return (internal::serializeEcsSystem<Ts>(s, &es, ecs) && ...);
 }
 
 } // namespace hg

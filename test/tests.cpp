@@ -1,8 +1,14 @@
 #include "tests.hpp"
+
 #include "hg/time.hpp"
 #include "hg/gpu.hpp"
 
+#include "internal.hpp"
+
 using namespace hg;
+
+static std::unique_ptr<Gpu> gpuOwner;
+Gpu* hg::testGpu = nullptr;
 
 static constexpr i32 maxTests = 1 << 16;
 
@@ -29,9 +35,12 @@ static i32 failCount = 0;
 
 int main()
 {
-    if (!initGpu({}))
-        HG_PANIC("Could not initialize GPU\n");
-    HG_DEFER(deinitGpu());
+    hg::internal::convertPixelFont();
+
+    gpuOwner = Gpu::create({});
+    if (gpuOwner == nullptr)
+        panic("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
+    testGpu = gpuOwner.get();
 
     std::printf("HurdyGurdy: Tests begun\n");
 
@@ -61,5 +70,6 @@ int main()
         }
     }
 
+    gpuOwner = nullptr;
     return failCount;
 }

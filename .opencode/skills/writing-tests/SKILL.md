@@ -1,4 +1,7 @@
-# Writing Tests
+---
+name: Writing Tests
+description: How to properly write tests
+---
 
 - most tests should quickly test one piece of functionality
 - some tests should integrate a whole subsystem

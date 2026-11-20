@@ -1,10 +1,7 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/math.hpp"
-#include "hg/geometry3d.hpp"
 
-#include <concepts>
 #include <span>
 #include <memory>
 #include <string_view>
@@ -13,83 +10,65 @@
 namespace hg {
 
 /**
- * Initialize the GPU
- *
- * Parameters
- * - extensions The Vulkan instance extensions required by the windowing backend
- */
-bool initGpu(std::span<std::string_view> extensions);
-
-/**
- * Deinitialize the GPU
- */
-void deinitGpu();
-
-/**
- * Wait for the GPU to finish work
- */
-void gpuWaitIdle();
-
-/**
  * Pixel formats
  */
-enum Format : u32 {
+enum class Format : u32 {
     /**
      * No format
      */
-    Format_undefined = 0,
+    undefined = 0,
     /**
      * 8 bit
      */
-    Format_r8_unorm,
-    Format_rg8_unorm,
-    Format_rgba8_unorm,
-    Format_bgra8_unorm,
-    Format_rgba8_srgb,
-    Format_bgra8_srgb,
+    r8_unorm,
+    rg8_unorm,
+    rgba8_unorm,
+    bgra8_unorm,
+    rgba8_srgb,
+    bgra8_srgb,
     /**
      * 16 bit
      */
-    Format_r16_unorm,
-    Format_r16_sfloat,
-    Format_rg16_unorm,
-    Format_rg16_sfloat,
-    Format_rgba16_unorm,
-    Format_rgba16_sfloat,
+    r16_unorm,
+    r16_sfloat,
+    rg16_unorm,
+    rg16_sfloat,
+    rgba16_unorm,
+    rgba16_sfloat,
     /**
      * 32 bit
      */
-    Format_r32_uint,
-    Format_r32_sfloat,
-    Format_rg32_sfloat,
-    Format_rgba32_sfloat,
+    r32_uint,
+    r32_sfloat,
+    rg32_sfloat,
+    rgba32_sfloat,
     /**
      * Packed
      */
-    Format_a2b10g10r10_unorm_pack32,
-    Format_b10g11r11_ufloat_pack32,
+    a2b10g10r10_unorm_pack32,
+    b10g11r11_ufloat_pack32,
     /**
      * Depth/stencil
      */
-    Format_d16_unorm,
-    Format_d32_sfloat,
-    Format_s8_uint,
-    Format_d16_unorm_s8_uint,
-    Format_d24_unorm_s8_uint,
-    Format_d32_sfloat_s8_uint,
+    d16_unorm,
+    d32_sfloat,
+    s8_uint,
+    d16_unorm_s8_uint,
+    d24_unorm_s8_uint,
+    d32_sfloat_s8_uint,
     /**
      * BC compressed
      */
-    Format_bc1_rgb_unorm_block,
-    Format_bc3_unorm_block,
-    Format_bc4_unorm_block,
-    Format_bc5_unorm_block,
-    Format_bc7_unorm_block,
+    bc1_rgb_unorm_block,
+    bc3_unorm_block,
+    bc4_unorm_block,
+    bc5_unorm_block,
+    bc7_unorm_block,
     /**
      * ASTC compressed
      */
-    Format_astc_4x4_unorm_block,
-    Format_astc_8x8_unorm_block,
+    astc_4x4_unorm_block,
+    astc_8x8_unorm_block,
 };
 
 /**
@@ -103,163 +82,88 @@ enum Format : u32 {
  */
 u32 formatToSize(Format format);
 
-// Vulkan allocator : TODO?
-
 /**
  * How a gpu buffer will be used
  */
-enum GpuBufferUsage : u32 {
-    GpuBufferUsage_transferSrc = 0x00000001,
-    GpuBufferUsage_transferDst = 0x00000002,
-    GpuBufferUsage_uniformTexelBuffer = 0x00000004,
-    GpuBufferUsage_storageTexelBuffer = 0x00000008,
-    GpuBufferUsage_uniformBuffer = 0x00000010,
-    GpuBufferUsage_storageBuffer = 0x00000020,
-    GpuBufferUsage_indirectBuffer = 0x00000100,
+struct GpuBufferUsage {
+    enum : u32 {
+        transferSrc = 0x00000001,
+        transferDst = 0x00000002,
+        uniformTexelBuffer = 0x00000004,
+        storageTexelBuffer = 0x00000008,
+        uniformBuffer = 0x00000010,
+        storageBuffer = 0x00000020,
+        indirectBuffer = 0x00000100,
+    };
 };
 using GpuBufferUsageFlags = u32;
 
 /**
  * How a gpu buffer will be accessed
  */
-enum GpuMemoryUsage : u32 {
+enum class GpuMemoryUsage : u32 {
     /**
      * It will only be accessed from the device
      */
-    GpuMemoryUsage_deviceOnly,
+    deviceOnly,
     /**
      * It will be used as a staging buffer to transfer from host to device
      */
-    GpuMemoryUsage_stagingWrite,
+    stagingWrite,
     /**
      * It will be used as a staging buffer to transfer from device to host
      */
-    GpuMemoryUsage_stagingRead,
+    stagingRead,
     /**
      * It will be frequently written from the host and read on the device
      */
-    GpuMemoryUsage_frequentUpdate,
+    frequentUpdate,
 };
 
 /**
- * GpuBuffer implementation data
+ * A buffer on the gpu
  */
-struct GpuBufferData;
-
-/**
- * A gpu buffer
- */
-struct GpuBuffer {
-    /**
-     * The implementation data
-     */
-    std::unique_ptr<GpuBufferData> data;
-
-    /**
-     * Construct empty
-     */
-    GpuBuffer() noexcept;
-
-    /**
-     * Create a gpu buffer
-     *
-     * Parameters
-     * - size The size in bytes of the buffer
-     * - usageFlags How the buffer will be used
-     * - memoryUsage How the buffer should be accessed
-     */
-    static GpuBuffer create(
-        u64 size,
-        GpuBufferUsageFlags usageFlags,
-        GpuMemoryUsage memoryUsage = GpuMemoryUsage_deviceOnly);
-
-    /**
-     * Destroy the gpu buffer
-     */
-    ~GpuBuffer() noexcept;
-
-    /**
-     * Get the size of the buffer in bytes
-     */
-    u64 size() const;
-
-    /**
-     * Get the uniform buffer descriptor index from the buffer
-     */
-    u32 uniformDescriptor() const;
-
-    /**
-     * Get the storage buffer descriptor index from the buffer
-     */
-    u32 storageDescriptor() const;
-
-    /**
-     * Writes to the gpu buffer
-     *
-     * Parameters
-     * - src The data to write
-     * - offset The offset in bytes into the gpu buffer
-     */
-    void write(std::span<const std::byte> src, u64 offset);
-
-    /**
-     * Reads from the gpu buffer
-     *
-     * Parameters
-     * - dst The location to write to
-     * - offset The offset in bytes into the gpu buffer
-     */
-    void read(std::span<std::byte> dst, u64 offset) const;
-
-    /**
-     * Move construct
-     */
-    GpuBuffer(GpuBuffer&&) noexcept;
-
-    /**
-     * Move assign
-     */
-    GpuBuffer& operator=(GpuBuffer&&) noexcept;
-
-    GpuBuffer(const GpuBuffer&) = delete;
-    GpuBuffer& operator=(const GpuBuffer&) = delete;
-};
+class GpuBuffer;
 
 /**
  * How an image will be used
  */
-enum GpuImageUsage : u32 {
-    GpuImageUsage_transferSrc = 0x00000001,
-    GpuImageUsage_transferDst = 0x00000002,
-    GpuImageUsage_sampled = 0x00000004,
-    GpuImageUsage_storage = 0x00000008,
-    GpuImageUsage_colorAttachment = 0x00000010,
-    GpuImageUsage_depthStencilAttachment = 0x00000020,
-    GpuImageUsage_transientAttachment = 0x00000040,
-    GpuImageUsage_inputAttachment = 0x00000080,
-    GpuImageUsage_hostTransfer = 0x00400000,
+struct GpuImageUsage {
+    enum : u32 {
+        transferSrc = 0x00000001,
+        transferDst = 0x00000002,
+        sampled = 0x00000004,
+        storage = 0x00000008,
+        colorAttachment = 0x00000010,
+        depthStencilAttachment = 0x00000020,
+        transientAttachment = 0x00000040,
+        inputAttachment = 0x00000080,
+        hostTransfer = 0x00400000,
+    };
 };
 using GpuImageUsageFlags = u32;
 
 /**
  * The layout of an image
  */
-enum GpuLayout : u32 {
-    GpuLayout_undefined = 0,
-    GpuLayout_general,
-    GpuLayout_colorAttachment,
-    GpuLayout_depthStencilAttachment,
-    GpuLayout_shaderReadOnly,
-    GpuLayout_transferSrc,
-    GpuLayout_transferDst,
-    GpuLayout_presentSrc,
+enum class GpuLayout : u32 {
+    undefined = 0,
+    general,
+    colorAttachment,
+    depthStencilAttachment,
+    shaderReadOnly,
+    transferSrc,
+    transferDst,
+    presentSrc,
 };
 
 /**
  * Extra config flags for image creation
  */
-enum GpuImageConfig : u32 {
-    GpuImageConfig_cubeCompatible = 0x00000010,
+struct GpuImageConfig {
+    enum : u32 {
+        cubeCompatible = 0x00000010,
+    };
 };
 using GpuImageConfigFlags = u32;
 
@@ -286,7 +190,7 @@ struct GpuImageCreateInfo {
     /**
      * The format of the image, must not be undefined
      */
-    Format format = Format_undefined;
+    Format format = Format::undefined;
     /**
      * The number of mip level
      */
@@ -310,133 +214,61 @@ struct GpuImageCreateInfo {
 };
 
 /**
- * GpuImage implementation data
+ * An image on the gpu
  */
-struct GpuImageData;
-
-/**
- * A gpu image
- */
-struct GpuImage {
-    /**
-     * The implementation data
-     */
-    std::unique_ptr<GpuImageData> data;
-
-    /**
-     * Construct empty
-     */
-    GpuImage() noexcept;
-
-    /**
-     * Create a gpu image assuming most defaults
-     */
-    static GpuImage create(u32 width, u32 height, Format format, GpuImageUsageFlags usage);
-
-    /**
-     * Create a gpu image with extended options
-     */
-    static GpuImage createEx(const GpuImageCreateInfo& config);
-
-    /**
-     * Destroy a gpu image
-     */
-    ~GpuImage() noexcept;
-
-    /**
-     * Get the width of an image
-     */
-    u32 width() const;
-
-    /**
-     * Get the height of an image
-     */
-    u32 height() const;
-
-    /**
-     * Move construct
-     */
-    GpuImage(GpuImage&&) noexcept;
-
-    /**
-     * Move assign
-     */
-    GpuImage& operator=(GpuImage&&) noexcept;
-
-    GpuImage(const GpuImage&) = delete;
-    GpuImage& operator=(const GpuImage&) = delete;
-};
+class GpuImage;
 
 /**
  * The dimensionality of an image
  */
-enum GpuViewType : u32 {
-    GpuViewType_1D = 0,
-    GpuViewType_2D = 1,
-    GpuViewType_3D = 2,
-    GpuViewType_cube = 3,
-    GpuViewType_1DArray = 4,
-    GpuViewType_2DArray = 5,
-    GpuViewType_cubeArray = 6,
+enum class GpuViewType : u32 {
+    image1D = 0,
+    image2D = 1,
+    image3D = 2,
+    cube = 3,
+    array1D = 4,
+    array2D = 5,
+    cubeArray = 6,
 };
-
-/**
- * The aspect the image will be accessed in
- */
-enum GpuAspect : u32 {
-    GpuAspect_none = 0,
-    GpuAspect_color = 0x00000001,
-    GpuAspect_depth = 0x00000002,
-    GpuAspect_stencil = 0x00000004,
-    GpuAspect_metadata = 0x00000008,
-    GpuAspect_plane0 = 0x00000010,
-    GpuAspect_plane1 = 0x00000020,
-    GpuAspect_plane2 = 0x00000040,
-};
-using GpuAspectFlags = u32;
 
 /**
  * How a sampler interpolates between pixels
  */
-enum GpuFilter : u32 {
-    GpuFilter_nearest = 0,
-    GpuFilter_linear = 1,
-    GpuFilter_count,
+enum class GpuFilter : u32 {
+    nearest = 0,
+    linear = 1,
+    count,
 };
 
 /**
  * How a sampler samples off the image's edge
  */
-enum GpuSamplerEdgeMode : u32 {
-    GpuSamplerEdgeMode_repeat = 0,
-    GpuSamplerEdgeMode_mirroredRepeat = 1,
-    GpuSamplerEdgeMode_clampToEdge = 2,
-    GpuSamplerEdgeMode_clampToBorder = 3,
-    GpuSamplerEdgeMode_mirrorClampToEdge = 4,
-    GpuSamplerEdgeMode_count,
+enum class GpuSamplerEdgeMode : u32 {
+    repeat = 0,
+    mirroredRepeat = 1,
+    clampToEdge = 2,
+    clampToBorder = 3,
+    mirrorClampToEdge = 4,
+    count,
 };
 
 /**
  * The border color if the sampler edge mode has a border
  */
-enum GpuSamplerBorder : u32 {
-    GpuSamplerBorder_floatTransparentBlack = 0,
-    GpuSamplerBorder_intTransparentBlack = 1,
-    GpuSamplerBorder_floatOpaqueBlack = 2,
-    GpuSamplerBorder_intOpaqueBlack = 3,
-    GpuSamplerBorder_floatOpaqueWhite = 4,
-    GpuSamplerBorder_intOpaqueWhite = 5,
-    GpuSamplerBorder_count,
+enum class GpuSamplerBorder : u32 {
+    floatTransparentBlack = 0,
+    intTransparentBlack = 1,
+    floatOpaqueBlack = 2,
+    intOpaqueBlack = 3,
+    floatOpaqueWhite = 4,
+    intOpaqueWhite = 5,
+    count,
 };
 
 /**
  * Config for GpuView
  */
 struct GpuViewCreateInfo {
-    /**
-     * The image to view
-     */
-    GpuImage* image = nullptr;
     /**
      * The index of the base mipmap level
      */
@@ -454,157 +286,25 @@ struct GpuViewCreateInfo {
      */
     u32 layerCount = 1;
     /**
-     * The aspect the image will be accessed in
-     */
-    GpuAspectFlags aspectFlags = 0;
-    /**
      * The dimensionality of the image
      */
-    GpuViewType type = {};
+    GpuViewType type = GpuViewType::image2D;
     /**
      * The sampler filter
      */
-    GpuFilter filter = {};
+    GpuFilter filter = GpuFilter::nearest;
     /**
      * How the sampler handles edges
      */
-    GpuSamplerEdgeMode edgeMode = {};
+    GpuSamplerEdgeMode edgeMode = GpuSamplerEdgeMode::repeat;
     /**
      * The border color if edge mode uses it
      */
-    GpuSamplerBorder border = {};
+    GpuSamplerBorder border = GpuSamplerBorder::floatTransparentBlack;
 };
 
 /**
- * GpuView implemenation data
- */
-struct GpuViewData;
-
-/**
- * A gpu view
- *
- * The view references the GpuImage it was created from internally.
- * The GpuImage must outlive any GpuView that references it.
- */
-struct GpuView {
-    /**
-     * The implementation data
-     */
-    std::unique_ptr<GpuViewData> data;
-
-    /**
-     * Construct empty
-     */
-    GpuView() noexcept;
-
-    /**
-     * Create a gpu image view
-     */
-    static GpuView create(
-        GpuImage& image,
-        GpuAspectFlags aspectFlags,
-        GpuFilter filter = GpuFilter_nearest);
-
-    /**
-     * Create a gpu image view with extended config
-     */
-    static GpuView createEx(const GpuViewCreateInfo& config);
-
-    /**
-     * Destroy the gpu view
-     */
-    ~GpuView() noexcept;
-
-    /**
-     * Get the width of an image
-     */
-    u32 width() const;
-
-    /**
-     * Get the height of an image
-     */
-    u32 height() const;
-
-    /**
-     * Get the depth of an image
-     */
-    u32 depth() const;
-
-    /**
-     * Get the format of an image
-     */
-    Format format() const;
-
-    /**
-     * Get the image sampler descriptor index from the image view
-     */
-    u32 samplerDescriptor() const;
-
-    /**
-     * Get the storage image descriptor index from the image view
-     */
-    u32 storageDescriptor() const;
-
-    /**
-     * Write to a gpu image
-     *
-     * Note, only fills the base mip level
-     *
-     * Parameters
-     * - src The data to write, must match the image size
-     */
-    void write(std::span<const std::byte> src);
-
-    /**
-     * Write to a gpu image cubemap
-     *
-     * Note, the view must have at least 6 array layers to fill
-     *
-     * Only the base mip level is filled
-     *
-     * src is assumed to be layed out as:
-     *  #
-     * ####
-     *  #
-     *
-     * Parameters
-     * - src The data to write, must match the image size times six
-     */
-    void writeCubemap(std::span<const std::byte> src);
-
-    /**
-     * Read from a gpu image
-     *
-     * Note, only the base mip level is read
-     *
-     * Parameters
-     * - dst The location to write to, must match the image size
-     */
-    void read(std::span<std::byte> dst) const;
-
-    /**
-     * Generates mipmaps from the base level
-     *
-     * Note, the view should only have 1 array layer
-     */
-    void genMipmaps();
-
-    /**
-     * Move construct
-     */
-    GpuView(GpuView&&) noexcept;
-
-    /**
-     * Move assign
-     */
-    GpuView& operator=(GpuView&&) noexcept;
-
-    GpuView(const GpuView&) = delete;
-    GpuView& operator=(const GpuView&) = delete;
-};
-
-/**
- * Calculates the maximum number of mipmap levels that an image can have
+ * Calculates the maximum number of mipmap levels that an image could have
  *
  * Parameters
  * - width The width of the image
@@ -614,37 +314,45 @@ struct GpuView {
 u32 getMaxMipmaps(u32 width, u32 height, u32 depth);
 
 /**
+ * A view into a GpuImage
+ */
+class GpuView;
+
+/**
  * How the vertex list is interpreted
  */
-enum GpuTopology : u32 {
-    GpuTopology_pointList = 0, GpuTopology_lineList = 1,
-    GpuTopology_lineStrip = 2,
-    GpuTopology_triangleList = 3,
-    GpuTopology_triangleStrip = 4,
-    GpuTopology_triangleFan = 5,
-    GpuTopology_lineListWithAdjacency = 6,
-    GpuTopology_lineStripWithAdjacency = 7,
-    GpuTopology_triangleListWithAdjacency = 8,
-    GpuTopology_triangleStripWithAdjacency = 9,
-    GpuTopology_patchList = 10,
+enum class GpuTopology : u32 {
+    pointList = 0,
+    lineList = 1,
+    lineStrip = 2,
+    triangleList = 3,
+    triangleStrip = 4,
+    triangleFan = 5,
+    lineListWithAdjacency = 6,
+    lineStripWithAdjacency = 7,
+    triangleListWithAdjacency = 8,
+    triangleStripWithAdjacency = 9,
+    patchList = 10,
 };
 
 /**
  * How to treat vertices
  */
-enum GpuPolygonMode : u32 {
-    GpuPolygonMode_fill = 0,
-    GpuPolygonMode_line = 1,
-    GpuPolygonMode_point = 2,
+enum class GpuPolygonMode : u32 {
+    fill = 0,
+    line = 1,
+    point = 2,
 };
 
-enum GpuCull : u32 {
-    GpuCull_none = 0,
-    GpuCull_front = 0x00000001,
-    GpuCull_back = 0x00000002,
-    GpuCull_both = 0x00000003,
+/**
+ * The cull mode
+ */
+enum class GpuCullMode : u32 {
+    none = 0,
+    front = 1,
+    back = 2,
+    both = 3,
 };
-using GpuCullFlags = u32;
 
 /**
  * Config for GpuPipeline graphics
@@ -653,33 +361,33 @@ struct GpuGraphicsPipelineCreateInfo {
     /**
      * The vertex shader code
      */
-    std::span<const u8> vertexShader{};
+    std::span<const byte> vertexShader{};
     /**
      * The fragment shader code
      */
-    std::span<const u8> fragmentShader{};
+    std::span<const byte> fragmentShader{};
     /**
      * The size of the push constant
      */
     u32 pushConstantSize = 0;
     /**
-     * The format of the color attachments, none can be UNDEFINED
+     * The format of the color attachments, none can be undefined
      */
-    std::span<const Format> colorAttachmentFormats;
+    std::span<const Format> colorAttachmentFormats{};
     /**
      * The format of the depth attachment, no depth attachment if UNDEFINED
      */
-    Format depthAttachmentFormat = Format_undefined;
+    Format depthAttachmentFormat = Format::undefined;
     /**
      * The format of the stencil attachment, no stencil attachment if UNDEFINED
      *
      * TODO: Stencil state is not yet implemented
      */
-    Format stencilAttachmentFormat = Format_undefined;
+    Format stencilAttachmentFormat = Format::undefined;
     /**
      * How to interpret vertices into topology
      */
-    GpuTopology topology = GpuTopology_triangleList;
+    GpuTopology topology = GpuTopology::triangleList;
     /**
      * The number of patch control points in the tesselation stage
      */
@@ -687,11 +395,11 @@ struct GpuGraphicsPipelineCreateInfo {
     /**
      * How polygons are drawn
      */
-    GpuPolygonMode polygonMode = GpuPolygonMode_fill;
+    GpuPolygonMode polygonMode = GpuPolygonMode::fill;
     /**
      * Enables back/front face culling
      */
-    GpuCullFlags cullMode = GpuCull_none;
+    GpuCullMode cullMode = GpuCullMode::none;
     /**
      * How many samples are used in MSAA
      */
@@ -713,163 +421,419 @@ struct GpuGraphicsPipelineCreateInfo {
 };
 
 /**
- * Config for GpuPipeline compute
+ * A gpu pipeline to execute shaders
  */
-struct GpuComputePipelineCreateInfo {
-    /**
-     * The spirv compute shader code, must not be nullptr
-     */
-    std::span<const u8> shaderCode{};
-    /**
-     * The size in bytes of the push constant, if any
-     */
-    u32 pushSize = 0;
-};
-
-/**
- * GpuPipeline implementation data
- */
-struct GpuPipelineData;
-
-/**
- * A gpu pipeline
- */
-struct GpuPipeline {
-    /**
-     * Implementation data
-     */
-    std::unique_ptr<GpuPipelineData> data;
-
-    /**
-     * Construct empty
-     */
-    GpuPipeline() noexcept;
-
-    /**
-     * Create a graphics pipeline
-     */
-    static GpuPipeline graphics(const GpuGraphicsPipelineCreateInfo& config);
-
-    /**
-     * Create a compute pipeline
-     */
-    static GpuPipeline compute(std::span<const u8> shaderCode, u32 pushSize = 0);
-
-    /**
-     * Destroy a graphics or compute pipeline
-     */
-    ~GpuPipeline() noexcept;
-
-    /**
-     * Move construct
-     */
-    GpuPipeline(GpuPipeline&&) noexcept;
-
-    /**
-     * Move assign
-     */
-    GpuPipeline& operator=(GpuPipeline&&) noexcept;
-
-    GpuPipeline(const GpuPipeline&) = delete;
-    GpuPipeline& operator=(const GpuPipeline&) = delete;
-};
+class GpuPipeline;
 
 /**
  * A gpu command buffer
  */
-struct GpuCmd;
+class GpuCommandBuffer;
 
 /**
- * Begin a command buffer to be executed once
+ * The present mode for the swapchain
+ */
+enum class GpuPresentMode : u32 {
+    immediate = 0,
+    mailbox = 1,
+    fifo = 2,
+    fifoRelaxed = 3,
+};
+
+/**
+ * A window swapchain
+ */
+class GpuSwapchain;
+
+/**
+ * Forward declaration of Window
+ */
+class Window;
+
+/**
+ * The graphics device
+ */
+class Gpu {
+public:
+    /**
+     * Create the gpu device
+     *
+     * Parameters
+     * - extensions The Vulkan instance extensions required by the windowing backend
+     */
+    static std::unique_ptr<Gpu> create(std::span<std::string_view> extensions);
+
+    /**
+     * Destroy the gpu device
+     */
+    virtual ~Gpu() noexcept = default;
+
+    /**
+     * Wait for the gpu to finish work
+     */
+    virtual void waitIdle() = 0;
+
+    /**
+     * Create a gpu buffer
+     *
+     * Parameters
+     * - size The size in bytes of the buffer
+     * - usageFlags How the buffer will be used
+     * - memoryUsage How the buffer should be accessed
+     */
+    virtual std::unique_ptr<GpuBuffer> createBuffer(
+        u64 size,
+        GpuBufferUsageFlags usageFlags,
+        GpuMemoryUsage memoryUsage = GpuMemoryUsage::deviceOnly) = 0;
+
+    /**
+     * Create a gpu image assuming most defaults
+     */
+    virtual std::unique_ptr<GpuImage> createImage(u32 width, u32 height, Format format, GpuImageUsageFlags usage) = 0;
+
+    /**
+     * Create a gpu image with extended options
+     */
+    virtual std::unique_ptr<GpuImage> createImage(const GpuImageCreateInfo& config) = 0;
+
+    /**
+     * Create a graphics pipeline
+     */
+    virtual std::unique_ptr<GpuPipeline> createGraphicsPipeline(const GpuGraphicsPipelineCreateInfo& config) = 0;
+
+    /**
+     * Create a compute pipeline
+     */
+    virtual std::unique_ptr<GpuPipeline> createComputePipeline(std::span<const byte> shaderCode, u32 pushSize = 0) = 0;
+
+    /**
+     * Begin a command buffer to be executed once
+     *
+     * Returns
+     * - The command buffer to record, will never be nullptr
+     */
+    virtual std::unique_ptr<GpuCommandBuffer> beginCommands() = 0;
+
+    /**
+     * Execute the command buffer and wait for completion
+     *
+     * Parameters
+     * - cmd The command buffer from beginCmd, must not be nullptr
+     */
+    virtual void endCommands(std::unique_ptr<GpuCommandBuffer> cmd) = 0;
+
+    /**
+     * Acquire an image from each swapchain and begin a command buffer
+     *
+     * Parameters
+     * - windows The windows that will be rendered to
+     */
+    virtual std::unique_ptr<GpuCommandBuffer> beginFrame(std::span<Window*> windows) = 0;
+
+    /**
+     * Finishes recording the command buffer and presents the window images
+     *
+     * Parameters
+     * - cmd The command buffer given from beginFrame
+     */
+    virtual void endFrame(std::unique_ptr<GpuCommandBuffer> cmd) = 0;
+
+    /**
+     * Create a gpu swapchain
+     */
+    virtual std::unique_ptr<GpuSwapchain> createSwapchain(
+        void* surface,
+        u32 width,
+        u32 height,
+        GpuPresentMode presentMode,
+        GpuImageUsageFlags imageUsage) = 0;
+};
+
+/**
+ * A gpu buffer
+ */
+class GpuBuffer {
+public:
+    /**
+     * Destroy the buffer
+     */
+    virtual ~GpuBuffer() noexcept = default;
+
+    /**
+     * Get the size of the buffer in bytes
+     */
+    virtual u64 size() const = 0;
+
+    /**
+     * Get the uniform buffer descriptor index from the buffer
+     */
+    virtual u32 uniformDescriptor() const = 0;
+
+    /**
+     * Get the storage buffer descriptor index from the buffer
+     */
+    virtual u32 storageDescriptor() const = 0;
+
+    /**
+     * Writes to the gpu buffer
+     *
+     * Parameters
+     * - src The data to write
+     * - offset The offset in bytes into the gpu buffer
+     */
+    virtual void write(std::span<const byte> src, u64 offset) = 0;
+
+    /**
+     * Reads from the gpu buffer
+     *
+     * Parameters
+     * - dst The destination to read to
+     * - offset The offset in bytes into the gpu buffer
+     */
+    virtual void read(std::span<byte> dst, u64 offset) const = 0;
+};
+
+/**
+ * A region of a gpu image
+ */
+struct GpuImageRegion {
+    /**
+     * The beginning of the region in the x direction
+     */
+    i32 x = 0;
+    /**
+     * The beginning of the region in the y direction
+     */
+    i32 y = 0;
+    /**
+     * The beginning of the region in the z direction
+     */
+    i32 z = 0;
+    /**
+     * The width of the region extending from x
+     */
+    u32 width = 0;
+    /**
+     * The height of the region extending from y
+     */
+    u32 height = 0;
+    /**
+     * The depth of the region extending from z
+     */
+    u32 depth = 0;
+    /**
+     * The mip level
+     */
+    u32 mipLevel = 0;
+    /**
+     * The beginning array layer
+     */
+    u32 arrayLayer = 0;
+    /**
+     * The extent of array layers
+     */
+    u32 layerCount = 1;
+};
+
+/**
+ * A gpu image
+ */
+class GpuImage {
+public:
+    /**
+     * Destroy the image
+     */
+    virtual ~GpuImage() noexcept = default;
+
+    /**
+     * Get the format of the image
+     */
+    virtual Format format() const = 0;
+
+    /**
+     * Get the width of the image
+     */
+    virtual u32 width() const = 0;
+
+    /**
+     * Get the height of the image
+     */
+    virtual u32 height() const = 0;
+
+    /**
+     * Get the height of the image
+     */
+    virtual u32 depth() const = 0;
+
+    /**
+     * Get the number of mipmaps in the image
+     */
+    virtual u32 mipmapCount() const = 0;
+
+    /**
+     * Get the number of array layers in the image
+     */
+    virtual u32 layerCount() const = 0;
+
+    /**
+     * Create a view into the image
+     */
+    virtual std::unique_ptr<GpuView> createView(GpuFilter filter = GpuFilter::nearest) = 0;
+
+    /**
+     * Create a view with extended config
+     */
+    virtual std::unique_ptr<GpuView> createView(const GpuViewCreateInfo& config) = 0;
+
+    /**
+     * Write to a section of the image from a buffer
+     *
+     * Note, src must be the same size as the box
+     */
+    virtual void write(std::span<const byte> src, const GpuImageRegion& dst) = 0;
+
+    /**
+     * Write to the whole image from a buffer
+     *
+     * Note, src must be the same size as the image, including array layers
+     */
+    virtual void writeWhole(std::span<const byte> src, u32 mipLevel = 0) = 0;
+
+    /**
+     * Write to the image as a cubemap
+     *
+     * Note, there must be 6 array layers
+     * Note, src must be the size of the image * 12
+     *
+     * src is assumed to be layed out as:
+     *  #
+     * ####
+     *  #
+     */
+    virtual void writeCubemap(std::span<const byte> src, u32 mipLevel = 0) = 0;
+
+    /**
+     * Generate mipmaps from the base level
+     */
+    virtual void generateMipmaps(u32 arrayLayer = 0) = 0;
+
+    /**
+     * Read from a section of the image
+     *
+     * Note, byte should be reinterpreted as pixels
+     */
+    virtual void read(std::span<byte> dst, const GpuImageRegion& src) = 0;
+
+    /**
+     * Read from the whole image, including all array layers
+     *
+     * Note, byte should be reinterpreted as pixels
+     */
+    virtual void readWhole(std::span<byte> dst, u32 mipLevel = 0) = 0;
+
+    /**
+     * Read from the image as a cubemap
+     *
+     * Note, there must be 6 array layers
+     * Note, only reads one mip layer
+     *
+     * The vector is layed out as:
+     *  #
+     * ####
+     *  #
+     *
+     * Note, byte should be reinterpreted as pixels
+     */
+    virtual void readCubemap(std::span<byte> dst, u32 mipLevel = 0) = 0;
+};
+
+/**
+ * A view into a gpu image for shaders
  *
- * Returns
- * - The command buffer to record, will never be nullptr
+ * The view references the GpuImage it was created from internally.
+ * The GpuImage must outlive any GpuView that references it.
  */
-GpuCmd* gpuCmdBegin();
+class GpuView {
+public:
+    /**
+     * Destroy the gpu view
+     */
+    virtual ~GpuView() noexcept = default;
+
+    /**
+     * Get the format of an image
+     */
+    virtual Format format() const = 0;
+
+    /**
+     * Get the width of an image
+     */
+    virtual u32 width() const = 0;
+
+    /**
+     * Get the height of an image
+     */
+    virtual u32 height() const = 0;
+
+    /**
+     * Get the depth of an image
+     */
+    virtual u32 depth() const = 0;
+
+    /**
+     * Get the number of mipmaps in the image
+     */
+    virtual u32 mipmapCount() const = 0;
+
+    /**
+     * Get the number of array layers in the image
+     */
+    virtual u32 layerCount() const = 0;
+
+    /**
+     * Get the image sampler descriptor index from the image view
+     */
+    virtual u32 samplerDescriptor() const = 0;
+
+    /**
+     * Get the storage image descriptor index from the image view
+     */
+    virtual u32 storageDescriptor() const = 0;
+};
 
 /**
- * Execute the command buffer and wait for completion
- *
- * Parameters
- * - cmd The command buffer from beginGpuCommands, must not be nullptr
+ * A gpu pipeline
  */
-void gpuCmdEnd(GpuCmd* cmd);
-
-/**
- * Bind a graphics or compute pipeline
- */
-void gpuBindPipeline(GpuCmd* cmd, const GpuPipeline& pipeline);
-
-/**
- * Push constants to the shader
- *
- * Parameters
- * - cmd The command buffer to record to
- * - pipeline The pipeline to push to
- * - push The data to push, must fit the pipeline's push constant size
- */
-void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, std::span<const std::byte> push);
-
-/**
- * Push constants to the shader
- *
- * Parameters
- * - cmd The command buffer to record to
- * - pipeline The pipeline to push to
- * - push The data to push, must fit the pipeline's push constant size
- */
-template<typename T> requires std::is_trivially_copyable_v<T>
-    && (!std::convertible_to<T, std::span<const std::byte>>)
-void gpuPushConstants(GpuCmd* cmd, const GpuPipeline& pipeline, const T& push)
-{
-    gpuPushConstants(cmd, pipeline, std::as_bytes(std::span{&push, 1}));
-}
-
-/**
- * Issue a draw call
- *
- * Parameters
- * - cmd The command buffer to record to
- * - vertexBegin The index of the first vertex to draw
- * - vertexCount The number of vertices to draw
- * - instanceBegin The index of the first instance to draw
- * - instanceCount The number of instances to draw
- */
-void gpuDraw(GpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount);
-
-/**
- * Dispatch a compute shader
- *
- * Parameters
- * - cmd The command buffer to record to
- * - groupCountX The number of workgroups in the x dimension
- * - groupCountY The number of workgroups in the y dimension
- * - groupCountZ The number of workgroups in the z dimension
- */
-void gpuDispatch(GpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
+class GpuPipeline {
+public:
+    /**
+     * Destroy a graphics or compute pipeline
+     */
+    virtual ~GpuPipeline() noexcept = default;
+};
 
 /**
  * How a gpu resource will be accessed
  */
-enum GpuAccess : u32 {
-    GpuAccess_indirectBuffer,
-    GpuAccess_uniformBufferCompute,
-    GpuAccess_uniformBufferVertex,
-    GpuAccess_uniformBufferFragment,
-    GpuAccess_uniformBufferAllGraphics,
-    GpuAccess_storageBufferCompute,
-    GpuAccess_storageBufferVertex,
-    GpuAccess_storageBufferFragment,
-    GpuAccess_storageBufferAllGraphics,
-    GpuAccess_sampledImageCompute,
-    GpuAccess_sampledImageFragment,
-    GpuAccess_storageImageCompute,
-    GpuAccess_storageImageFragment,
-    GpuAccess_colorAttachment,
-    GpuAccess_depthStencilAttachment,
-    GpuAccess_transferSrc,
-    GpuAccess_transferDst,
-    GpuAccess_hostRead,
+enum class GpuAccess : u32 {
+    indirectBuffer,
+    uniformBufferCompute,
+    uniformBufferVertex,
+    uniformBufferFragment,
+    uniformBufferAllGraphics,
+    storageBufferCompute,
+    storageBufferVertex,
+    storageBufferFragment,
+    storageBufferAllGraphics,
+    sampledImageCompute,
+    sampledImageFragment,
+    storageImageCompute,
+    storageImageFragment,
+    colorAttachment,
+    depthStencilAttachment,
+    transferSrc,
+    transferDst,
+    hostRead,
 };
 
 /**
@@ -877,8 +841,8 @@ enum GpuAccess : u32 {
  */
 struct GpuImageBarrier {
     GpuView* image = nullptr;
-    GpuAccess nextAccess = GpuAccess_transferDst;
-    GpuLayout nextLayout = GpuLayout_undefined;
+    GpuAccess nextAccess = GpuAccess::transferDst;
+    GpuLayout nextLayout = GpuLayout::undefined;
 };
 
 /**
@@ -886,104 +850,24 @@ struct GpuImageBarrier {
  */
 struct GpuBufferBarrier {
     GpuBuffer* buffer = nullptr;
-    GpuAccess nextAccess = GpuAccess_transferDst;
+    GpuAccess nextAccess = GpuAccess::transferDst;
 };
-
-/**
- * Creates a barrier for resource uses that are not part of a render pass
- *
- * Parameters
- * - cmd The command buffer
- * - bufferBarriers The buffer barriers
- * - imageBarriers The image barriers
- */
-void gpuMemoryBarrier(
-    GpuCmd* cmd,
-    std::span<const GpuBufferBarrier> bufferBarriers,
-    std::span<const GpuImageBarrier> imageBarriers);
-
-/**
- * Copies a section of a buffer to another
- *
- * Parameters
- * - cmd The command buffer
- * - dst The buffer to copy to
- * - dstOffset The distance in bytes into dst to start copying
- * - src The buffer to copy from
- * - srcOffset The distance in bytes into src to start copying
- * - size The size in bytes to copy
- */
-void gpuCopyBuffer(GpuCmd* cmd, const GpuBuffer& dst, usize dstOffset, const GpuBuffer& src, usize srcOffset, usize size);
-
-/**
- * Copies part of a 3d image to part of another 3d image
- *
- * Both images must be the same format
- * Both box must be the same size
- *
- * Parameters
- * - cmd The command buffer
- * - dst The image to copy to
- * - dstOffset The distance into dst to start copying
- * - src The image to copy from
- * - srcOffset The distance into src to start copying
- * - size The size to copy
- */
-void gpuCopyImage(GpuCmd* cmd, const GpuView& dst, Vec3 dstOffset, const GpuView& src, Vec3 srcOffset, Vec3 size);
-
-/**
- * Copies a whole image to another whole image
- *
- * Both images must be the same size and format
- *
- * Parameters
- * - cmd The command buffer
- * - dst The image to copy to
- * - src The image to copy from
- */
-void gpuCopyImageWhole(GpuCmd* cmd, const GpuView& dst, const GpuView& src);
-
-/**
- * Blit part of a 3d image to part of another 3d image
- *
- * Images and boxes may be different formats and sizes
- *
- * Parameters
- * - cmd The command buffer
- * - dst The image to copy to
- * - dstBox The box in dst to copy to
- * - src The image to copy from
- * - srcBox The box in src to copy from
- */
-void gpuBlitImage(GpuCmd* cmd, const GpuView& dst, Box dstBox, const GpuView& src, Box srcBox);
-
-/**
- * Blit a whole image to another whole image
- *
- * Images and boxes may be different formats and sizes
- *
- * Parameters
- * - cmd The command buffer
- * - dst The image to copy to
- * - src The image to copy from
- */
-void gpuBlitImageWhole(GpuCmd* cmd, const GpuView& dst, const GpuView& src);
 
 /**
  * The operation to load a render attachment
  */
-enum GpuLoadOp : u32 {
-    GpuLoadOp_load = 0,
-    GpuLoadOp_clear = 1,
-    GpuLoadOp_dontCare = 2,
+enum class GpuLoadOp : u32 {
+    load = 0,
+    clear = 1,
+    dontCare = 2,
 };
 
 /**
  * The operation to store a render attachment
  */
-enum GpuStoreOp : u32 {
-    GpuStoreOp_store = 0,
-    GpuStoreOp_dontCare = 1,
+enum class GpuStoreOp : u32 {
+    store = 0,
+    dontCare = 1,
 };
 
 /**
@@ -1005,11 +889,11 @@ struct GpuAttachment {
     /**
      * How the image will be loaded
      */
-    GpuLoadOp loadOp = GpuLoadOp_clear;
+    GpuLoadOp loadOp = GpuLoadOp::clear;
     /**
      * How the image will be stored
      */
-    GpuStoreOp storeOp = GpuStoreOp_store;
+    GpuStoreOp storeOp = GpuStoreOp::store;
     /**
      * What to clear the image to if cleared
      */
@@ -1017,7 +901,7 @@ struct GpuAttachment {
         /**
          * The color to clear to
          */
-        Vec4 clearColor;
+        f32 clearColor[4];
         /**
          * The depth stencil values to clear to
          */
@@ -1064,145 +948,224 @@ struct GpuPass {
 };
 
 /**
- * Performs memory barriers for compute shader resources
- *
- * Note, all attachments in the pass description are ignored
- *
- * Parameters
- * - cmd The command buffer
- * - pass The compute pass description
+ * A gpu command buffer
  */
-void gpuComputePass(GpuCmd* cmd, const GpuPass& pass);
+class GpuCommandBuffer {
+public:
+    /**
+     * Destroy a graphics or compute pipeline
+     */
+    virtual ~GpuCommandBuffer() noexcept = default;
 
-/**
- * Performs render barrier and begins a render pass
- *
- * Parameters
- * - cmd The command buffer
- * - pass The render pass description
- */
-void gpuBeginRenderPass(GpuCmd* cmd, const GpuPass& pass);
+    /**
+     * Creates a barrier for resource uses that are not part of a render pass
+     *
+     * Parameters
+     * - bufferBarriers The buffer barriers
+     * - imageBarriers The image barriers
+     */
+    virtual void memoryBarrier (
+        std::span<const GpuBufferBarrier> bufferBarriers,
+        std::span<const GpuImageBarrier> imageBarriers) = 0;
 
-/**
- * Ends the render pass
- *
- * Parameters
- * - cmd The command buffer
- */
-void gpuEndRenderPass(GpuCmd* cmd);
+    /**
+     * Copies a section of a buffer to another
+     *
+     * Parameters
+     * - dst The buffer to copy to
+     * - dstOffset The distance in bytes into dst to start copying
+     * - src The buffer to copy from
+     * - srcOffset The distance in bytes into src to start copying
+     * - size The size in bytes to copy
+     */
+    virtual void copyBuffer(
+        const GpuBuffer* dst,
+        usize dstOffset,
+        const GpuBuffer* src,
+        usize srcOffset,
+        usize size) = 0;
 
-/**
- * Set the rendering viewport, should be called after gpuRenderPassBegin
- */
-void gpuSetViewport(GpuCmd* cmd, f32 x, f32 y, f32 width, f32 height, f32 near = 0.0f, f32 far = 1.0f);
+    /**
+     * Copies part of a 3d image to part of another 3d image
+     *
+     * Both images must be the same format
+     * Both regions must be the same size
+     *
+     * Parameters
+     * - dst The image to copy to
+     * - dstRegion The part of dst to copy to
+     * - src The image to copy from
+     * - srcRegion The part of src to copy from
+     */
+    virtual void copyImage(
+        const GpuImage* dst,
+        const GpuImageRegion& dstRegion,
+        const GpuImage* src,
+        const GpuImageRegion& srcRegion) = 0;
 
-/**
- * Set the rendering scissor, should be called after gpuRenderPassBegin
- */
-void gpuSetScissor(GpuCmd* cmd, i32 x, i32 y, u32 width, u32 height);
+    /**
+     * Copies a whole image to another whole image, including all array layers
+     *
+     * Both images must be the same size and format
+     *
+     * Parameters
+     * - dst The image to copy to
+     * - src The image to copy from
+     */
+    virtual void copyImageWhole(
+        const GpuImage* dst,
+        const GpuImage* src) = 0;
 
-/**
- * The present mode for the swapchain
- */
-enum GpuPresentMode : u32 {
-    GpuPresentMode_immediate = 0,
-    GpuPresentMode_mailbox = 1,
-    GpuPresentMode_fifo = 2,
-    GpuPresentMode_fifoRelaxed = 3,
+    /**
+     * Blit part of a 3d image to part of another 3d image
+     *
+     * Images and boxes may be different formats and sizes
+     *
+     * Parameters
+     * - dst The image to copy to
+     * - dstRegion The region in dst to copy to
+     * - src The image to copy from
+     * - srcRegion The region in src to copy from
+     */
+    virtual void blitImage(
+        const GpuImage* dst,
+        const GpuImageRegion& dstRegion,
+        const GpuImage* src,
+        const GpuImageRegion& srcRegion) = 0;
+
+    /**
+     * Blit a whole image to another whole image
+     *
+     * Images and boxes may be different formats and sizes
+     *
+     * Parameters
+     * - dst The image to copy to
+     * - src The image to copy from
+     */
+    virtual void blitImageWhole(
+        const GpuImage* dst,
+        const GpuImage* src) = 0;
+
+    /**
+     * Performs memory barriers for compute shader resources
+     *
+     * Note, all attachments in the pass description are ignored
+     */
+    virtual void computePass(const GpuPass& pass) = 0;
+
+    /**
+     * Performs render barrier and begins a render pass
+     */
+    virtual void beginRenderPass(const GpuPass& pass) = 0;
+
+    /**
+     * Ends the render pass
+     */
+    virtual void endRenderPass() = 0;
+
+    /**
+     * Set the rendering viewport, should be called after gpuRenderPassBegin
+     */
+    virtual void gpuSetViewport(f32 x, f32 y, f32 width, f32 height, f32 near = 0.0f, f32 far = 1.0f) = 0;
+
+    /**
+     * Set the rendering scissor, should be called after gpuRenderPassBegin
+     */
+    virtual void gpuSetScissor(i32 x, i32 y, u32 width, u32 height) = 0;
+
+    /**
+     * Bind a graphics or compute pipeline
+     */
+    virtual void bindPipeline(const GpuPipeline* pipeline) = 0;
+
+    /**
+     * Push constants to the shader
+     *
+     * Parameters
+     * - pipeline The pipeline to push to
+     * - push The data to push, must fit the pipeline's push constant size
+     */
+    virtual void pushConstants(const GpuPipeline* pipeline, std::span<const byte> push) = 0;
+
+    /**
+     * Push constants to the shader
+     *
+     * Parameters
+     * - pipeline The pipeline to push to
+     * - push The data to push, must fit the pipeline's push constant size
+     */
+    template<typename T> requires std::is_trivially_copyable_v<T>
+    void pushConstants(const GpuPipeline* pipeline, const T& push)
+    {
+        pushConstants(pipeline, std::as_bytes(std::span{&push, 1}));
+    }
+
+    /**
+     * Issue a draw call
+     *
+     * Parameters
+     * - vertexBegin The index of the first vertex to draw
+     * - vertexCount The number of vertices to draw
+     * - instanceBegin The index of the first instance to draw
+     * - instanceCount The number of instances to draw
+     */
+    virtual void draw(u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount) = 0;
+
+    /**
+     * Dispatch a compute shader
+     *
+     * Parameters
+     * - groupCountX The number of workgroups in the x dimension
+     * - groupCountY The number of workgroups in the y dimension
+     * - groupCountZ The number of workgroups in the z dimension
+     */
+    virtual void dispatch(u32 groupCountX, u32 groupCountY, u32 groupCountZ) = 0;
 };
-
-/**
- * GpuSwapchain implementation data
- */
-struct GpuSwapchainData;
 
 /**
  * A gpu swapchain, used internally for window implementations
  */
-struct GpuSwapchain {
+class GpuSwapchain {
+public:
     /**
-     * The implementation data
+     * Destroy the gpu swapchain
      */
-    std::unique_ptr<GpuSwapchainData> data;
-
-    /**
-     * Construct empty
-     */
-    GpuSwapchain() noexcept;
-
-    /**
-     * Create a gpu swapchain
-     */
-    static GpuSwapchain create(
-        void* surface,
-        u32 width,
-        u32 height,
-        GpuPresentMode presentMode,
-        GpuImageUsageFlags imageUsage);
+    virtual ~GpuSwapchain() noexcept = default;
 
     /**
      * Recreate the swapchain with a new size
      */
-    void resize(u32 width, u32 height);
+    virtual void resize(u32 width, u32 height) = 0;
 
     /**
-     * Destroy the gpu swapchain
+     * Get the current swapchain width
      */
-    ~GpuSwapchain() noexcept;
+    virtual u32 width() const = 0;
 
     /**
-     * Get the current swapchain size
+     * Get the current swapchain height
      */
-    void size(u32* width, u32* height) const;
-
-    /**
-     * Get the current swapchain image count
-     */
-    u32 imageCount() const;
-
-    /**
-     * Get the current swapchain image view
-     */
-    GpuView* renderTarget() const;
+    virtual u32 height() const = 0;
 
     /**
      * Get the current swapchain format
      */
-    Format format() const;
+    virtual Format format() const = 0;
 
     /**
-     * Move construct
+     * Get the current swapchain image count
      */
-    GpuSwapchain(GpuSwapchain&& other) noexcept;
+    virtual u32 imageCount() const = 0;
 
     /**
-     * Move assign
+     * Get the current swapchain image
      */
-    GpuSwapchain& operator=(GpuSwapchain&& other) noexcept;
+    virtual GpuImage* currentImage() const = 0;
 
-    GpuSwapchain(const GpuSwapchain&) = delete;
-    GpuSwapchain& operator=(const GpuSwapchain&) = delete;
+    /**
+     * Get the current swapchain image view
+     */
+    virtual GpuView* currentView() const = 0;
 };
-
-/**
- * Forward declaration of Window
- */
-class Window;
-
-/**
- * Acquire an image from each swapchain and begin a command buffer
- *
- * Returns
- * - The command buffer to record this frame
- */
-GpuCmd* gpuBeginFrame(std::span<Window*> windows);
-
-/**
- * Finishes recording the command buffer and presents the window images
- *
- * Parameters
- * - cmd The command buffer given from beginFrame
- */
-void gpuEndFrame(GpuCmd* cmd);
 
 } // namespace hg

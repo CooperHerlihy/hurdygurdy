@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/macros.hpp"
+#include "hg/utility.hpp"
 #include "hg/hash.hpp"
 
 namespace hg {
@@ -199,7 +199,7 @@ public:
      */
     ~ScopeTimerLog()
     {
-        HG_LOG("Scope \"{}\": {}ms\n", name, timer.tick() * 1.e3f);
+        log("Scope \"{}\": {}ms\n", name, timer.tick() * 1.e3f);
     }
 
     ScopeTimerLog(const ScopeTimerLog& other) = delete;

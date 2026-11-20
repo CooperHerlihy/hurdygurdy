@@ -2,28 +2,13 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/math.hpp"
-#include "hg/geometry2d.hpp"
-#include "hg/assets.hpp"
+#include "hg/geometry.hpp"
 #include "hg/serialization.hpp"
 #include "hg/gpu.hpp"
 
 #include <cmath>
 
 namespace hg {
-
-/**
- * The standard view-projection uniform buffer
- */
-struct VPBuffer {
-    /**
-     * The projection
-     */
-    Mat4 proj{};
-    /**
-     * The view
-     */
-    Mat4 view{};
-};
 
 /**
  * An orthographic camera
@@ -98,40 +83,17 @@ struct Perspective {
  */
 struct Camera {
     /**
-     * The gpu view projection data
-     */
-    GpuBuffer vpBuffer{};
-    /**
      * The projection
      */
     std::variant<Orthographic, Perspective> projection{};
     /**
      * The current position
      */
-    Vec3 position{};
+    Vec3 position{0.0f};
     /**
      * The current rotation
      */
     Quat rotation{1.0f};
-
-    /**
-     * Initialize empty (projection should be set)
-     */
-    Camera() noexcept = default;
-
-    /**
-     * Initialize with projection and others or defaults
-     */
-    Camera(std::variant<Orthographic, Perspective> projectionVal, Vec3 positionVal = Vec3{0.0f}, Quat rotationVal = Quat{1.0f})
-        : projection{projectionVal}
-        , position{positionVal}
-        , rotation{rotationVal}
-    {}
-
-    /**
-     * Update the camera's gpu side data
-     */
-    void update();
 };
 
 /**
@@ -145,9 +107,9 @@ bool serialize(Serializer* s, Camera* camera);
  */
 struct TextureData {
     /**
-     * The pixel data, aligned to 16 bytes
+     * The pixel data
      */
-    void* pixels = nullptr;
+    std::vector<byte> pixels{};
     /**
      * The width of the texture in pixels
      */
@@ -163,44 +125,7 @@ struct TextureData {
     /**
      * The format of each pixel
      */
-    Format format = Format_undefined;
-
-    /**
-     * Construct empty
-     */
-    TextureData() noexcept = default;
-
-    /**
-     * Destroy the texture data
-     */
-    ~TextureData() noexcept;
-
-    /**
-     * Move construct
-     */
-    TextureData(TextureData&& other) noexcept
-        : pixels{std::exchange(other.pixels, nullptr)}
-        , width{std::exchange(other.width, 0)}
-        , height{std::exchange(other.height, 0)}
-        , depth{std::exchange(other.depth, 0)}
-        , format{std::exchange(other.format, Format_undefined)}
-    {}
-
-    /**
-     * Move assign
-     */
-    TextureData& operator=(TextureData&& other) noexcept
-    {
-        if (this != &other)
-        {
-            this->~TextureData();
-            new (this) TextureData{std::move(other)};
-        }
-        return *this;
-    }
-
-    TextureData(const TextureData&) = delete;
-    TextureData& operator=(const TextureData&) = delete;
+    Format format = Format::undefined;
 };
 
 /**
@@ -210,31 +135,30 @@ template<>
 bool serialize(Serializer* s, TextureData* tex);
 
 /**
- * Texture asset load implementation
+ * Load an image from disc and try to decode with all supported formats
  */
-template<>
-bool assetLoadImpl(AssetData<TextureData>* data);
+std::optional<TextureData> textureLoad(std::string_view path);
 
 /**
  * Store an image to disc in png format
  *
  * Note, png expects 8 bit rgba values
  */
-bool storeTexturePng(const TextureData& texture, std::string_view path);
+bool textureStorePng(const TextureData& texture, std::string_view path);
 
 /**
  * Store an image to disc in jpg format
  *
  * Note, jpg expects 8 bit rgba values
  */
-bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view path);
+bool textureStoreJpg(const TextureData& texture, u32 quality, std::string_view path);
 
 /**
  * Store an image to disc in hdr format
  *
  * Note, hdr expects 32 bit float format
  */
-bool storeTextureHdr(const TextureData& texture, std::string_view path);
+bool textureStoreHdr(const TextureData& texture, std::string_view path);
 
 /**
  * A texture asset stored on the gpu
@@ -243,17 +167,17 @@ struct Texture {
     /**
      * The image
      */
-    GpuImage image{};
+    std::unique_ptr<GpuImage> image{};
     /**
      * The image view
      */
-    GpuView view{};
+    std::unique_ptr<GpuView> view{};
 };
 
 /**
  * Create a gpu texture from cpu texture data
  */
-Texture uploadTextureToGpu(const TextureData& data);
+Texture uploadTextureToGpu(Gpu* gpu, const TextureData& data);
 
 /**
  * Create cpu texture data from a gpu texture
@@ -261,10 +185,9 @@ Texture uploadTextureToGpu(const TextureData& data);
 TextureData downloadTextureFromGpu(const Texture& tex);
 
 /**
- * Texture asset load implementation
+ * Load a texture from disc and upload it to the gpu
  */
-template<>
-bool assetLoadImpl(AssetData<Texture>* data);
+std::optional<Texture> textureLoadToGpu(Gpu* gpu, std::string_view path);
 
 /**
  * A texture atlas
@@ -273,7 +196,7 @@ struct TextureAtlas {
     /**
      * The texture
      */
-    Asset<Texture> texture = nullptr;
+    const Texture* texture = nullptr;
     /**
      * The sprites
      */
@@ -287,8 +210,8 @@ struct TextureAtlas {
     /**
      * Construct with texture
      */
-    TextureAtlas(const Asset<Texture>& textureVal)
-        : texture{textureVal.clone()}
+    TextureAtlas(const Texture& textureVal)
+        : texture{&textureVal}
     {}
 
     /**
@@ -567,7 +490,7 @@ private:
     /**
      * The gpu side instance buffer
      */
-    GpuBuffer instanceBuffer{};
+    std::unique_ptr<GpuBuffer> instanceBuffer{};
     /**
      * The capacity of the instance buffer
      */
@@ -652,18 +575,21 @@ public:
 class Renderer2D {
 private:
     /**
+     * The gpu
+     */
+    Gpu* gpu = nullptr;
+    /**
      * The render pipeline
      */
-    GpuPipeline pipeline{};
+    std::unique_ptr<GpuPipeline> pipeline = nullptr;
+    /**
+     * The view projection buffer
+     */
+    std::unique_ptr<GpuBuffer> vpBuffer = nullptr;
     /**
      * The layers to render this frame
      */
     std::vector<Layer2D*> layerQueue{};
-
-    /**
-     * Whether this instance holds a reference to the default pixel font
-     */
-    bool fontOwned = false;
 
 public:
     /**
@@ -674,7 +600,7 @@ public:
     /**
      * Initialize the renderer
      */
-    Renderer2D(Format colorFormat);
+    Renderer2D(Gpu* gpu, Format colorFormat);
 
     /**
      * Deinitialize the renderer and the default pixel font if unused
@@ -689,10 +615,10 @@ public:
     /**
      * Issue draw commands
      */
-    void render(GpuCmd* cmd, const Camera& camera);
+    void render(GpuCommandBuffer* cmd, const Camera& camera);
 
     /**
-     * Move construct, keeping the default pixel font initialized
+     * Move construct
      */
     Renderer2D(Renderer2D&& other) noexcept;
 

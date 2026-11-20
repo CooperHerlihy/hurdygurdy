@@ -16,11 +16,11 @@ namespace hg {
  * - stencilFormat The format the stencil will be in, if used
  */
 void initImGui(
-    const Window& window,
-    InputDevice& device,
+    Window* window,
+    InputDevice* device,
     Format colorFormat,
-    Format depthFormat = Format_undefined,
-    Format stencilFormat = Format_undefined);
+    Format depthFormat = Format::undefined,
+    Format stencilFormat = Format::undefined);
 
 /**
  * Deinitializes ImGui platform backend
@@ -30,7 +30,7 @@ void deinitImGui();
 /**
  * Create an ImGui texture
  */
-void* createImGuiTexture(const GpuView& view, GpuLayout layout);
+void* createImGuiTexture(GpuView* view, GpuLayout layout);
 
 /**
  * Create an ImGui texture
@@ -48,7 +48,7 @@ void beginImGuiFrame();
  * Parameters
  * - cmd The command buffer to record to
  */
-void renderImGui(GpuCmd* cmd);
+void renderImGui(GpuCommandBuffer* cmd);
 
 } // namespace hg
 

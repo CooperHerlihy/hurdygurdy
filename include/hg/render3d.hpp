@@ -69,11 +69,11 @@ struct Mesh {
     /**
      * The vertex buffer
      */
-    GpuBuffer vertexBuffer{};
+    std::unique_ptr<GpuBuffer> vertexBuffer{};
     /**
      * The index buffer
      **/
-    GpuBuffer indexBuffer{};
+    std::unique_ptr<GpuBuffer> indexBuffer{};
     /**
      * The number of vertices
      */
@@ -91,7 +91,7 @@ struct Mesh {
 /**
  * Create a gpu mesh from cpu mesh data
  */
-Mesh uploadMeshToGpu(const MeshData& data);
+Mesh uploadMeshToGpu(Gpu* gpu, const MeshData& data);
 
 /**
  * Create cpu mesh data from a gpu mesh
@@ -99,27 +99,26 @@ Mesh uploadMeshToGpu(const MeshData& data);
 MeshData downloadMeshFromGpu(const Mesh& mesh);
 
 /**
- * GpuMesh asset load implementation
+ * Load a mesh a upload it to the gpu
  */
-template<>
-bool assetLoadImpl(AssetData<Mesh>* data);
+std::optional<Mesh> meshLoadToGpu(Gpu* gpu, std::string_view path);
 
 /**
  * A 3D model
  */
-struct Material3D {
+struct Model3D {
     /**
      * The 3D geometry mesh
      */
-    Asset<Mesh> mesh{};
+    Mesh* mesh{};
     /**
      * The color map
      */
-    Asset<Texture> colorMap;
+    Texture* colorMap;
     /**
      * The normal map
      */
-    Asset<Texture> normalMap;
+    Texture* normalMap;
     /**
      * The lighting diffuse proportion
      */
@@ -134,7 +133,7 @@ struct Material3D {
  * Serialization for Material3D
  */
 template<>
-bool serialize(Serializer* s, Material3D* material);
+bool serialize(Serializer* s, Model3D* material);
 
 /**
  * A basic 3D renderer
@@ -186,17 +185,25 @@ private:
     };
 
     /**
+     * The gpu
+     */
+    Gpu* gpu = nullptr;
+    /**
      * The render pipeline
      */
-    GpuPipeline pipeline{};
+    std::unique_ptr<GpuPipeline> pipeline{};
+    /**
+     * The view projection buffer
+     */
+    std::unique_ptr<GpuBuffer> vpBuffer = nullptr;
     /**
      * The directional light gpu buffer
      */
-    GpuBuffer dirLightBuffer{};
+    std::unique_ptr<GpuBuffer> dirLightBuffer{};
     /**
      * The point light gpu buffer
      */
-    GpuBuffer pointLightBuffer{};
+    std::unique_ptr<GpuBuffer> pointLightBuffer{};
     /**
      * The directional lights
      */
@@ -219,7 +226,7 @@ public:
     /**
      * Create pipeline
      */
-    Renderer3D(Format colorFormat, Format depthFormat);
+    Renderer3D(Gpu* gpu, Format colorFormat, Format depthFormat);
 
     /**
      * Add a directional light to the scene
@@ -243,14 +250,14 @@ public:
         const Mat4& transform);
 
     /**
-     * Add a model to the scene
+     * Add a model to the scene from a material
      */
-    void drawModelMaterial(const Material3D& material, const Mat4& transform);
+    void drawModelMaterial(const Model3D& material, const Mat4& transform);
 
     /**
      * Issue gpu commands to render the scene then clear the scene
      */
-    void renderScene(GpuCmd* cmd, Camera& camera);
+    void renderScene(GpuCommandBuffer* cmd, Camera& camera);
 };
 
 } // namespace hg

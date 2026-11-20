@@ -164,44 +164,44 @@ TEST(testNoiseGLSL)
     static constexpr u32 imgWidth = 1;
     static constexpr u32 imgHeight = 11;
 
-    GpuImage img = GpuImage::create(imgWidth, imgHeight, Format_rgba8_unorm,
-        GpuImageUsage_storage | GpuImageUsage_transferSrc);
-    GpuView imgView = GpuView::create(img, GpuAspect_color);
+    std::unique_ptr<GpuImage> img = testGpu->createImage(imgWidth, imgHeight, Format::rgba8_unorm,
+        GpuImageUsage::storage | GpuImageUsage::transferSrc);
+    std::unique_ptr<GpuView> imgView = img->createView();
 
     struct Push {
         u32 imgIdx;
     };
-    GpuPipeline pipe = GpuPipeline::compute({noise_comp_spv, sizeof(noise_comp_spv)},
+    std::unique_ptr<GpuPipeline> pipe = testGpu->createComputePipeline(std::as_bytes(std::span{noise_comp_spv}),
         sizeof(Push));
 
-    GpuCmd* cmd = gpuCmdBegin();
+    std::unique_ptr<GpuCommandBuffer> cmd = testGpu->beginCommands();
 
     GpuImageBarrier ib{};
-    ib.image = &imgView;
-    ib.nextAccess = GpuAccess_storageImageCompute;
-    ib.nextLayout = GpuLayout_general;
-    gpuMemoryBarrier(cmd, {}, {&ib, 1});
+    ib.image = imgView.get();
+    ib.nextAccess = GpuAccess::storageImageCompute;
+    ib.nextLayout = GpuLayout::general;
+    cmd->memoryBarrier({}, {&ib, 1});
 
     {
         GpuPass pass{};
-        GpuView* storageImages[] = {&imgView};
+        GpuView* storageImages[] = {imgView.get()};
         pass.storageImages = storageImages;
-        gpuComputePass(cmd, pass);
+        cmd->computePass(pass);
 
-        Push push{imgView.storageDescriptor()};
-        gpuBindPipeline(cmd, pipe);
-        gpuPushConstants(cmd, pipe, push);
-        gpuDispatch(cmd, imgWidth, imgHeight, 1);
+        Push push{imgView->storageDescriptor()};
+        cmd->bindPipeline(pipe.get());
+        cmd->pushConstants(pipe.get(), push);
+        cmd->dispatch(imgWidth, imgHeight, 1);
     }
 
-    ib.nextAccess = GpuAccess_transferSrc;
-    ib.nextLayout = GpuLayout_transferSrc;
-    gpuMemoryBarrier(cmd, {}, {&ib, 1});
+    ib.nextAccess = GpuAccess::transferSrc;
+    ib.nextLayout = GpuLayout::transferSrc;
+    cmd->memoryBarrier({}, {&ib, 1});
 
-    gpuCmdEnd(cmd);
+    testGpu->endCommands(std::move(cmd));
 
     u32 result[imgWidth * imgHeight] = {};
-    imgView.read(std::as_writable_bytes(std::span{result}));
+    img->readWhole(std::as_writable_bytes(std::span{result}));
 
     const u32 passPixel = 0xFF00FF00; // green
     for (u32 row = 0; row < imgHeight; ++row)

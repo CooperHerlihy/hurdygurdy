@@ -1,9 +1,8 @@
 #pragma once
 
-#include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
-#include "hg/hash.hpp"
 #include "hg/utility.hpp"
+#include "hg/hash.hpp"
 
 #include <span>
 #include <optional>
@@ -35,7 +34,7 @@ struct SerialNode {
     /**
      * The serialized data
      */
-    std::vector<u8> data{};
+    std::vector<byte> data{};
 };
 
 /**
@@ -80,12 +79,12 @@ public:
     /**
      * Write serialized data in a binary format
      */
-    std::vector<u8> writeBinary();
+    std::vector<byte> writeBinary();
 
     /**
      * Read binary data to be deserialized, nullopt and an error set on failure
      */
-    static std::optional<Serializer> readBinary(std::span<const u8> bin);
+    static std::optional<Serializer> readBinary(std::span<const byte> bin);
 
     /**
      * Returns true if the serializer is writing to the data structure
@@ -116,14 +115,14 @@ public:
     /**
      * Serialize data directly
      */
-    bool serializeData(std::span<u8> data);
+    bool serializeData(std::span<byte> data);
 
     /**
      * Serialize variable length data
      *
      * Note, if reading, the data pointed to should be copied
      */
-    bool serializeVoid(std::span<const u8>* data);
+    bool serializeVoid(std::span<const byte>* data);
 };
 
 /**
@@ -132,7 +131,65 @@ public:
 template<typename T>
 bool serialize(Serializer* s, T* val)
 {
-    return s->serializeData({reinterpret_cast<u8*>(val), sizeof(*val)});
+    return s->serializeData(std::as_writable_bytes(std::span{val, 1}));
+}
+
+/**
+ * Deserialize an object from a binary
+ */
+template<typename T>
+std::optional<T> serialLoadFromBinary(std::span<const byte> bin)
+{
+    std::optional<Serializer> s = Serializer::readBinary(bin);
+    if (!s.has_value())
+        return std::nullopt;
+
+    std::optional ret = std::make_optional<T>();
+    if (!serialize(&*s, &*ret))
+        return std::nullopt;
+
+    return ret;
+}
+
+/**
+ * Deserialize an object from a binary
+ */
+template<typename T>
+std::vector<byte> serialStoreToBinary(const T& val)
+{
+    Serializer s = Serializer::writer();
+    serialize(&s, const_cast<T*>(&val));
+    return s.writeBinary();
+}
+
+/**
+ * Deserialize an object from a file
+ */
+template<typename T>
+std::optional<T> serialLoad(std::string_view path)
+{
+    std::optional<std::vector<byte>> file = binaryLoad(path);
+    if (!file.has_value())
+        return std::nullopt;
+
+    std::optional<T> ret = serialLoadFromBinary<T>(*file);
+    if (!ret.has_value())
+    {
+        setError("Could not deserialize file \"{}\": {}", path, getError());
+        return std::nullopt;
+    }
+
+    return ret;
+}
+
+/**
+ * Serialize an object to a file
+ */
+template<typename T>
+bool serialStore(const T& val, std::string_view path)
+{
+    std::vector<byte> bin = serialStoreToBinary(val);
+    return binaryStore(bin, path);
 }
 
 /**
@@ -275,7 +332,22 @@ bool serialize(Serializer* s, std::unique_ptr<T>* ptr)
  * string serialization
  */
 template<>
-bool serialize(Serializer* s, std::string* val);
+inline bool serialize(Serializer* s, std::string* val)
+{
+    if (s->isWriting())
+    {
+        std::span<const byte> data{std::as_bytes(std::span{*val})};
+        s->serializeVoid(&data);
+    }
+    else
+    {
+        std::span<const byte> data;
+        if (!s->serializeVoid(&data))
+            return false;
+        *val = std::string(data.begin(), data.end());
+    }
+    return true;
+}
 
 /**
  * trivial array serialization
@@ -286,7 +358,7 @@ bool serialize(Serializer* s, std::array<T, I>* arr)
     s->beginObject();
     HG_DEFER(s->endObject());
 
-    return s->serializeData({reinterpret_cast<u8*>(arr->data()), sizeof(T) * I});
+    return s->serializeData(std::as_writable_bytes(std::span{*arr}));
 }
 
 /**
@@ -310,19 +382,20 @@ bool serialize(Serializer* s, std::array<T, I>* arr)
  * trivial vector serialization
  */
 template<typename T> requires std::is_trivially_copyable_v<T>
-bool serialize(Serializer* s, std::vector<T>* arr)
+bool serialize(Serializer* s, std::vector<T>* vec)
 {
     if (s->isWriting())
     {
-        std::span<const u8> data{reinterpret_cast<u8*>(arr->data()), arr->size() * sizeof(T)};
+        std::span<const byte> data{std::as_bytes(std::span{*vec})};
         s->serializeVoid(&data);
     }
     else
     {
-        std::span<const u8> data;
+        std::span<const byte> data;
         if (!s->serializeVoid(&data))
             return false;
-        *arr = std::vector<T>(reinterpret_cast<const T*>(data.data()), reinterpret_cast<const T*>(data.data()) + data.size() / sizeof(T));
+        std::span<const T> typedData{reinterpret_cast<const T*>(data.data()), data.size() / sizeof(T)};
+        *vec = std::vector<T>{typedData.begin(), typedData.end()};
     }
     return true;
 }

@@ -1,6 +1,6 @@
 #include "hg/serialization.hpp"
 
-#include "hg/error.hpp"
+#include "hg/utility.hpp"
 
 #include <string_view>
 #include <cstring>
@@ -12,7 +12,7 @@ static constexpr u32 serialBinVersionMajor = 0;
 static constexpr u32 serialBinVersionMinor = 0;
 static constexpr u32 serialBinVersionPatch = 0;
 
-bool isSerialData(std::span<const u8> bin)
+bool isSerialData(std::span<const byte> bin)
 {
     return bin.size() > sizeof(serialBinTag) && std::memcmp(bin.data(), serialBinTag, sizeof(serialBinTag)) == 0;
 }
@@ -66,7 +66,7 @@ struct SerialBinNode {
     u32 begin = 0;
 };
 
-static void serialBinWriteNode(std::vector<u8>* bin, u32 idx, SerialNode* node)
+static void serialBinWriteNode(std::vector<byte>* bin, u32 idx, SerialNode* node)
 {
     SerialBinNode out{};
     out.isObject = node->children.empty() ? 0 : 1;
@@ -93,9 +93,9 @@ static void serialBinWriteNode(std::vector<u8>* bin, u32 idx, SerialNode* node)
     }
 }
 
-std::vector<u8> Serializer::writeBinary()
+std::vector<byte> Serializer::writeBinary()
 {
-    std::vector<u8> bin(sizeof(SerialBinHeader) + sizeof(SerialBinNode));
+    std::vector<byte> bin(sizeof(SerialBinHeader) + sizeof(SerialBinNode));
 
     SerialBinHeader header{};
     std::memcpy(header.tag, serialBinTag, sizeof(serialBinTag));
@@ -110,7 +110,7 @@ std::vector<u8> Serializer::writeBinary()
     return bin;
 }
 
-static bool serialBinReadNode(std::span<const u8> bin, u64 idx, Serializer* s)
+static bool serialBinReadNode(std::span<const byte> bin, u64 idx, Serializer* s)
 {
     if (bin.size() < idx + sizeof(SerialBinNode))
     {
@@ -142,7 +142,7 @@ static bool serialBinReadNode(std::span<const u8> bin, u64 idx, Serializer* s)
             setError("Serial binary is truncated");
             return false;
         }
-        s->serializeData({const_cast<u8*>(bin.data()) + node.begin, node.count});
+        s->serializeData({const_cast<byte*>(bin.data()) + node.begin, node.count});
     }
     return true;
 }
@@ -150,7 +150,7 @@ static bool serialBinReadNode(std::span<const u8> bin, u64 idx, Serializer* s)
 /**
  * Read binary data to be deserialized, nullopt and an error set on failure
  */
-std::optional<Serializer> Serializer::readBinary(std::span<const u8> bin)
+std::optional<Serializer> Serializer::readBinary(std::span<const byte> bin)
 {
     if (bin.size() < sizeof(SerialBinHeader))
     {
@@ -211,7 +211,7 @@ std::optional<Serializer> Serializer::readBinary(std::span<const u8> bin)
             setError("Serial binary is truncated");
             return std::nullopt;
         }
-        writer.serializeData({const_cast<u8*>(bin.data()) + rootNode.begin, rootNode.count});
+        writer.serializeData({const_cast<byte*>(bin.data()) + rootNode.begin, rootNode.count});
     }
 
     writer.current = nullptr;
@@ -258,7 +258,7 @@ void Serializer::endObject()
     current = current->parent;
 }
 
-bool Serializer::serializeData(std::span<u8> data)
+bool Serializer::serializeData(std::span<byte> data)
 {
     if (writing)
     {
@@ -267,7 +267,7 @@ bool Serializer::serializeData(std::span<u8> data)
 
         std::unique_ptr next = std::make_unique<SerialNode>();
         next->parent = current;
-        next->data = std::vector<u8>(data.begin(), data.end());
+        next->data = std::vector<byte>(data.begin(), data.end());
 
         current->children.emplace_back(std::move(next));
     }
@@ -294,7 +294,7 @@ bool Serializer::serializeData(std::span<u8> data)
     return true;
 }
 
-bool Serializer::serializeVoid(std::span<const u8>* data)
+bool Serializer::serializeVoid(std::span<const byte>* data)
 {
     if (writing)
     {
@@ -303,7 +303,7 @@ bool Serializer::serializeVoid(std::span<const u8>* data)
 
         std::unique_ptr next = std::make_unique<SerialNode>();
         next->parent = current;
-        next->data = std::vector<u8>(data->begin(), data->end());
+        next->data = std::vector<byte>(data->begin(), data->end());
 
         current->children.emplace_back(std::move(next));
     }
@@ -320,24 +320,6 @@ bool Serializer::serializeVoid(std::span<const u8>* data)
 
         SerialNode* leaf = current->children[current->currentChild++].get();
         *data = leaf->data;
-    }
-    return true;
-}
-
-template<>
-bool serialize(Serializer* s, std::string* val)
-{
-    if (s->isWriting())
-    {
-        std::span<const u8> data{reinterpret_cast<u8*>(val->data()), val->length()};
-        s->serializeVoid(&data);
-    }
-    else
-    {
-        std::span<const u8> data;
-        if (!s->serializeVoid(&data))
-            return false;
-        *val = std::string(data.begin(), data.end());
     }
     return true;
 }

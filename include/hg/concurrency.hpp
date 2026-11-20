@@ -5,7 +5,7 @@
 #include <type_traits>
 
 #include "hg/inttypes.hpp"
-#include "hg/macros.hpp"
+#include "hg/utility.hpp"
 
 namespace hg {
 

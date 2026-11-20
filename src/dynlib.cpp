@@ -1,5 +1,6 @@
 #include "hg/dynlib.hpp"
-#include "hg/error.hpp"
+
+#include "hg/utility.hpp"
 #include "hg/memory.hpp"
 
 namespace hg {

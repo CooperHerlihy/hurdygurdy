@@ -4,30 +4,30 @@ Modern C++20 game development library
 
 ## Rules
 
-**Always inform. Never act without approval.**
 - never run scripts without backups
-- never use exceptions or RTTI
 - never introduce third-party code
+- never use exceptions or RTTI
 - prefer not to use auto
-- use `i8`, `u32`, `f64`, etc., not `int`, `float`, `std::size_t`, etc.
+- use `i8`, `u32`, `f64`, etc., not `int`, `float`, etc.
 - use `HG_ASSERT` for assertions, assert all preconditions and invariants
 - use `setError("msg")` and return `std::optional` for recoverable errors
-- use `HG_PANIC` for unrecoverable errors
-- use RAII, generally delete copy constructors, and constructors must not fail
+- use `panic()` for unrecoverable errors
+- use RAII, generally delete copy constructors
+- prefer a static create function to a failing constructor
 - use `HG_DEFER` to defer C-style destructor functions
 - prefer `StringTemp` and `VectorTemp`, or `getScratch()`, for temporary allocations
 - prefer `forPar()` and `callPar()` for concurrency
-- use `HG_LOG` for temporary log statements
+- use `log()` for temporary log statements
 - otherwise, prefer to use the standard library
 
-- when writing tests, read AGENTS-test.md
+- when writing tests, use the `writing-tests` skill
 
 ## Build
 
 ```
 debug:
   cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug
-  cmake --build build
+  cmake --build debug
   ./build/tests
 
 release:

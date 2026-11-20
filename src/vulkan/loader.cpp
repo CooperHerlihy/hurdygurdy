@@ -1,10 +1,10 @@
-#include "vulkan_internal.hpp"
+#include "vulkan_gpu.hpp"
 
-#include "hg/error.hpp"
+#include "hg/utility.hpp"
 #include "hg/dynlib.hpp"
 
 namespace hg {
-namespace vulkan {
+namespace vk {
 
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name = nullptr
 
@@ -132,8 +132,8 @@ bool loadVulkan()
 #elif defined(HG_PLATFORM_WINDOWS)
         "vulkan-1.dll"
 #elif defined(HG_PLATFORM_APPLE)
-	// "libvulkan.1.dylib"
-	"libMoltenVK.dylib"
+        // "libvulkan.1.dylib"
+        "libMoltenVK.dylib"
 #endif
     );
     if (!lib.has_value())
@@ -173,19 +173,19 @@ void unloadVulkan()
 }
 
 #define HG_LOAD_VK_INSTANCE_FUNC(name) \
-    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(instance, #name); \
+    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(vk->instance, #name); \
     if (vulkanFuncs. name == nullptr) { \
         setError("Could not load " #name); \
         return false; \
     }
 
-bool loadVulkanInstanceFuncs(VkInstance instance)
+bool loadVulkanInstanceFuncs(GpuVk* vk)
 {
-    HG_ASSERT(instance != nullptr);
+    HG_ASSERT(vk->instance != nullptr);
 
     HG_LOAD_VK_INSTANCE_FUNC(vkGetDeviceProcAddr);
     HG_LOAD_VK_INSTANCE_FUNC(vkDestroyInstance);
-    if (vk.enableDebugMessenger)
+    if (vk->enableDebugMessenger)
     {
         HG_LOAD_VK_INSTANCE_FUNC(vkCreateDebugUtilsMessengerEXT);
         HG_LOAD_VK_INSTANCE_FUNC(vkDestroyDebugUtilsMessengerEXT);
@@ -196,7 +196,7 @@ bool loadVulkanInstanceFuncs(VkInstance instance)
     HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceQueueFamilyProperties);
     HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceMemoryProperties);
     HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceMemoryProperties2);
-    if (vk.surfaceExtensions)
+    if (vk->enableSurfaces)
     {
         HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceSupportKHR);
         HG_LOAD_VK_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceFormatsKHR);
@@ -212,19 +212,19 @@ bool loadVulkanInstanceFuncs(VkInstance instance)
 #undef HG_LOAD_VK_INSTANCE_FUNC
 
 #define HG_LOAD_VK_DEVICE_FUNC(name) \
-    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetDeviceProcAddr(device, #name); \
+    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetDeviceProcAddr(vk->device, #name); \
     if (vulkanFuncs. name == nullptr) { \
         setError("Could not load " #name); \
         return false; \
     }
 
-bool loadVulkanDeviceFuncs(VkDevice device)
+bool loadVulkanDeviceFuncs(GpuVk* vk)
 {
-    HG_ASSERT(device != nullptr);
+    HG_ASSERT(vk->device != nullptr);
 
     HG_LOAD_VK_DEVICE_FUNC(vkDestroyDevice);
     HG_LOAD_VK_DEVICE_FUNC(vkDeviceWaitIdle);
-    if (vk.surfaceExtensions)
+    if (vk->enableSurfaces)
     {
         HG_LOAD_VK_DEVICE_FUNC(vkCreateSwapchainKHR);
         HG_LOAD_VK_DEVICE_FUNC(vkDestroySwapchainKHR);
@@ -240,7 +240,7 @@ bool loadVulkanDeviceFuncs(VkDevice device)
     HG_LOAD_VK_DEVICE_FUNC(vkGetDeviceQueue);
     HG_LOAD_VK_DEVICE_FUNC(vkQueueWaitIdle);
     HG_LOAD_VK_DEVICE_FUNC(vkQueueSubmit);
-    if (vk.surfaceExtensions)
+    if (vk->enableSurfaces)
     {
         HG_LOAD_VK_DEVICE_FUNC(vkQueuePresentKHR);
     }
@@ -322,549 +322,549 @@ bool loadVulkanDeviceFuncs(VkDevice device)
 
 #undef HG_LOAD_VK_DEVICE_FUNC
 
-} // namespace vulkan
+} // namespace vk
 } // namespace hg
 
 extern "C" {
 
 PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char* pName)
 {
-    return ::hg::vulkan::vulkanFuncs.vkGetInstanceProcAddr(instance, pName);
+    return ::hg::vk::vulkanFuncs.vkGetInstanceProcAddr(instance, pName);
 }
 
 PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char* pName)
 {
-    return ::hg::vulkan::vulkanFuncs.vkGetDeviceProcAddr(device, pName);
+    return ::hg::vk::vulkanFuncs.vkGetDeviceProcAddr(device, pName);
 }
 
 VkResult vkCreateInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateInstance(pCreateInfo, pAllocator, pInstance);
+    return ::hg::vk::vulkanFuncs.vkCreateInstance(pCreateInfo, pAllocator, pInstance);
 }
 
 VkResult vkEnumerateInstanceLayerProperties(uint32_t* pPropertyCount, VkLayerProperties* pProperties)
 {
-    return ::hg::vulkan::vulkanFuncs.vkEnumerateInstanceLayerProperties(pPropertyCount, pProperties);
+    return ::hg::vk::vulkanFuncs.vkEnumerateInstanceLayerProperties(pPropertyCount, pProperties);
 }
 
 VkResult vkEnumerateInstanceExtensionProperties(const char* pLayerName, uint32_t* pPropertyCount, VkExtensionProperties* pProperties)
 {
-    return ::hg::vulkan::vulkanFuncs.vkEnumerateInstanceExtensionProperties(pLayerName, pPropertyCount, pProperties);
+    return ::hg::vk::vulkanFuncs.vkEnumerateInstanceExtensionProperties(pLayerName, pPropertyCount, pProperties);
 }
 
 void vkDestroyInstance(VkInstance instance, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyInstance(instance, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyInstance(instance, pAllocator);
 }
 
 VkResult vkCreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pMessenger)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+    return ::hg::vk::vulkanFuncs.vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
 }
 
 void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
 }
 
 VkResult vkEnumeratePhysicalDevices(VkInstance instance, uint32_t* pCount, VkPhysicalDevice* pDevices)
 {
-    return ::hg::vulkan::vulkanFuncs.vkEnumeratePhysicalDevices(instance, pCount, pDevices);
+    return ::hg::vk::vulkanFuncs.vkEnumeratePhysicalDevices(instance, pCount, pDevices);
 }
 
 VkResult vkEnumerateDeviceExtensionProperties(VkPhysicalDevice device, const char* pLayerName, uint32_t* pCount, VkExtensionProperties* pProps)
 {
-    return ::hg::vulkan::vulkanFuncs.vkEnumerateDeviceExtensionProperties(device, pLayerName, pCount, pProps);
+    return ::hg::vk::vulkanFuncs.vkEnumerateDeviceExtensionProperties(device, pLayerName, pCount, pProps);
 }
 
 void vkGetPhysicalDeviceProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties* pProperties)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceProperties(physicalDevice, pProperties);
+    ::hg::vk::vulkanFuncs.vkGetPhysicalDeviceProperties(physicalDevice, pProperties);
 }
 
 void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice device, uint32_t* pCount, VkQueueFamilyProperties* pProps)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceQueueFamilyProperties(device, pCount, pProps);
+    ::hg::vk::vulkanFuncs.vkGetPhysicalDeviceQueueFamilyProperties(device, pCount, pProps);
 }
 
 void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroySurfaceKHR(instance, surface, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroySurfaceKHR(instance, surface, pAllocator);
 }
 
 VkResult vkCreateDevice(VkPhysicalDevice device, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateDevice(device, pCreateInfo, pAllocator, pDevice);
+    return ::hg::vk::vulkanFuncs.vkCreateDevice(device, pCreateInfo, pAllocator, pDevice);
 }
 
 void vkDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyDevice(device, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyDevice(device, pAllocator);
 }
 
 VkResult vkDeviceWaitIdle(VkDevice device)
 {
-    return ::hg::vulkan::vulkanFuncs.vkDeviceWaitIdle(device);
+    return ::hg::vk::vulkanFuncs.vkDeviceWaitIdle(device);
 }
 
 VkResult vkGetPhysicalDeviceSurfaceSupportKHR(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex, VkSurfaceKHR surface, VkBool32* pSupported)
 {
-    return ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamilyIndex, surface, pSupported);
+    return ::hg::vk::vulkanFuncs.vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamilyIndex, surface, pSupported);
 }
 
 VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t* pCount, VkSurfaceFormatKHR* pFormats)
 {
-    return ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, pCount, pFormats);
+    return ::hg::vk::vulkanFuncs.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, pCount, pFormats);
 }
 
 VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t* pCount, VkPresentModeKHR* pModes)
 {
-    return ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, pCount, pModes);
+    return ::hg::vk::vulkanFuncs.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, pCount, pModes);
 }
 
 VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR* pCaps)
 {
-    return ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, pCaps);
+    return ::hg::vk::vulkanFuncs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, pCaps);
 }
 
 VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSwapchainKHR* pSwapchain)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
+    return ::hg::vk::vulkanFuncs.vkCreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
 }
 
 void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroySwapchainKHR(device, swapchain, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroySwapchainKHR(device, swapchain, pAllocator);
 }
 
 VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, uint32_t* pCount, VkImage* pImages)
 {
-    return ::hg::vulkan::vulkanFuncs.vkGetSwapchainImagesKHR(device, swapchain, pCount, pImages);
+    return ::hg::vk::vulkanFuncs.vkGetSwapchainImagesKHR(device, swapchain, pCount, pImages);
 }
 
 VkResult vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore sem, VkFence fence, uint32_t* pIndex)
 {
-    return ::hg::vulkan::vulkanFuncs.vkAcquireNextImageKHR(device, swapchain, timeout, sem, fence, pIndex);
+    return ::hg::vk::vulkanFuncs.vkAcquireNextImageKHR(device, swapchain, timeout, sem, fence, pIndex);
 }
 
 VkResult vkCreateSemaphore(VkDevice device, const VkSemaphoreCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSemaphore* pSemaphore)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
+    return ::hg::vk::vulkanFuncs.vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
 }
 
 void vkDestroySemaphore(VkDevice device, VkSemaphore sem, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroySemaphore(device, sem, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroySemaphore(device, sem, pAllocator);
 }
 
 VkResult vkCreateFence(VkDevice device, const VkFenceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkFence* pFence)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateFence(device, pCreateInfo, pAllocator, pFence);
+    return ::hg::vk::vulkanFuncs.vkCreateFence(device, pCreateInfo, pAllocator, pFence);
 }
 
 void vkDestroyFence(VkDevice device, VkFence fence, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyFence(device, fence, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyFence(device, fence, pAllocator);
 }
 
 VkResult vkResetFences(VkDevice device, uint32_t count, const VkFence* pFences)
 {
-    return ::hg::vulkan::vulkanFuncs.vkResetFences(device, count, pFences);
+    return ::hg::vk::vulkanFuncs.vkResetFences(device, count, pFences);
 }
 
 VkResult vkWaitForFences(VkDevice device, uint32_t count, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout)
 {
-    return ::hg::vulkan::vulkanFuncs.vkWaitForFences(device, count, pFences, waitAll, timeout);
+    return ::hg::vk::vulkanFuncs.vkWaitForFences(device, count, pFences, waitAll, timeout);
 }
 
 void vkGetDeviceQueue(VkDevice device, uint32_t family, uint32_t index, VkQueue* pQueue)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetDeviceQueue(device, family, index, pQueue);
+    ::hg::vk::vulkanFuncs.vkGetDeviceQueue(device, family, index, pQueue);
 }
 
 VkResult vkQueueWaitIdle(VkQueue queue)
 {
-    return ::hg::vulkan::vulkanFuncs.vkQueueWaitIdle(queue);
+    return ::hg::vk::vulkanFuncs.vkQueueWaitIdle(queue);
 }
 
 VkResult vkQueueSubmit(VkQueue queue, uint32_t count, const VkSubmitInfo* pSubmits, VkFence fence)
 {
-    return ::hg::vulkan::vulkanFuncs.vkQueueSubmit(queue, count, pSubmits, fence);
+    return ::hg::vk::vulkanFuncs.vkQueueSubmit(queue, count, pSubmits, fence);
 }
 
 VkResult vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pInfo)
 {
-    return ::hg::vulkan::vulkanFuncs.vkQueuePresentKHR(queue, pInfo);
+    return ::hg::vk::vulkanFuncs.vkQueuePresentKHR(queue, pInfo);
 }
 
 VkResult vkCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkCommandPool* pPool)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateCommandPool(device, pCreateInfo, pAllocator, pPool);
+    return ::hg::vk::vulkanFuncs.vkCreateCommandPool(device, pCreateInfo, pAllocator, pPool);
 }
 
 void vkDestroyCommandPool(VkDevice device, VkCommandPool pool, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyCommandPool(device, pool, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyCommandPool(device, pool, pAllocator);
 }
 
 VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags)
 {
-    return ::hg::vulkan::vulkanFuncs.vkResetCommandPool(device, commandPool, flags);
+    return ::hg::vk::vulkanFuncs.vkResetCommandPool(device, commandPool, flags);
 }
 
 VkResult vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* pInfo, VkCommandBuffer* pBufs)
 {
-    return ::hg::vulkan::vulkanFuncs.vkAllocateCommandBuffers(device, pInfo, pBufs);
+    return ::hg::vk::vulkanFuncs.vkAllocateCommandBuffers(device, pInfo, pBufs);
 }
 
 void vkFreeCommandBuffers(VkDevice device, VkCommandPool pool, uint32_t count, const VkCommandBuffer* pBufs)
 {
-    ::hg::vulkan::vulkanFuncs.vkFreeCommandBuffers(device, pool, count, pBufs);
+    ::hg::vk::vulkanFuncs.vkFreeCommandBuffers(device, pool, count, pBufs);
 }
 
 VkResult vkCreateDescriptorPool(VkDevice device, const VkDescriptorPoolCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorPool* pPool)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateDescriptorPool(device, pInfo, pAllocator, pPool);
+    return ::hg::vk::vulkanFuncs.vkCreateDescriptorPool(device, pInfo, pAllocator, pPool);
 }
 
 void vkDestroyDescriptorPool(VkDevice device, VkDescriptorPool pool, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyDescriptorPool(device, pool, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyDescriptorPool(device, pool, pAllocator);
 }
 
 VkResult vkResetDescriptorPool(VkDevice device, VkDescriptorPool pool, uint32_t flags)
 {
-    return ::hg::vulkan::vulkanFuncs.vkResetDescriptorPool(device, pool, flags);
+    return ::hg::vk::vulkanFuncs.vkResetDescriptorPool(device, pool, flags);
 }
 
 VkResult vkAllocateDescriptorSets(VkDevice device, const VkDescriptorSetAllocateInfo* pInfo, VkDescriptorSet* pSets)
 {
-    return ::hg::vulkan::vulkanFuncs.vkAllocateDescriptorSets(device, pInfo, pSets);
+    return ::hg::vk::vulkanFuncs.vkAllocateDescriptorSets(device, pInfo, pSets);
 }
 
 VkResult vkFreeDescriptorSets(VkDevice device, VkDescriptorPool descriptorPool, uint32_t descriptorSetCount, const VkDescriptorSet* pDescriptorSets)
 {
-    return ::hg::vulkan::vulkanFuncs.vkFreeDescriptorSets(device, descriptorPool, descriptorSetCount, pDescriptorSets);
+    return ::hg::vk::vulkanFuncs.vkFreeDescriptorSets(device, descriptorPool, descriptorSetCount, pDescriptorSets);
 }
 
 void vkUpdateDescriptorSets(VkDevice device, uint32_t writeCount, const VkWriteDescriptorSet* pWrites, uint32_t copyCount, const VkCopyDescriptorSet* pCopies)
 {
-    ::hg::vulkan::vulkanFuncs.vkUpdateDescriptorSets(device, writeCount, pWrites, copyCount, pCopies);
+    ::hg::vk::vulkanFuncs.vkUpdateDescriptorSets(device, writeCount, pWrites, copyCount, pCopies);
 }
 
 VkResult vkCreateDescriptorSetLayout(VkDevice device, const VkDescriptorSetLayoutCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorSetLayout* pLayout)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateDescriptorSetLayout(device, pInfo, pAllocator, pLayout);
+    return ::hg::vk::vulkanFuncs.vkCreateDescriptorSetLayout(device, pInfo, pAllocator, pLayout);
 }
 
 void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout layout, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyDescriptorSetLayout(device, layout, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyDescriptorSetLayout(device, layout, pAllocator);
 }
 
 VkResult vkCreatePipelineLayout(VkDevice device, const VkPipelineLayoutCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkPipelineLayout* pLayout)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreatePipelineLayout(device, pInfo, pAllocator, pLayout);
+    return ::hg::vk::vulkanFuncs.vkCreatePipelineLayout(device, pInfo, pAllocator, pLayout);
 }
 
 void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout layout, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyPipelineLayout(device, layout, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyPipelineLayout(device, layout, pAllocator);
 }
 
 VkResult vkCreateShaderModule(VkDevice device, const VkShaderModuleCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkShaderModule* pModule)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateShaderModule(device, pInfo, pAllocator, pModule);
+    return ::hg::vk::vulkanFuncs.vkCreateShaderModule(device, pInfo, pAllocator, pModule);
 }
 
 void vkDestroyShaderModule(VkDevice device, VkShaderModule module, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyShaderModule(device, module, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyShaderModule(device, module, pAllocator);
 }
 
 VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkGraphicsPipelineCreateInfo* pInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateGraphicsPipelines(device, cache, count, pInfos, pAllocator, pPipelines);
+    return ::hg::vk::vulkanFuncs.vkCreateGraphicsPipelines(device, cache, count, pInfos, pAllocator, pPipelines);
 }
 
 VkResult vkCreateComputePipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkComputePipelineCreateInfo* pInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateComputePipelines(device, cache, count, pInfos, pAllocator, pPipelines);
+    return ::hg::vk::vulkanFuncs.vkCreateComputePipelines(device, cache, count, pInfos, pAllocator, pPipelines);
 }
 
 void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyPipeline(device, pipeline, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyPipeline(device, pipeline, pAllocator);
 }
 
 VkResult vkCreateRenderPass(VkDevice device, const VkRenderPassCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateRenderPass(device, pCreateInfo, pAllocator, pRenderPass);
+    return ::hg::vk::vulkanFuncs.vkCreateRenderPass(device, pCreateInfo, pAllocator, pRenderPass);
 }
 
 void vkDestroyRenderPass(VkDevice device, VkRenderPass renderPass, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyRenderPass(device, renderPass, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyRenderPass(device, renderPass, pAllocator);
 }
 
 VkResult vkCreateFramebuffer(VkDevice device, const VkFramebufferCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkFramebuffer* pFramebuffer)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateFramebuffer(device, pCreateInfo, pAllocator, pFramebuffer);
+    return ::hg::vk::vulkanFuncs.vkCreateFramebuffer(device, pCreateInfo, pAllocator, pFramebuffer);
 }
 
 void vkDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyFramebuffer(device, framebuffer, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyFramebuffer(device, framebuffer, pAllocator);
 }
 
 VkResult vkCreateBuffer(VkDevice device, const VkBufferCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkBuffer* pBuf)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateBuffer(device, pInfo, pAllocator, pBuf);
+    return ::hg::vk::vulkanFuncs.vkCreateBuffer(device, pInfo, pAllocator, pBuf);
 }
 
 void vkDestroyBuffer(VkDevice device, VkBuffer buf, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyBuffer(device, buf, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyBuffer(device, buf, pAllocator);
 }
 
 VkResult vkCreateImage(VkDevice device, const VkImageCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkImage* pImage)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateImage(device, pInfo, pAllocator, pImage);
+    return ::hg::vk::vulkanFuncs.vkCreateImage(device, pInfo, pAllocator, pImage);
 }
 
 void vkDestroyImage(VkDevice device, VkImage img, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyImage(device, img, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyImage(device, img, pAllocator);
 }
 
 VkResult vkCreateImageView(VkDevice device, const VkImageViewCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateImageView(device, pInfo, pAllocator, pView);
+    return ::hg::vk::vulkanFuncs.vkCreateImageView(device, pInfo, pAllocator, pView);
 }
 
 void vkDestroyImageView(VkDevice device, VkImageView view, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroyImageView(device, view, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroyImageView(device, view, pAllocator);
 }
 
 VkResult vkCreateSampler(VkDevice device, const VkSamplerCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkSampler* pSampler)
 {
-    return ::hg::vulkan::vulkanFuncs.vkCreateSampler(device, pInfo, pAllocator, pSampler);
+    return ::hg::vk::vulkanFuncs.vkCreateSampler(device, pInfo, pAllocator, pSampler);
 }
 
 void vkDestroySampler(VkDevice device, VkSampler sampler, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkDestroySampler(device, sampler, pAllocator);
+    ::hg::vk::vulkanFuncs.vkDestroySampler(device, sampler, pAllocator);
 }
 
 void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties* pMemoryProperties)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceMemoryProperties(physicalDevice, pMemoryProperties);
+    ::hg::vk::vulkanFuncs.vkGetPhysicalDeviceMemoryProperties(physicalDevice, pMemoryProperties);
 }
 
 void vkGetPhysicalDeviceMemoryProperties2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties2* pMemoryProperties)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetPhysicalDeviceMemoryProperties2(physicalDevice, pMemoryProperties);
+    ::hg::vk::vulkanFuncs.vkGetPhysicalDeviceMemoryProperties2(physicalDevice, pMemoryProperties);
 }
 
 void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements* pMemoryRequirements)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetBufferMemoryRequirements(device, buffer, pMemoryRequirements);
+    ::hg::vk::vulkanFuncs.vkGetBufferMemoryRequirements(device, buffer, pMemoryRequirements);
 }
 
 void vkGetBufferMemoryRequirements2(VkDevice device, const VkBufferMemoryRequirementsInfo2* pInfo, VkMemoryRequirements2* pMemoryRequirements)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetBufferMemoryRequirements2(device, pInfo, pMemoryRequirements);
+    ::hg::vk::vulkanFuncs.vkGetBufferMemoryRequirements2(device, pInfo, pMemoryRequirements);
 }
 
 void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements* pMemoryRequirements)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetImageMemoryRequirements(device, image, pMemoryRequirements);
+    ::hg::vk::vulkanFuncs.vkGetImageMemoryRequirements(device, image, pMemoryRequirements);
 }
 
 void vkGetImageMemoryRequirements2(VkDevice device, const VkImageMemoryRequirementsInfo2* pInfo, VkMemoryRequirements2* pMemoryRequirements)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetImageMemoryRequirements2(device, pInfo, pMemoryRequirements);
+    ::hg::vk::vulkanFuncs.vkGetImageMemoryRequirements2(device, pInfo, pMemoryRequirements);
 }
 
 void vkGetDeviceBufferMemoryRequirements(VkDevice device, const VkDeviceBufferMemoryRequirements* pInfo, VkMemoryRequirements2* pMemoryRequirements)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetDeviceBufferMemoryRequirements(device, pInfo, pMemoryRequirements);
+    ::hg::vk::vulkanFuncs.vkGetDeviceBufferMemoryRequirements(device, pInfo, pMemoryRequirements);
 }
 
 void vkGetDeviceImageMemoryRequirements(VkDevice device, const VkDeviceImageMemoryRequirements* pInfo, VkMemoryRequirements2* pMemoryRequirements)
 {
-    ::hg::vulkan::vulkanFuncs.vkGetDeviceImageMemoryRequirements(device, pInfo, pMemoryRequirements);
+    ::hg::vk::vulkanFuncs.vkGetDeviceImageMemoryRequirements(device, pInfo, pMemoryRequirements);
 }
 
 VkResult vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDeviceMemory* pMemory)
 {
-    return ::hg::vulkan::vulkanFuncs.vkAllocateMemory(device, pInfo, pAllocator, pMemory);
+    return ::hg::vk::vulkanFuncs.vkAllocateMemory(device, pInfo, pAllocator, pMemory);
 }
 
 void vkFreeMemory(VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks* pAllocator)
 {
-    ::hg::vulkan::vulkanFuncs.vkFreeMemory(device, mem, pAllocator);
+    ::hg::vk::vulkanFuncs.vkFreeMemory(device, mem, pAllocator);
 }
 
 VkResult vkBindBufferMemory(VkDevice device, VkBuffer buf, VkDeviceMemory mem, VkDeviceSize offset)
 {
-    return ::hg::vulkan::vulkanFuncs.vkBindBufferMemory(device, buf, mem, offset);
+    return ::hg::vk::vulkanFuncs.vkBindBufferMemory(device, buf, mem, offset);
 }
 
 VkResult vkBindBufferMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindBufferMemoryInfo* pBindInfos)
 {
-    return ::hg::vulkan::vulkanFuncs.vkBindBufferMemory2(device, bindInfoCount, pBindInfos);
+    return ::hg::vk::vulkanFuncs.vkBindBufferMemory2(device, bindInfoCount, pBindInfos);
 }
 
 VkResult vkBindImageMemory(VkDevice device, VkImage img, VkDeviceMemory mem, VkDeviceSize offset)
 {
-    return ::hg::vulkan::vulkanFuncs.vkBindImageMemory(device, img, mem, offset);
+    return ::hg::vk::vulkanFuncs.vkBindImageMemory(device, img, mem, offset);
 }
 
 VkResult vkBindImageMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindImageMemoryInfo* pBindInfos)
 {
-    return ::hg::vulkan::vulkanFuncs.vkBindImageMemory2(device, bindInfoCount, pBindInfos);
+    return ::hg::vk::vulkanFuncs.vkBindImageMemory2(device, bindInfoCount, pBindInfos);
 }
 
 VkResult vkMapMemory(VkDevice device, VkDeviceMemory mem, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void** ppData)
 {
-    return ::hg::vulkan::vulkanFuncs.vkMapMemory(device, mem, offset, size, flags, ppData);
+    return ::hg::vk::vulkanFuncs.vkMapMemory(device, mem, offset, size, flags, ppData);
 }
 
 void vkUnmapMemory(VkDevice device, VkDeviceMemory mem)
 {
-    ::hg::vulkan::vulkanFuncs.vkUnmapMemory(device, mem);
+    ::hg::vk::vulkanFuncs.vkUnmapMemory(device, mem);
 }
 
 VkResult vkFlushMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange* pRanges)
 {
-    return ::hg::vulkan::vulkanFuncs.vkFlushMappedMemoryRanges(device, count, pRanges);
+    return ::hg::vk::vulkanFuncs.vkFlushMappedMemoryRanges(device, count, pRanges);
 }
 
 VkResult vkInvalidateMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange* pRanges)
 {
-    return ::hg::vulkan::vulkanFuncs.vkInvalidateMappedMemoryRanges(device, count, pRanges);
+    return ::hg::vk::vulkanFuncs.vkInvalidateMappedMemoryRanges(device, count, pRanges);
 }
 
 VkResult vkBeginCommandBuffer(VkCommandBuffer cmd, const VkCommandBufferBeginInfo* pInfo)
 {
-    return ::hg::vulkan::vulkanFuncs.vkBeginCommandBuffer(cmd, pInfo);
+    return ::hg::vk::vulkanFuncs.vkBeginCommandBuffer(cmd, pInfo);
 }
 
 VkResult vkEndCommandBuffer(VkCommandBuffer cmd)
 {
-    return ::hg::vulkan::vulkanFuncs.vkEndCommandBuffer(cmd);
+    return ::hg::vk::vulkanFuncs.vkEndCommandBuffer(cmd);
 }
 
 VkResult vkResetCommandBuffer(VkCommandBuffer cmd, VkCommandBufferResetFlags flags)
 {
-    return ::hg::vulkan::vulkanFuncs.vkResetCommandBuffer(cmd, flags);
+    return ::hg::vk::vulkanFuncs.vkResetCommandBuffer(cmd, flags);
 }
 
 void vkCmdCopyBuffer(VkCommandBuffer cmd, VkBuffer src, VkBuffer dst, uint32_t count, const VkBufferCopy* pRegions)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdCopyBuffer(cmd, src, dst, count, pRegions);
+    ::hg::vk::vulkanFuncs.vkCmdCopyBuffer(cmd, src, dst, count, pRegions);
 }
 
 void vkCmdCopyImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageCopy* pRegions)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdCopyImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions);
+    ::hg::vk::vulkanFuncs.vkCmdCopyImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions);
 }
 
 void vkCmdBlitImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageBlit* pRegions, VkFilter filter)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdBlitImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions, filter);
+    ::hg::vk::vulkanFuncs.vkCmdBlitImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions, filter);
 }
 
 void vkCmdCopyBufferToImage(VkCommandBuffer cmd, VkBuffer src, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkBufferImageCopy* pRegions)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdCopyBufferToImage(cmd, src, dst, dstLayout, count, pRegions);
+    ::hg::vk::vulkanFuncs.vkCmdCopyBufferToImage(cmd, src, dst, dstLayout, count, pRegions);
 }
 
 void vkCmdCopyImageToBuffer(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkBuffer dst, uint32_t count, const VkBufferImageCopy* pRegions)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdCopyImageToBuffer(cmd, src, srcLayout, dst, count, pRegions);
+    ::hg::vk::vulkanFuncs.vkCmdCopyImageToBuffer(cmd, src, srcLayout, dst, count, pRegions);
 }
 
 void vkCmdPipelineBarrier2(VkCommandBuffer cmd, const VkDependencyInfo* pInfo)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdPipelineBarrier2(cmd, pInfo);
+    ::hg::vk::vulkanFuncs.vkCmdPipelineBarrier2(cmd, pInfo);
 }
 
 void vkCmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags, uint32_t memoryBarrierCount, const VkMemoryBarrier* pMemoryBarriers, uint32_t bufferMemoryBarrierCount, const VkBufferMemoryBarrier* pBufferMemoryBarriers, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier* pImageMemoryBarriers)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, dependencyFlags, memoryBarrierCount, pMemoryBarriers, bufferMemoryBarrierCount, pBufferMemoryBarriers, imageMemoryBarrierCount, pImageMemoryBarriers);
+    ::hg::vk::vulkanFuncs.vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, dependencyFlags, memoryBarrierCount, pMemoryBarriers, bufferMemoryBarrierCount, pBufferMemoryBarriers, imageMemoryBarrierCount, pImageMemoryBarriers);
 }
 
 void vkCmdBeginRendering(VkCommandBuffer cmd, const VkRenderingInfo* pInfo)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdBeginRendering(cmd, pInfo);
+    ::hg::vk::vulkanFuncs.vkCmdBeginRendering(cmd, pInfo);
 }
 
 void vkCmdEndRendering(VkCommandBuffer cmd)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdEndRendering(cmd);
+    ::hg::vk::vulkanFuncs.vkCmdEndRendering(cmd);
 }
 
 void vkCmdBeginRenderPass(VkCommandBuffer cmd, const VkRenderPassBeginInfo* pRenderPassBegin, VkSubpassContents contents)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdBeginRenderPass(cmd, pRenderPassBegin, contents);
+    ::hg::vk::vulkanFuncs.vkCmdBeginRenderPass(cmd, pRenderPassBegin, contents);
 }
 
 void vkCmdEndRenderPass(VkCommandBuffer cmd)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdEndRenderPass(cmd);
+    ::hg::vk::vulkanFuncs.vkCmdEndRenderPass(cmd);
 }
 
 void vkCmdSetViewport(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkViewport* pViewports)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdSetViewport(cmd, first, count, pViewports);
+    ::hg::vk::vulkanFuncs.vkCmdSetViewport(cmd, first, count, pViewports);
 }
 
 void vkCmdSetScissor(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkRect2D* pScissors)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdSetScissor(cmd, first, count, pScissors);
+    ::hg::vk::vulkanFuncs.vkCmdSetScissor(cmd, first, count, pScissors);
 }
 
 void vkCmdBindPipeline(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipeline pipeline)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdBindPipeline(cmd, bindPoint, pipeline);
+    ::hg::vk::vulkanFuncs.vkCmdBindPipeline(cmd, bindPoint, pipeline);
 }
 
 void vkCmdBindDescriptorSets(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t count, const VkDescriptorSet* pSets, uint32_t dynCount, const uint32_t* pDyn)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdBindDescriptorSets(cmd, bindPoint, layout, firstSet, count, pSets, dynCount, pDyn);
+    ::hg::vk::vulkanFuncs.vkCmdBindDescriptorSets(cmd, bindPoint, layout, firstSet, count, pSets, dynCount, pDyn);
 }
 
 void vkCmdPushConstants(VkCommandBuffer cmd, VkPipelineLayout layout, VkShaderStageFlags stages, uint32_t offset, uint32_t size, const void* pData)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdPushConstants(cmd, layout, stages, offset, size, pData);
+    ::hg::vk::vulkanFuncs.vkCmdPushConstants(cmd, layout, stages, offset, size, pData);
 }
 
 void vkCmdBindVertexBuffers(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkBuffer* pBufs, const VkDeviceSize* pOffsets)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdBindVertexBuffers(cmd, first, count, pBufs, pOffsets);
+    ::hg::vk::vulkanFuncs.vkCmdBindVertexBuffers(cmd, first, count, pBufs, pOffsets);
 }
 
 void vkCmdBindIndexBuffer(VkCommandBuffer cmd, VkBuffer buf, VkDeviceSize offset, VkIndexType type)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdBindIndexBuffer(cmd, buf, offset, type);
+    ::hg::vk::vulkanFuncs.vkCmdBindIndexBuffer(cmd, buf, offset, type);
 }
 
 void vkCmdDraw(VkCommandBuffer cmd, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdDraw(cmd, vertexCount, instanceCount, firstVertex, firstInstance);
+    ::hg::vk::vulkanFuncs.vkCmdDraw(cmd, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void vkCmdDrawIndexed(VkCommandBuffer cmd, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    ::hg::vk::vulkanFuncs.vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
 void vkCmdDispatch(VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z)
 {
-    ::hg::vulkan::vulkanFuncs.vkCmdDispatch(cmd, x, y, z);
+    ::hg::vk::vulkanFuncs.vkCmdDispatch(cmd, x, y, z);
 }
 
 } // extern "C"

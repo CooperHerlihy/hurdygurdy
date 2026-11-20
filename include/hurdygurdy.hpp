@@ -27,19 +27,15 @@
 #pragma once
 
 #include <hg/inttypes.hpp>
-#include <hg/macros.hpp>
-#include <hg/error.hpp>
 #include <hg/utility.hpp>
 #include <hg/memory.hpp>
 #include <hg/concurrency.hpp>
 #include <hg/math.hpp>
-#include <hg/geometry2d.hpp>
-#include <hg/geometry3d.hpp>
+#include <hg/geometry.hpp>
 #include <hg/noise.hpp>
 #include <hg/hash.hpp>
 #include <hg/serialization.hpp>
 #include <hg/json.hpp>
-#include <hg/assets.hpp>
 #include <hg/time.hpp>
 #include <hg/dynlib.hpp>
 #include <hg/gpu.hpp>

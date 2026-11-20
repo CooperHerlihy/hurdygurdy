@@ -1,5 +1,5 @@
 #include "hg/memory.hpp"
-#include "hg/error.hpp"
+
 #include "hg/utility.hpp"
 
 #ifdef HG_PLATFORM_WINDOWS
@@ -12,7 +12,7 @@
 namespace hg {
 
 Arena::Arena(usize capacityVal)
-    : memory{std::make_unique_for_overwrite<u8[]>(capacityVal)}
+    : memory{std::make_unique_for_overwrite<byte[]>(capacityVal)}
     , capacity{capacityVal}
     , head{0}
 {}
@@ -22,7 +22,7 @@ void* Arena::alloc(usize size, usize alignment)
     u64 newHead = alignUp(head, alignment) + size;
     if (newHead > capacity)
     {
-        HG_WARN("Arena out of memory\n");
+        warn("Arena out of memory\n");
         setError("Arena out of memory");
         return nullptr;
     }

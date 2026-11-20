@@ -165,7 +165,6 @@ file(GLOB IMGUI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/*.cpp)
 set(VULKAN_SOURCES
     src/vulkan/loader.cpp
     src/vulkan/vulkan.cpp
-    src/vulkan/gpu.cpp
 )
 
 if(HG_LINUX)
@@ -188,20 +187,18 @@ if(HG_USE_SDL)
 endif()
 
 set(CORE_SOURCES
-    src/error.cpp
-    src/window.cpp
     src/utility.cpp
     src/memory.cpp
     src/concurrency.cpp
     src/math.cpp
-    src/geometry2d.cpp
-    src/geometry3d.cpp
+    src/geometry.cpp
     src/noise.cpp
     src/serialization.cpp
     src/json.cpp
-    src/assets.cpp
     src/time.cpp
     src/dynlib.cpp
+    src/gpu.cpp
+    src/window.cpp
     src/audio.cpp
     src/render2d.cpp
     src/render3d.cpp
@@ -287,23 +284,19 @@ endif()
 
 add_executable(tests
     test/tests.cpp
-    test/error.cpp
     test/utility.cpp
     test/memory.cpp
     test/concurrency.cpp
     test/math.cpp
-    test/geometry2d.cpp
-    test/geometry3d.cpp
+    test/geometry.cpp
     test/noise.cpp
-    test/filesystem.cpp
     test/hash.cpp
-    test/assets.cpp
-    test/audio.cpp
     test/serialization.cpp
     test/json.cpp
-    test/gpu.cpp
-    test/texture.cpp
     test/dynlib.cpp
+    test/gpu.cpp
+    test/audio.cpp
+    test/texture.cpp
     test/ecs.cpp
 )
 target_link_libraries(tests hurdygurdy)

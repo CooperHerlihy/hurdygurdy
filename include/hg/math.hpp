@@ -1,6 +1,5 @@
 #pragma once
 
-#include "hg/macros.hpp"
 #include "hg/inttypes.hpp"
 #include "hg/utility.hpp"
 

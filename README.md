@@ -5,7 +5,7 @@
 ![Platforms](https://img.shields.io/badge/platforms-Wayland%20%7C%20X11%20%7C%20Win32-lightgrey)
 ![Graphics](https://img.shields.io/badge/graphics-Vulkan-red)
 
-Hurdy Gurdy is a modern C++20 game development library collection. I mostly
+Hurdy Gurdy is a modern C++20 game development library. I mostly
 wrote it for fun and learning, but it should be usable to write real games. Most
 subsystems are pretty modular, so use what you like, and not what you don't.
 
@@ -29,15 +29,15 @@ int main()
 {
     std::unique_ptr<InputDevice> input = InputDevice::create();
     if (input == nullptr)
-        HG_PANIC("Could not create input device: {}\n", std::string{getError()}.c_str());
+        panic("Could not create input device: {}\n", std::string{getError()}.c_str());
 
     if (!initGpu(input->getVulkanExtensions()))
-        HG_PANIC("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
+        panic("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
     HG_DEFER(deinitGpu());
 
     std::unique_ptr<Window> window = input->createWindow({});
     if (window == nullptr)
-        HG_PANIC("Could not create window: {}\n", std::string{getError()}.c_str());
+        panic("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hello Hurdy Gurdy");
 
     Renderer2D renderer{window->swapchainFormat()};
@@ -121,10 +121,9 @@ c++ -std=c++20 -Ipath/to/hurdygurdy/include \
 
 - C++20 compiler (Clang 19+, GCC 15+, or MSVC)
 - CMake (3.18+)
-- SPIR-V compiler (glslc)
-  - Windows: included in LunarG Vulkan SDK
-  - Linux: install individually or in the LunarG Vulkan SDK
+- SPIR-V compiler (glslc, contained in LunarG Vulkan SDK)
 - Windows only: Windows SDK (installed with Visual Studio)
+- Optional: Ninja, Mold, and CCache are used to speed up compile times
 
 On Nix, `nix develop` provides all dependencies.
 

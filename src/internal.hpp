@@ -6,20 +6,20 @@ namespace hg {
 
 namespace internal {
 
-void* getVkInstance();
-void* getVkInstanceProcAddr(const char* name);
-
-void convertPixelFont();
+void* getVkInstance(Gpu* gpu);
+void* getVkInstanceProcAddr(Gpu* gpu, const char* name);
 
 void initImGuiGpu(
-    const GpuSwapchain& swap,
+    GpuSwapchain* swap,
     Format colorFormat,
-    Format depthFormat = Format_undefined,
-    Format stencilFormat = Format_undefined);
+    Format depthFormat = Format::undefined,
+    Format stencilFormat = Format::undefined);
 
 void deinitImGuiGpu();
 
 void beginImGuiFrameGpu();
+
+void convertPixelFont();
 
 } // namespace internal
 

@@ -1,6 +1,6 @@
 #include "tests.hpp"
 #include "hg/dynlib.hpp"
-#include "hg/error.hpp"
+#include "hg/utility.hpp"
 
 using namespace hg;
 

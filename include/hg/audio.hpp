@@ -1,8 +1,8 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/assets.hpp"
 #include "hg/concurrency.hpp"
+#include "hg/serialization.hpp"
 
 #include <span>
 #include <string_view>
@@ -100,6 +100,9 @@ public:
     virtual AudioBackend getBackend() = 0;
 };
 
+/**
+ * A dummy audio device for headless or audio-less setups
+ */
 class AudioDeviceDummy : public AudioDevice {
 public:
     /**
@@ -158,15 +161,14 @@ template<>
 bool serialize(Serializer* s, Sound* sound);
 
 /**
- * AudioData asset load implementation
+ * Load a sound from disc and try to decode with all supported formats
  */
-template<>
-bool assetLoadImpl(AssetData<Sound>* data);
+std::optional<Sound> soundLoad(std::string_view path);
 
 /**
  * Store a sound to disc in wav format
  */
-bool storeSoundWav(const Sound& sound, std::string_view path);
+bool soundStoreWav(const Sound& sound, std::string_view path);
 
 /**
  * A music track in the audio player
@@ -175,7 +177,7 @@ struct AudioPlayerSound {
     /**
      * The sound to play
      */
-    Asset<Sound> asset{};
+    const Sound* asset{};
     /**
      * The current position in the sound
      */
@@ -236,27 +238,27 @@ public:
     /**
      * Play a sound once
      */
-    void playSound(const Asset<Sound>& sound, f32 gain = 1.0f);
+    void playSound(const Sound& sound, f32 gain = 1.0f);
 
     /**
      * Start a new music track, or resume an existing one
      */
-    void playMusic(const Asset<Sound>& music, f32 gain = 1.0f);
+    void playMusic(const Sound& music, f32 gain = 1.0f);
 
     /**
      * Remove a music track from the player
      */
-    void killMusic(const Asset<Sound>& music);
+    void killMusic(const Sound& music);
 
     /**
      * Pause a music track
      */
-    void pauseMusic(const Asset<Sound>& music);
+    void pauseMusic(const Sound& music);
 
     /**
      * Set the volume for a music track
      */
-    void setMusicGain(const Asset<Sound>& music, f32 gain);
+    void setMusicGain(const Sound& music, f32 gain);
 };
 
 } // namespace hg

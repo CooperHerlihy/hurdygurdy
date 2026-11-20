@@ -1,10 +1,9 @@
 #include "x11_window.hpp"
 
 #include "internal.hpp"
-#include "hg/error.hpp"
-#include "hg/dynlib.hpp"
-#include "hg/hash.hpp"
 #include "hg/utility.hpp"
+#include "hg/hash.hpp"
+#include "hg/dynlib.hpp"
 
 #include <vector>
 #include <string_view>
@@ -222,121 +221,121 @@ static Button xkbKeysymToButton(KeySym keysym)
 {
     switch (keysym)
     {
-        case XK_Escape: return Button_escape;
-        case XK_Return: return Button_enter;
-        case XK_Tab: return Button_tab;
-        case XK_BackSpace: return Button_backspace;
-        case XK_space: return Button_space;
+        case XK_Escape: return Button::escape;
+        case XK_Return: return Button::enter;
+        case XK_Tab: return Button::tab;
+        case XK_BackSpace: return Button::backspace;
+        case XK_space: return Button::space;
 
-        case XK_Caps_Lock: return Button_capslock;
-        case XK_Num_Lock: return Button_numlock;
-        case XK_Scroll_Lock: return Button_scrolllock;
+        case XK_Caps_Lock: return Button::capslock;
+        case XK_Num_Lock: return Button::numlock;
+        case XK_Scroll_Lock: return Button::scrolllock;
 
-        case XK_Control_L: return Button_lctrl;
-        case XK_Control_R: return Button_rctrl;
-        case XK_Shift_L: return Button_lshift;
-        case XK_Shift_R: return Button_rshift;
-        case XK_Alt_L: return Button_lalt;
-        case XK_Alt_R: return Button_ralt;
-        case XK_Super_L: return Button_lsuper;
-        case XK_Super_R: return Button_rsuper;
+        case XK_Control_L: return Button::lctrl;
+        case XK_Control_R: return Button::rctrl;
+        case XK_Shift_L: return Button::lshift;
+        case XK_Shift_R: return Button::rshift;
+        case XK_Alt_L: return Button::lalt;
+        case XK_Alt_R: return Button::ralt;
+        case XK_Super_L: return Button::lsuper;
+        case XK_Super_R: return Button::rsuper;
 
-        case XK_Up: return Button_up;
-        case XK_Down: return Button_down;
-        case XK_Left: return Button_left;
-        case XK_Right: return Button_right;
+        case XK_Up: return Button::up;
+        case XK_Down: return Button::down;
+        case XK_Left: return Button::left;
+        case XK_Right: return Button::right;
 
-        case XK_F1: return Button_f1;
-        case XK_F2: return Button_f2;
-        case XK_F3: return Button_f3;
-        case XK_F4: return Button_f4;
-        case XK_F5: return Button_f5;
-        case XK_F6: return Button_f6;
-        case XK_F7: return Button_f7;
-        case XK_F8: return Button_f8;
-        case XK_F9: return Button_f9;
-        case XK_F10: return Button_f10;
-        case XK_F11: return Button_f11;
-        case XK_F12: return Button_f12;
+        case XK_F1: return Button::f1;
+        case XK_F2: return Button::f2;
+        case XK_F3: return Button::f3;
+        case XK_F4: return Button::f4;
+        case XK_F5: return Button::f5;
+        case XK_F6: return Button::f6;
+        case XK_F7: return Button::f7;
+        case XK_F8: return Button::f8;
+        case XK_F9: return Button::f9;
+        case XK_F10: return Button::f10;
+        case XK_F11: return Button::f11;
+        case XK_F12: return Button::f12;
 
-        case XK_a: return Button_a;
-        case XK_b: return Button_b;
-        case XK_c: return Button_c;
-        case XK_d: return Button_d;
-        case XK_e: return Button_e;
-        case XK_f: return Button_f;
-        case XK_g: return Button_g;
-        case XK_h: return Button_h;
-        case XK_i: return Button_i;
-        case XK_j: return Button_j;
-        case XK_k: return Button_k;
-        case XK_l: return Button_l;
-        case XK_m: return Button_m;
-        case XK_n: return Button_n;
-        case XK_o: return Button_o;
-        case XK_p: return Button_p;
-        case XK_q: return Button_q;
-        case XK_r: return Button_r;
-        case XK_s: return Button_s;
-        case XK_t: return Button_t;
-        case XK_u: return Button_u;
-        case XK_v: return Button_v;
-        case XK_w: return Button_w;
-        case XK_x: return Button_x;
-        case XK_y: return Button_y;
-        case XK_z: return Button_z;
+        case XK_a: return Button::a;
+        case XK_b: return Button::b;
+        case XK_c: return Button::c;
+        case XK_d: return Button::d;
+        case XK_e: return Button::e;
+        case XK_f: return Button::f;
+        case XK_g: return Button::g;
+        case XK_h: return Button::h;
+        case XK_i: return Button::i;
+        case XK_j: return Button::j;
+        case XK_k: return Button::k;
+        case XK_l: return Button::l;
+        case XK_m: return Button::m;
+        case XK_n: return Button::n;
+        case XK_o: return Button::o;
+        case XK_p: return Button::p;
+        case XK_q: return Button::q;
+        case XK_r: return Button::r;
+        case XK_s: return Button::s;
+        case XK_t: return Button::t;
+        case XK_u: return Button::u;
+        case XK_v: return Button::v;
+        case XK_w: return Button::w;
+        case XK_x: return Button::x;
+        case XK_y: return Button::y;
+        case XK_z: return Button::z;
 
-        case XK_0: return Button_0;
-        case XK_1: return Button_1;
-        case XK_2: return Button_2;
-        case XK_3: return Button_3;
-        case XK_4: return Button_4;
-        case XK_5: return Button_5;
-        case XK_6: return Button_6;
-        case XK_7: return Button_7;
-        case XK_8: return Button_8;
-        case XK_9: return Button_9;
+        case XK_0: return Button::b0;
+        case XK_1: return Button::b1;
+        case XK_2: return Button::b2;
+        case XK_3: return Button::b3;
+        case XK_4: return Button::b4;
+        case XK_5: return Button::b5;
+        case XK_6: return Button::b6;
+        case XK_7: return Button::b7;
+        case XK_8: return Button::b8;
+        case XK_9: return Button::b9;
 
-        case XK_minus: return Button_minus;
-        case XK_equal: return Button_equal;
-        case XK_bracketleft: return Button_lbracket;
-        case XK_bracketright: return Button_rbracket;
-        case XK_backslash: return Button_backslash;
-        case XK_semicolon: return Button_semicolon;
-        case XK_apostrophe: return Button_apostrophe;
-        case XK_grave: return Button_grave;
-        case XK_comma: return Button_comma;
-        case XK_period: return Button_period;
-        case XK_slash: return Button_slash;
+        case XK_minus: return Button::minus;
+        case XK_equal: return Button::equal;
+        case XK_bracketleft: return Button::lbracket;
+        case XK_bracketright: return Button::rbracket;
+        case XK_backslash: return Button::backslash;
+        case XK_semicolon: return Button::semicolon;
+        case XK_apostrophe: return Button::apostrophe;
+        case XK_grave: return Button::grave;
+        case XK_comma: return Button::comma;
+        case XK_period: return Button::period;
+        case XK_slash: return Button::slash;
 
-        case XK_Home: return Button_home;
-        case XK_End: return Button_end;
-        case XK_Page_Up: return Button_pageup;
-        case XK_Page_Down: return Button_pagedown;
-        case XK_Delete: return Button_kdelete;
-        case XK_Insert: return Button_insert;
-        case XK_Print: return Button_printscreen;
-        case XK_Pause: return Button_pause;
-        case XK_Menu: return Button_context;
+        case XK_Home: return Button::home;
+        case XK_End: return Button::end;
+        case XK_Page_Up: return Button::pageup;
+        case XK_Page_Down: return Button::pagedown;
+        case XK_Delete: return Button::kdelete;
+        case XK_Insert: return Button::insert;
+        case XK_Print: return Button::printscreen;
+        case XK_Pause: return Button::pause;
+        case XK_Menu: return Button::context;
 
-        case XK_KP_0: return Button_numpad0;
-        case XK_KP_1: return Button_numpad1;
-        case XK_KP_2: return Button_numpad2;
-        case XK_KP_3: return Button_numpad3;
-        case XK_KP_4: return Button_numpad4;
-        case XK_KP_5: return Button_numpad5;
-        case XK_KP_6: return Button_numpad6;
-        case XK_KP_7: return Button_numpad7;
-        case XK_KP_8: return Button_numpad8;
-        case XK_KP_9: return Button_numpad9;
-        case XK_KP_Decimal: return Button_numpaddecimal;
-        case XK_KP_Divide: return Button_numpaddiv;
-        case XK_KP_Multiply: return Button_numpadmul;
-        case XK_KP_Subtract: return Button_numpadminus;
-        case XK_KP_Add: return Button_numpadplus;
-        case XK_KP_Enter: return Button_numpadenter;
+        case XK_KP_0: return Button::numpad0;
+        case XK_KP_1: return Button::numpad1;
+        case XK_KP_2: return Button::numpad2;
+        case XK_KP_3: return Button::numpad3;
+        case XK_KP_4: return Button::numpad4;
+        case XK_KP_5: return Button::numpad5;
+        case XK_KP_6: return Button::numpad6;
+        case XK_KP_7: return Button::numpad7;
+        case XK_KP_8: return Button::numpad8;
+        case XK_KP_9: return Button::numpad9;
+        case XK_KP_Decimal: return Button::numpaddecimal;
+        case XK_KP_Divide: return Button::numpaddiv;
+        case XK_KP_Multiply: return Button::numpadmul;
+        case XK_KP_Subtract: return Button::numpadminus;
+        case XK_KP_Add: return Button::numpadplus;
+        case XK_KP_Enter: return Button::numpadenter;
 
-        default: return Button_count;
+        default: return Button::count;
     }
 }
 
@@ -344,12 +343,12 @@ static Button xButtonToButton(unsigned int button)
 {
     switch (button)
     {
-        case Button1: return Button_mouse1;
-        case Button2: return Button_mouse2;
-        case Button3: return Button_mouse3;
-        case 8: return Button_mouse4;
-        case 9: return Button_mouse5;
-        default: return Button_count;
+        case Button1: return Button::mouse1;
+        case Button2: return Button::mouse2;
+        case Button3: return Button::mouse3;
+        case 8: return Button::mouse4;
+        case 9: return Button::mouse5;
+        default: return Button::count;
     }
 }
 
@@ -457,17 +456,17 @@ std::unique_ptr<InputDeviceX11> InputDeviceX11::create()
     }
 
     // Create default cursors
-    device->cursors[CursorType_arrow] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_left_ptr));
-    device->cursors[CursorType_textInput] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_xterm));
-    device->cursors[CursorType_resizeAll] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_fleur));
-    device->cursors[CursorType_resizeNESW] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_plus));
-    device->cursors[CursorType_resizeNS] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_sb_v_double_arrow));
-    device->cursors[CursorType_resizeNWSE] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_plus));
-    device->cursors[CursorType_resizeEW] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_sb_h_double_arrow));
-    device->cursors[CursorType_hand] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_hand2));
-    device->cursors[CursorType_wait] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_watch));
-    device->cursors[CursorType_progress] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_watch));
-    device->cursors[CursorType_notAllowed] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_X_cursor));
+    device->cursors[static_cast<u32>(CursorType::arrow)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_left_ptr));
+    device->cursors[static_cast<u32>(CursorType::textInput)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_xterm));
+    device->cursors[static_cast<u32>(CursorType::resizeAll)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_fleur));
+    device->cursors[static_cast<u32>(CursorType::resizeNESW)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_plus));
+    device->cursors[static_cast<u32>(CursorType::resizeNS)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_sb_v_double_arrow));
+    device->cursors[static_cast<u32>(CursorType::resizeNWSE)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_plus));
+    device->cursors[static_cast<u32>(CursorType::resizeEW)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_sb_h_double_arrow));
+    device->cursors[static_cast<u32>(CursorType::hand)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_hand2));
+    device->cursors[static_cast<u32>(CursorType::wait)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_watch));
+    device->cursors[static_cast<u32>(CursorType::progress)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_watch));
+    device->cursors[static_cast<u32>(CursorType::notAllowed)] = xlibFuncs.XCreateFontCursor(device->display,assertCast<unsigned int>(XC_X_cursor));
 
     // Enumerate displays
     device->updateDisplayInfo();
@@ -480,7 +479,7 @@ InputDeviceX11::~InputDeviceX11()
     if (display == nullptr)
         return;
 
-    for (u32 i = 0; i < CursorType_count; i++)
+    for (u32 i = 0; i < static_cast<u32>(CursorType::count); i++)
     {
         if (cursors[i] != 0)
             xlibFuncs.XFreeCursor(display,cursors[i]);
@@ -558,7 +557,7 @@ void InputDeviceX11::processEvents()
                 // (unmodified) keysym of the active layout instead of the
                 // modifier-dependent keysym: press/release must resolve to
                 // the same button with or without shift.
-                Button button = Button_count;
+                Button button = Button::count;
                 if (xkbState != nullptr)
                 {
                     xkb_layout_index_t layout =
@@ -570,12 +569,12 @@ void InputDeviceX11::processEvents()
                         button = xkbKeysymToButton(syms[0]);
                 }
 
-                if (button < Button_count)
+                if (button < Button::count)
                 {
-                    isKeyDown[button] = pressed;
+                    isKeyDown[static_cast<u32>(button)] = pressed;
 
                     Event e{};
-                    e.type = pressed ? EventType_keyPress : EventType_keyRelease;
+                    e.type = pressed ? EventType::keyPress : EventType::keyRelease;
                     e.button = button;
                     events.push_back(e);
                 }
@@ -589,7 +588,7 @@ void InputDeviceX11::processEvents()
                     {
                         buf[len] = '\0';
                         Event e{};
-                        e.type = EventType_text;
+                        e.type = EventType::text;
                         std::memset(e.text, 0, sizeof(e.text));
                         std::memcpy(e.text, buf, assertCast<u64>(len));
                         events.push_back(e);
@@ -617,7 +616,7 @@ void InputDeviceX11::processEvents()
                         wheelDeltaAccum += delta;
 
                         Event e{};
-                        e.type = EventType_wheelMoved;
+                        e.type = EventType::wheelMoved;
                         e.wheel.delta = delta;
                         events.push_back(e);
                     }
@@ -626,12 +625,12 @@ void InputDeviceX11::processEvents()
 
                 Button button = xButtonToButton(event.xbutton.button);
 
-                if (button < Button_count)
+                if (button < Button::count)
                 {
-                    isKeyDown[button] = pressed;
+                    isKeyDown[static_cast<u32>(button)] = pressed;
 
                     Event e{};
-                    e.type = pressed ? EventType_keyPress : EventType_keyRelease;
+                    e.type = pressed ? EventType::keyPress : EventType::keyRelease;
                     e.button = button;
                     events.push_back(e);
                 }
@@ -651,7 +650,7 @@ void InputDeviceX11::processEvents()
                     mouseDeltaAccum += delta;
 
                     Event e{};
-                    e.type = EventType_mouseMoved;
+                    e.type = EventType::mouseMoved;
                     e.mouse.delta = delta;
                     e.mouse.pos = newPos;
                     e.mouse.globalPos = Vec2{assertCast<f32>(event.xmotion.x_root), assertCast<f32>(event.xmotion.y_root)};
@@ -684,7 +683,7 @@ void InputDeviceX11::processEvents()
                         }
 
                         Event e{};
-                        e.type = focused ? EventType_windowFocused : EventType_windowUnfocused;
+                        e.type = focused ? EventType::windowFocused : EventType::windowUnfocused;
                         events.push_back(e);
                     }
                 }
@@ -717,7 +716,7 @@ void InputDeviceX11::processEvents()
                 {
                     quit = true;
                     Event e{};
-                    e.type = EventType_quit;
+                    e.type = EventType::quit;
                     events.push_back(e);
 
                     WindowX11** found = windows.get(event.xclient.window);
@@ -725,7 +724,7 @@ void InputDeviceX11::processEvents()
                     {
                         (*found)->closed = true;
                         Event e2{};
-                        e2.type = EventType_windowClosed;
+                        e2.type = EventType::windowClosed;
                         events.push_back(e2);
                     }
                 }
@@ -833,7 +832,7 @@ void InputDeviceX11::processEvents()
     });
 }
 
-std::span<Event> InputDeviceX11::getEvents()
+std::span<const Event> InputDeviceX11::getEvents()
 {
     return events;
 }
@@ -843,7 +842,7 @@ bool InputDeviceX11::wasQuit()
     return quit;
 }
 
-std::unique_ptr<Window> InputDeviceX11::createWindow(const WindowConfig& config)
+std::unique_ptr<Window> InputDeviceX11::createWindow(Gpu* gpu, const WindowConfig& config)
 {
     u32 width = config.width != 0 ? config.width : 800;
     u32 height = config.height != 0 ? config.height : 600;
@@ -899,11 +898,11 @@ std::unique_ptr<Window> InputDeviceX11::createWindow(const WindowConfig& config)
 
     using PFN_vkCreateXlibSurfaceKHR = VkResult(*)(VkInstance, const VkXlibSurfaceCreateInfoKHR*, const VkAllocationCallbacks*, VkSurfaceKHR*);
     auto vkCreateXlibSurfaceKHR = reinterpret_cast<PFN_vkCreateXlibSurfaceKHR>(
-        internal::getVkInstanceProcAddr("vkCreateXlibSurfaceKHR"));
+        internal::getVkInstanceProcAddr(gpu, "vkCreateXlibSurfaceKHR"));
 
     VkSurfaceKHR surface;
     VkResult result = vkCreateXlibSurfaceKHR(
-        static_cast<VkInstance>(internal::getVkInstance()),
+        static_cast<VkInstance>(internal::getVkInstance(gpu)),
         &createInfo,
         nullptr,
         &surface
@@ -917,7 +916,7 @@ std::unique_ptr<Window> InputDeviceX11::createWindow(const WindowConfig& config)
 
     u32 winW = 800;
     u32 winH = 600;
-    window->swap = GpuSwapchain::create(surface, winW, winH, config.preferredPresentMode, config.imageUsage);
+    window->swap = gpu->createSwapchain(surface, winW, winH, config.preferredPresentMode, config.imageUsage);
 
     // Get initial window attributes
     xlibFuncs.XGetWindowAttributes(display,window->x11Window, &attrs);
@@ -935,17 +934,17 @@ std::unique_ptr<Window> InputDeviceX11::createWindow(const WindowConfig& config)
 
 bool InputDeviceX11::isButtonDown(Button button)
 {
-    return isKeyDown[button];
+    return isKeyDown[static_cast<u32>(button)];
 }
 
 bool InputDeviceX11::wasButtonPressed(Button button)
 {
-    return isKeyDown[button] && !wasKeyDown[button];
+    return isKeyDown[static_cast<u32>(button)] && !wasKeyDown[static_cast<u32>(button)];
 }
 
 bool InputDeviceX11::wasButtonReleased(Button button)
 {
-    return !isKeyDown[button] && wasKeyDown[button];
+    return !isKeyDown[static_cast<u32>(button)] && wasKeyDown[static_cast<u32>(button)];
 }
 
 Vec2 InputDeviceX11::mousePos()
@@ -989,9 +988,9 @@ Vec2 InputDeviceX11::wheelDelta()
 
 void InputDeviceX11::setCursor(CursorType type)
 {
-    if (type < CursorType_count && cursors[type] != 0)
+    if (type < CursorType::count && cursors[static_cast<u32>(type)] != 0)
     {
-        currentCursor = cursors[type];
+        currentCursor = cursors[static_cast<u32>(type)];
         // Apply to all windows
         windows.forEach([&](::Window, WindowX11* window)
         {
@@ -1037,9 +1036,9 @@ WindowX11::~WindowX11()
     }
 }
 
-GpuSwapchain& WindowX11::swapchain() const
+GpuSwapchain* WindowX11::swapchain() const
 {
-    return swap;
+    return swap.get();
 }
 
 void WindowX11::setTitle(std::string_view title)
@@ -1051,7 +1050,7 @@ void WindowX11::setTitle(std::string_view title)
     xlibFuncs.XStoreName(static_cast<InputDeviceX11*>(device)->display, x11Window, buf);
 }
 
-std::span<Event> WindowX11::events() const
+std::span<const Event> WindowX11::getEvents() const
 {
     return eventQueue;
 }

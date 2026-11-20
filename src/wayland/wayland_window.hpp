@@ -46,8 +46,8 @@ private:
 
     std::vector<Event> events{};
     bool quit = false;
-    bool isKeyDown[Button_count]{};
-    bool wasKeyDown[Button_count]{};
+    bool isKeyDown[static_cast<u32>(Button::count)]{};
+    bool wasKeyDown[static_cast<u32>(Button::count)]{};
     Vec2 mouseDeltaAccum{};
     Vec2 wheelDeltaAccum{};
 
@@ -83,25 +83,25 @@ public:
     static std::unique_ptr<InputDeviceWayland> create();
     ~InputDeviceWayland() override;
 
-    virtual InputBackend getBackend() override
+    InputBackend getBackend() override
     {
         return InputBackend::wayland;
     }
 
-    virtual std::span<std::string_view> getVulkanExtensions() override;
-    virtual std::span<DisplayInfo> displayInfo() override;
-    virtual void processEvents() override;
-    virtual std::span<Event> getEvents() override;
-    virtual bool wasQuit() override;
-    virtual std::unique_ptr<Window> createWindow(const WindowConfig& config) override;
-    virtual bool isButtonDown(Button button) override;
-    virtual bool wasButtonPressed(Button button) override;
-    virtual bool wasButtonReleased(Button button) override;
-    virtual Vec2 mousePos() override;
-    virtual Vec2 mouseDelta() override;
-    virtual Vec2 wheelDelta() override;
-    virtual void setCursor(CursorType type) override;
-    virtual void showCursor(bool show = true) override;
+    std::span<std::string_view> getVulkanExtensions() override;
+    std::span<DisplayInfo> displayInfo() override;
+    void processEvents() override;
+    std::span<const Event> getEvents() override;
+    bool wasQuit() override;
+    std::unique_ptr<Window> createWindow(Gpu* gpu, const WindowConfig& config) override;
+    bool isButtonDown(Button button) override;
+    bool wasButtonPressed(Button button) override;
+    bool wasButtonReleased(Button button) override;
+    Vec2 mousePos() override;
+    Vec2 mouseDelta() override;
+    Vec2 wheelDelta() override;
+    void setCursor(CursorType type) override;
+    void showCursor(bool show = true) override;
 
     // Wayland protocol callbacks
     static void keyboardKeymap(void* data, struct wl_keyboard* keyboard,
@@ -168,13 +168,13 @@ public:
 
 class WindowWayland : public Window {
 private:
-    mutable GpuSwapchain swap{};
+    std::unique_ptr<GpuSwapchain> swap{};
 
     struct wl_surface* wlSurface = nullptr;
     struct xdg_surface* xdgSurface = nullptr;
     struct xdg_toplevel* xdgToplevel = nullptr;
 
-    mutable std::vector<Event> eventQueue{};
+    std::vector<Event> eventQueue{};
     Vec2 mouse{};
     u32 width = 0;
     u32 height = 0;
@@ -190,18 +190,18 @@ public:
     {}
     ~WindowWayland() override;
 
-    virtual GpuSwapchain& swapchain() const override;
-    virtual void setTitle(std::string_view title) override;
-    virtual std::span<Event> events() const override;
-    virtual bool wasClosed() const override;
-    virtual bool isFocused() const override;
-    virtual bool wasFocusGained() const override;
-    virtual bool wasFocusLost() const override;
-    virtual bool wasResized() const override;
-    virtual void size(u32* width, u32* height) const override;
-    virtual void setFullscreen(bool set = true) override;
-    virtual Vec2 mousePos() const override;
-    virtual Vec2 mouseDelta() const override;
+    GpuSwapchain* swapchain() const override;
+    void setTitle(std::string_view title) override;
+    std::span<const Event> getEvents() const override;
+    bool wasClosed() const override;
+    bool isFocused() const override;
+    bool wasFocusGained() const override;
+    bool wasFocusLost() const override;
+    bool wasResized() const override;
+    void size(u32* width, u32* height) const override;
+    void setFullscreen(bool set = true) override;
+    Vec2 mousePos() const override;
+    Vec2 mouseDelta() const override;
 
     friend class InputDeviceWayland;
 };

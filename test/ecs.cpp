@@ -46,14 +46,14 @@ TEST(testDespawnComponents)
     ecs.add<f32>(e) = 3.14f;
     ecs.despawn(e);
     ASSERT(!ecs.alive(e));
-    ASSERT(ecs.count<u32>() == 0);
-    ASSERT(ecs.count<f32>() == 0);
+    ASSERT(ecs.getEntities<u32>().size() == 0);
+    ASSERT(ecs.getEntities<f32>().size() == 0);
 
     Entity f = ecs.spawn();
     ASSERT(!ecs.has<u32>(f));
     ASSERT(!ecs.has<f32>(f));
     ecs.add<u32>(f) = 10;
-    ASSERT(ecs.count<u32>() == 1);
+    ASSERT(ecs.getEntities<u32>().size() == 1);
     ASSERT(ecs.get<u32>(f) == 10);
 }
 
@@ -64,11 +64,11 @@ TEST(testEcsReset)
     Entity e2 = ecs.spawn();
     ecs.add<u32>(e1) = 1;
     ecs.add<f32>(e2) = 2.0f;
-    ecs.reset();
+    ecs.clearEntities();
     ASSERT(!ecs.alive(e1));
     ASSERT(!ecs.alive(e2));
-    ASSERT(ecs.count<u32>() == 0);
-    ASSERT(ecs.count<f32>() == 0);
+    ASSERT(ecs.getEntities<u32>().size() == 0);
+    ASSERT(ecs.getEntities<f32>().size() == 0);
     Entity e3 = ecs.spawn();
     ASSERT(ecs.alive(e3));
 }
@@ -84,12 +84,12 @@ TEST(testAddGetRemove)
     ecs.get<u32>(e1) = 99;
     ASSERT(ecs.get<u32>(e1) == 99);
     ecs.add<u32>(e2) = 7;
-    ASSERT(ecs.count<u32>() == 2);
+    ASSERT(ecs.getEntities<u32>().size() == 2);
     ecs.remove<u32>(e1);
     ASSERT(!ecs.has<u32>(e1));
     ASSERT(ecs.has<u32>(e2));
     ASSERT(ecs.get<u32>(e2) == 7);
-    ASSERT(ecs.count<u32>() == 1);
+    ASSERT(ecs.getEntities<u32>().size() == 1);
     ecs.add<u32>(e1) = 55;
     ASSERT(ecs.get<u32>(e1) == 55);
 }
@@ -146,7 +146,7 @@ TEST(testGetEntityFromComponent)
 TEST(testQuerySpans)
 {
     Ecs<u32> ecs{};
-    ASSERT(ecs.count<u32>() == 0);
+    ASSERT(ecs.getEntities<u32>().size() == 0);
     ASSERT(ecs.getEntities<u32>().size() == 0);
     ASSERT(ecs.getComponents<u32>().size() == 0);
 
@@ -182,7 +182,7 @@ TEST(testGetSmallestEntities)
     ecs.add<u32>(b);
     ecs.add<f32>(b);
     ecs.add<f32>(c);
-    std::span<Entity> smallest = ecs.getSmallestEntities<u32, f32>();
+    std::span<const Entity> smallest = ecs.getSmallestEntities<u32, f32>();
     ASSERT(smallest.size() == 2);
 
     ecs.remove<u32>(b);
@@ -191,69 +191,6 @@ TEST(testGetSmallestEntities)
 
     Ecs<u32> empty{};
     ASSERT(empty.getSmallestEntities<u32>().size() == 0);
-}
-
-TEST(testEcsComponentApi)
-{
-    Entity e{5};
-    EcsComponent<u32> cs;
-    u32& ref = cs.add(e);
-    ref = 42;
-    ASSERT(cs.has(e));
-    ASSERT(cs.get(e) == 42);
-    ASSERT(cs.getEntity(cs.get(e)) == e);
-    cs.remove(e);
-    ASSERT(!cs.has(e));
-
-    cs.add(e) = 7;
-    const EcsComponent<u32>& ccs = cs;
-    ASSERT(ccs.has(e));
-    ASSERT(ccs.get(e) == 7);
-}
-
-TEST(testPackAdd)
-{
-    Ecs<u32, f32> ecs{};
-    Entity e = ecs.spawn();
-    ecs.add<u32, f32>(e);
-    ASSERT(ecs.has<u32>(e));
-    ASSERT(ecs.has<f32>(e));
-    ASSERT(ecs.count<u32>() == 1);
-    ASSERT(ecs.count<f32>() == 1);
-
-    Entity e2 = ecs.spawn();
-    ecs.add<u32, f32>(e2, 33u, 2.5f);
-    ASSERT(ecs.get<u32>(e2) == 33);
-    ASSERT(ecs.get<f32>(e2) == 2.5f);
-}
-
-TEST(testPackAddMove)
-{
-    Lifecycle::stats.reset();
-    {
-        Ecs<u32, Lifecycle> ecs{};
-        Entity e = ecs.spawn();
-        Lifecycle src;
-        ecs.add<u32, Lifecycle>(e, 42u, std::move(src));
-        ASSERT(!src.valid);
-        ASSERT(ecs.has<u32>(e));
-        ASSERT(ecs.get<u32>(e) == 42);
-        ASSERT(ecs.get<Lifecycle>(e).valid);
-        ASSERT(Lifecycle::stats.copies == 0);
-        ASSERT(Lifecycle::stats.moves == 1);
-    }
-    ASSERT(Lifecycle::stats.alive == 0);
-}
-
-TEST(testPackRemove)
-{
-    Ecs<u32, f32> ecs{};
-    Entity e = ecs.spawn();
-    ecs.add<u32>(e) = 1;
-    ecs.add<f32>(e) = 2.0f;
-    ecs.remove<u32, f32>(e);
-    ASSERT(!ecs.has<u32>(e));
-    ASSERT(!ecs.has<f32>(e));
 }
 
 TEST(testEcsLifecycle)
@@ -298,7 +235,7 @@ TEST(testEcsLifecycle)
         Entity e2 = ecs.spawn();
         ecs.add<Lifecycle>(e2);
         ASSERT(Lifecycle::stats.alive == 1);
-        ecs.reset();
+        ecs.clearEntities();
         ASSERT(Lifecycle::stats.alive == 0);
         ASSERT(Lifecycle::stats.dtors == 7);
         ASSERT(Lifecycle::stats.copies == 1);
@@ -317,14 +254,14 @@ TEST(testLargeNumberOfEntities)
         entities[i] = ecs.spawn();
         ecs.add<u32>(entities[i]) = i;
     }
-    ASSERT(ecs.count<u32>() == n);
+    ASSERT(ecs.getEntities<u32>().size() == n);
 
     for (u32 i = 0; i < n; ++i)
         ASSERT(ecs.get<u32>(entities[i]) == i);
 
     for (u32 i = 0; i < n; i += 2)
         ecs.remove<u32>(entities[i]);
-    ASSERT(ecs.count<u32>() == n / 2);
+    ASSERT(ecs.getEntities<u32>().size() == n / 2);
 }
 
 TEST(testForEachSingleType)
@@ -478,13 +415,10 @@ TEST(testConstQuery)
     ASSERT((cecs.hasAny<u32, f32>(e1)));
     ASSERT(cecs.get<u32>(e1) == 10);
     ASSERT(cecs.get<f32>(e2) == 2.0f);
-    ASSERT(cecs.count<u32>() == 2);
-    ASSERT(cecs.count<f32>() == 2);
+    ASSERT(cecs.getEntities<u32>().size() == 2);
+    ASSERT(cecs.getEntities<f32>().size() == 2);
     std::span<const u32> comps = cecs.getComponents<u32>();
     ASSERT(comps.size() == 2);
-    const EcsComponent<u32>& cs = cecs.getComponentSystem<u32>();
-    ASSERT(cs.has(e1));
-    ASSERT(cs.get(e1) == 10);
 
     u64 sum = 0;
     cecs.forEach<u32>([&](const u32& v) { sum += v; });
@@ -522,10 +456,11 @@ struct EntityRefComp {
 namespace hg {
 
 template<>
-void ecsSerialize(Serializer* s, EntityRefComp* val, EntitySerializer* ecs)
+bool ecsSerialize(Serializer* s, EntityRefComp* val, EntitySerializer* ecs)
 {
-    ecsSerialize(s, &val->target, ecs);
-    serialize(s, &val->data);
+    if (!ecsSerialize(s, &val->target, ecs))
+        return false;
+    return serialize(s, &val->data);
 }
 
 } // namespace hg
@@ -538,8 +473,8 @@ TEST(testSerializeEcsEmpty)
     ASSERT(serialize(&w, &ecs));
     Serializer r = Serializer::reader(w.takeNode());
     ASSERT(serialize(&r, &copy));
-    ASSERT(copy.count<u32>() == 0);
-    ASSERT(copy.count<f32>() == 0);
+    ASSERT(copy.getEntities<u32>().size() == 0);
+    ASSERT(copy.getEntities<f32>().size() == 0);
 }
 
 TEST(testSerializeEcsRoundtrip)
@@ -558,8 +493,8 @@ TEST(testSerializeEcsRoundtrip)
     Serializer r = Serializer::reader(w.takeNode());
     ASSERT(serialize(&r, &copy));
 
-    ASSERT(copy.count<u32>() == 2);
-    ASSERT(copy.count<f32>() == 2);
+    ASSERT(copy.getEntities<u32>().size() == 2);
+    ASSERT(copy.getEntities<f32>().size() == 2);
     u64 sum = 0;
     copy.forEach<u32, f32>([&](Entity ce, u32& a, f32& b)
     {
@@ -586,7 +521,7 @@ TEST(testSerializeEcsSparse)
     Serializer r = Serializer::reader(w.takeNode());
     ASSERT(serialize(&r, &copy));
 
-    ASSERT(copy.count<u32>() == 2);
+    ASSERT(copy.getEntities<u32>().size() == 2);
     u64 sum = 0;
     copy.forEach<u32>([&](u32& v) { sum += v; });
     ASSERT(sum == 4);
@@ -609,8 +544,8 @@ TEST(testSerializeEcsPartialCoverage)
     Serializer r = Serializer::reader(w.takeNode());
     ASSERT(serialize(&r, &copy));
 
-    ASSERT(copy.count<u32>() == 2);
-    ASSERT(copy.count<f32>() == 2);
+    ASSERT(copy.getEntities<u32>().size() == 2);
+    ASSERT(copy.getEntities<f32>().size() == 2);
 
     {
         u64 sumU = 0;
@@ -638,7 +573,7 @@ TEST(testSerializeEcsEntityReferences)
     Serializer r = Serializer::reader(w.takeNode());
     ASSERT(serialize(&r, &copy));
 
-    ASSERT(copy.count<EntityRefComp>() == 1);
+    ASSERT(copy.getEntities<EntityRefComp>().size() == 1);
     u32 foundData = 0;
     bool targetAlive = false;
     copy.forEach<EntityRefComp>([&](Entity ce, EntityRefComp& c)
@@ -664,7 +599,7 @@ TEST(testSerializeEcsEntityComponent)
     Serializer r = Serializer::reader(w.takeNode());
     ASSERT(serialize(&r, &copy));
 
-    ASSERT(copy.count<Entity>() == 1);
+    ASSERT(copy.getEntities<Entity>().size() == 1);
     bool targetAlive = false;
     copy.forEach<Entity>([&](Entity ce, Entity& e)
     {
@@ -686,15 +621,15 @@ TEST(testSerializeEcsBinaryRoundtrip)
 
     Serializer w = Serializer::writer();
     ASSERT(serialize(&w, &ecs));
-    std::vector<u8> bin = w.writeBinary();
+    std::vector<byte> bin = w.writeBinary();
     std::optional<Serializer> rOpt = Serializer::readBinary(bin);
     ASSERT(rOpt.has_value());
     Serializer& r = *rOpt;
     Ecs<u32, f32> copy{};
     ASSERT(serialize(&r, &copy));
 
-    ASSERT(copy.count<u32>() == 2);
-    ASSERT(copy.count<f32>() == 2);
+    ASSERT(copy.getEntities<u32>().size() == 2);
+    ASSERT(copy.getEntities<f32>().size() == 2);
     u64 sum = 0;
     copy.forEach<u32, f32>([&](Entity ce, u32& a, f32& b)
     {

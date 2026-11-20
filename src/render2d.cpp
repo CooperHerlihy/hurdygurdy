@@ -1,46 +1,12 @@
 #include "hg/render2d.hpp"
 
 #include "hg/utility.hpp"
-#include "hg/error.hpp"
 #include "hg/memory.hpp"
 
 #include "stb_image.h"
 #include "stb_image_write.h"
 
 namespace hg {
-
-void Camera::update()
-{
-    if (vpBuffer.data == nullptr)
-    {
-        vpBuffer = GpuBuffer::create(sizeof(VPBuffer),
-            GpuBufferUsage_uniformBuffer, GpuMemoryUsage_frequentUpdate);
-    }
-
-    VPBuffer vp{};
-    match(projection,
-        [&](Perspective& persp)
-        {
-            vp.proj = matPerspective(
-                persp.fov,
-                persp.aspect,
-                persp.near,
-                persp.far);
-        },
-        [&](Orthographic& ortho)
-        {
-            vp.proj = matOrthographic(
-                ortho.left,
-                ortho.right,
-                ortho.top,
-                ortho.bottom,
-                ortho.near,
-                ortho.far);
-        });
-    vp.view = matView(position, Vec3{1.0f}, rotation);
-
-    vpBuffer.write(std::as_bytes(std::span{&vp, 1}), 0);
-}
 
 template<>
 bool serialize(Serializer* s, Orthographic* ortho)
@@ -73,11 +39,6 @@ bool serialize(Serializer* s, Camera* camera)
         &camera->rotation);
 }
 
-TextureData::~TextureData() noexcept
-{
-    std::free(pixels);
-}
-
 template<>
 bool serialize(Serializer* s, TextureData* tex)
 {
@@ -92,49 +53,49 @@ bool serialize(Serializer* s, TextureData* tex)
         return false;
     if (!serialize(s, &tex->format))
         return false;
+    if (!serialize(s, &tex->pixels))
+        return false;
 
-    u64 size = tex->width * tex->height * tex->depth * formatToSize(tex->format);
-    if (!s->isWriting())
-        tex->pixels = std::malloc(size);
-    return s->serializeData({static_cast<u8*>(tex->pixels), size});
+    return true;
 }
 
-template<>
-bool assetLoadImpl(AssetData<TextureData>* data)
+std::optional<TextureData> textureLoad(std::string_view path)
 {
-    std::optional<std::vector<u8>> bin = fileLoad(data->path);
+    std::optional<std::vector<byte>> bin = binaryLoad(path);
     if (!bin.has_value())
-    {
-        setError("Could not load asset file: {}", data->path.c_str());
-        return false;
-    }
+        return {};
+
+    std::optional tex = std::make_optional<TextureData>();
 
     std::optional<Serializer> s = Serializer::readBinary(*bin);
-    if (s.has_value() && serialize(&*s, &data->asset))
-        return true;
+    if (s.has_value() && serialize(&*s, &tex))
+        return tex;
 
     int x, y, channels;
-    data->asset.pixels = stbi_load_from_memory(
-        bin->data(),
+    byte* pixels = reinterpret_cast<byte*>(stbi_load_from_memory(
+        reinterpret_cast<stbi_uc*>(bin->data()),
         assertCast<int>(bin->size()),
         &x,
         &y,
         &channels,
-        4);
+        4));
 
-    if (data->asset.pixels == nullptr)
+    if (pixels == nullptr)
     {
-        setError("Could not decode image: {}", data->path.c_str());
-        return false;
+        setError("Could not decode image: {}", path);
+        return {};
     }
-    data->asset.width = assertCast<u32>(x);
-    data->asset.height = assertCast<u32>(y);
-    data->asset.depth = 1;
-    data->asset.format = Format_rgba8_srgb;
-    return true;
+    HG_DEFER(std::free(pixels));
+
+    tex->pixels = std::vector<byte>(pixels, pixels + x * y * 4);
+    tex->width = assertCast<u32>(x);
+    tex->height = assertCast<u32>(y);
+    tex->depth = 1;
+    tex->format = Format::rgba8_srgb;
+    return tex;
 }
 
-bool storeTexturePng(const TextureData& texture, std::string_view path)
+bool textureStorePng(const TextureData& texture, std::string_view path)
 {
     ArenaScope scratch = getScratch();
     StringTemp p{path, scratch};
@@ -144,7 +105,7 @@ bool storeTexturePng(const TextureData& texture, std::string_view path)
          assertCast<int>(texture.width),
          assertCast<int>(texture.height),
          4,
-         texture.pixels,
+         texture.pixels.data(),
          assertCast<int>(texture.width * sizeof(u32))))
     {
         setError("Could not store image: {}", p.c_str());
@@ -153,7 +114,7 @@ bool storeTexturePng(const TextureData& texture, std::string_view path)
     return true;
 }
 
-bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view path)
+bool textureStoreJpg(const TextureData& texture, u32 quality, std::string_view path)
 {
     ArenaScope scratch = getScratch();
     StringTemp p{path, scratch};
@@ -163,7 +124,7 @@ bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view p
          assertCast<int>(texture.width),
          assertCast<int>(texture.height),
          4,
-         texture.pixels,
+         texture.pixels.data(),
          assertCast<int>(quality)))
     {
         setError("Could not store image: {}", p.c_str());
@@ -172,7 +133,7 @@ bool storeTextureJpg(const TextureData& texture, u32 quality, std::string_view p
     return true;
 }
 
-bool storeTextureHdr(const TextureData& texture, std::string_view path)
+bool textureStoreHdr(const TextureData& texture, std::string_view path)
 {
     ArenaScope scratch = getScratch();
     StringTemp p{path, scratch};
@@ -182,7 +143,7 @@ bool storeTextureHdr(const TextureData& texture, std::string_view path)
          assertCast<int>(texture.width),
          assertCast<int>(texture.height),
          4,
-         static_cast<f32*>(texture.pixels)))
+         reinterpret_cast<const f32*>(texture.pixels.data())))
     {
         setError("Could not store image: {}", p.c_str());
         return false;
@@ -190,9 +151,9 @@ bool storeTextureHdr(const TextureData& texture, std::string_view path)
     return true;
 }
 
-Texture uploadTextureToGpu(const TextureData& data)
+Texture uploadTextureToGpu(Gpu* gpu, const TextureData& data)
 {
-    if (data.pixels == nullptr)
+    if (data.pixels.empty())
         return {};
 
     GpuImageCreateInfo imageInfo{};
@@ -200,14 +161,13 @@ Texture uploadTextureToGpu(const TextureData& data)
     imageInfo.width = data.width;
     imageInfo.height = data.height;
     imageInfo.depth = data.depth;
-    imageInfo.usage = GpuImageUsage_transferDst | GpuImageUsage_sampled;
+    imageInfo.usage = GpuImageUsage::transferDst | GpuImageUsage::sampled;
 
     Texture tex{};
-    tex.image = GpuImage::createEx(imageInfo);
-    tex.view = GpuView::create(tex.image, GpuAspect_color, GpuFilter_nearest);
+    tex.image = gpu->createImage(imageInfo);
+    tex.view = tex.image->createView(GpuFilter::nearest);
 
-    u64 size = assertCast<u64>(data.width) * data.height * data.depth * formatToSize(data.format);
-    tex.view.write(std::span<const std::byte>{static_cast<const std::byte*>(data.pixels), size});
+    tex.image->writeWhole(data.pixels);
 
     return tex;
 }
@@ -215,31 +175,28 @@ Texture uploadTextureToGpu(const TextureData& data)
 TextureData downloadTextureFromGpu(const Texture& tex)
 {
     TextureData data{};
-    data.width = tex.view.width();
-    data.height = tex.view.height();
-    data.depth = tex.view.depth();
-    data.format = tex.view.format();
 
-    u64 size = assertCast<u64>(data.width) * data.height * data.depth * formatToSize(data.format);
-    data.pixels = std::malloc(size);
+    data.width = tex.view->width();
+    data.height = tex.view->height();
+    data.depth = tex.view->depth();
+    data.format = tex.view->format();
 
-    tex.view.read(std::span{static_cast<std::byte*>(data.pixels), size});
+    data.pixels.resize(data.width * data.height * data.depth * formatToSize(data.format));
+    tex.image->readWhole(data.pixels);
 
     return data;
 }
 
-template<>
-bool assetLoadImpl(AssetData<Texture>* data)
+std::optional<Texture> textureLoadToGpu(Gpu* gpu, std::string_view path)
 {
-    Asset<TextureData> tex = load<TextureData>(data->path);
-    if (tex->pixels == nullptr)
-        return false;
-
-    data->asset = uploadTextureToGpu(*tex);
-    return true;
+    std::optional<TextureData> data = textureLoad(path);
+    if (!data.has_value())
+        return std::nullopt;
+    return uploadTextureToGpu(gpu, *data);
 }
 
 struct RenderState2D {
+    Texture defaultFontTexture{};
     TextureAtlas defaultFont{};
 };
 
@@ -251,30 +208,29 @@ namespace internal {
 
 void convertPixelFont()
 {
-    HG_LOG("converting pixel font file\n");
+    log("converting pixel font file\n");
 
-    Asset<TextureData> fontData = load<TextureData>("resources/pixel_font.png");
+    std::optional<TextureData> fontData = textureLoad("resources/pixel_font.png");
 
     Serializer s = Serializer::writer();
     serialize(&s, &*fontData);
 
-    std::vector<u8> bin = s.writeBinary();
-    fileStore(bin, "resources/pixel_font.hg");
+    std::vector<byte> bin = s.writeBinary();
+    binaryStore(bin, "resources/pixel_font.hg");
 }
 
 } // namespace internal
 
-static void initPixelFont()
+static void initPixelFont(Gpu* gpu)
 {
-    std::optional<Serializer> s = Serializer::readBinary(resources_pixel_font_hg);
+    std::optional<Serializer> s = Serializer::readBinary(std::as_bytes(std::span{resources_pixel_font_hg}));
 
     TextureData fontData{};
     if (!s.has_value() || !serialize(&*s, &fontData))
-    {
-        HG_WARN("Could not deserialize pixel font: {}", getError());
-    }
+        warn("Could not deserialize pixel font: {}", getError());
 
-    render2D.defaultFont = newAsset<Texture>(uploadTextureToGpu(fontData));
+    render2D.defaultFontTexture = uploadTextureToGpu(gpu, fontData);
+    render2D.defaultFont = {render2D.defaultFontTexture};
     render2D.defaultFont.addEmpty(32);
     render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95);
 }
@@ -385,7 +341,7 @@ void Layer2D::drawSprite(const Texture& texture, Rect src, Rect dst, Vec4 tint)
     instance.size = dst.end - dst.begin;
     instance.uvPos = src.begin;
     instance.uvSize = src.end - src.begin;
-    instance.texIdx = texture.view.samplerDescriptor();
+    instance.texIdx = texture.view->samplerDescriptor();
 
     instances.emplace_back(instance);
     changed = true;
@@ -401,7 +357,7 @@ void Layer2D::drawSpriteRot(const Texture& texture, Rect src, Rect dst, Vec2 ori
     instance.uvSize = src.end - src.begin;
     instance.origin = origin;
     instance.rotation = rotation;
-    instance.texIdx = texture.view.samplerDescriptor();
+    instance.texIdx = texture.view->samplerDescriptor();
 
     instances.emplace_back(instance);
     changed = true;
@@ -521,65 +477,73 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
     return {text.begin() + toDraw.length(), text.end()};
 }
 
-struct RenderPush2D {
-    Mat4 model = {};
+namespace {
+
+struct ViewProj {
+    Mat4 proj{};
+    Mat4 view{};
+};
+
+struct Push {
+    Mat4 model{};
     u32 vpIdx = 0;
     u32 instIdx = 0;
 };
+
+} // namespace
 
 #include "shaders/render2d.vert.spv.h"
 #include "shaders/render2d.frag.spv.h"
 
 static u32 pixelFontCount = 0;
 
-Renderer2D::Renderer2D(Format colorFormat)
+Renderer2D::Renderer2D(Gpu* gpu, Format colorFormat)
+    : gpu{gpu}
 {
     if (pixelFontCount++ == 0)
-        initPixelFont();
-    fontOwned = true;
+        initPixelFont(gpu);
 
     GpuGraphicsPipelineCreateInfo pipelineConfig{};
-    pipelineConfig.vertexShader = render2d_vert_spv;
-    pipelineConfig.fragmentShader = render2d_frag_spv;
-    pipelineConfig.pushConstantSize = sizeof(RenderPush2D);
+    pipelineConfig.vertexShader = std::as_bytes(std::span{render2d_vert_spv});
+    pipelineConfig.fragmentShader = std::as_bytes(std::span{render2d_frag_spv});
+    pipelineConfig.pushConstantSize = sizeof(Push);
     pipelineConfig.colorAttachmentFormats = {&colorFormat, 1};
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = {&enableColorBlend, 1};
 
-    pipeline = GpuPipeline::graphics(pipelineConfig);
+    pipeline = gpu->createGraphicsPipeline(pipelineConfig);
+
+    vpBuffer = gpu->createBuffer(sizeof(ViewProj),
+        GpuBufferUsage::uniformBuffer, GpuMemoryUsage::frequentUpdate);
+
+    ViewProj vp{
+        matView(Vec3{0.0f}, Vec3{1.0f}, 1.0f),
+        matOrthographic(-1, 1, -1, 1, 0, 1),
+    };
+    vpBuffer->write(std::as_bytes(std::span{&vp, 1}), 0);
 }
 
 Renderer2D::Renderer2D(Renderer2D&& other) noexcept
-    : pipeline{std::move(other.pipeline)}
+    : gpu{std::exchange(other.gpu, nullptr)}
+    , pipeline{std::move(other.pipeline)}
+    , vpBuffer{std::move(other.vpBuffer)}
     , layerQueue{std::move(other.layerQueue)}
-    , fontOwned{std::exchange(other.fontOwned, false)}
 {}
 
 Renderer2D& Renderer2D::operator=(Renderer2D&& other) noexcept
 {
     if (this != &other)
     {
-        pipeline = std::move(other.pipeline);
-        layerQueue = std::move(other.layerQueue);
-        if (fontOwned)
-        {
-            fontOwned = false;
-            if (--pixelFontCount == 0 && !other.fontOwned)
-                deinitPixelFont();
-        }
-        fontOwned = std::exchange(other.fontOwned, false);
+        this->~Renderer2D();
+        new (this) Renderer2D{std::move(other)};
     }
     return *this;
 }
 
 Renderer2D::~Renderer2D() noexcept
 {
-    if (fontOwned)
-    {
-        fontOwned = false;
-        if (--pixelFontCount == 0)
-            deinitPixelFont();
-    }
+    if (gpu != nullptr && --pixelFontCount == 0)
+        deinitPixelFont();
 }
 
 void Renderer2D::drawLayer(Layer2D& layer)
@@ -587,9 +551,32 @@ void Renderer2D::drawLayer(Layer2D& layer)
     layerQueue.emplace_back(&layer);
 }
 
-void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
+void Renderer2D::render(GpuCommandBuffer* cmd, const Camera& camera)
 {
     HG_ASSERT(cmd != nullptr);
+
+    ViewProj vp{};
+    match(camera.projection,
+        [&](const Perspective& persp)
+        {
+            vp.proj = matPerspective(
+                persp.fov,
+                persp.aspect,
+                persp.near,
+                persp.far);
+        },
+        [&](const Orthographic& ortho)
+        {
+            vp.proj = matOrthographic(
+                ortho.left,
+                ortho.right,
+                ortho.top,
+                ortho.bottom,
+                ortho.near,
+                ortho.far);
+        });
+    vp.view = matView(camera.position, Vec3{1.0f}, camera.rotation);
+    vpBuffer->write(std::as_bytes(std::span{&vp, 1}), 0);
 
     for (Layer2D* layer : layerQueue)
     {
@@ -600,28 +587,28 @@ void Renderer2D::render(GpuCmd* cmd, const Camera& camera)
         {
             if (layer->instances.capacity() > layer->instanceCapacity)
             {
-                gpuWaitIdle();
+                gpu->waitIdle();
 
-                layer->instanceBuffer = GpuBuffer::create(layer->instances.capacity() * sizeof(Layer2D::Instance),
-                    GpuBufferUsage_transferDst | GpuBufferUsage_storageBuffer, GpuMemoryUsage_frequentUpdate);
+                layer->instanceBuffer = gpu->createBuffer(layer->instances.capacity() * sizeof(Layer2D::Instance),
+                    GpuBufferUsage::transferDst | GpuBufferUsage::storageBuffer, GpuMemoryUsage::frequentUpdate);
                 layer->instanceCapacity = assertCast<u32>(layer->instances.capacity());
             }
 
-            layer->instanceBuffer.write(std::as_bytes(std::span{layer->instances}), 0);
+            layer->instanceBuffer->write(std::as_bytes(std::span{layer->instances}), 0);
 
             layer->changed = false;
         }
 
-        gpuBindPipeline(cmd, pipeline);
+        cmd->bindPipeline(pipeline.get());
 
-        RenderPush2D push{};
+        Push push{};
         push.model = layer->transform;
-        push.vpIdx = camera.vpBuffer.uniformDescriptor();
-        push.instIdx = layer->instanceBuffer.storageDescriptor();
+        push.vpIdx = vpBuffer->uniformDescriptor();
+        push.instIdx = layer->instanceBuffer->storageDescriptor();
 
-        gpuPushConstants(cmd, pipeline, push);
+        cmd->pushConstants(pipeline.get(), push);
 
-        gpuDraw(cmd, 0, 6, 0, assertCast<u32>(layer->instances.size()));
+        cmd->draw(0, 6, 0, assertCast<u32>(layer->instances.size()));
     }
 
     layerQueue.clear();
