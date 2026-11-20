@@ -87,8 +87,8 @@ private:
 
     mutable std::vector<Event> eventQueue{};
     Vec2 mouse{};
-    u32 width = 0;
-    u32 height = 0;
+    u32 winWidth = 0;
+    u32 winHeight = 0;
     bool closed = false;
     bool focused = false;
     bool focusGained = false;
@@ -109,7 +109,8 @@ public:
     bool wasFocusGained() const override;
     bool wasFocusLost() const override;
     bool wasResized() const override;
-    void size(u32* width, u32* height) const override;
+    u32 width() const override;
+    u32 height() const override;
     void setFullscreen(bool set = true) override;
     Vec2 mousePos() const override;
     Vec2 mouseDelta() const override;

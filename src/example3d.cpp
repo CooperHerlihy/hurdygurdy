@@ -22,12 +22,9 @@ int main()
         panic("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hurdy Gurdy 3D Example");
 
-    u32 width, height;
-    window->size(&width, &height);
-    f32 aspect = height == 0 ? 1 : assertCast<f32>(width) / assertCast<f32>(height);
-
     Renderer3D renderer{gpu.get(), window->swapchainFormat(), Format::d32_sfloat};
 
+    f32 aspect = window->height() == 0 ? 1 : assertCast<f32>(window->width()) / assertCast<f32>(window->height());
     Camera camera{Perspective{aspect, pif / 2.0f, 0.1f, 100.0f}};
     camera.position = Vec3{0.0f, 1.5f, -5.0f};
 
@@ -104,7 +101,7 @@ int main()
         whiteTex.image->writeWhole(std::as_bytes(std::span{whitePixel}));
     }
 
-    std::unique_ptr<GpuImage> depthImg = gpu->createImage(width, height, Format::d32_sfloat,
+    std::unique_ptr<GpuImage> depthImg = gpu->createImage(window->width(), window->height(), Format::d32_sfloat,
         GpuImageUsage::depthStencilAttachment);
     std::unique_ptr<GpuView> depthView = depthImg->createView();
 
@@ -131,7 +128,9 @@ int main()
 
         if (window->wasResized())
         {
-            window->size(&width, &height);
+            u32 width = window->width();
+            u32 height = window->height();
+
             aspect = assertCast<f32>(width) / assertCast<f32>(height);
             camera.projection = Perspective{aspect, pif / 2.0f, 0.1f, 100.0f};
 

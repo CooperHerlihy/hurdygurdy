@@ -20,7 +20,7 @@ static std::unique_ptr<Gpu> gpu{};
 static std::unique_ptr<Window> window{};
 static std::unique_ptr<Window> secondWindow{};
 static std::string inputBackendName = "none";
-static std::string inputBackendError{};static u32 width, height;
+static std::string inputBackendError{};
 static Camera camera{Orthographic{{{0, 0}, {1.0f, 1.0f}}}};
 
 static const char* eventName(EventType type)
@@ -295,8 +295,7 @@ static void switchInputBackend(InputBackend backend)
     inputBackendName = inputBackendNameStr(input->getBackend());
     inputBackendError = usedFallback ? "requested backend failed: " + firstError : std::string{};
 
-    window->size(&width, &height);
-    camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(width) / assertCast<f32>(height), 1.0f}}};
+    camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(window->width()) / assertCast<f32>(window->height()), 1.0f}}};
 
     initImGui(window.get(), input.get(), window->swapchainFormat());
 }
@@ -360,8 +359,7 @@ int main()
     audioDevice->setCallback(audioCallback, {.channels = 2, .sampleRate = 48000});
     HG_DEFER(if (audioDevice) audioDevice->unsetCallback());
 
-    window->size(&width, &height);
-    camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(width) / assertCast<f32>(height), 1.0f}}};
+    camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(window->width()) / assertCast<f32>(window->height()), 1.0f}}};
 
     bool showEvents = true;
     bool showKeyboard = true;
@@ -383,8 +381,7 @@ int main()
                 if (input->wasQuit() || window->wasClosed())
                     goto quit;
 
-                window->size(&width, &height);
-                camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(width) / assertCast<f32>(height), 1.0f}}};
+                camera.projection = Orthographic{{{0, 0}, {assertCast<f32>(window->width()) / assertCast<f32>(window->height()), 1.0f}}};
 
                 beginImGuiFrame();
                 ImGui::NewFrame();
@@ -548,8 +545,8 @@ int main()
                     ImGui::Text("wasResized: %d", window->wasResized());
                     ImGui::Text("wasClosed: %d", window->wasClosed());
 
-                    u32 ww, wh;
-                    window->size(&ww, &wh);
+                    u32 ww = window->width();
+                    u32 wh = window->height();
                     ImGui::Text("size: %u, %u", ww, wh);
 
                     if (secondWindow != nullptr)
@@ -558,9 +555,7 @@ int main()
                         ImGui::Text("focused=%d resized=%d closed=%d",
                             secondWindow->isFocused(),
                             secondWindow->wasResized(), secondWindow->wasClosed());
-                        u32 sw, sh;
-                        secondWindow->size(&sw, &sh);
-                        ImGui::Text("size: %u, %u", sw, sh);
+                        ImGui::Text("size: %u, %u", secondWindow->width(), secondWindow->height());
                     }
 
                     ImGui::Text("Actions");

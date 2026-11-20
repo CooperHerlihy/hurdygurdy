@@ -117,6 +117,26 @@ TEST(testNoiseVec1DRangeMulti)
     }
 }
 
+TEST(testNoiseMultiDDifferentInputs)
+{
+    // seed 0 is a degenerate constant (the mix multiplies by seed), so use nonzero seeds
+    for (u32 seed = 1; seed < 4; ++seed)
+    {
+        ASSERT(noise2D(seed, 1, 2) != noise2D(seed, 2, 2));
+        ASSERT(noise3D(seed, 1, 2, 3) != noise3D(seed, 1, 3, 3));
+        ASSERT(noise4D(seed, 1, 2, 3, 4) != noise4D(seed, 1, 2, 4, 4));
+    }
+}
+
+TEST(testNoiseVec2DDeterministic)
+{
+    Vec2 a = noiseVec2D(7, {1.5f, -2.5f});
+    Vec2 b = noiseVec2D(7, {1.5f, -2.5f});
+    ASSERT(a == b);
+    Vec2 c = noiseVec2D(7, {1.5f, -2.4f});
+    ASSERT(a != c);
+}
+
 TEST(testRngSeeded)
 {
     Rng rng(12345);
@@ -154,6 +174,23 @@ TEST(testRngSequence)
     ASSERT(a != b);
     ASSERT(b != c);
     ASSERT(a != c);
+}
+
+TEST(testRngDefaultConstruct)
+{
+    Rng a;
+    Rng b;
+    u32 av = a.next();
+    u32 bv = b.next();
+    ASSERT(av == bv);
+    ASSERT(a.next64() == b.next64());
+}
+
+TEST(testTrueRandomCallable)
+{
+    // Hardware RNG: only check it runs and yields a usable seed
+    u32 seed = trueRandom();
+    ASSERT(noise(seed, 0) == noise(seed, 0));
 }
 
 TEST(testNoiseGLSL)

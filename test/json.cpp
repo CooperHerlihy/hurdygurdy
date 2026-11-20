@@ -241,6 +241,48 @@ TEST(testJsonForEachAndIteration)
     }
 }
 
+TEST(testMakeJsonValue)
+{
+    JsonValue str = makeJsonValue("literal");
+    ASSERT(str.string() == "literal");
+
+    std::string owned = "owned";
+    JsonValue strCopy = makeJsonValue(owned);
+    ASSERT(strCopy.string() == "owned");
+    ASSERT(owned == "owned");
+
+    JsonValue num = makeJsonValue(2.5);
+    ASSERT(num.number() == 2.5);
+
+    JsonValue boolVal = makeJsonValue(false);
+    ASSERT(boolVal.boolean() == false);
+
+    JsonValue obj = makeJsonValue(JsonObject{"k", 1.0});
+    ASSERT(obj.object().getNumber("k") == 1.0);
+
+    JsonValue arr = makeJsonValue(JsonArray{"x"});
+    ASSERT(arr.array().getString(0) == "x");
+}
+
+TEST(testJsonObjectSettersReplace)
+{
+    JsonObject obj{
+        "o", JsonObject{"old", true},
+        "a", JsonArray{1.0},
+    };
+    ASSERT(obj.count() == 2);
+
+    obj.setObject("o", JsonObject{"new", false});
+    ASSERT(obj.getObject("o").count() == 1);
+    ASSERT(obj.getObject("o").getBoolean("new") == false);
+    ASSERT(obj.count() == 2);
+
+    obj.setArray("a", JsonArray{9.0, 8.0});
+    ASSERT(obj.getArray("a").count() == 2);
+    ASSERT(obj.getArray("a").getNumber(0) == 9.0);
+    ASSERT(obj.count() == 2);
+}
+
 TEST(testWriteJsonEmptyObject)
 {
     JsonObject obj{};

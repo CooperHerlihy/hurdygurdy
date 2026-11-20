@@ -1118,19 +1118,19 @@ void InputDeviceWayland::xdgToplevelConfigure(void* data, struct xdg_toplevel* t
         u32 newW = assertCast<u32>(width);
         u32 newH = assertCast<u32>(height);
 
-        if (newW != window->width || newH != window->height)
+        if (newW != window->winWidth || newH != window->winHeight)
         {
             // Ignore suggests while creating, before the swapchain exists
             if (window->swap == nullptr)
             {
-                window->width = newW;
-                window->height = newH;
+                window->winWidth = newW;
+                window->winHeight = newH;
                 return;
             }
 
             window->resized = true;
-            window->width = newW;
-            window->height = newH;
+            window->winWidth = newW;
+            window->winHeight = newH;
 
             window->swap->resize(newW, newH);
 
@@ -1451,8 +1451,8 @@ std::unique_ptr<Window> InputDeviceWayland::createWindow(Gpu* gpu, const WindowC
         : "Hurdy Gurdy");
 
     // 0 lets the compositor suggest a size, which arrives in the roundtrip below
-    wd->width = config.width != 0 ? config.width : 800;
-    wd->height = config.height != 0 ? config.height : 600;
+    wd->winWidth = config.width != 0 ? config.width : 800;
+    wd->winHeight = config.height != 0 ? config.height : 600;
 
     windows.add(surfaceKey(wd->wlSurface), wd);
 
@@ -1483,7 +1483,7 @@ std::unique_ptr<Window> InputDeviceWayland::createWindow(Gpu* gpu, const WindowC
         return nullptr;
     }
 
-    wd->swap = gpu->createSwapchain(surface, wd->width, wd->height, config.preferredPresentMode, config.imageUsage);
+    wd->swap = gpu->createSwapchain(surface, wd->winWidth, wd->winHeight, config.preferredPresentMode, config.imageUsage);
 
     return window;
 }
@@ -1524,14 +1524,14 @@ Vec2 InputDeviceWayland::mousePos()
 Vec2 InputDeviceWayland::mouseDelta()
 {
     if (activeWindow != nullptr)
-        return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
+        return mouseDeltaAccum / assertCast<f32>(activeWindow->winHeight);
 
     if (windows.size() == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](u64, WindowWayland* wd)
         {
-            ret = ret / assertCast<f32>(wd->height);
+            ret = ret / assertCast<f32>(wd->winHeight);
         });
         return ret;
     }
@@ -1727,12 +1727,14 @@ bool WindowWayland::wasResized() const
     return resized;
 }
 
-void WindowWayland::size(u32* outWidth, u32* outHeight) const
+u32 WindowWayland::width() const
 {
-    if (outWidth != nullptr)
-        *outWidth = width;
-    if (outHeight != nullptr)
-        *outHeight = height;
+    return winWidth;
+}
+
+u32 WindowWayland::height() const
+{
+    return winHeight;
 }
 
 void WindowWayland::setFullscreen(bool set)
@@ -1750,7 +1752,7 @@ Vec2 WindowWayland::mousePos() const
 
 Vec2 WindowWayland::mouseDelta() const
 {
-    return static_cast<InputDeviceWayland*>(device)->mouseDeltaAccum / assertCast<f32>(height);
+    return static_cast<InputDeviceWayland*>(device)->mouseDeltaAccum / assertCast<f32>(winHeight);
 }
 
 } // namespace hg

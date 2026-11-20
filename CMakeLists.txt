@@ -298,6 +298,10 @@ add_executable(tests
     test/audio.cpp
     test/texture.cpp
     test/ecs.cpp
+    test/time.cpp
+    test/inttypes.cpp
+    test/render2d.cpp
+    test/render3d.cpp
 )
 target_link_libraries(tests hurdygurdy)
 target_include_directories(tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/test)

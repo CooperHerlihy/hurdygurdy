@@ -442,8 +442,8 @@ void InputDeviceSdl3::processEvents()
                 if (w != nullptr)
                 {
                     w->swap->resize(width, height);
-                    w->width = width;
-                    w->height = height;
+                    w->winWidth = width;
+                    w->winHeight = height;
                     w->resized = true;
                     w->eventQueue.push_back(event);
                 }
@@ -482,8 +482,8 @@ std::unique_ptr<Window> InputDeviceSdl3::createWindow(Gpu* gpu, const WindowConf
 
     u32 w, h;
     SDL_GetWindowSize(win->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
-    win->width = w;
-    win->height = h;
+    win->winWidth = w;
+    win->winHeight = h;
 
     VkSurfaceKHR surface;
     if (!SDL_Vulkan_CreateSurface(
@@ -533,14 +533,14 @@ Vec2 InputDeviceSdl3::mousePos()
 Vec2 InputDeviceSdl3::mouseDelta()
 {
     if (activeWindow != nullptr)
-        return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
+        return mouseDeltaAccum / assertCast<f32>(activeWindow->winHeight);
 
     if (windows.size() == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](SDL_WindowID, WindowSdl3* wd)
         {
-            ret = ret / assertCast<f32>(wd->height);
+            ret = ret / assertCast<f32>(wd->winHeight);
         });
         return ret;
     }
@@ -615,7 +615,7 @@ void InputDeviceSdl3::showCursor(bool show)
         SDL_HideCursor();
 }
 
-WindowSdl3::~WindowSdl3()
+WindowSdl3::~WindowSdl3() noexcept
 {
     if (sdlWindow != nullptr)
     {
@@ -664,12 +664,14 @@ bool WindowSdl3::wasResized() const
     return resized;
 }
 
-void WindowSdl3::size(u32* outWidth, u32* outHeight) const
+u32 WindowSdl3::width() const
 {
-    if (outWidth != nullptr)
-        *outWidth = width;
-    if (outHeight != nullptr)
-        *outHeight = height;
+    return winWidth;
+}
+
+u32 WindowSdl3::height() const
+{
+    return winHeight;
 }
 
 void WindowSdl3::setFullscreen(bool set)
@@ -686,7 +688,7 @@ Vec2 WindowSdl3::mousePos() const
 
 Vec2 WindowSdl3::mouseDelta() const
 {
-    return static_cast<InputDeviceSdl3*>(device)->mouseDeltaAccum / assertCast<f32>(height);
+    return static_cast<InputDeviceSdl3*>(device)->mouseDeltaAccum / assertCast<f32>(winHeight);
 }
 
 std::unique_ptr<AudioDeviceSdl3> AudioDeviceSdl3::create()

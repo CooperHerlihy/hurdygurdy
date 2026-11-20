@@ -446,138 +446,6 @@ public:
 };
 
 /**
- * A dummy input device for headless or inputless setups
- */
-class InputDeviceDummy : public InputDevice {
-public:
-    /**
-     * Create a new input device
-     */
-    static std::unique_ptr<InputDeviceDummy> create()
-    {
-        return std::make_unique<InputDeviceDummy>();
-    }
-
-    /**
-     * Returns the backend in use
-     */
-    virtual InputBackend getBackend() override
-    {
-        return InputBackend::none;
-    }
-
-    /**
-     * Returns the Vulkan extensions needed by the platform for windowing
-     */
-    virtual std::span<std::string_view> getVulkanExtensions() override
-    {
-        return {};
-    }
-
-    /**
-     * Returns the display info
-     */
-    virtual std::span<DisplayInfo> displayInfo() override
-    {
-        return {};
-    }
-
-    /**
-     * Processes all events since startup or the last call to process events
-     */
-    virtual void processEvents() override
-    {
-    }
-
-    /**
-     * Returns the events processed by processEvents
-     */
-    virtual std::span<const Event> getEvents() override
-    {
-        return {};
-    }
-
-    /**
-     * Returns whether the application was quit
-     */
-    virtual bool wasQuit() override
-    {
-        return false;
-    }
-
-    /**
-     * Create a new window
-     */
-    virtual std::unique_ptr<Window> createWindow(Gpu*, const WindowConfig&) override
-    {
-        setError("Dummy input device cannot create windows");
-        return nullptr;
-    }
-
-    /**
-     * Get whether a button is currently down
-     */
-    virtual bool isButtonDown(Button) override
-    {
-        return false;
-    }
-
-    /**
-     * Get whether a button was pressed last frame
-     */
-    virtual bool wasButtonPressed(Button) override
-    {
-        return false;
-    }
-
-    /**
-     * Get whether a button was released last frame
-     */
-    virtual bool wasButtonReleased(Button) override
-    {
-        return false;
-    }
-
-    /**
-     * Get the current mouse position relative to the active window
-     */
-    virtual Vec2 mousePos() override
-    {
-        return {};
-    }
-
-    /**
-     * Get the change in mouse position
-     */
-    virtual Vec2 mouseDelta() override
-    {
-        return {};
-    }
-
-    /**
-     * Get the mouse wheel movement
-     */
-    virtual Vec2 wheelDelta() override
-    {
-        return {};
-    }
-
-    /**
-     * Set the current cursor
-     */
-    virtual void setCursor(CursorType) override
-    {
-    }
-
-    /**
-     * Show or hide the cursor
-     */
-    virtual void showCursor(bool) override
-    {
-    }
-};
-
-/**
  * A window
  */
 class Window {
@@ -665,9 +533,14 @@ public:
     virtual bool wasResized() const = 0;
 
     /**
-     * Get the width and height
+     * Get the width of the window in pixels
      */
-    virtual void size(u32* width, u32* height) const = 0;
+    virtual u32 width() const = 0;
+
+    /**
+     * Get the height of the window in pixels
+     */
+    virtual u32 height() const = 0;
 
     /**
      * Set to fullscreen or disable fullscreen
@@ -749,6 +622,218 @@ public:
     {
         return device->showCursor(show);
     }
+};
+
+/**
+ * A dummy input device for headless or inputless setups
+ */
+class InputDeviceDummy : public InputDevice {
+public:
+    /**
+     * Create a new input device
+     */
+    static std::unique_ptr<InputDeviceDummy> create()
+    {
+        return std::make_unique<InputDeviceDummy>();
+    }
+
+    /**
+     * Returns the backend in use
+     */
+    InputBackend getBackend() override;
+
+    /**
+     * Returns the Vulkan extensions needed by the platform for windowing
+     */
+    std::span<std::string_view> getVulkanExtensions() override;
+
+    /**
+     * Returns the display info
+     */
+    std::span<DisplayInfo> displayInfo() override;
+
+    /**
+     * Processes all events since startup or the last call to process events
+     */
+    void processEvents() override;
+
+    /**
+     * Returns the events processed by processEvents
+     */
+    std::span<const Event> getEvents() override;
+
+    /**
+     * Returns whether the application was quit
+     */
+    bool wasQuit() override;
+
+    /**
+     * Create a new window
+     */
+    std::unique_ptr<Window> createWindow(Gpu*, const WindowConfig&) override;
+
+    /**
+     * Get whether a button is currently down
+     */
+    bool isButtonDown(Button) override;
+
+    /**
+     * Get whether a button was pressed last frame
+     */
+    bool wasButtonPressed(Button) override;
+
+    /**
+     * Get whether a button was released last frame
+     */
+    bool wasButtonReleased(Button) override;
+
+    /**
+     * Get the current mouse position relative to the active window
+     */
+    Vec2 mousePos() override;
+
+    /**
+     * Get the change in mouse position
+     */
+    Vec2 mouseDelta() override;
+
+    /**
+     * Get the mouse wheel movement
+     */
+    Vec2 wheelDelta() override;
+
+    /**
+     * Set the current cursor
+     */
+    void setCursor(CursorType) override;
+
+    /**
+     * Show or hide the cursor
+     */
+    void showCursor(bool) override;
+};
+
+/**
+ * A dummy window for headless or windowless setups
+ */
+class WindowDummy : public Window {
+private:
+    /**
+     * The dummy swapchain
+     */
+    std::unique_ptr<GpuSwapchain> swap = nullptr;
+
+public:
+    /**
+     * Construct empty
+     */
+    explicit WindowDummy(InputDevice* device) noexcept;
+
+    /**
+     * The dummy window does not have a swapchain
+     */
+    GpuSwapchain* swapchain() const override;
+
+    /**
+     * Set the window title
+     */
+    void setTitle(std::string_view) override;
+
+    /**
+     * Get events relevant to this window
+     */
+    std::span<const Event> getEvents() const override;
+
+    /**
+     * Returns whether the window was closed
+     */
+    bool wasClosed() const override;
+
+    /**
+     * Returns whether this is the active window
+     */
+    bool isFocused() const override;
+
+    /**
+     * Returns whether the window gained focus last frame
+     */
+    bool wasFocusGained() const override;
+
+    /**
+     * Returns whether the window lost focus last frame
+     */
+    bool wasFocusLost() const override;
+
+    /**
+     * Returns whether the window was resized this frame
+     */
+    bool wasResized() const override;
+
+    /**
+     * Get the width of the window in pixels
+     */
+    u32 width() const override;
+
+    /**
+     * Get the height of the window in pixels
+     */
+    u32 height() const override;
+
+    /**
+     * Set to fullscreen or disable fullscreen
+     */
+    void setFullscreen(bool = true) override;
+
+    /**
+     * Get the mouse position relative to this window
+     */
+    Vec2 mousePos() const override;
+
+    /**
+     * Get the change in mouse position relative to this window
+     */
+    Vec2 mouseDelta() const override;
+};
+
+/**
+ * A dummy swapchain for headless or windowless setups
+ */
+class GpuSwapchainDummy : public GpuSwapchain {
+public:
+    /**
+     * Recreate the swapchain with a new size
+     */
+    void resize(u32, u32) override;
+
+    /**
+     * Get the current swapchain width
+     */
+    u32 width() const override;
+
+    /**
+     * Get the current swapchain height
+     */
+    u32 height() const override;
+
+    /**
+     * Get the current swapchain format
+     */
+    Format format() const override;
+
+    /**
+     * Get the current swapchain image count
+     */
+    u32 imageCount() const override;
+
+    /**
+     * Get the current swapchain image
+     */
+    GpuImage* currentImage() const override;
+
+    /**
+     * Get the current swapchain image view
+     */
+    GpuView* currentView() const override;
 };
 
 } // namespace hg

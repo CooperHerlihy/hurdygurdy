@@ -699,11 +699,11 @@ void InputDeviceX11::processEvents()
                     u32 newW = assertCast<u32>(event.xconfigure.width);
                     u32 newH = assertCast<u32>(event.xconfigure.height);
 
-                    if (newW != window->width || newH != window->height)
+                    if (newW != window->winWidth || newH != window->winHeight)
                     {
                         window->resized = true;
-                        window->width = newW;
-                        window->height = newH;
+                        window->winWidth = newW;
+                        window->winHeight = newH;
                     }
                 }
                 break;
@@ -920,8 +920,8 @@ std::unique_ptr<Window> InputDeviceX11::createWindow(Gpu* gpu, const WindowConfi
 
     // Get initial window attributes
     xlibFuncs.XGetWindowAttributes(display,window->x11Window, &attrs);
-    window->width = static_cast<u32>(attrs.width);
-    window->height = static_cast<u32>(attrs.height);
+    window->winWidth = static_cast<u32>(attrs.width);
+    window->winHeight = static_cast<u32>(attrs.height);
     window->focused = (attrs.map_state == IsViewable);
 
     windows.add(window->x11Window, window.get());
@@ -967,14 +967,14 @@ Vec2 InputDeviceX11::mousePos()
 Vec2 InputDeviceX11::mouseDelta()
 {
     if (activeWindow != nullptr)
-        return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
+        return mouseDeltaAccum / assertCast<f32>(activeWindow->winHeight);
 
     if (windows.size() == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](::Window, WindowX11* wd)
         {
-            ret = ret / assertCast<f32>(wd->height);
+            ret = ret / assertCast<f32>(wd->winHeight);
         });
         return ret;
     }
@@ -1080,12 +1080,14 @@ bool WindowX11::wasResized() const
     return resized;
 }
 
-void WindowX11::size(u32* outWidth, u32* outHeight) const
+u32 WindowX11::width() const
 {
-    if (outWidth != nullptr)
-        *outWidth = width;
-    if (outHeight != nullptr)
-        *outHeight = height;
+    return winWidth;
+}
+
+u32 WindowX11::height() const
+{
+    return winHeight;
 }
 
 void WindowX11::setFullscreen(bool set)

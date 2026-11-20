@@ -24,12 +24,8 @@ int main()
 
     Renderer2D renderer{gpu.get(), window->swapchainFormat()};
 
-    u32 winW, winH;
-    window->size(&winW, &winH);
-    f32 aspect = assertCast<f32>(winW) / assertCast<f32>(winH);
-
+    f32 aspect = assertCast<f32>(window->width()) / assertCast<f32>(window->height());
     Camera camera{Orthographic{{{0, 0}, {aspect, 1.0f}}}};
-
     Layer2D layer{};
 
     struct Color {
@@ -69,8 +65,7 @@ int main()
 
         if (window->wasResized())
         {
-            window->size(&winW, &winH);
-            aspect = assertCast<f32>(winW) / assertCast<f32>(winH);
+            aspect = assertCast<f32>(window->width()) / assertCast<f32>(window->height());
             camera.projection = Orthographic{{{0, 0}, {aspect, 1.0f}}};
         }
 

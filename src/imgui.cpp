@@ -274,9 +274,7 @@ void beginImGuiFrame()
     Vec2 mouse = state.window->mousePos();
     io.AddMousePosEvent(mouse.x(), mouse.y());
 
-    u32 width, height;
-    state.window->size(&width, &height);
-    io.DisplaySize = ImVec2(assertCast<f32>(width), assertCast<f32>(height));
+    io.DisplaySize = ImVec2(assertCast<f32>(state.window->width()), assertCast<f32>(state.window->height()));
 
     io.DeltaTime = assertCast<f32>(state.clock.tick());
     if (io.DeltaTime <= 0.0f)

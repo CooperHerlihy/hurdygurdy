@@ -174,6 +174,17 @@ TEST(testHashDistinctStrings)
     ASSERT(hash(std::string_view{""}) != hash(std::string_view{"x"}));
 }
 
+TEST(testHashUniquePtr)
+{
+    std::unique_ptr<int> p = std::make_unique<int>(5);
+    const int* raw = p.get();
+    ASSERT(hash(p) == hash(raw));
+
+    std::unique_ptr<int> moved = std::move(p);
+    ASSERT(hash(moved) == hash(raw));
+    ASSERT(hash(p) == hash(static_cast<int*>(nullptr)));
+}
+
 TEST(testSetDefault)
 {
     HashSet<u32> set;
@@ -460,6 +471,18 @@ TEST(testSetStringViewComparison)
     ASSERT(set.size() == 3);
 }
 
+TEST(testSetMoveOnlyValue)
+{
+    HashSet<std::unique_ptr<u32>> set;
+    set.add(std::make_unique<u32>(7));
+    set.add(std::make_unique<u32>(8));
+    ASSERT(set.size() == 2);
+
+    HashSet<std::unique_ptr<u32>> moved = std::move(set);
+    ASSERT(set.size() == 0);
+    ASSERT(moved.size() == 2);
+}
+
 TEST(testMapDefault)
 {
     HashMap<u32, f32> map;
@@ -671,6 +694,27 @@ TEST(testMapRemoveNonExistentKey)
     map.add(1, 1.0f);
     ASSERT(!map.remove(99u));
     ASSERT(!map.remove(0u));
+    ASSERT(map.size() == 1);
+}
+
+TEST(testMapStringKeys)
+{
+    HashMap<std::string, u32> map;
+    map.add(std::string{"apple"}, 1);
+    map.add(std::string{"banana"}, 2);
+
+    ASSERT(map.size() == 2);
+    ASSERT(map.has("apple"));
+    ASSERT(map.has(std::string_view{"banana"}));
+    ASSERT(!map.has("cherry"));
+
+    u32* v = map.get("banana");
+    ASSERT(v != nullptr);
+    ASSERT(*v == 2);
+    ASSERT(map.get("cherry") == nullptr);
+
+    ASSERT(map.remove("apple"));
+    ASSERT(!map.has("apple"));
     ASSERT(map.size() == 1);
 }
 

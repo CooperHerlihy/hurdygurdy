@@ -290,6 +290,85 @@ TEST(testIntersectRayCircleTangent)
     ASSERT(intersect(ray, c).has_value());
 }
 
+TEST(testIntersectLineRay2D)
+{
+    Line2D line{{0, 0}, {10, 0}};
+    Ray2D ray{{5, 0}, {0, 1}};
+    std::optional<Hit2D> hit = intersect(line, ray);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+    {
+        ASSERT(std::abs(hit->dist - 0.5f) < FLT_EPSILON);
+        ASSERT((hit->normal == Vec2{-1, 0}));
+    }
+}
+
+TEST(testIntersectLineRay2DMiss)
+{
+    Line2D line{{0, 0}, {10, 0}};
+
+    // ray points away from the line
+    Ray2D away{{5, 5}, {0, 1}};
+    ASSERT(!intersect(line, away).has_value());
+
+    // ray parallel to the line
+    Ray2D parallel{{0, 5}, {1, 0}};
+    ASSERT(!intersect(line, parallel).has_value());
+}
+
+TEST(testRayCircleNormal)
+{
+    Ray2D ray{{0, 0}, {1, 0}};
+    Circle c{{10, 0}, 3};
+    std::optional<Hit2D> hit = intersect(ray, c);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+        ASSERT((hit->normal == Vec2{-1, 0}));
+}
+
+TEST(testRayRectNormalFromOutside)
+{
+    Ray2D ray{{-5, 5}, {1, 0}};
+    Rect r{{0, 0}, {10, 10}};
+    std::optional<Hit2D> hit = intersect(ray, r);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+    {
+        ASSERT(std::abs(hit->dist - 5.0f) < FLT_EPSILON);
+        ASSERT((hit->normal == Vec2{-1, 0}));
+    }
+}
+
+TEST(testRayRectNormalFromInside)
+{
+    Ray2D ray{{5, 5}, {0, 1}};
+    Rect r{{0, 0}, {10, 10}};
+    std::optional<Hit2D> hit = intersect(ray, r);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+    {
+        ASSERT(std::abs(hit->dist) < FLT_EPSILON);
+        ASSERT((hit->normal == Vec2{0, -1}));
+    }
+}
+
+TEST(testRayPlaneNormal)
+{
+    Ray3D ray{{0, 0, -5}, {0, 0, 1}};
+    Plane p{{0, 0, 1}, 0};
+    std::optional<Hit3D> hit = intersect(ray, p);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+        ASSERT((hit->normal == Vec3{0, 0, -1}));
+}
+
+TEST(testPlaneFromTriNormal)
+{
+    Triangle tri{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    Plane p = planeFromTri(tri);
+    ASSERT((p.normal == Vec3{0, 0, 1}));
+}
+
 TEST(testSphereContainsPoint)
 {
     Sphere s{{0, 0, 0}, 5};

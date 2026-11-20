@@ -101,4 +101,178 @@ std::unique_ptr<InputDevice> InputDevice::create()
     return InputDeviceDummy::create();
 }
 
+InputBackend InputDeviceDummy::getBackend()
+{
+    return InputBackend::none;
+}
+
+std::span<std::string_view> InputDeviceDummy::getVulkanExtensions()
+{
+    return {};
+}
+
+std::span<DisplayInfo> InputDeviceDummy::displayInfo()
+{
+    return {};
+}
+
+void InputDeviceDummy::processEvents()
+{
+}
+
+std::span<const Event> InputDeviceDummy::getEvents()
+{
+    return {};
+}
+
+bool InputDeviceDummy::wasQuit()
+{
+    return false;
+}
+
+std::unique_ptr<Window> InputDeviceDummy::createWindow(Gpu*, const WindowConfig&)
+{
+    return std::make_unique<WindowDummy>(this);
+}
+
+bool InputDeviceDummy::isButtonDown(Button)
+{
+    return false;
+}
+
+bool InputDeviceDummy::wasButtonPressed(Button)
+{
+    return false;
+}
+
+bool InputDeviceDummy::wasButtonReleased(Button)
+{
+    return false;
+}
+
+Vec2 InputDeviceDummy::mousePos()
+{
+    return {};
+}
+
+Vec2 InputDeviceDummy::mouseDelta()
+{
+    return {};
+}
+
+Vec2 InputDeviceDummy::wheelDelta()
+{
+    return {};
+}
+
+void InputDeviceDummy::setCursor(CursorType)
+{
+}
+
+void InputDeviceDummy::showCursor(bool)
+{
+}
+
+WindowDummy::WindowDummy(InputDevice* device) noexcept
+    : Window{device}
+    , swap{std::make_unique<GpuSwapchainDummy>()}
+{}
+
+GpuSwapchain* WindowDummy::swapchain() const
+{
+    return nullptr;
+}
+
+void WindowDummy::setTitle(std::string_view)
+{
+}
+
+std::span<const Event> WindowDummy::getEvents() const
+{
+    return {};
+}
+
+bool WindowDummy::wasClosed() const
+{
+    return false;
+}
+
+bool WindowDummy::isFocused() const
+{
+    return false;
+}
+
+bool WindowDummy::wasFocusGained() const
+{
+    return false;
+}
+
+bool WindowDummy::wasFocusLost() const
+{
+    return false;
+}
+
+bool WindowDummy::wasResized() const
+{
+    return false;
+}
+
+u32 WindowDummy::width() const
+{
+    return 0;
+}
+
+u32 WindowDummy::height() const
+{
+    return 0;
+}
+
+void WindowDummy::setFullscreen(bool)
+{
+}
+
+Vec2 WindowDummy::mousePos() const
+{
+    return {};
+}
+
+Vec2 WindowDummy::mouseDelta() const
+{
+    return {};
+}
+
+void GpuSwapchainDummy::resize(u32, u32)
+{
+}
+
+u32 GpuSwapchainDummy::width() const
+{
+    return 0;
+}
+
+u32 GpuSwapchainDummy::height() const
+{
+    return 0;
+}
+
+Format GpuSwapchainDummy::format() const
+{
+    return Format::undefined;
+}
+
+u32 GpuSwapchainDummy::imageCount() const
+{
+    return 0;
+}
+
+GpuImage* GpuSwapchainDummy::currentImage() const
+{
+    return nullptr;
+}
+
+GpuView* GpuSwapchainDummy::currentView() const
+{
+    return nullptr;
+}
+
 } // namespace hg

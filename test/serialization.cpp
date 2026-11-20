@@ -1,6 +1,7 @@
 #include "tests.hpp"
 #include "hg/serialization.hpp"
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -969,6 +970,87 @@ TEST(testSerializeReadSizeMismatchError)
     Serializer r = Serializer::reader(w.takeNode());
     setError("");
     ASSERT(!serialize(&r, &copy));
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testSerializerIsWritingIsReading)
+{
+    Serializer w = Serializer::writer();
+    ASSERT(w.isWriting());
+    ASSERT(!w.isReading());
+
+    i32 val = 5;
+    ASSERT(serialize(&w, &val));
+    Serializer r = Serializer::reader(w.takeNode());
+    ASSERT(r.isReading());
+    ASSERT(!r.isWriting());
+}
+
+TEST(testSerializeVoid)
+{
+    const byte data[]{byte{0x01}, byte{0x02}, byte{0x03}, byte{0x04}};
+    std::span<const byte> out{data};
+
+    Serializer w = Serializer::writer();
+    ASSERT(w.serializeVoid(&out));
+    Serializer r = Serializer::reader(w.takeNode());
+
+    std::span<const byte> in;
+    ASSERT(r.serializeVoid(&in));
+    ASSERT(in.size() == 4);
+    ASSERT(memcmp(in.data(), data, 4) == 0);
+}
+
+TEST(testSerialLoadStoreToBinary)
+{
+    std::vector<u32> val{10, 20, 30};
+
+    std::vector<byte> bin = serialStoreToBinary(val);
+    std::optional<std::vector<u32>> copy = serialLoadFromBinary<std::vector<u32>>(bin);
+    ASSERT(copy.has_value());
+    ASSERT(*copy == val);
+
+    std::vector<byte> garbage(16, byte{0});
+    ASSERT(!serialLoadFromBinary<std::vector<u32>>(garbage).has_value());
+}
+
+static constexpr const char* serialTestPath = "/tmp/hg_serialization_test/serial.bin";
+
+struct SerialFileData {
+    i64 a;
+    std::string b;
+    std::vector<f64> c;
+};
+
+bool serialize(Serializer* s, SerialFileData* val)
+{
+    return serializeObject(s, &val->a, &val->b, &val->c);
+}
+
+TEST(testSerialStoreLoad)
+{
+    std::filesystem::create_directories("/tmp/hg_serialization_test");
+
+    SerialFileData val{};
+    val.a = -777;
+    val.b = "file round trip";
+    val.c = {1.5, -2.5, 3.5};
+
+    setError("");
+    ASSERT(serialStore(val, serialTestPath));
+
+    setError("");
+    std::optional<SerialFileData> loaded = serialLoad<SerialFileData>(serialTestPath);
+    ASSERT(loaded.has_value());
+    ASSERT(loaded->a == val.a);
+    ASSERT(loaded->b == val.b);
+    ASSERT(loaded->c == val.c);
+}
+
+TEST(testSerialLoadMissingFile)
+{
+    setError("");
+    ASSERT(!serialLoad<i32>("/tmp/hg_serialization_test/nonexistent.bin").has_value());
     ASSERT(getError().length() > 0);
 }
 

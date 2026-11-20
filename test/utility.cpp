@@ -598,6 +598,25 @@ TEST(testFloatToStringIntegerRendersNonFloat)
     ASSERT(isInteger(floatToString(1.0, 17)));
 }
 
+TEST(testFormatBuffer)
+{
+    char buf[32];
+    u64 len = formatBuffer(buf, "{} + {} = {}", 1, 2, 3);
+    ASSERT(len == 9);
+    ASSERT(std::string_view{buf} == "1 + 2 = 3");
+    ASSERT(buf[len] == '\0');
+}
+
+TEST(testFormatBufferTruncated)
+{
+    char buf[8];
+    u64 len = formatBuffer(buf, "{}{}", "abcdef", "ghijk");
+    // 11 characters do not fit, the buffer is 8 bytes minus the null
+    ASSERT(len == 7);
+    ASSERT(std::string_view{buf} == "abcdefg");
+    ASSERT(buf[7] == '\0');
+}
+
 static constexpr const char* testDir = "/tmp/hg_filesystem_test";
 
 static void setupTestDir()

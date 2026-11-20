@@ -639,3 +639,74 @@ TEST(testSerializeEcsBinaryRoundtrip)
     ASSERT(sum == 33);
 }
 
+
+TEST(testEntityBitLayout)
+{
+    static_assert(Entity::idxBits == 24);
+    // nullEntity is all ones, so its fields decode to the maximum values
+    static_assert(nullEntity.idx() == (u32{1} << Entity::idxBits) - 1);
+    static_assert(nullEntity.generation() == ~u32{0} << Entity::idxBits);
+
+    Entity a{5};
+    ASSERT(a.idx() == 5);
+    ASSERT(a.generation() == 0);
+    static_assert(Entity{5}.idx() == 5);
+    static_assert(Entity{5}.generation() == 0);
+
+    Entity g1{u32{1} << Entity::idxBits};
+    ASSERT(g1.idx() == 0);
+    // generation() returns the raw generation field, scaled by idxBits
+    ASSERT(g1.generation() == (u32{1} << Entity::idxBits));
+
+    Entity g1i3 = Entity{(u32{1} << Entity::idxBits) | 3};
+    ASSERT(g1i3.idx() == 3);
+    ASSERT(g1i3.generation() == (u32{1} << Entity::idxBits));
+
+    // nextIdx keeps the generation, nextGeneration keeps the index
+    static_assert(Entity{5}.nextIdx() == Entity{6});
+    static_assert(Entity{(u32{1} << Entity::idxBits) | 5}.nextGeneration()
+        == Entity{(u32{2} << Entity::idxBits) | 5});
+    ASSERT(a.nextIdx() == Entity{6});
+    ASSERT(a.nextIdx().generation() == 0);
+    ASSERT(g1i3.nextGeneration().idx() == 3);
+    ASSERT(g1i3.nextGeneration().generation() == (u32{2} << Entity::idxBits));
+
+    // nextIdx across a generation boundary wraps the index
+    Entity last = Entity{(u32{1} << Entity::idxBits) | ((u32{1} << Entity::idxBits) - 1)};
+    ASSERT(last.idx() == (u32{1} << Entity::idxBits) - 1);
+    ASSERT(last.generation() == (u32{1} << Entity::idxBits));
+    Entity wrapped = last.nextIdx();
+    ASSERT(wrapped.idx() == 0);
+    ASSERT(wrapped.generation() == (u32{2} << Entity::idxBits));
+}
+
+TEST(testClearComponents)
+{
+    Ecs<u32, f32> ecs{};
+    Entity e1 = ecs.spawn();
+    Entity e2 = ecs.spawn();
+    ecs.add<u32>(e1) = 1;
+    ecs.add<u32>(e2) = 2;
+    ecs.add<f32>(e1) = 1.0f;
+
+    ecs.clearComponents<u32>();
+    ASSERT(ecs.getEntities<u32>().size() == 0);
+    ASSERT(ecs.getComponents<u32>().size() == 0);
+    ASSERT(!ecs.has<u32>(e1));
+    ASSERT(!ecs.has<u32>(e2));
+    // Other components are untouched, entities stay alive
+    ASSERT(ecs.alive(e1));
+    ASSERT(ecs.alive(e2));
+    ASSERT(ecs.has<f32>(e1));
+    ASSERT(ecs.get<f32>(e1) == 1.0f);
+
+    // The component can be added again after clearing
+    ecs.add<u32>(e1) = 9;
+    ASSERT(ecs.get<u32>(e1) == 9);
+
+    // clearComponents with multiple types
+    ecs.clearComponents<u32, f32>();
+    ASSERT(!ecs.has<f32>(e1));
+    ASSERT(ecs.getEntities<f32>().size() == 0);
+    ASSERT(ecs.alive(e1));
+}

@@ -2115,3 +2115,52 @@ TEST(testBarrierFlagsAllGraphics)
     for (u32 i = 0; i < imgSize * imgSize; ++i)
         ASSERT(pixels[i] == 0xFF996633);
 }
+
+TEST(testGpuImageAccessors)
+{
+    GpuImageCreateInfo ci{};
+    ci.width = 8;
+    ci.height = 8;
+    ci.format = Format::rgba8_unorm;
+    ci.usage = GpuImageUsage::transferSrc | GpuImageUsage::transferDst | GpuImageUsage::sampled;
+    ci.mipLevels = 4;
+    std::unique_ptr<GpuImage> img = testGpu->createImage(ci);
+
+    ASSERT(img->format() == Format::rgba8_unorm);
+    ASSERT(img->width() == 8);
+    ASSERT(img->height() == 8);
+    ASSERT(img->depth() == 1);
+    ASSERT(img->mipmapCount() == 4);
+    ASSERT(img->layerCount() == 1);
+
+    GpuViewCreateInfo vci{};
+    vci.levelCount = 4;
+    std::unique_ptr<GpuView> view = img->createView(vci);
+    ASSERT(view->format() == Format::rgba8_unorm);
+    ASSERT(view->width() == 8);
+    ASSERT(view->height() == 8);
+    ASSERT(view->depth() == 1);
+    ASSERT(view->mipmapCount() == 4);
+    ASSERT(view->layerCount() == 1);
+
+    // A partial view reports only its configured mip and layer extent
+    GpuViewCreateInfo pci{};
+    pci.baseMipLevel = 1;
+    pci.levelCount = 2;
+    std::unique_ptr<GpuView> partial = img->createView(pci);
+    ASSERT(partial->mipmapCount() == 2);
+    ASSERT(partial->layerCount() == 1);
+
+    // 3D image depth
+    GpuImageCreateInfo dci{};
+    dci.dimensions = 3;
+    dci.width = 4;
+    dci.height = 4;
+    dci.depth = 2;
+    dci.format = Format::rgba8_unorm;
+    dci.usage = GpuImageUsage::transferSrc | GpuImageUsage::transferDst;
+    std::unique_ptr<GpuImage> img3d = testGpu->createImage(dci);
+    ASSERT(img3d->depth() == 2);
+    ASSERT(img3d->width() == 4);
+    ASSERT(img3d->height() == 4);
+}
