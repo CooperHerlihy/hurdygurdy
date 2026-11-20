@@ -7,9 +7,9 @@ namespace hg {
 
 u32 noise(u32 seed, u32 pos)
 {
-    u32 ret = (pos + 384521713u) * 955740521u;
+    u32 ret = pos * 955740521u + 384521713u;
     ret ^= ret >> 13;
-    ret *= seed * 725937977u;
+    ret *= seed * 725937977u + 3685604807u;
     ret ^= ret >> 7;
     ret *= 358166231u;
     ret ^= ret >> 11;

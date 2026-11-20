@@ -119,8 +119,7 @@ TEST(testNoiseVec1DRangeMulti)
 
 TEST(testNoiseMultiDDifferentInputs)
 {
-    // seed 0 is a degenerate constant (the mix multiplies by seed), so use nonzero seeds
-    for (u32 seed = 1; seed < 4; ++seed)
+    for (u32 seed = 0; seed < 3; ++seed)
     {
         ASSERT(noise2D(seed, 1, 2) != noise2D(seed, 2, 2));
         ASSERT(noise3D(seed, 1, 2, 3) != noise3D(seed, 1, 3, 3));
