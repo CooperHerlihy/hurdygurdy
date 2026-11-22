@@ -158,7 +158,7 @@ struct Sound {
  * Sound serialization
  */
 template<>
-bool serialize(Serializer* s, Sound* sound);
+bool serialize(Serializer& s, Sound* sound);
 
 /**
  * Load a sound from disc and try to decode with all supported formats

@@ -6,7 +6,7 @@
 namespace hg {
 
 template<>
-bool serialize(Serializer* s, MeshData* mesh)
+bool serialize(Serializer& s, MeshData* mesh)
 {
     return serializeObject(s,
         &mesh->vertices,
@@ -58,7 +58,7 @@ std::optional<Mesh> meshLoadToGpu(Gpu* gpu, std::string_view path)
 }
 
 template<>
-bool serialize(Serializer* s, Model3D* material)
+bool serialize(Serializer& s, Model3D* material)
 {
     return serializeObject(s,
         &material->mesh,

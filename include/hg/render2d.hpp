@@ -100,7 +100,7 @@ struct Camera {
  * Camera serialization
  */
 template<>
-bool serialize(Serializer* s, Camera* camera);
+bool serialize(Serializer& s, Camera* camera);
 
 /**
  * A texture asset
@@ -132,7 +132,7 @@ struct TextureData {
  * TextureData serialization
  */
 template<>
-bool serialize(Serializer* s, TextureData* tex);
+bool serialize(Serializer& s, TextureData* tex);
 
 /**
  * Load an image from disc and try to decode with all supported formats
@@ -196,7 +196,7 @@ struct TextureAtlas {
     /**
      * The texture
      */
-    const Texture* texture = nullptr;
+    Texture texture{};
     /**
      * The sprites
      */
@@ -206,13 +206,6 @@ struct TextureAtlas {
      * Construct empty
      */
     TextureAtlas() noexcept = default;
-
-    /**
-     * Construct with texture
-     */
-    TextureAtlas(const Texture& textureVal)
-        : texture{&textureVal}
-    {}
 
     /**
      * Add empty sprites, to control indices
@@ -252,7 +245,7 @@ struct TextureAtlas {
  * TextureAtlas serialization
  */
 template<>
-bool serialize(Serializer* s, TextureAtlas* atlas);
+bool serialize(Serializer& s, TextureAtlas* atlas);
 
 /**
  * Get an atlas for a default pixel font

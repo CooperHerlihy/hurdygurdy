@@ -60,7 +60,7 @@ struct MeshData {
  * Mesh serialization
  */
 template<>
-bool serialize(Serializer* s, MeshData* mesh);
+bool serialize(Serializer& s, MeshData* mesh);
 
 /**
  * A 3D mesh asset stored on the gpu
@@ -133,7 +133,7 @@ struct Model3D {
  * Serialization for Material3D
  */
 template<>
-bool serialize(Serializer* s, Model3D* material);
+bool serialize(Serializer& s, Model3D* material);
 
 /**
  * A basic 3D renderer

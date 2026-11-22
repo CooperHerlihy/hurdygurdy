@@ -456,7 +456,7 @@ struct EntityRefComp {
 namespace hg {
 
 template<>
-bool ecsSerialize(Serializer* s, EntityRefComp* val, EntitySerializer* ecs)
+bool ecsSerialize(Serializer& s, EntityRefComp* val, EntitySerializer* ecs)
 {
     if (!ecsSerialize(s, &val->target, ecs))
         return false;
@@ -470,9 +470,9 @@ TEST(testSerializeEcsEmpty)
     Ecs<u32, f32> ecs{};
     Ecs<u32, f32> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &ecs));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &ecs));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy.getEntities<u32>().size() == 0);
     ASSERT(copy.getEntities<f32>().size() == 0);
 }
@@ -489,9 +489,9 @@ TEST(testSerializeEcsRoundtrip)
 
     Ecs<u32, f32> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &ecs));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &ecs));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
 
     ASSERT(copy.getEntities<u32>().size() == 2);
     ASSERT(copy.getEntities<f32>().size() == 2);
@@ -517,9 +517,9 @@ TEST(testSerializeEcsSparse)
 
     Ecs<u32> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &ecs));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &ecs));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
 
     ASSERT(copy.getEntities<u32>().size() == 2);
     u64 sum = 0;
@@ -540,9 +540,9 @@ TEST(testSerializeEcsPartialCoverage)
 
     Ecs<u32, f32> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &ecs));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &ecs));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
 
     ASSERT(copy.getEntities<u32>().size() == 2);
     ASSERT(copy.getEntities<f32>().size() == 2);
@@ -569,9 +569,9 @@ TEST(testSerializeEcsEntityReferences)
 
     Ecs<EntityRefComp> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &ecs));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &ecs));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
 
     ASSERT(copy.getEntities<EntityRefComp>().size() == 1);
     u32 foundData = 0;
@@ -595,9 +595,9 @@ TEST(testSerializeEcsEntityComponent)
 
     Ecs<Entity> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &ecs));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &ecs));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
 
     ASSERT(copy.getEntities<Entity>().size() == 1);
     bool targetAlive = false;
@@ -620,13 +620,12 @@ TEST(testSerializeEcsBinaryRoundtrip)
     ecs.add<f32>(e2) = 20.0f;
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &ecs));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
+    ASSERT(serialize(w, &ecs));
+    std::vector<byte> bin = w.takeFromWriter();
+    ASSERT(isSerialData(bin));
+    Serializer r = Serializer::reader(bin);
     Ecs<u32, f32> copy{};
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(r, &copy));
 
     ASSERT(copy.getEntities<u32>().size() == 2);
     ASSERT(copy.getEntities<f32>().size() == 2);

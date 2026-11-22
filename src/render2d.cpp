@@ -9,29 +9,7 @@
 namespace hg {
 
 template<>
-bool serialize(Serializer* s, Orthographic* ortho)
-{
-    return serializeObject(s,
-        &ortho->left,
-        &ortho->right,
-        &ortho->top,
-        &ortho->bottom,
-        &ortho->near,
-        &ortho->far);
-}
-
-template<>
-bool serialize(Serializer* s, Perspective* persp)
-{
-    return serializeObject(s,
-        &persp->aspect,
-        &persp->fov,
-        &persp->near,
-        &persp->far);
-}
-
-template<>
-bool serialize(Serializer* s, Camera* camera)
+bool serialize(Serializer& s, Camera* camera)
 {
     return serializeObject(s,
         &camera->projection,
@@ -40,23 +18,14 @@ bool serialize(Serializer* s, Camera* camera)
 }
 
 template<>
-bool serialize(Serializer* s, TextureData* tex)
+bool serialize(Serializer& s, TextureData* tex)
 {
-    s->beginObject();
-    HG_DEFER(s->endObject());
-
-    if (!serialize(s, &tex->width))
-        return false;
-    if (!serialize(s, &tex->height))
-        return false;
-    if (!serialize(s, &tex->depth))
-        return false;
-    if (!serialize(s, &tex->format))
-        return false;
-    if (!serialize(s, &tex->pixels))
-        return false;
-
-    return true;
+    return serializeObject(s,
+        &tex->width,
+        &tex->height,
+        &tex->depth,
+        &tex->format,
+        &tex->pixels);
 }
 
 std::optional<TextureData> textureLoad(std::string_view path)
@@ -67,9 +36,12 @@ std::optional<TextureData> textureLoad(std::string_view path)
 
     std::optional tex = std::make_optional<TextureData>();
 
-    std::optional<Serializer> s = Serializer::readBinary(*bin);
-    if (s.has_value() && serialize(&*s, &tex))
-        return tex;
+    if (isSerialData(*bin))
+    {
+        Serializer s = Serializer::reader(*bin);
+        if (serialize(s, &tex))
+            return tex;
+    }
 
     int x, y, channels;
     byte* pixels = reinterpret_cast<byte*>(stbi_load_from_memory(
@@ -196,7 +168,6 @@ std::optional<Texture> textureLoadToGpu(Gpu* gpu, std::string_view path)
 }
 
 struct RenderState2D {
-    Texture defaultFontTexture{};
     TextureAtlas defaultFont{};
 };
 
@@ -211,26 +182,24 @@ void convertPixelFont()
     log("converting pixel font file\n");
 
     std::optional<TextureData> fontData = textureLoad("resources/pixel_font.png");
+    if (!fontData.has_value())
+    {
+        warn("pixel_font.png could not be read: {}", getError());
+        return;
+    }
 
-    Serializer s = Serializer::writer();
-    serialize(&s, &*fontData);
-
-    std::vector<byte> bin = s.writeBinary();
-    binaryStore(bin, "resources/pixel_font.hg");
+    serialStore(*fontData, "resources/pixel_font.hg");
 }
 
 } // namespace internal
 
 static void initPixelFont(Gpu* gpu)
 {
-    std::optional<Serializer> s = Serializer::readBinary(std::as_bytes(std::span{resources_pixel_font_hg}));
-
-    TextureData fontData{};
-    if (!s.has_value() || !serialize(&*s, &fontData))
+    std::optional fontData = serialLoadFromBinary<TextureData>(std::as_bytes(std::span{resources_pixel_font_hg}));
+    if (!fontData.has_value())
         warn("Could not deserialize pixel font: {}", getError());
 
-    render2D.defaultFontTexture = uploadTextureToGpu(gpu, fontData);
-    render2D.defaultFont = {render2D.defaultFontTexture};
+    render2D.defaultFont.texture = uploadTextureToGpu(gpu, *fontData);
     render2D.defaultFont.addEmpty(32);
     render2D.defaultFont.addGrid({{0, 0}, {1, 1}}, 12, 8, 95);
 }
@@ -296,7 +265,7 @@ const TextureAtlas& getDefaultFont()
 }
 
 template<>
-bool serialize(Serializer* s, TextureAtlas* atlas)
+bool serialize(Serializer& s, TextureAtlas* atlas)
 {
     return serializeObject(s,
         &atlas->texture,
@@ -469,7 +438,7 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
         Vec2 spriteSize = (sprite.end - sprite.begin) * factor;
 
         Rect dst = {pos, pos + spriteSize};
-        drawSprite(*box.font->texture, sprite, dst, color);
+        drawSprite(box.font->texture, sprite, dst, color);
 
         pos.x() += spriteSize.x();
     }

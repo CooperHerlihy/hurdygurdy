@@ -92,7 +92,7 @@ std::unique_ptr<AudioDevice> AudioDevice::create()
 }
 
 template<>
-bool serialize(Serializer* s, Sound* sound)
+bool serialize(Serializer& s, Sound* sound)
 {
     return serializeObject(s,
         &sound->data,

@@ -607,14 +607,14 @@ public:
      * The serialize function
      */
     template<typename... Ts>
-    friend bool serialize(Serializer* s, Ecs<Ts...>* ecs);
+    friend bool serialize(Serializer& s, Ecs<Ts...>* ecs);
 };
 
 /**
  * The default serialization for a component, may be overridden
  */
 template<typename T>
-bool ecsSerialize(Serializer* s, T* val, EntitySerializer*)
+bool ecsSerialize(Serializer& s, T* val, EntitySerializer*)
 {
     return serialize(s, val);
 }
@@ -623,9 +623,9 @@ bool ecsSerialize(Serializer* s, T* val, EntitySerializer*)
  * Entity ecs serialization
  */
 template<>
-inline bool ecsSerialize(Serializer* s, Entity* e, EntitySerializer* ecs)
+inline bool ecsSerialize(Serializer& s, Entity* e, EntitySerializer* ecs)
 {
-    if (s->isWriting())
+    if (s.isWriting())
     {
         u32 idx = ecs->getIdx(*e);
         serializeObject(s, &idx);
@@ -646,22 +646,19 @@ namespace internal {
  * Serialize one component system of an ecs
  */
 template<typename T, typename EcsT>
-bool serializeEcsSystem(Serializer* s, EntitySerializer* es, EcsT* ecs)
+bool serializeEcsSystem(Serializer& s, EntitySerializer* es, EcsT* ecs)
 {
     std::span<const Entity> entities = ecs->template getEntities<T>();
     std::span<T> components = ecs->template getComponents<T>();
 
-    if (s->isWriting())
-    {
-        u32 cCount = assertCast<u32>(components.size());
-        s->beginObject(&cCount);
-        HG_DEFER(s->endObject());
+    u64 cCount = components.size();
+    serialize(s, &cCount);
 
-        for (u32 i = 0; i < components.size(); ++i)
+    if (s.isWriting())
+    {
+        for (u64 i = 0; i < cCount; ++i)
         {
             u32 idx = es->getIdx(entities[i]);
-            s->beginObject();
-            HG_DEFER(s->endObject());
             if (!serialize(s, &idx) ||
                 !ecsSerialize(s, &components[i], es))
                 return false;
@@ -670,15 +667,8 @@ bool serializeEcsSystem(Serializer* s, EntitySerializer* es, EcsT* ecs)
     }
     else
     {
-        u32 cCount;
-        if (!s->beginObject(&cCount))
-            return false;
-        HG_DEFER(s->endObject());
-
-        for (u32 i = 0; i < cCount; ++i)
+        for (u64 i = 0; i < cCount; ++i)
         {
-            s->beginObject();
-            HG_DEFER(s->endObject());
             u32 idx;
             if (!serialize(s, &idx) ||
                 !ecsSerialize(s, &ecs->template add<T>(es->getEntity(idx)), es))
@@ -696,16 +686,12 @@ bool serializeEcsSystem(Serializer* s, EntitySerializer* es, EcsT* ecs)
  * Note, if the ecs is not empty, the serialized data is added to the ecs
  */
 template<typename... Ts>
-bool serialize(Serializer* s, Ecs<Ts...>* ecs)
+bool serialize(Serializer& s, Ecs<Ts...>* ecs)
 {
-    if (!s->beginObject())
-        return false;
-    HG_DEFER(s->endObject());
-
     ArenaScope scratch = getScratch();
     EntitySerializer es{scratch};
 
-    if (s->isWriting())
+    if (s.isWriting())
     {
         es.entityToIdx.resize(ecs->getEntities().size());
 

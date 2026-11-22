@@ -17,14 +17,14 @@ TEST(testCameraSerializeRoundtripOrthographic)
     cam.rotation = Quat{0.5f};
 
     Serializer s = Serializer::writer();
-    ASSERT(serialize(&s, &cam));
-    std::vector<byte> bin = s.writeBinary();
+    ASSERT(serialize(s, &cam));
+    std::vector<byte> bin = s.takeFromWriter();
     ASSERT(bin.size() > 0);
+    ASSERT(isSerialData(bin));
 
-    std::optional<Serializer> r = Serializer::readBinary(bin);
-    ASSERT(r.has_value());
+    Serializer r = Serializer::reader(bin);
     Camera out{};
-    ASSERT(serialize(&*r, &out));
+    ASSERT(serialize(r, &out));
 
     const Orthographic* o = std::get_if<Orthographic>(&out.projection);
     ASSERT(o != nullptr);
@@ -47,13 +47,13 @@ TEST(testCameraSerializeRoundtripPerspective)
     cam.rotation = Quat{1.0f};
 
     Serializer s = Serializer::writer();
-    ASSERT(serialize(&s, &cam));
-    std::vector<byte> bin = s.writeBinary();
+    ASSERT(serialize(s, &cam));
+    std::vector<byte> bin = s.takeFromWriter();
+    ASSERT(isSerialData(bin));
 
-    std::optional<Serializer> r = Serializer::readBinary(bin);
-    ASSERT(r.has_value());
+    Serializer r = Serializer::reader(bin);
     Camera out{};
-    ASSERT(serialize(&*r, &out));
+    ASSERT(serialize(r, &out));
 
     const Perspective* p = std::get_if<Perspective>(&out.projection);
     ASSERT(p != nullptr);
@@ -77,13 +77,13 @@ TEST(testTextureDataSerializeRoundtrip)
         tex.pixels[i] = static_cast<byte>(i * 7);
 
     Serializer s = Serializer::writer();
-    ASSERT(serialize(&s, &tex));
-    std::vector<byte> bin = s.writeBinary();
+    ASSERT(serialize(s, &tex));
+    std::vector<byte> bin = s.takeFromWriter();
+    ASSERT(isSerialData(bin));
 
-    std::optional<Serializer> r = Serializer::readBinary(bin);
-    ASSERT(r.has_value());
+    Serializer r = Serializer::reader(bin);
     TextureData out{};
-    ASSERT(serialize(&*r, &out));
+    ASSERT(serialize(r, &out));
 
     ASSERT(out.width == 3);
     ASSERT(out.height == 2);
@@ -434,7 +434,7 @@ TEST(testRenderer2DDrawTextReturn)
     Renderer2D renderer{testGpu, Format::rgba8_unorm};
 
     const TextureAtlas& font = getDefaultFont();
-    ASSERT(font.texture != nullptr);
+    ASSERT(font.texture.image != nullptr);
     ASSERT(font.sprites.size() >= 127);
 
     Layer2D layer{};
@@ -476,7 +476,6 @@ TEST(testRenderer2DMoveAndRefcount)
     // and rises again
     Renderer2D c{testGpu, Format::rgba8_unorm};
     const TextureAtlas& font = getDefaultFont();
-    ASSERT(font.texture != nullptr);
-    ASSERT(font.texture->image != nullptr);
+    ASSERT(font.texture.image != nullptr);
 }
 

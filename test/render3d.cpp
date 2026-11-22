@@ -38,13 +38,13 @@ TEST(testMeshDataSerializeRoundtrip)
     mesh.indices = {0, 1, 2};
 
     Serializer s = Serializer::writer();
-    ASSERT(serialize(&s, &mesh));
-    std::vector<byte> bin = s.writeBinary();
+    ASSERT(serialize(s, &mesh));
+    std::vector<byte> bin = s.takeFromWriter();
+    ASSERT(isSerialData(bin));
 
-    std::optional<Serializer> r = Serializer::readBinary(bin);
-    ASSERT(r.has_value());
+    Serializer r = Serializer::reader(bin);
     MeshData out{};
-    ASSERT(serialize(&*r, &out));
+    ASSERT(serialize(r, &out));
 
     ASSERT(out.vertices.size() == 3);
     ASSERT(out.indices.size() == 3);

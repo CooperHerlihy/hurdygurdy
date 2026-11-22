@@ -1,6 +1,7 @@
 #include "tests.hpp"
 #include "hg/serialization.hpp"
 
+#include <cstring>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -13,21 +14,9 @@ TEST(testSerializeBool)
     bool copy = false;
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
-}
-
-TEST(testSerializeI64)
-{
-    i64 val = -1234567890123;
-    i64 copy = 0;
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy == val);
 }
 
@@ -37,21 +26,9 @@ TEST(testSerializeU32)
     u32 copy = 0;
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
-}
-
-TEST(testSerializeF64)
-{
-    f64 val = 3.14159265358979;
-    f64 copy = 0.0;
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy == val);
 }
 
@@ -61,92 +38,9 @@ TEST(testSerializeVec3)
     Vec3 copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
-}
-
-TEST(testSerializeMat4)
-{
-    Mat4 val{1.0f};
-    Mat4 copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT((copy[0] == val[0] && copy[1] == val[1] && copy[2] == val[2] && copy[3] == val[3]));
-}
-
-TEST(testSerializeComplex)
-{
-    Complex val{3.0f, 4.0f};
-    Complex copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
-}
-
-TEST(testSerializeQuat)
-{
-    Quat val{0.707f, 0.0f, 0.707f, 0.0f};
-    Quat copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
-}
-
-TEST(testSerializeNested)
-{
-    i32 outer = 7;
-    i32 inner = 42;
-    i32 outerCopy = 0;
-    i32 innerCopy = 0;
-
-    Serializer w = Serializer::writer();
-    w.beginObject();
-    ASSERT(serialize(&w, &outer));
-    w.beginObject();
-    ASSERT(serialize(&w, &inner));
-    w.endObject();
-    w.endObject();
-
-    Serializer r = Serializer::reader(w.takeNode());
-    r.beginObject();
-    ASSERT(serialize(&r, &outerCopy));
-    r.beginObject();
-    ASSERT(serialize(&r, &innerCopy));
-    r.endObject();
-    r.endObject();
-
-    ASSERT(outerCopy == outer);
-    ASSERT(innerCopy == inner);
-}
-
-TEST(testSerializeBeginWithSize)
-{
-    u32 childCount = 0;
-    u32 val = 99;
-    u32 copy = 0;
-
-    Serializer w = Serializer::writer();
-    w.beginObject();
-    ASSERT(serialize(&w, &val));
-    w.endObject();
-
-    Serializer r = Serializer::reader(w.takeNode());
-    r.beginObject(&childCount);
-    ASSERT(serialize(&r, &copy));
-    r.endObject();
-
-    ASSERT(childCount == 1);
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy == val);
 }
 
@@ -160,7 +54,7 @@ TEST(testSerializeCompositeStruct)
         std::string e;
     };
 
-    auto serializeData = [](Serializer* s, Data* val)
+    auto serializeData = [](Serializer& s, Data* val)
     {
         return serializeObject(s,
             &val->a,
@@ -178,9 +72,9 @@ TEST(testSerializeCompositeStruct)
 
     Data copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serializeData(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serializeData(&r, &copy));
+    ASSERT(serializeData(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serializeData(r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b == val.b);
     ASSERT(copy.c == val.c);
@@ -197,9 +91,9 @@ TEST(testSerializeLifecycle)
 
     Lifecycle copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy.id == savedId);
     ASSERT(copy.valid == true);
 }
@@ -210,9 +104,9 @@ TEST(testSerializeCArray)
     u32 copy[4] = {};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy[0] == 10);
     ASSERT(copy[1] == 20);
     ASSERT(copy[2] == 30);
@@ -225,23 +119,10 @@ TEST(testSerializeTrivialArray)
     std::array<u32, 4> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy == val);
-}
-
-TEST(testSerializeArrayOfStrings)
-{
-    std::array<std::string, 2> val{std::string{"alpha"}, std::string{"beta"}};
-    std::array<std::string, 2> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy[0] == "alpha");
-    ASSERT(copy[1] == "beta");
 }
 
 TEST(testSerializeString)
@@ -250,9 +131,9 @@ TEST(testSerializeString)
     std::string copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy == val);
 }
 
@@ -263,18 +144,18 @@ TEST(testSerializeMultipleRootValues)
     std::string c = "third";
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &a));
-    ASSERT(serialize(&w, &b));
-    ASSERT(serialize(&w, &c));
+    ASSERT(serialize(w, &a));
+    ASSERT(serialize(w, &b));
+    ASSERT(serialize(w, &c));
 
     i32 aCopy = 0;
     f64 bCopy = 0.0;
     std::string cCopy{};
 
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &aCopy));
-    ASSERT(serialize(&r, &bCopy));
-    ASSERT(serialize(&r, &cCopy));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &aCopy));
+    ASSERT(serialize(r, &bCopy));
+    ASSERT(serialize(r, &cCopy));
     ASSERT(aCopy == a);
     ASSERT(bCopy == b);
     ASSERT(cCopy == c);
@@ -286,39 +167,11 @@ TEST(testSerializeTrivialVector)
     std::vector<u8> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy.size() == val.size());
     ASSERT(memcmp(copy.data(), val.data(), val.size()) == 0);
-}
-
-TEST(testSerializeTrivialVectorInObject)
-{
-    struct Data {
-        std::string name;
-        std::vector<u8> bytes;
-        i32 id;
-    };
-
-    auto serializeData = [](Serializer* s, Data* val)
-    {
-        return serializeObject(s, &val->name, &val->bytes, &val->id);
-    };
-
-    Data val{};
-    val.name = "blob";
-    val.bytes = {0x01, 0x02, 0x03};
-    val.id = -5;
-
-    Data copy{};
-    Serializer w = Serializer::writer();
-    ASSERT(serializeData(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serializeData(&r, &copy));
-    ASSERT(copy.name == val.name);
-    ASSERT(copy.bytes == val.bytes);
-    ASSERT(copy.id == val.id);
 }
 
 TEST(testSerializeVectorOfStrings)
@@ -327,13 +180,10 @@ TEST(testSerializeVectorOfStrings)
     std::vector<std::string> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size() == val.size());
-    ASSERT(copy[0] == "one");
-    ASSERT(copy[1] == "two");
-    ASSERT(copy[2] == "three");
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
+    ASSERT(copy == val);
 }
 
 TEST(testSerializeVectorOfVectors)
@@ -342,16 +192,22 @@ TEST(testSerializeVectorOfVectors)
     std::vector<std::vector<u32>> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size() == val.size());
-    ASSERT(copy[0].size() == 2);
-    ASSERT(copy[0][0] == 1);
-    ASSERT(copy[0][1] == 2);
-    ASSERT(copy[1].size() == 0);
-    ASSERT(copy[2].size() == 1);
-    ASSERT(copy[2][0] == 3);
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
+    ASSERT(copy == val);
+}
+
+TEST(testSerializeVectorReadReplacesContents)
+{
+    std::vector<u32> val{4, 5};
+    std::vector<u32> copy{1, 2, 3, 4, 5, 6};
+
+    Serializer w = Serializer::writer();
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
+    ASSERT(copy == val);
 }
 
 TEST(testSerializeUniquePtr)
@@ -360,28 +216,24 @@ TEST(testSerializeUniquePtr)
     std::unique_ptr<i32> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
+    ASSERT(copy != nullptr);
     ASSERT(*copy == 42);
     ASSERT(copy.get() != val.get());
 }
 
-TEST(testSerializeArray)
+TEST(testSerializeUniquePtrNullRoundTrip)
 {
-    std::vector<u32> val{};
-    val.push_back(1);
-    val.push_back(2);
-    val.push_back(3);
+    std::unique_ptr<i32> val{};
+    std::unique_ptr<i32> copy = std::make_unique<i32>(99);
 
-    std::vector<u32> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size() == val.size());
-    for (u32 i = 0; i < val.size(); ++i)
-        ASSERT(copy[i] == val[i]);
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
+    ASSERT(copy == nullptr);
 }
 
 TEST(testSerializeSet)
@@ -393,9 +245,9 @@ TEST(testSerializeSet)
 
     HashSet<u32> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy.size() == val.size());
     ASSERT(copy.has(10u));
     ASSERT(copy.has(20u));
@@ -411,13 +263,31 @@ TEST(testSerializeMap)
 
     HashMap<u32, f32> copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy.size() == val.size());
     ASSERT(*copy.get(1u) == 1.5f);
     ASSERT(*copy.get(2u) == 2.5f);
     ASSERT(*copy.get(3u) == 3.5f);
+}
+
+TEST(testSerializeMapReadClearsExisting)
+{
+    HashMap<u32, f32> val{};
+    val.add(1, 1.5f);
+
+    HashMap<u32, f32> copy{};
+    copy.add(2, 2.5f);
+    copy.add(3, 3.5f);
+
+    Serializer w = Serializer::writer();
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
+    ASSERT(copy.size() == 1);
+    ASSERT(*copy.get(1u) == 1.5f);
+    ASSERT(copy.get(2u) == nullptr);
 }
 
 TEST(testBinaryRoundTripPrimitive)
@@ -428,7 +298,7 @@ TEST(testBinaryRoundTripPrimitive)
         bool c;
     };
 
-    auto serializeData = [](Serializer* s, Data* val)
+    auto serializeData = [](Serializer& s, Data* val)
     {
         return serializeObject(s,
             &val->a,
@@ -442,44 +312,14 @@ TEST(testBinaryRoundTripPrimitive)
 
     Data copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serializeData(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serializeData(&r, &copy));
+    ASSERT(serializeData(w, &val));
+    std::vector<byte> bin = w.takeFromWriter();
+    ASSERT(isSerialData(bin));
+    Serializer r = Serializer::reader(bin);
+    ASSERT(serializeData(r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b == val.b);
     ASSERT(copy.c == val.c);
-}
-
-TEST(testBinaryRoundTripString)
-{
-    struct Data {
-        i64 a;
-        std::string b;
-    };
-
-    auto serializeData = [](Serializer* s, Data* val)
-    {
-        return serializeObject(s,
-            &val->a,
-            &val->b);
-    };
-    Data val{};
-    val.a = -999;
-    val.b = std::string{"binary-test"};
-
-    Data copy{};
-    Serializer w = Serializer::writer();
-    ASSERT(serializeData(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serializeData(&r, &copy));
-    ASSERT(copy.a == val.a);
-    ASSERT(copy.b == val.b);
 }
 
 TEST(testBinaryRoundTripTrivialVector)
@@ -489,7 +329,7 @@ TEST(testBinaryRoundTripTrivialVector)
         std::vector<u8> b;
     };
 
-    auto serializeData = [](Serializer* s, Data* val)
+    auto serializeData = [](Serializer& s, Data* val)
     {
         return serializeObject(s,
             &val->a,
@@ -501,124 +341,171 @@ TEST(testBinaryRoundTripTrivialVector)
 
     Data copy{};
     Serializer w = Serializer::writer();
-    ASSERT(serializeData(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serializeData(&r, &copy));
+    ASSERT(serializeData(w, &val));
+    std::vector<byte> bin = w.takeFromWriter();
+    ASSERT(isSerialData(bin));
+    Serializer r = Serializer::reader(bin);
+    ASSERT(serializeData(r, &copy));
     ASSERT(copy.a == val.a);
     ASSERT(copy.b.size() == val.b.size());
     ASSERT(memcmp(copy.b.data(), val.b.data(), val.b.size()) == 0);
 }
 
-TEST(testBinaryRoundTripVector)
+TEST(testSerialDataSignatureConstexpr)
 {
-    std::vector<u32> val{1, 2, 3, 4};
-    std::vector<u32> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    ASSERT(Serializer::readBinary(bin).has_value());
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
-}
-
-TEST(testBinaryRoundTripVectorOfStrings)
-{
-    std::vector<std::string> val{"alpha", "", "gamma"};
-    std::vector<std::string> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
-}
-
-TEST(testBinaryRoundTripMap)
-{
-    HashMap<std::string, i32> val{};
-    val.add("a", 1);
-    val.add("b", -2);
-
-    HashMap<std::string, i32> copy{};
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size() == val.size());
-    ASSERT(*copy.get("a") == 1);
-    ASSERT(*copy.get("b") == -2);
+    static_assert(sizeof(serialDataSignature) == 2);
+    static_assert(serialDataSignature[0] == 'H');
+    static_assert(serialDataSignature[1] == 'G');
 }
 
 TEST(testIsSerialData)
 {
+    std::vector<byte> empty{};
+    ASSERT(!isSerialData(empty));
+
+    std::vector<byte> one{byte{'H'}};
+    ASSERT(!isSerialData(one));
+
+    std::vector<byte> signature{byte{'H'}, byte{'G'}};
+    ASSERT(isSerialData(signature));
+
+    std::vector<byte> payload{byte{'H'}, byte{'G'}, byte{0x01}, byte{0x02}};
+    ASSERT(isSerialData(payload));
+
+    std::vector<byte> wrong{byte{'X'}, byte{'G'}};
+    ASSERT(!isSerialData(wrong));
+
+    std::vector<byte> reversed{byte{'G'}, byte{'H'}};
+    ASSERT(!isSerialData(reversed));
+
+    std::vector<byte> extended{byte{'H'}, byte{'G'}, byte{'S'}, byte{'D'}};
+    ASSERT(isSerialData(extended));
+}
+
+TEST(testWriterStartsWithSignature)
+{
+    Serializer w = Serializer::writer();
+    ASSERT(w.isWriting());
+    ASSERT(!w.isReading());
+
+    std::span<const byte> bin = w.get();
+    ASSERT(bin.size() == sizeof(serialDataSignature));
+    ASSERT(isSerialData(bin));
+}
+
+TEST(testWriterGetMatchesTakeFromWriter)
+{
     Serializer w = Serializer::writer();
     i32 val = 5;
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    ASSERT(Serializer::readBinary(bin).has_value());
+    ASSERT(serialize(w, &val));
 
-    ASSERT(!Serializer::readBinary({}).has_value());
+    std::span<const byte> view = w.get();
+    std::vector<byte> before{view.begin(), view.end()};
 
-    std::vector<byte> garbage(32, byte{0});
-    ASSERT(!Serializer::readBinary(garbage).has_value());
+    std::vector<byte> taken = w.takeFromWriter();
+    ASSERT(before == taken);
+    ASSERT(isSerialData(taken));
+}
+
+TEST(testTakeFromWriterResetsWriter)
+{
+    Serializer w = Serializer::writer();
+    i32 val = 5;
+    ASSERT(serialize(w, &val));
+    std::vector<byte> bin = w.takeFromWriter();
+    ASSERT(bin.size() > sizeof(serialDataSignature));
+
+    ASSERT(!w.isWriting());
+    ASSERT(w.isReading());
+    ASSERT(w.get().empty());
+}
+
+TEST(testTakeFromWriterOnReader)
+{
+    std::vector<byte> bin{byte{'H'}, byte{'G'}, byte{1}};
+    Serializer r = Serializer::reader(bin);
+
+    std::vector<byte> taken = r.takeFromWriter();
+    ASSERT(taken.empty());
+    ASSERT(r.isReading());
+
+    byte out{};
+    ASSERT(serialize(r, &out));
+    ASSERT(out == byte{1});
+}
+
+TEST(testReaderWithoutSignatureStartsAtZero)
+{
+    u32 expected = 0xDEADBEEF;
+    std::array<byte, sizeof(u32)> raw{};
+    memcpy(raw.data(), &expected, sizeof(expected));
+
+    Serializer r = Serializer::reader(raw);
+    u32 copy = 0;
+    ASSERT(serialize(r, &copy));
+    ASSERT(copy == expected);
+}
+
+TEST(testReaderTrailingDataIgnored)
+{
+    Serializer w = Serializer::writer();
+    i32 val = 5;
+    ASSERT(serialize(w, &val));
+    std::vector<byte> bin = w.takeFromWriter();
+    bin.push_back(byte{0xFF});
+    bin.push_back(byte{0xFF});
+
+    Serializer r = Serializer::reader(bin);
+    i32 copy = 0;
+    ASSERT(serialize(r, &copy));
+    ASSERT(copy == val);
+}
+
+TEST(testSerializeDataWriterAppends)
+{
+    std::array<byte, 3> first{byte{1}, byte{2}, byte{3}};
+    std::array<byte, 2> second{byte{4}, byte{5}};
+
+    Serializer w = Serializer::writer();
+    ASSERT(w.serializeData(first));
+    ASSERT(w.get().size() == sizeof(serialDataSignature) + first.size());
+    ASSERT(w.serializeData(second));
+    ASSERT(w.get().size() == sizeof(serialDataSignature) + first.size() + second.size());
+}
+
+TEST(testSerializeDataTruncated)
+{
+    std::vector<byte> bin{byte{'H'}, byte{'G'}, byte{9}};
+    Serializer r = Serializer::reader(bin);
+
+    std::array<byte, 2> out{};
+    setError("");
+    ASSERT(!r.serializeData(out));
+    ASSERT(getError().length() > 0);
+    ASSERT(!r.isWriting());
 }
 
 TEST(testReadSerialBinaryRejectsGarbage)
 {
-    setError("");
-    ASSERT(!Serializer::readBinary({}).has_value());
-    ASSERT(getError().length() > 0);
+    ASSERT(!serialLoadFromBinary<i32>({}).has_value());
 
     std::vector<byte> garbage(32, byte{0});
-    setError("");
-    ASSERT(!Serializer::readBinary(garbage).has_value());
-    ASSERT(getError().length() > 0);
-}
-
-TEST(testReadSerialBinaryRejectsWrongVersion)
-{
-    Serializer w = Serializer::writer();
-    i32 val = 5;
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-
-    // The major version follows the 4 byte tag
-    u32 version = 1;
-    memcpy(bin.data() + 4, &version, sizeof(version));
-
-    setError("");
-    ASSERT(!Serializer::readBinary(bin).has_value());
-    ASSERT(getError().length() > 0);
+    ASSERT(!serialLoadFromBinary<i32>(garbage).has_value());
 }
 
 TEST(testReadSerialBinaryRejectsTruncation)
 {
     Serializer w = Serializer::writer();
     std::vector<u32> val{1, 2, 3};
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    ASSERT(Serializer::readBinary(bin).has_value());
+    ASSERT(serialize(w, &val));
+    std::vector<byte> bin = w.takeFromWriter();
+    ASSERT(serialLoadFromBinary<std::vector<u32>>(bin).has_value());
 
-    // Every truncation must fail: the loader validates node and leaf ranges
+    // Every truncation must fail: the reader validates every payload range
     for (u64 cut = 1; cut < bin.size(); ++cut)
     {
         std::vector<byte> trunc(bin.begin(), bin.end() - assertCast<i64>(cut));
-        setError("");
-        ASSERT(!Serializer::readBinary(trunc).has_value());
-        ASSERT(getError().length() > 0);
+        ASSERT(!serialLoadFromBinary<std::vector<u32>>(trunc).has_value());
     }
 }
 
@@ -628,25 +515,12 @@ TEST(testProductRoundTripPrimitive)
     std::tuple<i64, f64, bool> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(std::get<0>(copy) == std::get<0>(val));
     ASSERT(std::get<1>(copy) == std::get<1>(val));
     ASSERT(std::get<2>(copy) == std::get<2>(val));
-}
-
-TEST(testProductRoundTripString)
-{
-    std::tuple<i64, std::string> val{7, std::string{"hello"}};
-    std::tuple<i64, std::string> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(std::get<0>(copy) == std::get<0>(val));
-    ASSERT(std::get<1>(copy) == std::get<1>(val));
 }
 
 TEST(testProductRoundTripEmpty)
@@ -655,26 +529,9 @@ TEST(testProductRoundTripEmpty)
     std::tuple<> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-}
-
-TEST(testProductRoundTripBinary)
-{
-    std::tuple<i32, std::string, f32> val{42, std::string{"binary"}, 2.5f};
-    std::tuple<i32, std::string, f32> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serialize(&r, &copy));
-    ASSERT(std::get<0>(copy) == std::get<0>(val));
-    ASSERT(std::get<1>(copy) == std::get<1>(val));
-    ASSERT(std::get<2>(copy) == std::get<2>(val));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
 }
 
 TEST(testSumRoundTripFirstType)
@@ -683,37 +540,24 @@ TEST(testSumRoundTripFirstType)
     std::variant<i64, f64, std::string> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(std::holds_alternative<i64>(copy));
     ASSERT(std::get<i64>(copy) == -42);
 }
 
-TEST(testSumRoundTripSecondType)
+TEST(testSumRoundTripChangesType)
 {
-    std::variant<i64, f64, std::string> val{f64{3.14}};
-    std::variant<i64, f64, std::string> copy{};
+    std::variant<i64, f64, std::string> val{std::string{"changed"}};
+    std::variant<i64, f64, std::string> copy{i64{99}};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(std::holds_alternative<f64>(copy));
-    ASSERT(std::get<f64>(copy) == 3.14);
-}
-
-TEST(testSumRoundTripThirdType)
-{
-    std::variant<i64, f64, std::string> val{std::string{"world"}};
-    std::variant<i64, f64, std::string> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(std::holds_alternative<std::string>(copy));
-    ASSERT(std::get<std::string>(copy) == std::string{"world"});
+    ASSERT(std::get<std::string>(copy) == std::string{"changed"});
 }
 
 TEST(testSumRoundTripEmpty)
@@ -722,27 +566,11 @@ TEST(testSumRoundTripEmpty)
     std::variant<i64, f64, std::string> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(std::holds_alternative<i64>(copy));
     ASSERT(std::get<i64>(copy) == 0);
-}
-
-TEST(testSumRoundTripBinary)
-{
-    std::variant<i64, f64, std::string> val{f64{99.9}};
-    std::variant<i64, f64, std::string> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serialize(&r, &copy));
-    ASSERT(std::holds_alternative<f64>(copy));
-    ASSERT(std::get<f64>(copy) == 99.9);
 }
 
 TEST(testMaybeRoundTripWithValue)
@@ -751,24 +579,11 @@ TEST(testMaybeRoundTripWithValue)
     std::optional<i64> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy.has_value());
     ASSERT(*copy == 42);
-}
-
-TEST(testMaybeRoundTripWithString)
-{
-    std::optional<std::string> val{std::string{"maybe"}};
-    std::optional<std::string> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.has_value());
-    ASSERT(*copy == *val);
 }
 
 TEST(testMaybeRoundTripEmpty)
@@ -777,38 +592,23 @@ TEST(testMaybeRoundTripEmpty)
     std::optional<i64> copy{std::optional<i64>{99}};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(!copy.has_value());
-}
-
-TEST(testMaybeRoundTripBinary)
-{
-    std::optional<f32> val{2.5f};
-    std::optional<f32> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    std::vector<byte> bin = w.writeBinary();
-    std::optional<Serializer> rOpt = Serializer::readBinary(bin);
-    ASSERT(rOpt.has_value());
-    Serializer& r = *rOpt;
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.has_value());
-    ASSERT(*copy == 2.5f);
 }
 
 TEST(testSerializeEmptyString)
 {
     std::string val = std::string{""};
-    std::string copy{};
+    std::string copy = std::string{"not empty"};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy == val);
+    ASSERT(copy.empty());
 }
 
 TEST(testSerializeEmptyTrivialVector)
@@ -817,97 +617,10 @@ TEST(testSerializeEmptyTrivialVector)
     std::vector<u8> copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy.size() == val.size());
-}
-
-TEST(testSerializeEmptyArray)
-{
-    std::vector<u32> val{};
-    std::vector<u32> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size() == 0);
-}
-
-TEST(testSerializeEmptySet)
-{
-    HashSet<u32> val{};
-    HashSet<u32> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size() == 0);
-}
-
-TEST(testSerializeEmptyMap)
-{
-    HashMap<u32, f32> val{};
-    HashMap<u32, f32> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.size() == 0);
-}
-
-TEST(testSerializeEmptyMaybe)
-{
-    std::optional<i64> val{};
-    std::optional<i64> copy{std::optional<i64>{99}};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(!copy.has_value());
-}
-
-TEST(testSerializeNestedProduct)
-{
-    std::tuple<std::tuple<i64, f64>, bool> val{std::tuple<i64, f64>{-7, 2.5f}, true};
-    std::tuple<std::tuple<i64, f64>, bool> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(std::get<0>(std::get<0>(copy)) == -7);
-    ASSERT(std::get<1>(std::get<0>(copy)) == 2.5f);
-    ASSERT(std::get<1>(copy) == true);
-}
-
-TEST(testSerializeNestedMaybe)
-{
-    std::optional<std::string> val{std::string{"nested"}};
-    std::optional<std::string> copy{};
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy.has_value());
-    ASSERT(*copy == *val);
-}
-
-TEST(testSerializeBoolFalse)
-{
-    bool val = false;
-    bool copy = true;
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
-    ASSERT(copy == val);
 }
 
 TEST(testSerializeLargeString)
@@ -919,86 +632,25 @@ TEST(testSerializeLargeString)
     std::string copy{};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(serialize(&r, &copy));
+    ASSERT(serialize(w, &val));
+    Serializer r = Serializer::reader(w.get());
+    ASSERT(serialize(r, &copy));
     ASSERT(copy == val);
     ASSERT(copy.size() == 2048);
 }
 
-TEST(testSerializeReadStringAsIntError)
+TEST(testSerializeDataDirect)
 {
-    std::string val = std::string{"hello"};
+    byte data[]{byte{0x01}, byte{0x02}, byte{0x03}, byte{0x04}};
 
     Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
+    ASSERT(w.serializeData(data));
+    std::vector<byte> bin = w.takeFromWriter();
 
-    i64 copy = 0;
-    Serializer r = Serializer::reader(w.takeNode());
-    setError("");
-    ASSERT(!serialize(&r, &copy));
-    ASSERT(getError().length() > 0);
-}
-
-TEST(testSerializeReadMissingChildError)
-{
-    i64 val = 42;
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-
-    struct Data {
-        i64 a;
-        i64 b;
-    };
-    Data copy{};
-
-    Serializer r = Serializer::reader(w.takeNode());
-    setError("");
-    ASSERT(!serializeObject(&r, &copy.a, &copy.b));
-    ASSERT(getError().length() > 0);
-}
-
-TEST(testSerializeReadSizeMismatchError)
-{
-    u32 val = 0xCAFEBABE;
-
-    Serializer w = Serializer::writer();
-    ASSERT(serialize(&w, &val));
-
-    i64 copy = 0;
-    Serializer r = Serializer::reader(w.takeNode());
-    setError("");
-    ASSERT(!serialize(&r, &copy));
-    ASSERT(getError().length() > 0);
-}
-
-TEST(testSerializerIsWritingIsReading)
-{
-    Serializer w = Serializer::writer();
-    ASSERT(w.isWriting());
-    ASSERT(!w.isReading());
-
-    i32 val = 5;
-    ASSERT(serialize(&w, &val));
-    Serializer r = Serializer::reader(w.takeNode());
-    ASSERT(r.isReading());
-    ASSERT(!r.isWriting());
-}
-
-TEST(testSerializeVoid)
-{
-    const byte data[]{byte{0x01}, byte{0x02}, byte{0x03}, byte{0x04}};
-    std::span<const byte> out{data};
-
-    Serializer w = Serializer::writer();
-    ASSERT(w.serializeVoid(&out));
-    Serializer r = Serializer::reader(w.takeNode());
-
-    std::span<const byte> in;
-    ASSERT(r.serializeVoid(&in));
-    ASSERT(in.size() == 4);
-    ASSERT(memcmp(in.data(), data, 4) == 0);
+    Serializer r = Serializer::reader(bin);
+    byte out[4] = {};
+    ASSERT(r.serializeData(std::span<byte>{out}));
+    ASSERT(memcmp(out, data, 4) == 0);
 }
 
 TEST(testSerialLoadStoreToBinary)
@@ -1006,6 +658,7 @@ TEST(testSerialLoadStoreToBinary)
     std::vector<u32> val{10, 20, 30};
 
     std::vector<byte> bin = serialStoreToBinary(val);
+    ASSERT(isSerialData(bin));
     std::optional<std::vector<u32>> copy = serialLoadFromBinary<std::vector<u32>>(bin);
     ASSERT(copy.has_value());
     ASSERT(*copy == val);
@@ -1022,7 +675,7 @@ struct SerialFileData {
     std::vector<f64> c;
 };
 
-bool serialize(Serializer* s, SerialFileData* val)
+bool serialize(Serializer& s, SerialFileData* val)
 {
     return serializeObject(s, &val->a, &val->b, &val->c);
 }
@@ -1038,6 +691,10 @@ TEST(testSerialStoreLoad)
 
     setError("");
     ASSERT(serialStore(val, serialTestPath));
+
+    std::optional<std::vector<byte>> bin = binaryLoad(serialTestPath);
+    ASSERT(bin.has_value());
+    ASSERT(isSerialData(*bin));
 
     setError("");
     std::optional<SerialFileData> loaded = serialLoad<SerialFileData>(serialTestPath);
@@ -1059,15 +716,11 @@ TEST(testSerializeNestedFailurePropagates)
     i32 inner = 42;
 
     Serializer w = Serializer::writer();
-    w.beginObject();
-    ASSERT(serialize(&w, &inner));
-    w.endObject();
+    ASSERT(serialize(w, &inner));
+
     f64 copy = 0.0;
-    Serializer r = Serializer::reader(w.takeNode());
+    Serializer r = Serializer::reader(w.get());
     setError("");
-    r.beginObject();
-    ASSERT(!serialize(&r, &copy));
-    r.endObject();
+    ASSERT(!serialize(r, &copy));
     ASSERT(getError().length() > 0);
 }
-

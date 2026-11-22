@@ -136,8 +136,8 @@ TEST(testSoundLoadBadSerialData)
     // Valid serial binary, but with a structure that does not match a Sound
     Serializer w = Serializer::writer();
     i64 wrong = 5;
-    ASSERT(serialize(&w, &wrong));
-    std::vector<byte> bin = w.writeBinary();
+    ASSERT(serialize(w, &wrong));
+    std::vector<byte> bin = w.takeFromWriter();
     ASSERT(binaryStore(bin, path));
 
     setError("");
