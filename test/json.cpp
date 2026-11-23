@@ -2,6 +2,9 @@
 #include "hg/json.hpp"
 #include "hg/utility.hpp"
 
+#include <iterator>
+#include <numeric>
+
 using namespace hg;
 
 TEST(testJsonDefaultConstructors)
@@ -224,20 +227,12 @@ TEST(testJsonForEachAndIteration)
     {
         JsonArray arr{1.0, 2.0, 3.0};
 
-        f64 sum = 0.0;
-        for (JsonValue& val : arr)
-        {
-            sum += val.number();
-        }
+        f64 sum = std::accumulate(arr.begin(), arr.end(), 0.0,
+            [](f64 acc, JsonValue& val) { return acc + val.number(); });
         ASSERT(sum == 6.0);
 
-        u64 counted = 0;
         const JsonArray& carr = arr;
-        for (const JsonValue* it = carr.begin(); it != carr.end(); ++it)
-        {
-            ++counted;
-        }
-        ASSERT(counted == 3);
+        ASSERT(assertCast<u64>(std::distance(carr.begin(), carr.end())) == 3);
     }
 }
 
@@ -375,31 +370,11 @@ TEST(testWriteJsonDocument)
     ASSERT(out[0] == '{');
     ASSERT(out[out.length() - 1] == '}');
 
-    u64 openBrace = 0;
-    u64 closeBrace = 0;
-    u64 openBracket = 0;
-    u64 closeBracket = 0;
-    for (u64 i = 0; i < out.length(); ++i)
-    {
-        switch (out[i])
-        {
-        case '{': ++openBrace; break;
-        case '}': ++closeBrace; break;
-        case '[': ++openBracket; break;
-        case ']': ++closeBracket; break;
-        default: break;
-        }
-    }
-    ASSERT(openBrace == closeBrace);
-    ASSERT(openBracket == closeBracket);
+    ASSERT(std::count(out.begin(), out.end(), '{') == std::count(out.begin(), out.end(), '}'));
+    ASSERT(std::count(out.begin(), out.end(), '[') == std::count(out.begin(), out.end(), ']'));
 
-    bool trailingComma = false;
-    for (u64 i = 0; i + 2 < out.length(); ++i)
-    {
-        if (out[i] == ',' && out[i + 1] == '\n' && (out[i + 2] == '}' || out[i + 2] == ']'))
-            trailingComma = true;
-    }
-    ASSERT(!trailingComma);
+    ASSERT(!contains(out, ",\n}"));
+    ASSERT(!contains(out, ",\n]"));
 
     ASSERT(contains(out, "\"name\" : \"hurdy\""));
     ASSERT(contains(out, "\"count\" : 3"));

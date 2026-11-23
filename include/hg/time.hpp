@@ -4,6 +4,8 @@
 #include "hg/utility.hpp"
 #include "hg/hash.hpp"
 
+#include <chrono>
+
 namespace hg {
 
 /**
@@ -14,16 +16,9 @@ private:
     /**
      * The begin time
      */
-    f64 time = 0.0;
+    std::chrono::time_point<std::chrono::steady_clock> time = std::chrono::steady_clock::now();
 
 public:
-    /**
-     * Begin the clock;
-     */
-    Clock() noexcept
-    {
-        tick();
-    }
 
     /**
      * Resets the clock and returns the time in seconds since the last tick

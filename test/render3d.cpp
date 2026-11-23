@@ -3,6 +3,7 @@
 #include "hg/serialization.hpp"
 #include "hg/utility.hpp"
 
+#include <algorithm>
 #include <vector>
 
 using namespace hg;
@@ -179,8 +180,7 @@ TEST(testRenderer3DRenderScene)
 
     // The triangle covers the whole viewport: every pixel must differ from
     // the red clear color
-    for (u32 i = 0; i < size * size; ++i)
-        ASSERT(pixels[i] != 0xFF0000FF);
+    ASSERT(std::all_of(pixels, pixels + size * size, [](u32 p) { return p != 0xFF0000FF; }));
 }
 
 TEST(testRenderer3DSceneClearedAfterRender)

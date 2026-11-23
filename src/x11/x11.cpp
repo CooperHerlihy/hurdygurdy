@@ -826,9 +826,7 @@ void InputDeviceX11::processEvents()
     // Forward events to windows
     windows.forEach([&](::Window, WindowX11* window)
     {
-        window->eventQueue.clear();
-        for (u64 i = 0; i < events.size(); ++i)
-            window->eventQueue.push_back(events[i]);
+        window->eventQueue.assign(events.begin(), events.end());
     });
 }
 

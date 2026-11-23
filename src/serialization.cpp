@@ -71,18 +71,15 @@ bool Serializer::serializeData(std::span<byte> data)
             return false;
         }
 
-        for (byte& b : data)
-        {
-            b = r.bin[r.pos++];
-        }
+        std::memcpy(data.data(), r.bin.data() + r.pos, data.size());
+        r.pos += data.size();
         return true;
     },
     [&](Writer& w)
     {
-        for (byte b : data)
-        {
-            w.bin.emplace_back(b);
-        }
+        u64 pos = w.bin.size();
+        w.bin.resize(pos + data.size());
+        std::memcpy(w.bin.data() + pos, data.data(), data.size());
         return true;
     });
 }

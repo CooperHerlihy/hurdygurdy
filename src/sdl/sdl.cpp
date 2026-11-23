@@ -255,11 +255,7 @@ std::span<std::string_view> InputDeviceSdl3::getVulkanExtensions()
         panic("SDL could not get Vulkan instance extensions: {}\n", SDL_GetError());
 
     static std::vector<std::string_view> extBuffer{};
-    extBuffer.resize(extCount);
-    for (u32 i = 0; i < extCount; ++i)
-    {
-        extBuffer[i] = exts[i];
-    }
+    extBuffer.assign(exts, exts + extCount);
 
     return extBuffer;
 }

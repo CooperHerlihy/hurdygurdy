@@ -328,9 +328,7 @@ TEST(testArenaAllocatorVector)
     Arena a{256};
     ArenaScope scope{&a};
     VectorTemp<u32> v{ArenaAllocator<u32>{&a}};
-    v.push_back(1);
-    v.push_back(2);
-    v.push_back(3);
+    v.insert(v.end(), {1u, 2u, 3u});
     ASSERT(v.size() == 3);
     ASSERT(v[0] == 1);
     ASSERT(v[2] == 3);

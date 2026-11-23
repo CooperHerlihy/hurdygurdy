@@ -6,6 +6,7 @@
 #include <malloc.h>
 #endif
 
+#include <algorithm>
 #include <vector>
 #include <memory>
 
@@ -45,19 +46,16 @@ ArenaScope getScratch(const Arena* conflict)
 
 ArenaScope getScratch(std::span<const Arena*> conflicts)
 {
-    for (std::unique_ptr<Arena>& arena : scratchArenas)
+    auto it = std::ranges::find_if(scratchArenas, [&](std::unique_ptr<Arena>& arena)
     {
-        for (const Arena* conflict : conflicts)
+        return std::ranges::none_of(conflicts, [&](const Arena* conflict)
         {
-            if (arena.get() == conflict)
-                goto next;
-        }
-        return arena.get();
-next:
-        continue;
-    }
-
-    return scratchArenas.emplace_back(std::make_unique<Arena>((u64{1} << 28) - 1)).get();
+            return conflict == arena.get();
+        });
+    });
+    if (it == scratchArenas.end())
+        return scratchArenas.emplace_back(std::make_unique<Arena>((u64{1} << 28) - 1)).get();
+    return it->get();
 }
 
 } // namespace hg

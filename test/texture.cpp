@@ -2,6 +2,7 @@
 #include "hg/render2d.hpp"
 #include "hg/utility.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -54,8 +55,7 @@ TEST(testTextureStoreLoadPng)
 
     const u32* originalPixels = reinterpret_cast<const u32*>(original.pixels.data());
     const u32* loadedPixels = reinterpret_cast<const u32*>(loaded->pixels.data());
-    for (u32 i = 0; i < 4 * 3; ++i)
-        ASSERT(loadedPixels[i] == originalPixels[i]);
+    ASSERT(std::equal(loadedPixels, loadedPixels + 4 * 3, originalPixels));
 }
 
 TEST(testTextureStoreLoadJpg)

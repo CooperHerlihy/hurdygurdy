@@ -1,6 +1,8 @@
 #include "tests.hpp"
 #include "hg/concurrency.hpp"
 
+#include <algorithm>
+
 using namespace hg;
 
 TEST(testSpinLockAcquireRelease)
@@ -138,17 +140,16 @@ TEST(testCallParManyItems)
     Fence fence{};
     static constexpr u32 count = 100;
     bool vals[count]{};
-    for (u32 i = 0; i < count; ++i)
+    for (bool& val : vals)
     {
-        callPar(&fence, &vals[i], [](void* p)
+        callPar(&fence, &val, [](void* p)
         {
             *static_cast<bool*>(p) = true;
         });
     }
     bool ok = fence.wait(2.0);
     ASSERT(ok);
-    for (u32 i = 0; i < count; ++i)
-        ASSERT(vals[i]);
+    ASSERT(std::all_of(vals, vals + count, [](bool val) { return val; }));
 }
 
 TEST(testCallParModifyPointer)

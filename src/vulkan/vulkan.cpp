@@ -91,26 +91,23 @@ static bool isDebugMessengerAvailable()
     VectorTemp<VkLayerProperties> layers{layerCount, scratch};
     vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
-    for (VkLayerProperties& layer : layers)
-    {
-        if (strcmp(layer.layerName, "VK_LAYER_KHRONOS_validation") == 0)
-            goto layerFound;
-    }
-    return false;
-layerFound:
+    if (std::ranges::none_of(layers, [&](VkLayerProperties& layer)
+        {
+            return strcmp(layer.layerName,  "VK_LAYER_KHRONOS_validation") == 0;
+        }))
+        return false;
 
     u32 extCount;
     vkEnumerateInstanceExtensionProperties(nullptr, &extCount, nullptr);
     VectorTemp<VkExtensionProperties> exts{extCount, scratch};
     vkEnumerateInstanceExtensionProperties(nullptr, &extCount, exts.data());
 
-    for (VkExtensionProperties& ext : exts)
-    {
-        if (strcmp(ext.extensionName, "VK_EXT_debug_utils") == 0)
-            goto extFound;
-    }
-    return false;
-extFound:
+    if (std::ranges::none_of(exts, [&](VkExtensionProperties& ext)
+        {
+            return strcmp(ext.extensionName, "VK_EXT_debug_utils") == 0;
+        }))
+        return false;
+
     return true;
 #endif
     return false;
@@ -193,18 +190,19 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
     VectorTemp<VkQueueFamilyProperties> families{familyCount, scratch};
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.data());
 
-    for (u32 i = 0; i < familyCount; ++i)
+    auto it = std::ranges::find_if(families, [&](VkQueueFamilyProperties& family)
     {
-        if (families[i].queueFlags & queueFlags)
-        {
-            *queueFamily = i;
-            return true;
-        }
+        return (family.queueFlags & queueFlags) != 0;
+    });
+    if (it == families.end())
+    {
+        setError("Could not find Vulkan queue family");
+        *queueFamily = (u32)-1;
+        return false;
     }
 
-    setError("Could not find Vulkan queue family");
-    *queueFamily = (u32)-1;
-    return false;
+    *queueFamily = assertCast<u32>(it - families.begin());
+    return true;
 }
 
 static VkPhysicalDevice findPhysicalDevice(GpuVk* vk)
@@ -219,39 +217,34 @@ static VkPhysicalDevice findPhysicalDevice(GpuVk* vk)
     vkEnumeratePhysicalDevices(vk->instance, &gpuCount, gpus.data());
 
     VectorTemp<VkExtensionProperties> extProps{scratch};
-
-    for (VkPhysicalDevice gpu : gpus)
+    auto it = std::ranges::find_if(gpus, [&](VkPhysicalDevice gpu)
     {
-        u32 family;
-
         u32 propCount = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &propCount, nullptr);
         extProps.resize(propCount);
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &propCount, extProps.data());
 
-        for (u32 j = 0; j < assertCast<u32>(std::size(deviceExtensions)); j++)
-        {
-            for (u32 k = 0; k < propCount; k++)
+        if (std::ranges::any_of(deviceExtensions, [&](const char* extName)
             {
-                if (strcmp(deviceExtensions[j], extProps[k].extensionName) == 0)
-                    goto nextExt;
-            }
-            goto nextGpu;
-nextExt:
-            continue;
-        }
+                return std::ranges::none_of(extProps, [&](VkExtensionProperties& extProp)
+                {
+                    return strcmp(extName, extProp.extensionName) == 0;
+                });
+            }))
+            return false;
 
+        u32 family;
         if (!findQueueFamily(gpu, &family, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
-            goto nextGpu;
+            return false;
 
-        return gpu;
-
-nextGpu:
-        continue;
+        return true;
+    });
+    if (it == gpus.end())
+    {
+        setError("Could not find suitable gpu");
+        return nullptr;
     }
-
-    setError("Could not find suitable gpu");
-    return nullptr;
+    return *it;
 }
 
 static VkDevice createDevice(GpuVk* vk)
@@ -741,11 +734,11 @@ static Format findSwapchainFormat(GpuVk* vk, VkSurfaceKHR surface)
     vkGetPhysicalDeviceSurfaceFormatsKHR(
         vk->physicalDevice, surface, &formatCount, formats.data());
 
-    for (u32 i = 0; i < formatCount; ++i)
+    for (VkSurfaceFormatKHR& f : formats)
     {
-        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
+        if (f.format == VK_FORMAT_R8G8B8A8_SRGB)
             return Format::rgba8_srgb;
-        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
+        if (f.format == VK_FORMAT_B8G8R8A8_SRGB)
             return Format::bgra8_srgb;
     }
     panic("No supported swapchain formats\n");

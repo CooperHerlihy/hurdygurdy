@@ -265,7 +265,6 @@ void AudioPlayer::update(std::span<f32> buf, AudioConfig config)
 void AudioPlayer::playSound(const Sound& soundSrc, f32 gain)
 {
     SpinLockScope scope{lock};
-
     sounds.emplace_back(&soundSrc, 0, gain, true);
 }
 
@@ -289,7 +288,7 @@ void AudioPlayer::killMusic(const Sound& musicSrc)
 {
     SpinLockScope scope{lock};
 
-    for (u32 i = 0; i < sounds.size(); ++i)
+    for (u32 i = 0; i < music.size(); ++i)
     {
         if (music[i].asset == &musicSrc)
         {

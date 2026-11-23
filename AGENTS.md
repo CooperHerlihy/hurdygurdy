@@ -4,19 +4,19 @@ Modern C++20 game development library
 
 ## Rules
 
-- never run scripts without backups
 - never introduce third-party code
 - never use exceptions or RTTI
 - prefer not to use auto
+- prioritize both performance and readability
+- prefer modern declarative patterns to legacy imperative patterns
 - use `i8`, `u32`, `f64`, etc., not `int`, `float`, etc.
-- use `HG_ASSERT` for assertions, assert all preconditions and invariants
-- use `setError("msg")` and return `std::optional` for recoverable errors
-- use `panic()` for unrecoverable errors
-- use RAII, generally delete copy constructors
+- handle programmer errors with `HG_ASSERT`
+- handle external errors with `setError("msg")` and `std::optional`
+- handle unrecoverable errors with `panic()`
 - prefer a static create function to a failing constructor
-- use `HG_DEFER` to defer C-style destructor functions
-- prefer `StringTemp` and `VectorTemp`, or `getScratch()`, for temporary allocations
-- prefer `forPar()` and `callPar()` for concurrency
+- use `HG_DEFER` to defer C-style destroy functions
+- use `StringTemp` and `VectorTemp`, or `getScratch()`, for temporary allocations
+- use `forPar()` and `callPar()` for concurrency
 - use `log()` for temporary log statements
 - otherwise, prefer to use the standard library
 

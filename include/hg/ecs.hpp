@@ -221,10 +221,7 @@ public:
         {
             u64 oldCount = s.indices.size();
             s.indices.resize(e.idx() + 1);
-            for (u64 i = oldCount; i < s.indices.size(); ++i)
-            {
-                s.indices[i] = static_cast<u32>(-1);
-            }
+            std::memset(s.indices.data() + oldCount, static_cast<u32>(-1), (s.indices.size() - oldCount) * sizeof(*s.indices.data()));
         }
 
         u64 idx = s.entities.size();

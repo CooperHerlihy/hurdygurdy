@@ -1,6 +1,7 @@
 #include "tests.hpp"
 #include "hg/utility.hpp"
 
+#include <algorithm>
 #include <cfloat>
 #include <cstring>
 #include <limits>
@@ -723,9 +724,6 @@ TEST(testLoadAndStoreLargeFile)
     std::optional<std::vector<byte>> loaded = binaryLoad(path);
     ASSERT(loaded.has_value());
     ASSERT(loaded->size() == size);
-    for (u64 i = 0; i < size; ++i)
-    {
-        ASSERT((*loaded)[i] == static_cast<byte>(i & 0xFF));
-    }
+    ASSERT(std::equal(loaded->begin(), loaded->end(), data.begin()));
     cleanupTestDir();
 }

@@ -922,12 +922,26 @@ static const struct wl_seat_listener seatListener = {
     .name = InputDeviceWayland::seatName,
 };
 
+static DisplayInfo* displayForOutput(struct wl_output* const* outputs, u32 outputCount,
+    std::vector<DisplayInfo>& displays, struct wl_output* output)
+{
+    for (u32 i = 0; i < outputCount; i++)
+    {
+        if (outputs[i] != output)
+            continue;
+
+        if (displays.size() <= i)
+            displays.resize(assertCast<u64>(i + 1));
+        return &displays[i];
+    }
+    return nullptr;
+}
+
 void InputDeviceWayland::outputGeometry(void* data, struct wl_output* output,
     int32_t x, int32_t y, int32_t physicalWidth, int32_t physicalHeight,
     int32_t subpixel, const char* make, const char* model, int32_t transform)
 {
     (void)data;
-    (void)output;
     (void)physicalWidth;
     (void)physicalHeight;
     (void)subpixel;
@@ -935,17 +949,12 @@ void InputDeviceWayland::outputGeometry(void* data, struct wl_output* output,
     (void)model;
     (void)transform;
 
-    for (u32 i = 0; i < wlDevice->outputCount; i++)
-    {
-        if (wlDevice->outputs[i] == output)
-        {
-            if (wlDevice->displays.size() <= i)
-                wlDevice->displays.resize(assertCast<u64>(i + 1));
-            wlDevice->displays[i].posX = x;
-            wlDevice->displays[i].posY = y;
-            break;
-        }
-    }
+    DisplayInfo* info = displayForOutput(wlDevice->outputs, wlDevice->outputCount, wlDevice->displays, output);
+    if (info == nullptr)
+        return;
+
+    info->posX = x;
+    info->posY = y;
 }
 
 void InputDeviceWayland::outputMode(void* data, struct wl_output* output,
@@ -957,22 +966,17 @@ void InputDeviceWayland::outputMode(void* data, struct wl_output* output,
     if (!(flags & WL_OUTPUT_MODE_CURRENT))
         return;
 
-    for (u32 i = 0; i < wlDevice->outputCount; i++)
-    {
-        if (wlDevice->outputs[i] == output)
-        {
-            if (wlDevice->displays.size() <= i)
-                wlDevice->displays.resize(assertCast<u64>(i + 1));
-            wlDevice->displays[i].sizeW = assertCast<u32>(width);
-            wlDevice->displays[i].sizeH = assertCast<u32>(height);
-            wlDevice->displays[i].workPosX = wlDevice->displays[i].posX;
-            wlDevice->displays[i].workPosY = wlDevice->displays[i].posY;
-            wlDevice->displays[i].workSizeW = wlDevice->displays[i].sizeW;
-            wlDevice->displays[i].workSizeH = wlDevice->displays[i].sizeH;
-            wlDevice->displays[i].dpiScale = 1.0f;
-            break;
-        }
-    }
+    DisplayInfo* info = displayForOutput(wlDevice->outputs, wlDevice->outputCount, wlDevice->displays, output);
+    if (info == nullptr)
+        return;
+
+    info->sizeW = assertCast<u32>(width);
+    info->sizeH = assertCast<u32>(height);
+    info->workPosX = info->posX;
+    info->workPosY = info->posY;
+    info->workSizeW = info->sizeW;
+    info->workSizeH = info->sizeH;
+    info->dpiScale = 1.0f;
 }
 
 void InputDeviceWayland::outputDone(void* data, struct wl_output* output)
@@ -985,16 +989,11 @@ void InputDeviceWayland::outputScale(void* data, struct wl_output* output, int32
 {
     (void)data;
 
-    for (u32 i = 0; i < wlDevice->outputCount; i++)
-    {
-        if (wlDevice->outputs[i] == output)
-        {
-            if (wlDevice->displays.size() <= i)
-                wlDevice->displays.resize(assertCast<u64>(i + 1));
-            wlDevice->displays[i].dpiScale = assertCast<f32>(factor);
-            break;
-        }
-    }
+    DisplayInfo* info = displayForOutput(wlDevice->outputs, wlDevice->outputCount, wlDevice->displays, output);
+    if (info == nullptr)
+        return;
+
+    info->dpiScale = assertCast<f32>(factor);
 }
 
 void InputDeviceWayland::outputName(void* data, struct wl_output* output, const char* name)

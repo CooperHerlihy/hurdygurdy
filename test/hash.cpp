@@ -143,8 +143,8 @@ TEST(testHashPointer)
     void* pb = &b;
     ASSERT(hash(pa) == hash(pa));
     ASSERT(hash(pa) != hash(pb));
-    ASSERT(hash((void*)nullptr) == hash((void*)nullptr));
-    ASSERT(hash(pa) != hash((void*)nullptr));
+    ASSERT(hash(static_cast<void*>(nullptr)) == hash(static_cast<void*>(nullptr)));
+    ASSERT(hash(pa) != hash(static_cast<void*>(nullptr)));
 }
 
 TEST(testHashStringViewEmpty)
@@ -392,11 +392,11 @@ TEST(testSetStringCollision)
     for (u32 i = 0; i < 10; ++i)
         set.add(std::string{vals[i]});
     ASSERT(set.size() == 10);
-    for (u32 i = 0; i < 10; ++i)
+    for (const char* val : vals)
     {
-        ASSERT(set.has(vals[i]));
-        ASSERT(set.has(std::string_view{vals[i]}));
-        ASSERT(set.has(std::string{vals[i]}));
+        ASSERT(set.has(val));
+        ASSERT(set.has(std::string_view{val}));
+        ASSERT(set.has(std::string{val}));
     }
     ASSERT(!set.has("purple"));
 }

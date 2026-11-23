@@ -50,6 +50,9 @@ public:
     {
     }
 
+    /**
+     * Add alternating name-value pairs recursively
+     */
     template<typename N, typename V, typename... Rest> requires (sizeof...(Rest) % 2 == 0)
     void addValues(N&& name, V&& val, Rest&&... rest)
     {

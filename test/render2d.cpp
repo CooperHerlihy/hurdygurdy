@@ -2,6 +2,7 @@
 #include "hg/render2d.hpp"
 #include "hg/serialization.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -90,8 +91,7 @@ TEST(testTextureDataSerializeRoundtrip)
     ASSERT(out.depth == 1);
     ASSERT(out.format == Format::rgba8_unorm);
     ASSERT(out.pixels.size() == tex.pixels.size());
-    for (usize i = 0; i < tex.pixels.size(); ++i)
-        ASSERT(out.pixels[i] == tex.pixels[i]);
+    ASSERT(std::equal(out.pixels.begin(), out.pixels.end(), tex.pixels.begin()));
 }
 
 // ---- texture atlas ----

@@ -1,7 +1,5 @@
 #include "hg/time.hpp"
-#include "hg/utility.hpp"
 
-#include <ctime>
 #include <chrono>
 #include <thread>
 
@@ -9,11 +7,9 @@ namespace hg {
 
 f64 Clock::tick()
 {
-    f64 prev = time;
-    timespec ts;
-    timespec_get(&ts, TIME_UTC);
-    time = assertCast<f64>(ts.tv_sec) + assertCast<f64>(ts.tv_nsec) * 1e-9;
-    return time - prev;
+    auto prev = time;
+    time = std::chrono::steady_clock::now();
+    return std::chrono::duration<f64>(time - prev).count();
 }
 
 void sleep(f64 time)

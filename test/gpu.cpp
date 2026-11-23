@@ -17,6 +17,9 @@
 #include "shaders/blur.comp.spv.h"
 #include "shaders/invert.frag.spv.h"
 
+#include <algorithm>
+#include <iterator>
+
 using namespace hg;
 
 // ---- shared shader spans ----
@@ -213,8 +216,7 @@ TEST(testGpuBufferWriteReadMultiple)
     buf->write(std::as_bytes(std::span{src}), 0);
     u32 dst[16] = {};
     buf->read(std::as_writable_bytes(std::span{dst}), 0);
-    for (u32 i = 0; i < 16; ++i)
-        ASSERT(dst[i] == i * 3 + 7);
+    ASSERT(std::equal(std::begin(dst), std::end(dst), std::begin(src)));
 }
 
 TEST(testGpuViewWriteRead)
@@ -224,13 +226,11 @@ TEST(testGpuViewWriteRead)
     std::unique_ptr<GpuView> view = img->createView();
 
     u32 src[16 * 16] = {};
-    for (u32 i = 0; i < 16 * 16; ++i)
-        src[i] = 0x30405060;
+    std::fill(std::begin(src), std::end(src), 0x30405060u);
     img->writeWhole(std::as_bytes(std::span{src}));
     u32 dst[16 * 16] = {};
     img->readWhole(std::as_writable_bytes(std::span{dst}));
-    for (u32 i = 0; i < 16 * 16; ++i)
-        ASSERT(dst[i] == 0x30405060);
+    ASSERT(std::equal(std::begin(dst), std::end(dst), std::begin(src)));
 }
 
 TEST(testGpuViewExtendedConfigSampler)
@@ -258,11 +258,7 @@ TEST(testGpuViewExtendedConfigSampler)
     // Read back texture data to verify write
     u32 readback[texSize * texSize] = {};
     texImg->readWhole(std::as_writable_bytes(std::span{readback}));
-    bool match = true;
-    for (u32 i = 0; i < texSize * texSize; ++i)
-        if (readback[i] != checker[i])
-            match = false;
-    ASSERT(match);
+    ASSERT(std::equal(std::begin(readback), std::end(readback), std::begin(checker)));
 
     // Verify sampled rendering produces non-clear color
     static constexpr u32 outSize = 2;
@@ -552,8 +548,7 @@ TEST(testGpuCopyBufferRegion)
     src->write(std::as_bytes(std::span{pattern}), 0);
 
     u32 sentinel[elemCount] = {};
-    for (u32 i = 0; i < elemCount; ++i)
-        sentinel[i] = 0xDDDDDDDD;
+    std::fill(std::begin(sentinel), std::end(sentinel), 0xDDDDDDDDu);
     dst->write(std::as_bytes(std::span{sentinel}), 0);
 
     std::unique_ptr<GpuCommandBuffer> cmd = testGpu->beginCommands();
@@ -595,8 +590,7 @@ TEST(testGpuCopyBufferWhole)
     src->write(std::as_bytes(std::span{pattern}), 0);
 
     u32 sentinel[elemCount] = {};
-    for (u32 i = 0; i < elemCount; ++i)
-        sentinel[i] = 0xDDDDDDDD;
+    std::fill(std::begin(sentinel), std::end(sentinel), 0xDDDDDDDDu);
     dst->write(std::as_bytes(std::span{sentinel}), 0);
 
     std::unique_ptr<GpuCommandBuffer> cmd = testGpu->beginCommands();

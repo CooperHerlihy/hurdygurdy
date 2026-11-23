@@ -275,9 +275,10 @@ void AudioDevicePipewire::setCallback(AudioCallback callback, const AudioConfig&
     if (stream != nullptr)
     {
         pipewire::pwFuncs.pw_thread_loop_lock(pipewire::audio.threadLoop);
+        HG_DEFER(pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop));
+
         pipewire::pwFuncs.pw_stream_disconnect(stream);
         pipewire::pwFuncs.pw_stream_destroy(stream);
-        pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop);
         stream = nullptr;
     }
 
@@ -319,24 +320,25 @@ void AudioDevicePipewire::setCallback(AudioCallback callback, const AudioConfig&
         0);
     params[1] = spa_pod_builder_pop(&builder, &frame);
 
-    pipewire::pwFuncs.pw_thread_loop_lock(pipewire::audio.threadLoop);
+    {
+        pipewire::pwFuncs.pw_thread_loop_lock(pipewire::audio.threadLoop);
+        HG_DEFER(pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop));
 
-    pipewire::pwFuncs.pw_stream_add_listener(stream, &streamListener, &streamEvents, this);
+        pipewire::pwFuncs.pw_stream_add_listener(stream, &streamListener, &streamEvents, this);
 
-    pipewire::pwFuncs.pw_stream_connect(
-        stream,
-        SPA_DIRECTION_OUTPUT,
-        PW_ID_ANY,
-        static_cast<pw_stream_flags>(
-            PW_STREAM_FLAG_AUTOCONNECT |
-            PW_STREAM_FLAG_MAP_BUFFERS |
-            PW_STREAM_FLAG_RT_PROCESS
-        ),
-        params,
-        2
-    );
-
-    pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop);
+        pipewire::pwFuncs.pw_stream_connect(
+            stream,
+            SPA_DIRECTION_OUTPUT,
+            PW_ID_ANY,
+            static_cast<pw_stream_flags>(
+                PW_STREAM_FLAG_AUTOCONNECT |
+                PW_STREAM_FLAG_MAP_BUFFERS |
+                PW_STREAM_FLAG_RT_PROCESS
+            ),
+            params,
+            2
+        );
+    }
 
     pipewire::pwFuncs.pw_thread_loop_start(pipewire::audio.threadLoop);
 }
@@ -349,9 +351,10 @@ void AudioDevicePipewire::unsetCallback()
     if (stream != nullptr)
     {
         pipewire::pwFuncs.pw_thread_loop_lock(pipewire::audio.threadLoop);
+        HG_DEFER(pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop));
+
         pipewire::pwFuncs.pw_stream_disconnect(stream);
         pipewire::pwFuncs.pw_stream_destroy(stream);
-        pipewire::pwFuncs.pw_thread_loop_unlock(pipewire::audio.threadLoop);
         stream = nullptr;
     }
 }

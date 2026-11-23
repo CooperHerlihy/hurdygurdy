@@ -2,7 +2,9 @@
 #include "hg/audio.hpp"
 #include "hg/utility.hpp"
 
+#include <algorithm>
 #include <filesystem>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -40,8 +42,7 @@ TEST(testSoundSerialRoundTrip)
     ASSERT(a->frequency == 48000);
     ASSERT(a->channels == 2);
     ASSERT(a->data.size() == 6);
-    for (u64 i = 0; i < a->data.size(); ++i)
-        ASSERT(a->data[i] == original.data[i]);
+    ASSERT(std::equal(a->data.begin(), a->data.end(), original.data.begin()));
 }
 
 TEST(testSoundWavStoreLoadMono)
@@ -53,8 +54,7 @@ TEST(testSoundWavStoreLoadMono)
     original.channels = 1;
     original.data.resize(8);
     static constexpr f32 samples[] = {0.0f, 0.25f, -0.5f, 0.75f, -1.0f, 0.5f, -0.25f, 1.0f};
-    for (u64 i = 0; i < original.data.size(); ++i)
-        original.data[i] = samples[i];
+    std::copy(std::begin(samples), std::end(samples), original.data.begin());
 
     std::string path = makePath("wav_mono");
     ASSERT(soundStoreWav(original, path));
@@ -64,8 +64,7 @@ TEST(testSoundWavStoreLoadMono)
     ASSERT(a->frequency == 22050);
     ASSERT(a->channels == 1);
     ASSERT(a->data.size() == 8);
-    for (u64 i = 0; i < a->data.size(); ++i)
-        ASSERT(a->data[i] == samples[i]);
+    ASSERT(std::equal(a->data.begin(), a->data.end(), std::begin(samples)));
 }
 
 TEST(testSoundWavStoreLoadStereo)
@@ -77,8 +76,7 @@ TEST(testSoundWavStoreLoadStereo)
     original.channels = 2;
     original.data.resize(8);
     static constexpr f32 samples[] = {0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f, 0.4f, -0.4f};
-    for (u64 i = 0; i < original.data.size(); ++i)
-        original.data[i] = samples[i];
+    std::copy(std::begin(samples), std::end(samples), original.data.begin());
 
     std::string path = makePath("wav_stereo");
     ASSERT(soundStoreWav(original, path));
@@ -88,8 +86,7 @@ TEST(testSoundWavStoreLoadStereo)
     ASSERT(a->frequency == 44100);
     ASSERT(a->channels == 2);
     ASSERT(a->data.size() == 8);
-    for (u64 i = 0; i < a->data.size(); ++i)
-        ASSERT(a->data[i] == samples[i]);
+    ASSERT(std::equal(a->data.begin(), a->data.end(), std::begin(samples)));
 }
 
 TEST(testSoundWavStoreNoChannels)

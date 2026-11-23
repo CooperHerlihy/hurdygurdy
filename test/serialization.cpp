@@ -452,8 +452,7 @@ TEST(testReaderTrailingDataIgnored)
     i32 val = 5;
     ASSERT(serialize(w, &val));
     std::vector<byte> bin = w.takeFromWriter();
-    bin.push_back(byte{0xFF});
-    bin.push_back(byte{0xFF});
+    bin.insert(bin.end(), {byte{0xFF}, byte{0xFF}});
 
     Serializer r = Serializer::reader(bin);
     i32 copy = 0;
@@ -625,10 +624,7 @@ TEST(testSerializeEmptyTrivialVector)
 
 TEST(testSerializeLargeString)
 {
-    std::string builder{};
-    for (u32 i = 0; i < 2048; ++i)
-        builder += "x";
-    std::string val = builder;
+    std::string val(2048, 'x');
     std::string copy{};
 
     Serializer w = Serializer::writer();
