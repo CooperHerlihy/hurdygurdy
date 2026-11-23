@@ -56,19 +56,6 @@ enum class Format : u32 {
     d16_unorm_s8_uint,
     d24_unorm_s8_uint,
     d32_sfloat_s8_uint,
-    /**
-     * BC compressed
-     */
-    bc1_rgb_unorm_block,
-    bc3_unorm_block,
-    bc4_unorm_block,
-    bc5_unorm_block,
-    bc7_unorm_block,
-    /**
-     * ASTC compressed
-     */
-    astc_4x4_unorm_block,
-    astc_8x8_unorm_block,
 };
 
 /**

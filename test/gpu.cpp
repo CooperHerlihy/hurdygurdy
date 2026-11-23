@@ -122,11 +122,6 @@ TEST(testFormatToSize)
     ASSERT(formatToSize(Format::d24_unorm_s8_uint) == 4);
     ASSERT(formatToSize(Format::d32_sfloat) == 4);
     ASSERT(formatToSize(Format::d32_sfloat_s8_uint) == 5);
-    // Block-compressed
-    ASSERT(formatToSize(Format::bc1_rgb_unorm_block) == 8);
-    ASSERT(formatToSize(Format::bc3_unorm_block) == 16);
-    ASSERT(formatToSize(Format::bc5_unorm_block) == 16);
-    ASSERT(formatToSize(Format::bc7_unorm_block) == 16);
 }
 
 TEST(testGetMaxMipmaps)

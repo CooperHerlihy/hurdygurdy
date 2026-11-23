@@ -721,3 +721,75 @@ TEST(testSerializeNestedFailurePropagates)
     ASSERT(!serialize(r, &copy));
     ASSERT(getError().length() > 0);
 }
+
+TEST(testSerialTruncatedString)
+{
+    // valid header and length, but no payload bytes
+    std::vector<byte> bin{
+        static_cast<byte>('H'), static_cast<byte>('G'),
+        static_cast<byte>(3), static_cast<byte>(0), static_cast<byte>(0),
+        static_cast<byte>(0), static_cast<byte>(0), static_cast<byte>(0),
+        static_cast<byte>(0), static_cast<byte>(0)};
+
+    setError("");
+    ASSERT(!serialLoadFromBinary<std::string>(bin).has_value());
+    ASSERT(getError().length() > 0);
+}
+
+static std::vector<byte> serialBinWithLength(u64 length)
+{
+    std::vector<byte> bin{static_cast<byte>('H'), static_cast<byte>('G')};
+    const byte* bytes = reinterpret_cast<const byte*>(&length);
+    bin.insert(bin.end(), bytes, bytes + sizeof(length));
+    return bin;
+}
+
+TEST(testSerialHugeStringLength)
+{
+    // declared length of 1 << 40 with no payload
+    std::vector<byte> bin = serialBinWithLength(1ull << 40);
+
+    setError("");
+    ASSERT(!serialLoadFromBinary<std::string>(bin).has_value());
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testSerialHugeVectorLength)
+{
+    std::vector<byte> bin = serialBinWithLength(1ull << 40);
+
+    setError("");
+    ASSERT(!serialLoadFromBinary<std::vector<f32>>(bin).has_value());
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testSerialHugeHashSetLength)
+{
+    std::vector<byte> bin = serialBinWithLength(1ull << 40);
+
+    setError("");
+    ASSERT(!(serialLoadFromBinary<HashSet<u32>>(bin).has_value()));
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testSerialHugeHashMapLength)
+{
+    std::vector<byte> bin = serialBinWithLength(1ull << 40);
+
+    setError("");
+    ASSERT(!(serialLoadFromBinary<HashMap<u32, u32>>(bin).has_value()));
+    ASSERT(getError().length() > 0);
+}
+
+TEST(testSerialVectorTruncatedPayload)
+{
+    // declares two f32s but only provides one
+    std::vector<byte> bin = serialBinWithLength(2);
+    f32 val = 1.5f;
+    const byte* bytes = reinterpret_cast<const byte*>(&val);
+    bin.insert(bin.end(), bytes, bytes + sizeof(val));
+
+    setError("");
+    ASSERT(!serialLoadFromBinary<std::vector<f32>>(bin).has_value());
+    ASSERT(getError().length() > 0);
+}

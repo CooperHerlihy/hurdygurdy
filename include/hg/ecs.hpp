@@ -60,6 +60,9 @@ public:
 
     /**
      * Get the generation from a handle
+     *
+     * Note, the generation is 8 bits, so 24 index bits and 8 generation bits
+     * share the handle. Generation wraparound is documented on nextGeneration
      */
     constexpr u32 generation() const
     {
@@ -68,6 +71,9 @@ public:
 
     /**
      * Returns a new handle at the same index
+     *
+     * Note, the generation is 8 bits and wraps around. After 256 recycles of
+     * one index, a stale handle can become valid again
      */
     constexpr Entity nextGeneration() const
     {

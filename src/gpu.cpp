@@ -38,13 +38,6 @@ u32 formatToSize(Format format)
         case Format::d16_unorm_s8_uint: return 3;
         case Format::d24_unorm_s8_uint: return 4;
         case Format::d32_sfloat_s8_uint: return 5;
-        case Format::bc1_rgb_unorm_block: return 8;
-        case Format::bc3_unorm_block: return 16;
-        case Format::bc4_unorm_block: return 16;
-        case Format::bc5_unorm_block: return 16;
-        case Format::bc7_unorm_block: return 16;
-        case Format::astc_4x4_unorm_block: return 16;
-        case Format::astc_8x8_unorm_block: return 16;
     }
     return 0;
 }

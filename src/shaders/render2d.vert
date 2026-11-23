@@ -3,8 +3,8 @@
 #include "hurdygurdy.glsl"
 
 layout (HgUniformBuffer) uniform ViewProjection {
-    mat4 proj;
     mat4 view;
+    mat4 proj;
 } uVP[];
 
 struct Instance {

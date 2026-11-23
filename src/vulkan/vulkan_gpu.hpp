@@ -2,7 +2,6 @@
 
 #include "hg/gpu.hpp"
 #include "hg/inttypes.hpp"
-#include "hg/utility.hpp"
 #include "hg/format.hpp"
 #include "hg/hash.hpp"
 
@@ -613,13 +612,6 @@ constexpr VkFormat formatToVk(Format format)
         case Format::d16_unorm_s8_uint: return VK_FORMAT_D16_UNORM_S8_UINT;
         case Format::d24_unorm_s8_uint: return VK_FORMAT_D24_UNORM_S8_UINT;
         case Format::d32_sfloat_s8_uint: return VK_FORMAT_D32_SFLOAT_S8_UINT;
-        case Format::bc1_rgb_unorm_block: return VK_FORMAT_BC1_RGB_UNORM_BLOCK;
-        case Format::bc3_unorm_block: return VK_FORMAT_BC3_UNORM_BLOCK;
-        case Format::bc4_unorm_block: return VK_FORMAT_BC4_UNORM_BLOCK;
-        case Format::bc5_unorm_block: return VK_FORMAT_BC5_UNORM_BLOCK;
-        case Format::bc7_unorm_block: return VK_FORMAT_BC7_UNORM_BLOCK;
-        case Format::astc_4x4_unorm_block: return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
-        case Format::astc_8x8_unorm_block: return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
     }
     panic("Unknown Vulkan format\n");
     return VK_FORMAT_UNDEFINED;
@@ -654,13 +646,6 @@ constexpr VkImageAspectFlags gpuFormatToAspect(Format format)
         case Format::d16_unorm_s8_uint: return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
         case Format::d24_unorm_s8_uint: return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
         case Format::d32_sfloat_s8_uint: return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-        case Format::bc1_rgb_unorm_block: return VK_IMAGE_ASPECT_COLOR_BIT;
-        case Format::bc3_unorm_block: return VK_IMAGE_ASPECT_COLOR_BIT;
-        case Format::bc4_unorm_block: return VK_IMAGE_ASPECT_COLOR_BIT;
-        case Format::bc5_unorm_block: return VK_IMAGE_ASPECT_COLOR_BIT;
-        case Format::bc7_unorm_block: return VK_IMAGE_ASPECT_COLOR_BIT;
-        case Format::astc_4x4_unorm_block: return VK_IMAGE_ASPECT_COLOR_BIT;
-        case Format::astc_8x8_unorm_block: return VK_IMAGE_ASPECT_COLOR_BIT;
     }
     panic("Unknown Vulkan format\n");
     return VK_FORMAT_UNDEFINED;

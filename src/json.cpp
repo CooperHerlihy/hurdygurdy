@@ -296,7 +296,8 @@ static void writeJsonValue(std::string& str, u32 indent, const JsonValue& value)
                 str += "true";
             else
                 str += "false";
-        }
+        },
+        [&](const JsonNull&) { str += "null"; }
     );
 }
 
@@ -318,6 +319,7 @@ static bool readJsonObject(JsonObject& val, std::string_view str, u32& head)
         return false;
     ++count;
 
+    bool expectValue = false;
     while (true)
     {
         while (count < str.length() && isWhitespace(str[count]))
@@ -330,10 +332,13 @@ static bool readJsonObject(JsonObject& val, std::string_view str, u32& head)
 
         if (str[count] == '}')
         {
+            if (expectValue)
+                return false;
             ++count;
             head = count;
             return true;
         }
+        expectValue = false;
 
         std::string nextName{};
         if (!readJsonString(nextName, str, count))
@@ -374,6 +379,7 @@ static bool readJsonObject(JsonObject& val, std::string_view str, u32& head)
         if (count == str.length() || str[count] != ',')
             return false;
         ++count;
+        expectValue = true;
     }
 }
 
@@ -384,6 +390,7 @@ static bool readJsonArray(JsonArray& val, std::string_view str, u32& head)
         return false;
     ++count;
 
+    bool expectValue = false;
     while (true)
     {
         while (count < str.length() && isWhitespace(str[count]))
@@ -396,10 +403,13 @@ static bool readJsonArray(JsonArray& val, std::string_view str, u32& head)
 
         if (str[count] == ']')
         {
+            if (expectValue)
+                return false;
             ++count;
             head = count;
             return true;
         }
+        expectValue = false;
 
         JsonValue newVal{};
         if (!readJsonValue(newVal, str, count))
@@ -422,6 +432,59 @@ static bool readJsonArray(JsonArray& val, std::string_view str, u32& head)
         if (count == str.length() || str[count] != ',')
             return false;
         ++count;
+        expectValue = true;
+    }
+}
+
+static bool readHex4(u32& val, std::string_view str, u32 head)
+{
+    // head points at 'u', four hex digits must follow
+    if (head + 4 >= str.length())
+        return false;
+
+    u32 ret = 0;
+    for (u32 i = 1; i <= 4; ++i)
+    {
+        char c = str[head + i];
+        u32 d;
+        if (c >= '0' && c <= '9')
+            d = assertCast<u32>(c - '0');
+        else if (c >= 'a' && c <= 'f')
+            d = assertCast<u32>(c - 'a') + 10;
+        else if (c >= 'A' && c <= 'F')
+            d = assertCast<u32>(c - 'A') + 10;
+        else
+            return false;
+        ret = (ret << 4) | d;
+    }
+    val = ret;
+    return true;
+}
+
+template<typename S>
+static void appendUtf8(S& str, u32 code)
+{
+    if (code < 0x80)
+    {
+        str += static_cast<char>(code);
+    }
+    else if (code < 0x800)
+    {
+        str += static_cast<char>(0xC0 | (code >> 6));
+        str += static_cast<char>(0x80 | (code & 0x3F));
+    }
+    else if (code < 0x10000)
+    {
+        str += static_cast<char>(0xE0 | (code >> 12));
+        str += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+        str += static_cast<char>(0x80 | (code & 0x3F));
+    }
+    else
+    {
+        str += static_cast<char>(0xF0 | (code >> 18));
+        str += static_cast<char>(0x80 | ((code >> 12) & 0x3F));
+        str += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+        str += static_cast<char>(0x80 | (code & 0x3F));
     }
 }
 
@@ -448,6 +511,45 @@ static bool readJsonString(std::string& val, std::string_view str, u32& head)
             ++count;
             if (count == str.length())
                 return false;
+
+            if (str[count] == 'u')
+            {
+                u32 code = 0;
+                if (!readHex4(code, str, count))
+                    return false;
+
+                if (code >= 0xD800 && code <= 0xDBFF)
+                {
+                    // a low surrogate must follow as \uXXXX
+                    if (count + 10 >= str.length() ||
+                        str[count + 5] != '\\' || str[count + 6] != 'u')
+                        return false;
+
+                    u32 low = 0;
+                    if (!readHex4(low, str, count + 6))
+                        return false;
+                    if (low < 0xDC00 || low > 0xDFFF)
+                        return false;
+
+                    code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                    count += 10;
+                }
+                else if (code >= 0xDC00 && code <= 0xDFFF)
+                {
+                    return false;
+                }
+                else
+                {
+                    count += 4;
+                }
+
+                appendUtf8(temp, code);
+
+                ++count;
+                if (count == str.length())
+                    return false;
+                continue;
+            }
 
             switch (str[count])
             {
@@ -495,7 +597,8 @@ static bool readJsonString(std::string& val, std::string_view str, u32& head)
 static bool readJsonNum(f64& val, std::string_view str, u32& head)
 {
     u32 count = head;
-    while (count < str.length() && str[count] != ',' && !isWhitespace(str[count]))
+    while (count < str.length() && str[count] != ',' && str[count] != '}' &&
+        str[count] != ']' && !isWhitespace(str[count]))
     {
         ++count;
     }
@@ -533,12 +636,28 @@ static bool readJsonBool(bool& val, std::string_view str, u32& head)
     return false;
 }
 
+static bool readJsonNull(std::string_view str, u32& head)
+{
+    if (str.length() - head >= 4 && std::string_view{str.data() + head, 4} == "null")
+    {
+        head += 4;
+        return true;
+    }
+    return false;
+}
+
 static bool readJsonValue(JsonValue& val, std::string_view str, u32& head)
 {
     bool boolVal;
     if (readJsonBool(boolVal, str, head))
     {
         val = boolVal;
+        return true;
+    }
+
+    if (readJsonNull(str, head))
+    {
+        val = JsonNull{};
         return true;
     }
 
@@ -583,6 +702,17 @@ std::optional<JsonObject> readJson(std::string_view json)
         setError("Could not parse JSON");
         return {};
     }
+
+    while (head < json.length() && isWhitespace(json[head]))
+    {
+        ++head;
+    }
+    if (head != json.length())
+    {
+        setError("Could not parse JSON: trailing data after object");
+        return {};
+    }
+
     return ret;
 }
 

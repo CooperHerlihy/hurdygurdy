@@ -5,7 +5,7 @@
 #include "hg/memory.hpp"
 #include "hg/serialization.hpp"
 
-#if defined(HG_PLATFORM_LINUX)
+#if defined(HG_USE_PIPEWIRE)
 #include "pipewire/pipewire_audio.hpp"
 #endif
 
@@ -44,7 +44,7 @@ static std::unique_ptr<AudioDevice> createBackend(AudioBackend backend)
     case AudioBackend::sdl3:
         return AudioDeviceSdl3::create();
 #endif
-#if defined(HG_PLATFORM_LINUX)
+#if defined(HG_USE_PIPEWIRE)
     case AudioBackend::pipewire:
         return AudioDevicePipewire::create();
 #endif
@@ -71,7 +71,7 @@ std::unique_ptr<AudioDevice> AudioDevice::create()
     if (d != nullptr)
         return d;
 
-#if defined(HG_PLATFORM_LINUX)
+#if defined(HG_USE_PIPEWIRE)
     d = createBackend(AudioBackend::pipewire);
     if (d != nullptr)
         return d;
@@ -111,9 +111,6 @@ std::optional<Sound> soundLoad(std::string_view path)
     if (ret.has_value())
         return ret;
 
-    ArenaScope scratch = getScratch();
-    StringTemp p{path, scratch};
-
     if (bin->size() > 12 &&
         std::memcmp("RIFF", &(*bin)[0], 4) == 0 &&
         std::memcmp("WAVE", &(*bin)[8], 4) == 0)
@@ -121,7 +118,7 @@ std::optional<Sound> soundLoad(std::string_view path)
         unsigned int channels = 0;
         unsigned int sampleRate = 0;
         drwav_uint64 totalPCMFrameCount = 0;
-        f32* pSampleData = drwav_open_file_and_read_pcm_frames_f32(p.c_str(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
+        f32* pSampleData = drwav_open_memory_and_read_pcm_frames_f32(bin->data(), bin->size(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
         if (pSampleData == nullptr) {
             setError("Could not read wav file: {}", path);
             return std::nullopt;
@@ -139,7 +136,7 @@ std::optional<Sound> soundLoad(std::string_view path)
     {
         drmp3_config config{};
         drmp3_uint64 totalPCMFrameCount = 0;
-        f32* pSampleData = drmp3_open_file_and_read_pcm_frames_f32(p.c_str(), &config, &totalPCMFrameCount, nullptr);
+        f32* pSampleData = drmp3_open_memory_and_read_pcm_frames_f32(bin->data(), bin->size(), &config, &totalPCMFrameCount, nullptr);
         if (pSampleData == nullptr) {
             setError("Could not read mp3 file: {}", path);
             return std::nullopt;
@@ -158,12 +155,12 @@ std::optional<Sound> soundLoad(std::string_view path)
         unsigned int channels = 0;
         unsigned int sampleRate = 0;
         drflac_uint64 totalPCMFrameCount = 0;
-        f32* pSampleData = drflac_open_file_and_read_pcm_frames_f32(p.c_str(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
+        f32* pSampleData = drflac_open_memory_and_read_pcm_frames_f32(bin->data(), bin->size(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
         if (pSampleData == nullptr) {
             setError("Could not read flac file: {}", path);
             return std::nullopt;
         }
-        HG_DEFER(drwav_free(pSampleData, NULL));
+        HG_DEFER(drflac_free(pSampleData, nullptr));
 
         std::optional ret = std::make_optional<Sound>();
         ret->channels = channels;

@@ -74,8 +74,8 @@ bool serialize(Serializer& s, Model3D* material)
 namespace {
 
 struct ViewProj {
-    Mat4 proj{};
     Mat4 view{};
+    Mat4 proj{};
 };
 
 struct Push {
@@ -167,6 +167,7 @@ void Renderer3D::drawModelMaterial(const Model3D& material, const Mat4& transfor
 void Renderer3D::renderScene(GpuCommandBuffer* cmd, Camera& camera)
 {
     ViewProj vp{};
+    vp.view = matView(camera.position, Vec3{1.0f}, camera.rotation);
     match(camera.projection,
         [&](const Perspective& persp)
         {
@@ -186,7 +187,6 @@ void Renderer3D::renderScene(GpuCommandBuffer* cmd, Camera& camera)
                 ortho.near,
                 ortho.far);
         });
-    vp.view = matView(camera.position, Vec3{1.0f}, camera.rotation);
     vpBuffer->write(std::as_bytes(std::span{&vp, 1}), 0);
 
     if (dirLightBuffer->size() < dirLights.size() * sizeof(LightData))

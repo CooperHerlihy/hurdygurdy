@@ -24,6 +24,11 @@ template<typename T> requires (std::is_convertible_v<T&&, std::string> || std::i
 JsonValue makeJsonValue(T&& val);
 
 /**
+ * A json null value
+ */
+struct JsonNull {};
+
+/**
  * A json object
  */
 class JsonObject {
@@ -302,14 +307,14 @@ public:
 };
 
 /**
- * A json value, an object, array, string, number or boolean
+ * A json value, an object, array, string, number, boolean or null
  */
 class JsonValue {
 private:
     /**
      * The value
      */
-    std::variant<JsonObject, JsonArray, std::string, f64, bool> val;
+    std::variant<JsonNull, JsonObject, JsonArray, std::string, f64, bool> val;
 
 public:
     /**
@@ -351,6 +356,21 @@ public:
     JsonValue(bool boolean)
         : val{boolean}
     {}
+
+    /**
+     * Construct a null value
+     */
+    JsonValue(JsonNull)
+        : val{JsonNull{}}
+    {}
+
+    /**
+     * Check whether the value is null
+     */
+    bool isNull() const
+    {
+        return std::holds_alternative<JsonNull>(val);
+    }
 
     /**
      * Get the value as an object, asserts if wrong type

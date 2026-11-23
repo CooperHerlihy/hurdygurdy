@@ -2,7 +2,6 @@
 
 #include "hg/memory.hpp"
 #include "hg/time.hpp"
-#include "hg/utility.hpp"
 
 #include <cmath>
 #include <vector>
@@ -125,8 +124,7 @@ struct ThreadPoolState {
 
 static ThreadPoolState& threadPool()
 {
-    static ThreadPoolState pool{4096, std::max(
-        assertCast<u32>(1), std::thread::hardware_concurrency() - 1)};
+    static ThreadPoolState pool{4096, std::max(2u, std::thread::hardware_concurrency()) - 1};
     return pool;
 }
 

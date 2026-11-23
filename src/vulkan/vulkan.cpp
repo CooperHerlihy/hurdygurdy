@@ -1340,22 +1340,22 @@ u32 GpuBufferVk::storageDescriptor() const
 
 void GpuBufferVk::write(std::span<const byte> src, u64 offset)
 {
-    u64 writeSize = src.size();
-    if (writeSize == 0)
+    if (src.size() == 0)
         return;
 
-    HG_ASSERT(offset + writeSize <= size());
+    HG_ASSERT(offset <= bufSize);
+    HG_ASSERT(src.size() <= bufSize - offset);
 
     if (static_cast<u32>(memoryAccess) & static_cast<u32>(GpuMemoryHostAccess::write))
     {
-        VkResult result = vmaCopyMemoryToAllocation(vk->vma, src.data(), alloc, offset, writeSize);
+        VkResult result = vmaCopyMemoryToAllocation(vk->vma, src.data(), alloc, offset, src.size());
         if (result != VK_SUCCESS)
             panic("Could not write gpu buffer: {}\n", vkResultToStr(result));
         return;
     }
 
     std::unique_ptr<GpuBuffer> stageBuffer = vk->createBuffer(
-        writeSize, GpuBufferUsage::transferSrc, GpuMemoryUsage::stagingWrite);
+        src.size(), GpuBufferUsage::transferSrc, GpuMemoryUsage::stagingWrite);
     GpuBufferVk* stage = static_cast<GpuBufferVk*>(stageBuffer.get());
     stage->write(src, 0);
 
@@ -1363,7 +1363,7 @@ void GpuBufferVk::write(std::span<const byte> src, u64 offset)
 
     VkBufferCopy region{};
     region.dstOffset = offset;
-    region.size = writeSize;
+    region.size = src.size();
 
     vkCmdCopyBuffer(
         static_cast<GpuCommandBufferVk*>(cmd.get())->cmd,
@@ -1379,6 +1379,7 @@ void GpuBufferVk::write(std::span<const byte> src, u64 offset)
 
 void GpuBufferVk::read(std::span<byte> dst, u64 offset) const
 {
+    HG_ASSERT(offset <= bufSize);
     HG_ASSERT(dst.size() <= bufSize - offset);
     if (dst.size() == 0)
         return;
@@ -1476,6 +1477,10 @@ std::unique_ptr<GpuView> GpuImageVk::createView(const GpuViewCreateInfo& config)
     HG_ASSERT(vk != nullptr);
     HG_ASSERT(config.levelCount > 0);
     HG_ASSERT(config.layerCount > 0);
+    HG_ASSERT(config.baseMipLevel < mipLevels);
+    HG_ASSERT(config.baseMipLevel + config.levelCount <= mipLevels);
+    HG_ASSERT(config.baseArrayLayer < arrayLayers);
+    HG_ASSERT(config.baseArrayLayer + config.layerCount <= arrayLayers);
 
     std::unique_ptr<GpuViewVk> view = std::make_unique<GpuViewVk>();
     view->vk = vk;
@@ -1532,6 +1537,17 @@ void GpuImageVk::write(std::span<const byte> src, const GpuImageRegion& dst)
     HG_ASSERT(dst.width > 0 && dst.height > 0 && dst.depth > 0);
     HG_ASSERT(dst.mipLevel < mipLevels);
     HG_ASSERT(dst.arrayLayer + dst.layerCount <= arrayLayers);
+
+    u32 mipW = imageWidth >> dst.mipLevel;
+    u32 mipH = imageHeight >> dst.mipLevel;
+    u32 mipD = imageDepth >> dst.mipLevel;
+    if (mipW < 1) mipW = 1;
+    if (mipH < 1) mipH = 1;
+    if (mipD < 1) mipD = 1;
+    HG_ASSERT(dst.x >= 0 && dst.y >= 0 && dst.z >= 0);
+    HG_ASSERT(assertCast<u32>(dst.x) + dst.width <= mipW);
+    HG_ASSERT(assertCast<u32>(dst.y) + dst.height <= mipH);
+    HG_ASSERT(assertCast<u32>(dst.z) + dst.depth <= mipD);
 
     u64 writeSize = assertCast<u64>(dst.width)
                   * dst.height
@@ -1843,6 +1859,17 @@ void GpuImageVk::read(std::span<byte> dst, const GpuImageRegion& src)
     HG_ASSERT(src.width > 0 && src.height > 0 && src.depth > 0);
     HG_ASSERT(src.mipLevel < mipLevels);
     HG_ASSERT(src.arrayLayer + src.layerCount <= arrayLayers);
+
+    u32 mipW = imageWidth >> src.mipLevel;
+    u32 mipH = imageHeight >> src.mipLevel;
+    u32 mipD = imageDepth >> src.mipLevel;
+    if (mipW < 1) mipW = 1;
+    if (mipH < 1) mipH = 1;
+    if (mipD < 1) mipD = 1;
+    HG_ASSERT(src.x >= 0 && src.y >= 0 && src.z >= 0);
+    HG_ASSERT(assertCast<u32>(src.x) + src.width <= mipW);
+    HG_ASSERT(assertCast<u32>(src.y) + src.height <= mipH);
+    HG_ASSERT(assertCast<u32>(src.z) + src.depth <= mipD);
 
     HG_ASSERT(dst.size() ==
         assertCast<u64>(src.width) *

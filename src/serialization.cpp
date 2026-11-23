@@ -42,6 +42,19 @@ std::vector<byte> Serializer::takeFromWriter()
     return std::move(std::get<Writer>(s).bin);
 }
 
+u64 Serializer::remaining() const
+{
+    return match(s,
+        [&](const Reader& r) -> u64
+        {
+            return assertCast<u64>(r.bin.size() - r.pos);
+        },
+        [&](const Writer&) -> u64
+        {
+            return std::numeric_limits<u64>::max();
+        });
+}
+
 /**
  * Returns true if the serializer is reading from the data
  */

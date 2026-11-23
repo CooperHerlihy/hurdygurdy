@@ -18,7 +18,8 @@ TEST(testJsonDefaultConstructors)
 
     bool matched = false;
     value.match(
-        [&](const JsonObject&) { matched = true; },
+        [&](const JsonNull&) { matched = true; },
+        [&](const JsonObject&) {},
         [&](const JsonArray&) {},
         [&](const std::string&) {},
         [&](const f64&) {},
@@ -428,9 +429,11 @@ TEST(testReadJsonWhitespace)
     ASSERT(result->getNumber("a") == 1.0);
     ASSERT(result->getString("b") == "two words");
 
-    std::optional<JsonObject> trailing = readJson("{ \"a\" : 1 , }");
-    ASSERT(trailing.has_value());
-    ASSERT(trailing->count() == 1);
+    std::optional<JsonObject> trailingObject = readJson("{ \"a\" : 1 , }");
+    ASSERT(!trailingObject.has_value());
+
+    std::optional<JsonObject> trailingArray = readJson("{ \"a\" : [ 1 , ] }");
+    ASSERT(!trailingArray.has_value());
 }
 
 TEST(testReadJsonArrays)
@@ -494,6 +497,13 @@ TEST(testReadJsonFailure)
         "{ \"a\" : [ 1, 2 }",
         "{ \"a\" : [ 1, 2",
         "{ \"a\" : 1, \"b\" : }",
+        "{ \"a\" : 1 , }",
+        "{ \"a\" : [ 1 , ] }",
+        "{} garbage",
+        "{} {}",
+        "{ \"a\" : 1 } junk",
+        "{ \"a\" : \"\\uD83D\" }",
+        "{ \"a\" : \"\\uDC00\" }",
     };
 
     for (const char* input : inputs)
@@ -550,4 +560,85 @@ TEST(testReadWriteJsonRoundTrip)
     ASSERT(json->getArray("c").count() == 4);
     ASSERT(json->getObject("d").count() == 1);
     ASSERT(json->getObject("d").getArray("e").count() == 0);
+}
+
+TEST(testReadJsonCompact)
+{
+    std::optional<JsonObject> obj = readJson("{\"score\":42}");
+    ASSERT(obj.has_value());
+    ASSERT(obj->count() == 1);
+    ASSERT(obj->getNumber("score") == 42.0);
+
+    std::optional<JsonObject> arr = readJson("{\"a\":[1,-2]}");
+    ASSERT(arr.has_value());
+    JsonArray& a = arr->getArray("a");
+    ASSERT(a.count() == 2);
+    ASSERT(a.getNumber(0) == 1.0);
+    ASSERT(a.getNumber(1) == -2.0);
+}
+
+TEST(testReadJsonTrailingData)
+{
+    ASSERT(!readJson("{} garbage").has_value());
+    ASSERT(!readJson("{} {}").has_value());
+    ASSERT(!readJson("{ \"a\" : 1 } junk").has_value());
+    ASSERT(readJson("{} \n\t ").has_value());
+}
+
+TEST(testReadJsonNull)
+{
+    std::optional<JsonObject> result = readJson("{ \"a\" : null , \"b\" : [ null ] }");
+    ASSERT(result.has_value());
+    ASSERT(result->count() == 2);
+
+    bool aNull = false;
+    result->getValue("a").match(
+        [&](const JsonNull&) { aNull = true; },
+        [](const auto&) {}
+    );
+    ASSERT(aNull);
+
+    bool arrNull = false;
+    result->getArray("b").getValue(0).match(
+        [&](const JsonNull&) { arrNull = true; },
+        [](const auto&) {}
+    );
+    ASSERT(arrNull);
+
+    ASSERT(result->getValue("a").isNull());
+
+    JsonObject obj{"n", JsonNull{}};
+    ASSERT(writeJson(obj) == "{\n\t\"n\" : null\n}");
+
+    std::optional<JsonObject> roundTrip = readJson(writeJson(obj));
+    ASSERT(roundTrip.has_value());
+    ASSERT(roundTrip->getValue("n").isNull());
+}
+
+TEST(testReadJsonUnicodeEscapes)
+{
+    // "e" U+00E9, two byte utf-8
+    std::optional<JsonObject> two = readJson("{ \"s\" : \"caf\\u00e9\" }");
+    ASSERT(two.has_value());
+    ASSERT(two->getString("s") == "caf\xC3\xA9");
+
+    // U+1F600, surrogate pair, four byte utf-8
+    std::optional<JsonObject> pair = readJson("{ \"s\" : \"\\uD83D\\uDE00\" }");
+    ASSERT(pair.has_value());
+    ASSERT(pair->getString("s") == "\xF0\x9F\x98\x80");
+
+    // uppercase hex
+    std::optional<JsonObject> upper = readJson("{ \"s\" : \"\\u00C9\" }");
+    ASSERT(upper.has_value());
+    ASSERT(upper->getString("s") == "\xC3\x89");
+}
+
+TEST(testReadJsonExtremeNumbers)
+{
+    std::optional<JsonObject> result = readJson(
+        "{ \"big\" : 1e308 , \"small\" : 1e-308 , \"huge\" : 1e15 }");
+    ASSERT(result.has_value());
+    ASSERT(result->getNumber("big") == 1e308);
+    ASSERT(result->getNumber("small") == 1e-308);
+    ASSERT(result->getNumber("huge") == 1e15);
 }

@@ -19,6 +19,19 @@ option(HG_USE_SDL "Use the SDL backend" OFF)
 option(HG_USE_CCACHE "Use ccache as the compiler launcher" OFF)
 option(HG_USE_MOLD "Use mold as the linker" OFF)
 
+# Linux platform backends. Each can be disabled to cut dependencies; with all
+# of them disabled, InputDevice::create() and AudioDevice::create() fall back
+# to the dummy backends.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    option(HG_USE_WAYLAND "Build the Wayland input backend" ON)
+    option(HG_USE_X11 "Build the X11 input backend" ON)
+    option(HG_USE_PIPEWIRE "Build the PipeWire audio backend" ON)
+else()
+    set(HG_USE_WAYLAND OFF)
+    set(HG_USE_X11 OFF)
+    set(HG_USE_PIPEWIRE OFF)
+endif()
+
 if(HG_USE_CCACHE)
     find_program(CCACHE_PROGRAM ccache)
     if(CCACHE_PROGRAM)

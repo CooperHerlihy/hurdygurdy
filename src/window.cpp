@@ -3,8 +3,11 @@
 #include "hg/utility.hpp"
 #include "hg/format.hpp"
 
-#if defined(HG_PLATFORM_LINUX)
+#if defined(HG_USE_WAYLAND)
 #include "wayland/wayland_window.hpp"
+#endif
+
+#if defined(HG_USE_X11)
 #include "x11/x11_window.hpp"
 #endif
 
@@ -35,9 +38,11 @@ static std::unique_ptr<InputDevice> createBackend(InputBackend backend)
 {
     switch (backend)
     {
-#if defined(HG_PLATFORM_LINUX)
+#if defined(HG_USE_WAYLAND)
     case InputBackend::wayland:
         return InputDeviceWayland::create();
+#endif
+#if defined(HG_USE_X11)
     case InputBackend::x11:
         return InputDeviceX11::create();
 #endif
@@ -65,14 +70,16 @@ std::unique_ptr<InputDevice> InputDevice::create()
     if (d != nullptr)
         return d;
 
-#if defined(HG_PLATFORM_LINUX)
+#if defined(HG_USE_WAYLAND)
     if (preferredBackend != InputBackend::wayland)
     {
         d = createBackend(InputBackend::wayland);
         if (d != nullptr)
             return d;
     }
+#endif
 
+#if defined(HG_USE_X11)
     if (preferredBackend != InputBackend::x11)
     {
         d = createBackend(InputBackend::x11);

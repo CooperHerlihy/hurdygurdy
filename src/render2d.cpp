@@ -198,7 +198,10 @@ static void initPixelFont(Gpu* gpu)
 {
     std::optional fontData = serialLoadFromBinary<TextureData>(std::as_bytes(std::span{resources_pixel_font_hg}));
     if (!fontData.has_value())
+    {
         warn("Could not deserialize pixel font: {}", getError());
+        return;
+    }
 
     render2D.defaultFont.texture = uploadTextureToGpu(gpu, *fontData);
     render2D.defaultFont.addEmpty(32);
@@ -450,8 +453,8 @@ std::string_view Layer2D::drawText(std::string_view text, Vec4 color, const Text
 namespace {
 
 struct ViewProj {
-    Mat4 proj{};
     Mat4 view{};
+    Mat4 proj{};
 };
 
 struct Push {
@@ -526,6 +529,7 @@ void Renderer2D::render(GpuCommandBuffer* cmd, const Camera& camera)
     HG_ASSERT(cmd != nullptr);
 
     ViewProj vp{};
+    vp.view = matView(camera.position, Vec3{1.0f}, camera.rotation);
     match(camera.projection,
         [&](const Perspective& persp)
         {
@@ -545,7 +549,6 @@ void Renderer2D::render(GpuCommandBuffer* cmd, const Camera& camera)
                 ortho.near,
                 ortho.far);
         });
-    vp.view = matView(camera.position, Vec3{1.0f}, camera.rotation);
     vpBuffer->write(std::as_bytes(std::span{&vp, 1}), 0);
 
     for (Layer2D* layer : layerQueue)

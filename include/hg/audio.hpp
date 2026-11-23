@@ -138,6 +138,9 @@ public:
 
 /**
  * Audio data asset
+ *
+ * Data must be interleaved f32 samples at the output device's sample rate and
+ * channel count. No format conversion is performed during mixing.
  */
 struct Sound {
     /**
@@ -232,6 +235,9 @@ public:
 
     /**
      * Update the music and sounds, the callback
+     *
+     * Note, sounds are mixed without conversion, so they must be interleaved
+     * f32 samples at the device's sample rate and channel count
      */
     void update(std::span<f32> buf, AudioConfig config);
 

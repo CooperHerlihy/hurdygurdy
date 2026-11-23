@@ -45,7 +45,10 @@ Vec2 closestPoint(Vec2 pos, Rect rect)
 
 Vec2 closestPoint(Vec2 pos, Circle circle)
 {
-    return circle.pos + circle.radius * normalize(pos - circle.pos);
+    Vec2 rel = pos - circle.pos;
+    if (rel == Vec2{0} || circle.radius == 0)
+        return circle.pos;
+    return circle.pos + circle.radius * normalize(rel);
 }
 
 f32 distance(Vec2 point, Circle circle)
@@ -124,6 +127,10 @@ std::optional<Hit2D> intersect(Ray2D ray, Rect rect)
 std::optional<Hit2D> intersect(Ray2D ray, Circle circle)
 {
     HG_ASSERT(ray.dir != Vec2{0});
+
+    // a zero radius circle has no surface to hit
+    if (circle.radius == 0)
+        return {};
 
     Vec2 rel = ray.pos - circle.pos;
     f32 a = dot(ray.dir, ray.dir);

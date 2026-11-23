@@ -36,6 +36,22 @@ TEST(testCircleClosestPoint)
     ASSERT(std::abs(p.x() - 5.0f) < FLT_EPSILON && std::abs(p.y()) < FLT_EPSILON);
 }
 
+TEST(testCircleClosestPointCenter)
+{
+    Circle c{{2, 3}, 5};
+    Vec2 p = closestPoint({2, 3}, c);
+    ASSERT((p == Vec2{2, 3}));
+    ASSERT(std::isfinite(p.x()) && std::isfinite(p.y()));
+}
+
+TEST(testCircleClosestPointZeroRadius)
+{
+    Circle z{{2, 3}, 0};
+    Vec2 p = closestPoint({10, 3}, z);
+    ASSERT((p == Vec2{2, 3}));
+    ASSERT(std::isfinite(p.x()) && std::isfinite(p.y()));
+}
+
 TEST(testCircleIntersect)
 {
     Circle a{{0, 0}, 5};
@@ -156,6 +172,27 @@ TEST(testIntersectRayCircleMiss)
     Ray2D ray{{0, 0}, {1, 0}};
     Circle c{{10, 5}, 1};
     ASSERT(!intersect(ray, c).has_value());
+}
+
+TEST(testIntersectRayCircleZeroRadius)
+{
+    Ray2D ray{{0, 0}, {1, 0}};
+    Circle z{{10, 0}, 0};
+    ASSERT(!intersect(ray, z).has_value());
+}
+
+TEST(testIntersectRayCircleCenterHitFinite)
+{
+    // ray starting at the circle center still produces a finite normal
+    Ray2D ray{{0, 0}, {1, 0}};
+    Circle c{{0, 0}, 5};
+    std::optional<Hit2D> hit = intersect(ray, c);
+    ASSERT(hit.has_value());
+    if (hit.has_value())
+    {
+        ASSERT(std::isfinite(hit->normal.x()) && std::isfinite(hit->normal.y()));
+        ASSERT((hit->normal == Vec2{1, 0}));
+    }
 }
 
 TEST(testIntersectRayRect)

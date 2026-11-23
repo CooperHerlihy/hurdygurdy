@@ -72,12 +72,23 @@ set(VULKAN_SOURCES
 )
 
 if(HG_LINUX)
-    set(PLATFORM_SOURCES
-        src/wayland/wayland.cpp
-        src/wayland/wayland-protocol.c
-        src/x11/x11.cpp
-        src/pipewire/pipewire.cpp
-    )
+    set(PLATFORM_SOURCES)
+    if(HG_USE_WAYLAND)
+        list(APPEND PLATFORM_SOURCES
+            src/wayland/wayland.cpp
+            src/wayland/wayland-protocol.c
+        )
+    endif()
+    if(HG_USE_X11)
+        list(APPEND PLATFORM_SOURCES
+            src/x11/x11.cpp
+        )
+    endif()
+    if(HG_USE_PIPEWIRE)
+        list(APPEND PLATFORM_SOURCES
+            src/pipewire/pipewire.cpp
+        )
+    endif()
 elseif(HG_WINDOWS)
     set(PLATFORM_SOURCES
         src/win32/win32.cpp
@@ -180,7 +191,15 @@ if(HG_USE_SDL)
 endif()
 
 if(HG_LINUX)
-    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_WAYLAND=1)
+    if(HG_USE_WAYLAND)
+        target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_WAYLAND=1)
+    endif()
+    if(HG_USE_X11)
+        target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_X11=1)
+    endif()
+    if(HG_USE_PIPEWIRE)
+        target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_PIPEWIRE=1)
+    endif()
     target_include_directories(hurdygurdy_core SYSTEM PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/xorgproto/include
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libX11/include
@@ -342,14 +361,3 @@ if(HG_INSTALL)
         DESTINATION ${HG_CMAKE_INSTALL_DIR}
     )
 endif()
-
-# Summary
-
-message(STATUS "hurdygurdy ${PROJECT_VERSION}")
-message(STATUS "  tests:     ${HG_BUILD_TESTS}")
-message(STATUS "  examples:  ${HG_BUILD_EXAMPLES}")
-message(STATUS "  install:   ${HG_INSTALL}")
-message(STATUS "  sdl:       ${HG_USE_SDL}")
-message(STATUS "  ccache:    ${HG_USE_CCACHE}")
-message(STATUS "  mold:      ${HG_USE_MOLD}")
-message(STATUS "  pch:       ${HG_USE_PCH}")

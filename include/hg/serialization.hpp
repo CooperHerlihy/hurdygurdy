@@ -9,6 +9,7 @@
 #include <optional>
 #include <tuple>
 #include <variant>
+#include <limits>
 #include <memory>
 #include <string>
 #include <array>
@@ -89,6 +90,11 @@ public:
      * The the binary data from the writer, leaving an empty reader
      */
     std::vector<byte> takeFromWriter();
+
+    /**
+     * The number of bytes left to read, or the max u64 when writing
+     */
+    u64 remaining() const;
 
     /**
      * Returns true if the serializer is reading from the data
@@ -308,7 +314,14 @@ inline bool serialize(Serializer& s, std::string* val)
         return false;
 
     if (s.isReading())
+    {
+        if (length > s.remaining())
+        {
+            setError("Could not deserialize string, length exceeds remaining data");
+            return false;
+        }
         val->resize(length);
+    }
     return s.serializeData(std::as_writable_bytes(std::span{*val}));
 }
 
@@ -337,7 +350,15 @@ bool serialize(Serializer& s, std::vector<T>* vec)
         return false;
 
     if (s.isReading())
+    {
+        // each element takes at least one byte, so reject lengths past the input
+        if (size > s.remaining())
+        {
+            setError("Could not deserialize vector, size exceeds remaining data");
+            return false;
+        }
         vec->resize(size);
+    }
 
     for (T& val : *vec)
     {
@@ -366,6 +387,11 @@ bool serialize(Serializer& s, HashSet<V>* set)
     }
     else
     {
+        if (size > s.remaining())
+        {
+            setError("Could not deserialize hash set, size exceeds remaining data");
+            return false;
+        }
         set->clear();
         for (u64 i = 0; i < size; ++i)
         {
@@ -397,6 +423,11 @@ bool serialize(Serializer& s, HashMap<K, V>* map)
     }
     else
     {
+        if (size > s.remaining())
+        {
+            setError("Could not deserialize hash map, size exceeds remaining data");
+            return false;
+        }
         map->clear();
         for (u64 i = 0; i < size; ++i)
         {

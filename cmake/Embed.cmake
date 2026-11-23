@@ -2,6 +2,14 @@
 # registers a custom command and returns the generated header path through
 # <out_var>.
 
+find_program(GLSLC_PROGRAM glslc)
+if(NOT GLSLC_PROGRAM)
+    message(FATAL_ERROR
+        "glslc was not found. It is included in the LunarG Vulkan SDK, and is "
+        "required to compile the shaders. Install the SDK or set "
+        "-DCMAKE_PROGRAM_PATH to a directory containing glslc.")
+endif()
+
 function(hg_embed_resource path out_var)
     set(src ${CMAKE_CURRENT_SOURCE_DIR}/${path})
     set(header ${CMAKE_CURRENT_BINARY_DIR}/${path}.h)
@@ -26,7 +34,7 @@ function(hg_compile_shader path out_var)
     add_custom_command(
         OUTPUT ${header}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${spv_dir}
-        COMMAND glslc -o ${spv} ${src} -I${CMAKE_CURRENT_SOURCE_DIR}/include
+        COMMAND ${GLSLC_PROGRAM} -o ${spv} ${src} -I${CMAKE_CURRENT_SOURCE_DIR}/include
         COMMAND embed ${spv} ${name}.spv ${header}
         DEPENDS embed ${src}
             ${CMAKE_CURRENT_SOURCE_DIR}/include/hurdygurdy.glsl
