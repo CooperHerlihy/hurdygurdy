@@ -29,6 +29,15 @@ if(HG_USE_CCACHE)
     endif()
 endif()
 
+# ccache cannot use precompiled headers, so enabling a PCH would make the test
+# translation units uncacheable. Default the PCH off when ccache is on.
+if(HG_USE_CCACHE)
+    set(HG_USE_PCH_DEFAULT OFF)
+else()
+    set(HG_USE_PCH_DEFAULT ON)
+endif()
+option(HG_USE_PCH "Precompile the shared test header" ${HG_USE_PCH_DEFAULT})
+
 set(HG_LINK_OPTIONS)
 if(HG_USE_MOLD AND NOT MSVC)
     find_program(MOLD_PROGRAM mold)

@@ -142,7 +142,11 @@ target_compile_options(hurdygurdy_imgui PRIVATE
 )
 
 add_library(hurdygurdy_vendor OBJECT
-    src/cimpl.c
+    src/stb_image.c
+    src/stb_image_write.c
+    src/dr_flac.c
+    src/dr_mp3.c
+    src/dr_wav.c
     src/cppimpl.cpp
 )
 target_include_directories(hurdygurdy_vendor PRIVATE ${HG_PRIVATE_INCLUDE_DIRS})
@@ -256,11 +260,14 @@ if(HG_BUILD_TESTS)
     target_link_options(tests PRIVATE ${HG_LINK_OPTIONS})
     target_include_directories(tests PRIVATE
         ${CMAKE_CURRENT_BINARY_DIR}/test
+        ${CMAKE_CURRENT_SOURCE_DIR}/test
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/wayland
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
     )
-    target_precompile_headers(tests PRIVATE <hurdygurdy.hpp>)
+    if(HG_USE_PCH)
+        target_precompile_headers(tests PRIVATE <tests.hpp>)
+    endif()
     target_compile_features(tests PRIVATE cxx_std_20)
     target_compile_options(tests PRIVATE
         ${HG_CXX_FLAGS}
@@ -345,3 +352,4 @@ message(STATUS "  install:   ${HG_INSTALL}")
 message(STATUS "  sdl:       ${HG_USE_SDL}")
 message(STATUS "  ccache:    ${HG_USE_CCACHE}")
 message(STATUS "  mold:      ${HG_USE_MOLD}")
+message(STATUS "  pch:       ${HG_USE_PCH}")

@@ -1,4 +1,5 @@
 #include "tests.hpp"
+#include "hg/math.hpp"
 #include "hg/serialization.hpp"
 
 #include <cstring>

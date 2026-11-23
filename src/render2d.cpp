@@ -1,6 +1,7 @@
 #include "hg/render2d.hpp"
 
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 #include "hg/memory.hpp"
 
 #include "stb_image.h"

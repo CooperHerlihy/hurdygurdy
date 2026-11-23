@@ -1,4 +1,5 @@
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 
 #include "hg/memory.hpp"
 
@@ -44,6 +45,20 @@ std::string_view getError()
 void printError()
 {
     std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", errorLength, errorData);
+}
+
+void assertionFailed(const char* file, i32 line, const char* func, const char* cond)
+{
+#ifdef HG_LOGGING
+    std::fprintf(stderr, "HurdyGurdy Panic: Assertion failed in %s:%d %s() \"%s\"\n", file, line, func, cond);
+    printError();
+#else
+    (void)file;
+    (void)line;
+    (void)func;
+    (void)cond;
+#endif
+    std::abort();
 }
 
 bool isWhitespace(char c)

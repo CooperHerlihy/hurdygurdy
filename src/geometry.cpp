@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <iterator>
 
 namespace hg {
 

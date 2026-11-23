@@ -1,6 +1,7 @@
 #include "hg/gpu.hpp"
 
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 
 #include "vulkan/vulkan_gpu.hpp"
 

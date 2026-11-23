@@ -2,6 +2,7 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 #include "hg/hash.hpp"
 
 #include <span>

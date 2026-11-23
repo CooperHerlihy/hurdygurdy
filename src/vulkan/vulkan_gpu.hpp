@@ -3,6 +3,7 @@
 #include "hg/gpu.hpp"
 #include "hg/inttypes.hpp"
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 #include "hg/hash.hpp"
 
 #include <array>

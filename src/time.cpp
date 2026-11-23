@@ -5,11 +5,17 @@
 
 namespace hg {
 
+u64 Clock::nowNanos()
+{
+    return static_cast<u64>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
 f64 Clock::tick()
 {
-    auto prev = time;
-    time = std::chrono::steady_clock::now();
-    return std::chrono::duration<f64>(time - prev).count();
+    u64 prev = time;
+    time = nowNanos();
+    return static_cast<f64>(time - prev) / 1.0e9;
 }
 
 void sleep(f64 time)

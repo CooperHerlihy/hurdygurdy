@@ -1,6 +1,7 @@
 #include "hg/audio.hpp"
 
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 #include "hg/memory.hpp"
 #include "hg/serialization.hpp"
 

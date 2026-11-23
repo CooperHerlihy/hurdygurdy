@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/utility.hpp"
+#include "hg/assert.hpp"
 #include "hg/memory.hpp"
 #include "hg/concurrency.hpp"
 #include "hg/serialization.hpp"
@@ -221,7 +221,8 @@ public:
         {
             u64 oldCount = s.indices.size();
             s.indices.resize(e.idx() + 1);
-            std::memset(s.indices.data() + oldCount, static_cast<u32>(-1), (s.indices.size() - oldCount) * sizeof(*s.indices.data()));
+            // Fill each byte with 0xFF, i.e. u32 -1.
+            std::memset(s.indices.data() + oldCount, 0xFF, (s.indices.size() - oldCount) * sizeof(*s.indices.data()));
         }
 
         u64 idx = s.entities.size();

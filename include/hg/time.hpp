@@ -2,9 +2,8 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 #include "hg/hash.hpp"
-
-#include <chrono>
 
 namespace hg {
 
@@ -13,10 +12,12 @@ namespace hg {
  */
 class Clock {
 private:
+    static u64 nowNanos();
+
     /**
-     * The begin time
+     * The begin time, in nanoseconds
      */
-    std::chrono::time_point<std::chrono::steady_clock> time = std::chrono::steady_clock::now();
+    u64 time = nowNanos();
 
 public:
 

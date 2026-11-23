@@ -7,8 +7,6 @@ Modern C++20 game development library
 - never introduce third-party code
 - never use exceptions or RTTI
 - prefer not to use auto
-- prioritize both performance and readability
-- prefer modern declarative patterns to legacy imperative patterns
 - use `i8`, `u32`, `f64`, etc., not `int`, `float`, etc.
 - handle programmer errors with `HG_ASSERT`
 - handle external errors with `setError("msg")` and `std::optional`
@@ -26,17 +24,20 @@ Modern C++20 game development library
 
 ```
 debug:
-  cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug
+  cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug \
+    -DHG_USE_MOLD=on -DHG_USE_CCACHE=on
   cmake --build debug
   ./build/tests
 
 release:
-  cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release
+  cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release \
+    -DHG_USE_MOLD=on -DHG_USE_CCACHE=on
   cmake --build build/release
   ./build/release/tests
 
 san:
   cmake -G Ninja -B build/san -DCMAKE_BUILD_TYPE=Debug \
+    -DHG_USE_MOLD=on -DHG_USE_CCACHE=on \
     -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
     -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
@@ -45,6 +46,7 @@ san:
 
 tsan:
   cmake -G Ninja -B build/tsan -DCMAKE_BUILD_TYPE=Debug \
+    -DHG_USE_MOLD=on -DHG_USE_CCACHE=on \
     -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
     -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"

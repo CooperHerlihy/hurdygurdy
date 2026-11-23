@@ -5,9 +5,9 @@
 #include "internal.hpp"
 
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 #include "hg/memory.hpp"
 #include "hg/hash.hpp"
-#include "hg/utility.hpp"
 
 #include <span>
 #include <string_view>

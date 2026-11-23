@@ -1,5 +1,6 @@
 #include "tests.hpp"
 #include "hg/utility.hpp"
+#include "hg/format.hpp"
 
 #include <algorithm>
 #include <cfloat>

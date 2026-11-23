@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/utility.hpp"
+#include "hg/assert.hpp"
 
 #include <utility>
 #include <span>

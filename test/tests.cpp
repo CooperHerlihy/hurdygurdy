@@ -1,6 +1,7 @@
 #include "tests.hpp"
 
 #include "hg/time.hpp"
+#include "hg/format.hpp"
 #include "hg/gpu.hpp"
 
 #include "internal.hpp"

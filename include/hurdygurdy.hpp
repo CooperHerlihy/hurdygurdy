@@ -27,7 +27,9 @@
 #pragma once
 
 #include <hg/inttypes.hpp>
+#include <hg/assert.hpp>
 #include <hg/utility.hpp>
+#include <hg/format.hpp>
 #include <hg/memory.hpp>
 #include <hg/concurrency.hpp>
 #include <hg/math.hpp>
