@@ -133,7 +133,9 @@ static VkInstance createInstance(GpuVk* vk, std::span<std::string_view> extensio
     if (vk->enableDebugMessenger)
     {
         instanceInfo.pNext = &debugUtilsMessengerInfo;
-        const char* layers[]{
+        // Must outlive the vkCreateInstance call: a stack array can have its
+        // slot reused by the compiler before the loader reads the pointer.
+        static constexpr const char* layers[]{
             "VK_LAYER_KHRONOS_validation",
         };
         instanceInfo.enabledLayerCount = assertCast<u32>(std::size(layers));

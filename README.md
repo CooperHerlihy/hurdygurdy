@@ -31,20 +31,19 @@ int main()
     if (input == nullptr)
         panic("Could not create input device: {}\n", std::string{getError()}.c_str());
 
-    if (!initGpu(input->getVulkanExtensions()))
+    std::unique_ptr<Gpu> gpu = Gpu::create(input->getVulkanExtensions());
+    if (gpu == nullptr)
         panic("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
-    HG_DEFER(deinitGpu());
 
-    std::unique_ptr<Window> window = input->createWindow({});
+    std::unique_ptr<Window> window = input->createWindow(gpu.get(), {});
     if (window == nullptr)
         panic("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hello Hurdy Gurdy");
 
-    Renderer2D renderer{window->swapchainFormat()};
-    Layer2D layer{};
+    Renderer2D renderer{gpu.get(), window->swapchainFormat()};
 
     Camera camera{Orthographic{{{0, 0}, {1.6f, 1.0f}}}};
-    camera.update();
+    Layer2D layer{};
 
     for (;;)
     {
@@ -63,32 +62,39 @@ int main()
         renderer.drawLayer(layer);
 
         Window* windows[] = {window.get()};
-        GpuCmd* cmd = gpuBeginFrame(windows);
-        if (window->renderTarget() != nullptr)
+        std::unique_ptr<GpuCommandBuffer> cmd = gpu->beginFrame(windows);
+
+        if (window->currentView() != nullptr)
         {
             GpuAttachment colorAttachment{};
-            colorAttachment.image = window->renderTarget();
+            colorAttachment.image = window->currentView();
 
             GpuPass pass{};
             pass.colorAttachments = {&colorAttachment, 1};
 
-            gpuBeginRenderPass(cmd, pass);
-            renderer.render(cmd, camera);
-            gpuEndRenderPass(cmd);
+            cmd->beginRenderPass(pass);
+            renderer.render(cmd.get(), camera);
+            cmd->endRenderPass();
         }
-        gpuEndFrame(cmd);
+        gpu->endFrame(std::move(cmd));
     }
 
-    gpuWaitIdle();
+    gpu->waitIdle();
 }
 ```
 
-Complete runnable versions live in [src/example2d.cpp](src/example2d.cpp) and
-[src/example3d.cpp](src/example3d.cpp).
+Complete runnable versions live in [examples/example2d.cpp](examples/example2d.cpp) and
+[examples/example3d.cpp](examples/example3d.cpp).
 
 ## Integration
 
-With CMake and [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html):
+All three methods make the `hurdygurdy::hurdygurdy` target available:
+
+```cmake CMakeLists.txt
+target_link_libraries(my_game PRIVATE hurdygurdy::hurdygurdy)
+```
+
+With [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html):
 
 ```cmake CMakeLists.txt
 include(FetchContent)
@@ -97,33 +103,55 @@ FetchContent_Declare(hurdygurdy
     GIT_TAG        main
 )
 FetchContent_MakeAvailable(hurdygurdy)
-
-target_link_libraries(my_game hurdygurdy)
 ```
 
-Or clone and use `add_subdirectory`:
+With an installed copy:
+
+```bash
+git clone https://github.com/CooperHerlihy/hurdygurdy
+cmake -S hurdygurdy -B hurdygurdy/build -DCMAKE_BUILD_TYPE=Release
+cmake --install hurdygurdy/build --prefix /path/to/prefix
+```
+
+```cmake CMakeLists.txt
+find_package(hurdygurdy REQUIRED)
+```
+
+Configure your project with `-DCMAKE_PREFIX_PATH=/path/to/prefix` so CMake can
+find the package. Or, with a plain checkout:
 
 ```cmake CMakeLists.txt
 add_subdirectory(path/to/hurdygurdy)
-target_link_libraries(my_game hurdygurdy)
 ```
 
-Or link manually:
+As a subproject or through FetchContent, tests, examples and install rules are
+disabled by default. Enable them if needed:
 
-```bash
-c++ -std=c++20 -Ipath/to/hurdygurdy/include \
-    -Lpath/to/hurdygurdy/build -lhurdygurdy my_game.cpp
+```cmake
+set(HG_BUILD_TESTS ON CACHE BOOL "" FORCE)
+set(HG_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
 ```
+
+## Options
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `HG_BUILD_TESTS` | top-level: `ON`, subproject: `OFF` | Build the test suite |
+| `HG_BUILD_EXAMPLES` | top-level: `ON`, subproject: `OFF` | Build `example2d`, `example3d` and `platform_test` |
+| `HG_INSTALL` | top-level: `ON`, subproject: `OFF` | Generate install and CMake package rules |
+| `HG_USE_SDL` | `OFF` | Use the SDL backend instead of the native platform backends |
+| `HG_USE_CCACHE` | `OFF` | Use ccache as the compiler launcher |
+| `HG_USE_MOLD` | `OFF` | Link with mold (non-MSVC) |
 
 ## Building
 
 ### Dependencies
 
 - C++20 compiler (Clang 19+, GCC 15+, or MSVC)
-- CMake (3.18+)
-- SPIR-V compiler (glslc, contained in LunarG Vulkan SDK)
+- CMake (3.21+)
+- SPIR-V compiler (glslc, included in LunarG Vulkan SDK)
 - Windows only: Windows SDK (installed with Visual Studio)
-- Optional: Ninja, Mold, and CCache are used to speed up compile times
+- Debugging only: Vulkan Validation Layers (included in LunarG Vulkan SDK)
 
 On Nix, `nix develop` provides all dependencies.
 
@@ -139,23 +167,29 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-On Nix, `nix build` compiles a standalone release build.
-
-## Testing
-
-Tests and examples are built together with the library:
+On Nix, `nix build` compiles a standalone release build of the library, and the
+`nix develop` shell provides scripts that build everything with ccache and mold
+enabled:
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
+debug     # Debug build and run tests
+release   # Release build and run tests
+san       # Address + UB sanitizer build and run tests
+tsan      # Thread sanitizer build and run tests
 ```
 
-Then run the tests and examples:
+### Testing
+
+Tests and examples are built together when hurdygurdy is the top-level project:
 
 ```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Debug -DHG_BUILD_TESTS=ON -DHG_BUILD_EXAMPLES=ON
+cmake --build build
+
 ./build/tests
 ./build/example2d
 ./build/example3d
 ```
 
 Both examples save a screenshot with Ctrl-S.
+

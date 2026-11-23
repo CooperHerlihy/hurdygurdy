@@ -1,92 +1,20 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.21)
 
 project(hurdygurdy VERSION 0.1.0 LANGUAGES C CXX)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
-    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
-endif()
-
-if(MSVC)
-    add_compile_options(/permissive- /GR- /D_CRT_SECURE_NO_WARNINGS)
-    add_compile_options(/wd4702 /wd4127 /wd4530)
-    set(STRICT_FLAGS /W4 /WX)
-    set(TESTS_EXCEPTION_FLAG /EHsc)
-else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -Wno-cpp")
-    set(STRICT_FLAGS -Wall -Wextra -Wconversion -Wsign-conversion -pedantic -Werror)
-    set(TESTS_EXCEPTION_FLAG -fexceptions)
-
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(CLANG_VENDOR_FLAGS
-            -Wno-nullability-extension
-            -Wno-nullability-completeness
-        )
-    endif()
-
-    find_program(MOLD_PROGRAM mold)
-    if(MOLD_PROGRAM)
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
-    endif()
-endif()
-
-set(VulkanHeaders_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/Vulkan-Headers/include)
-
-# Platform detection
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(HG_LINUX TRUE)
-endif()
-if(WIN32)
-    set(HG_WINDOWS TRUE)
-endif()
-
-option(HG_USE_SDL "Use SDL backend" OFF)
-if(HG_USE_SDL)
-    find_package(SDL3 QUIET)
-    if(SDL3_FOUND)
-        message(STATUS "Using system SDL3")
-        set(SDL_INCLUDE_DIR "")
-    else()
-        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-        set(SDL_STATIC ON CACHE BOOL "" FORCE)
-        set(SDL_TEST OFF CACHE BOOL "" FORCE)
-        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/CMakeLists.txt")
-            message(STATUS "Using vendored SDL3")
-            add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
-        else()
-            message(STATUS "SDL3 not found, fetching from GitHub")
-            include(FetchContent)
-            FetchContent_Declare(SDL
-                GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-                GIT_TAG release-3.4.10
-            )
-            FetchContent_MakeAvailable(SDL)
-        endif()
-        set(SDL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
-    endif()
-endif()
-
-set(INCLUDE_DIRS
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/wayland
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends
-    ${SDL_INCLUDE_DIR}
-)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+include(cmake/Options.cmake)
+include(cmake/Compiler.cmake)
+include(cmake/Dependencies.cmake)
+include(cmake/Embed.cmake)
 
 # Resources
+
+add_executable(embed src/embed.c)
+target_compile_features(embed PRIVATE c_std_11)
 
 set(RESOURCES
     resources/pixel_font.hg
@@ -94,30 +22,22 @@ set(RESOURCES
 
 set(RESOURCE_HEADERS)
 foreach(resource ${RESOURCES})
-    set(res_h ${CMAKE_CURRENT_BINARY_DIR}/${resource}.h)
-    get_filename_component(res_dir ${res_h} DIRECTORY)
-    add_custom_command(
-        OUTPUT ${res_h}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${res_dir}
-        COMMAND embed ${CMAKE_CURRENT_SOURCE_DIR}/${resource} ${resource} ${res_h}
-        DEPENDS embed
-            ${CMAKE_CURRENT_SOURCE_DIR}/${resource}
-        COMMENT "Embedding ${resource}"
-    )
-    list(APPEND RESOURCE_HEADERS ${res_h})
+    hg_embed_resource(${resource} header)
+    list(APPEND RESOURCE_HEADERS ${header})
 endforeach()
 
 add_custom_target(resources DEPENDS ${RESOURCE_HEADERS})
 
 # Shaders
 
-add_executable(embed src/embed.c)
-
-set(SHADERS
+set(LIBRARY_SHADERS
     src/shaders/render2d.vert
     src/shaders/render2d.frag
     src/shaders/render3d.vert
     src/shaders/render3d.frag
+)
+
+set(TEST_SHADERS
     test/shaders/compute.comp
     test/shaders/tri.vert
     test/shaders/tri.frag
@@ -136,31 +56,15 @@ set(SHADERS
     test/shaders/noise.comp
 )
 
-set(SHADER_HEADERS)
-foreach(shader ${SHADERS})
-    set(shader_src ${CMAKE_CURRENT_SOURCE_DIR}/${shader})
-    set(shader_dir ${CMAKE_CURRENT_BINARY_DIR}/${shader})
-    get_filename_component(shader_dir ${shader_dir} DIRECTORY)
-    get_filename_component(shader_name ${shader} NAME)
-    set(spv ${shader_dir}/${shader_name}.spv)
-    set(spv_h ${shader_dir}/${shader_name}.spv.h)
-    add_custom_command(
-        OUTPUT ${spv_h}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_dir}
-        COMMAND glslc -o ${spv} ${shader_src} -I${CMAKE_CURRENT_SOURCE_DIR}/include
-        COMMAND embed ${spv} ${shader_name}.spv ${spv_h}
-        DEPENDS embed ${shader_src}
-            ${CMAKE_CURRENT_SOURCE_DIR}/include/hurdygurdy.glsl
-        COMMENT "Compiling ${shader}"
-    )
-    list(APPEND SHADER_HEADERS ${spv_h})
+set(LIBRARY_SHADER_HEADERS)
+foreach(shader ${LIBRARY_SHADERS})
+    hg_compile_shader(${shader} header)
+    list(APPEND LIBRARY_SHADER_HEADERS ${header})
 endforeach()
 
-add_custom_target(shaders DEPENDS ${SHADER_HEADERS})
+add_custom_target(shaders DEPENDS ${LIBRARY_SHADER_HEADERS})
 
 # Sources
-
-file(GLOB IMGUI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/*.cpp)
 
 set(VULKAN_SOURCES
     src/vulkan/loader.cpp
@@ -177,12 +81,6 @@ if(HG_LINUX)
 elseif(HG_WINDOWS)
     set(PLATFORM_SOURCES
         src/win32/win32.cpp
-    )
-endif()
-
-if(HG_USE_SDL)
-    set(SDL_SOURCES
-        src/sdl/sdl.cpp
     )
 endif()
 
@@ -205,7 +103,25 @@ set(CORE_SOURCES
     src/imgui.cpp
     ${VULKAN_SOURCES}
     ${PLATFORM_SOURCES}
-    ${SDL_SOURCES}
+)
+
+if(HG_USE_SDL)
+    list(APPEND CORE_SOURCES src/sdl/sdl.cpp)
+endif()
+
+file(GLOB IMGUI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/*.cpp)
+
+set(HG_PRIVATE_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/wayland
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends
+    ${SDL_INCLUDE_DIR}
+    ${VulkanHeaders_INCLUDE_DIR}
 )
 
 # Object libraries
@@ -214,33 +130,50 @@ add_library(hurdygurdy_imgui OBJECT
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_vulkan.cpp
     ${IMGUI_SOURCES}
 )
-target_include_directories(hurdygurdy_imgui
-    PUBLIC
-        ${INCLUDE_DIRS}
-        ${VulkanHeaders_INCLUDE_DIR}
+target_include_directories(hurdygurdy_imgui PRIVATE ${HG_PRIVATE_INCLUDE_DIRS})
+target_compile_features(hurdygurdy_imgui PRIVATE cxx_std_20)
+target_compile_definitions(hurdygurdy_imgui PRIVATE
+    IMGUI_DEFINE_MATH_OPERATORS
+    ${HG_CXX_DEFINITIONS}
 )
-target_compile_definitions(hurdygurdy_imgui PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
-target_compile_options(hurdygurdy_imgui PRIVATE ${CLANG_VENDOR_FLAGS})
+target_compile_options(hurdygurdy_imgui PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:${HG_CXX_FLAGS}>
+    $<$<COMPILE_LANGUAGE:CXX>:${HG_VENDOR_FLAGS}>
+)
 
 add_library(hurdygurdy_vendor OBJECT
     src/cimpl.c
     src/cppimpl.cpp
 )
-target_include_directories(hurdygurdy_vendor
-    PUBLIC
-        ${INCLUDE_DIRS}
-        ${VulkanHeaders_INCLUDE_DIR}
+target_include_directories(hurdygurdy_vendor PRIVATE ${HG_PRIVATE_INCLUDE_DIRS})
+target_compile_features(hurdygurdy_vendor PRIVATE cxx_std_20 c_std_11)
+target_compile_definitions(hurdygurdy_vendor PRIVATE ${HG_CXX_DEFINITIONS})
+target_compile_options(hurdygurdy_vendor PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:${HG_CXX_FLAGS}>
+    $<$<COMPILE_LANGUAGE:CXX>:${HG_VENDOR_FLAGS}>
 )
-target_compile_options(hurdygurdy_vendor PRIVATE ${CLANG_VENDOR_FLAGS})
 
 add_library(hurdygurdy_core OBJECT ${CORE_SOURCES})
 add_dependencies(hurdygurdy_core shaders resources)
-target_include_directories(hurdygurdy_core
-    PUBLIC
-        ${INCLUDE_DIRS}
-        ${CMAKE_CURRENT_BINARY_DIR}/src
-        ${VulkanHeaders_INCLUDE_DIR}
+target_include_directories(hurdygurdy_core PRIVATE ${HG_PRIVATE_INCLUDE_DIRS})
+target_compile_features(hurdygurdy_core PRIVATE cxx_std_20 c_std_11)
+target_compile_definitions(hurdygurdy_core PRIVATE
+    IMGUI_DEFINE_MATH_OPERATORS
+    ${HG_CXX_DEFINITIONS}
 )
+target_compile_options(hurdygurdy_core PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:${HG_CXX_FLAGS}>
+    $<$<COMPILE_LANGUAGE:CXX>:${HG_VENDOR_FLAGS}>
+    $<$<COMPILE_LANGUAGE:CXX>:${HG_STRICT_FLAGS}>
+)
+if(MSVC)
+    target_compile_options(hurdygurdy_core PRIVATE /EHs-c-)
+endif()
+
+if(HG_USE_SDL)
+    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_SDL=1)
+    target_link_libraries(hurdygurdy_core PRIVATE ${SDL_TARGET})
+endif()
 
 if(HG_LINUX)
     target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_WAYLAND=1)
@@ -259,72 +192,156 @@ elseif(HG_WINDOWS)
     target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_WIN32_BACKEND=1)
 endif()
 
-if(HG_USE_SDL)
-    target_compile_definitions(hurdygurdy_core PRIVATE HG_USE_SDL=1)
-endif()
-
-if(MSVC)
-    target_compile_options(hurdygurdy_core PRIVATE /EHs-c-)
-endif()
-target_compile_options(hurdygurdy_core PRIVATE ${STRICT_FLAGS} ${CLANG_VENDOR_FLAGS})
-target_compile_definitions(hurdygurdy_core PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
-
 # Static library
 
-add_library(hurdygurdy STATIC)
-target_link_libraries(hurdygurdy PUBLIC hurdygurdy_core hurdygurdy_imgui hurdygurdy_vendor)
+add_library(hurdygurdy STATIC
+    $<TARGET_OBJECTS:hurdygurdy_core>
+    $<TARGET_OBJECTS:hurdygurdy_imgui>
+    $<TARGET_OBJECTS:hurdygurdy_vendor>
+)
+add_library(hurdygurdy::hurdygurdy ALIAS hurdygurdy)
+
+target_compile_features(hurdygurdy PUBLIC cxx_std_20)
+target_include_directories(hurdygurdy
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/hurdygurdy>
+)
+target_link_options(hurdygurdy PRIVATE ${HG_LINK_OPTIONS})
+
 if(HG_USE_SDL)
-    target_link_libraries(hurdygurdy PRIVATE SDL3::SDL3)
+    # PUBLIC: consumers of the static library must link SDL3 themselves.
+    # hurdygurdyConfig.cmake runs find_dependency(SDL3) for installed use.
+    target_compile_definitions(hurdygurdy INTERFACE HG_USE_SDL=1)
+    target_link_libraries(hurdygurdy PUBLIC ${SDL_TARGET})
 endif()
 if(HG_WINDOWS)
     target_link_libraries(hurdygurdy PRIVATE ole32 dwmapi)
 endif()
 
-# Executables
+# Tests
 
-add_executable(tests
-    test/tests.cpp
-    test/utility.cpp
-    test/memory.cpp
-    test/concurrency.cpp
-    test/math.cpp
-    test/geometry.cpp
-    test/noise.cpp
-    test/hash.cpp
-    test/serialization.cpp
-    test/json.cpp
-    test/dynlib.cpp
-    test/gpu.cpp
-    test/audio.cpp
-    test/texture.cpp
-    test/ecs.cpp
-    test/time.cpp
-    test/inttypes.cpp
-    test/render2d.cpp
-    test/render3d.cpp
-)
-target_link_libraries(tests hurdygurdy)
-target_include_directories(tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/test)
-target_precompile_headers(tests PRIVATE <hurdygurdy.hpp>)
-target_compile_options(tests PRIVATE ${STRICT_FLAGS} ${TESTS_EXCEPTION_FLAG})
-target_compile_definitions(tests PRIVATE HG_LOGGING=1)
+if(HG_BUILD_TESTS)
+    set(TEST_SHADER_HEADERS)
+    foreach(shader ${TEST_SHADERS})
+        hg_compile_shader(${shader} header)
+        list(APPEND TEST_SHADER_HEADERS ${header})
+    endforeach()
 
-foreach(tgt example2d example3d platform_test)
-    add_executable(${tgt} src/${tgt}.cpp)
-    target_link_libraries(${tgt} hurdygurdy)
-    if(MSVC)
-        target_compile_options(${tgt} PRIVATE /EHs-c-)
-    endif()
-    target_compile_options(${tgt} PRIVATE ${STRICT_FLAGS})
-endforeach()
+    add_custom_target(test_shaders DEPENDS ${TEST_SHADER_HEADERS})
 
-# Install
+    add_executable(tests
+        test/tests.cpp
+        test/utility.cpp
+        test/memory.cpp
+        test/concurrency.cpp
+        test/math.cpp
+        test/geometry.cpp
+        test/noise.cpp
+        test/hash.cpp
+        test/serialization.cpp
+        test/json.cpp
+        test/dynlib.cpp
+        test/gpu.cpp
+        test/audio.cpp
+        test/texture.cpp
+        test/ecs.cpp
+        test/time.cpp
+        test/inttypes.cpp
+        test/render2d.cpp
+        test/render3d.cpp
+    )
+    add_dependencies(tests test_shaders)
+    target_link_libraries(tests PRIVATE hurdygurdy)
+    target_link_options(tests PRIVATE ${HG_LINK_OPTIONS})
+    target_include_directories(tests PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/test
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/wayland
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
+    )
+    target_precompile_headers(tests PRIVATE <hurdygurdy.hpp>)
+    target_compile_features(tests PRIVATE cxx_std_20)
+    target_compile_options(tests PRIVATE
+        ${HG_CXX_FLAGS}
+        ${HG_STRICT_FLAGS}
+        ${HG_TEST_FLAGS}
+    )
+    target_compile_definitions(tests PRIVATE
+        HG_LOGGING=1
+        ${HG_CXX_DEFINITIONS}
+    )
+endif()
 
-install(TARGETS hurdygurdy ARCHIVE DESTINATION lib)
-install(TARGETS tests example2d example3d platform_test RUNTIME DESTINATION bin)
-install(DIRECTORY include/
-    DESTINATION include
-    FILES_MATCHING
-        PATTERN "*.hpp"
-        PATTERN "*.glsl"
-)
+# Examples
+
+if(HG_BUILD_EXAMPLES)
+    foreach(example example2d example3d platform_test)
+        add_executable(${example} examples/${example}.cpp)
+        target_link_libraries(${example} PRIVATE hurdygurdy)
+        target_link_options(${example} PRIVATE ${HG_LINK_OPTIONS})
+        target_include_directories(${example} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
+        )
+        target_compile_features(${example} PRIVATE cxx_std_20)
+        target_compile_options(${example} PRIVATE
+            ${HG_CXX_FLAGS}
+            ${HG_STRICT_FLAGS}
+        )
+        target_compile_definitions(${example} PRIVATE ${HG_CXX_DEFINITIONS})
+    endforeach()
+endif()
+
+# Install and CMake package
+
+if(HG_INSTALL)
+    set(HG_CMAKE_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/hurdygurdy)
+
+    install(TARGETS hurdygurdy
+        EXPORT hurdygurdyTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+
+    install(DIRECTORY include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hurdygurdy
+        FILES_MATCHING
+            PATTERN "*.hpp"
+            PATTERN "*.glsl"
+    )
+
+    install(EXPORT hurdygurdyTargets
+        FILE hurdygurdyTargets.cmake
+        NAMESPACE hurdygurdy::
+        DESTINATION ${HG_CMAKE_INSTALL_DIR}
+    )
+
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/hurdygurdyConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/hurdygurdyConfig.cmake
+        INSTALL_DESTINATION ${HG_CMAKE_INSTALL_DIR}
+    )
+
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/hurdygurdyConfigVersion.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+
+    install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/hurdygurdyConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/hurdygurdyConfigVersion.cmake
+        DESTINATION ${HG_CMAKE_INSTALL_DIR}
+    )
+endif()
+
+# Summary
+
+message(STATUS "hurdygurdy ${PROJECT_VERSION}")
+message(STATUS "  tests:     ${HG_BUILD_TESTS}")
+message(STATUS "  examples:  ${HG_BUILD_EXAMPLES}")
+message(STATUS "  install:   ${HG_INSTALL}")
+message(STATUS "  sdl:       ${HG_USE_SDL}")
+message(STATUS "  ccache:    ${HG_USE_CCACHE}")
+message(STATUS "  mold:      ${HG_USE_MOLD}")

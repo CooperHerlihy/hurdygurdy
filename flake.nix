@@ -11,17 +11,23 @@
             pkgs = nixpkgs.legacyPackages.${system};
 
             debug = pkgs.writeShellScriptBin "debug" ''
-                cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug -DHG_USE_SDL=ON \
+                cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug \
+                    -DHG_USE_SDL=ON -DHG_USE_CCACHE=ON -DHG_USE_MOLD=ON \
+                    -DHG_BUILD_TESTS=ON -DHG_BUILD_EXAMPLES=ON \
                 && cmake --build build \
                 && ./build/tests
             '';
             release = pkgs.writeShellScriptBin "release" ''
-                cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release -DHG_USE_SDL=ON \
+                cmake -G Ninja -B build/release -DCMAKE_BUILD_TYPE=Release \
+                    -DHG_USE_SDL=ON -DHG_USE_CCACHE=ON -DHG_USE_MOLD=ON \
+                    -DHG_BUILD_TESTS=ON -DHG_BUILD_EXAMPLES=ON \
                 && cmake --build build/release \
                 && ./build/release/tests
             '';
             san = pkgs.writeShellScriptBin "san" ''
-                cmake -G Ninja -B build/san -DCMAKE_BUILD_TYPE=Debug -DHG_USE_SDL=ON \
+                cmake -G Ninja -B build/san -DCMAKE_BUILD_TYPE=Debug \
+                    -DHG_USE_SDL=ON -DHG_USE_CCACHE=ON -DHG_USE_MOLD=ON \
+                    -DHG_BUILD_TESTS=ON -DHG_BUILD_EXAMPLES=ON \
                     -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
                     -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
                     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
@@ -29,7 +35,9 @@
                 && LSAN_OPTIONS=detect_leaks=0 ./build/san/tests
             '';
             tsan = pkgs.writeShellScriptBin "tsan" ''
-                cmake -G Ninja -B build/tsan -DCMAKE_BUILD_TYPE=Debug -DHG_USE_SDL=ON \
+                cmake -G Ninja -B build/tsan -DCMAKE_BUILD_TYPE=Debug \
+                    -DHG_USE_SDL=ON -DHG_USE_CCACHE=ON -DHG_USE_MOLD=ON \
+                    -DHG_BUILD_TESTS=ON -DHG_BUILD_EXAMPLES=ON \
                     -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
                     -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
                     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
@@ -170,7 +178,13 @@
                 ];
 
                 cmakeBuildType = "Release";
-                cmakeFlags = [ "-DHG_USE_SDL=OFF" ];
+                cmakeFlags = [
+                    "-DHG_USE_SDL=OFF"
+                    "-DHG_USE_CCACHE=OFF"
+                    "-DHG_USE_MOLD=OFF"
+                    "-DHG_BUILD_TESTS=OFF"
+                    "-DHG_BUILD_EXAMPLES=OFF"
+                ];
 
                 preConfigure = ''
                     rm -rf vendor/imgui vendor/Vulkan-Headers
@@ -197,17 +211,6 @@
                     chmod -R u+w vendor/libxkbcommon
                     chmod -R u+w vendor/wayland
                     chmod -R u+w vendor/wayland-protocols
-                '';
-
-                postFixup = ''
-                    for bin in $out/bin/*; do
-                        patchelf --add-rpath ${pkgs.vulkan-loader}/lib $bin
-                        patchelf --add-rpath ${pkgs.libx11}/lib $bin
-                        patchelf --add-rpath ${pkgs.libxrandr}/lib $bin
-                        patchelf --add-rpath ${pkgs.pipewire}/lib $bin
-                        patchelf --add-rpath ${pkgs.libxkbcommon}/lib $bin
-                        patchelf --add-rpath ${pkgs.wayland}/lib $bin
-                    done
                 '';
             };
         });
