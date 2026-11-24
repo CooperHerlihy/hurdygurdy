@@ -3151,14 +3151,19 @@ u32 GpuSwapchainVk::imageCount() const
     return assertCast<u32>(images.size());
 }
 
+bool GpuSwapchainVk::frameAvailable() const
+{
+    return imageIdx < views.size();
+}
+
 GpuImage* GpuSwapchainVk::currentImage() const
 {
-    return imageIdx < images.size() ? const_cast<GpuImageVk*>(&images[imageIdx]) : nullptr;
+    return const_cast<GpuImageVk*>(&images[imageIdx]);
 }
 
 GpuView* GpuSwapchainVk::currentView() const
 {
-    return imageIdx < views.size() ? const_cast<GpuViewVk*>(&views[imageIdx]) : nullptr;
+    return const_cast<GpuViewVk*>(&views[imageIdx]);
 }
 
 GpuSwapchainVk::~GpuSwapchainVk() noexcept

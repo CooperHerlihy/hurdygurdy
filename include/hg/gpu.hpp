@@ -1145,12 +1145,21 @@ public:
     virtual u32 imageCount() const = 0;
 
     /**
+     * Returns whether an image is available this frame
+     */
+    virtual bool frameAvailable() const = 0;
+
+    /**
      * Get the current swapchain image
+     *
+     * Note, frameAvailable must return true
      */
     virtual GpuImage* currentImage() const = 0;
 
     /**
      * Get the current swapchain image view
+     *
+     * Note, frameAvailable must return true
      */
     virtual GpuView* currentView() const = 0;
 };

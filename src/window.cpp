@@ -272,6 +272,10 @@ u32 GpuSwapchainDummy::imageCount() const
 {
     return 0;
 }
+bool GpuSwapchainDummy::frameAvailable() const
+{
+    return false;
+}
 
 GpuImage* GpuSwapchainDummy::currentImage() const
 {

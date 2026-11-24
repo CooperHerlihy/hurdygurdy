@@ -797,7 +797,7 @@ int main()
             }
         }
 
-        if (window->currentView() != nullptr)
+        if (window->frameAvailable())
         {
             ProfilerScopeTimer timer{"Cpu"};
             GpuAttachment colorAttachment{};
@@ -809,7 +809,7 @@ int main()
             cmd->endRenderPass();
         }
 
-        if (secondWindow != nullptr && secondWindow->currentView() != nullptr)
+        if (secondWindow != nullptr && secondWindow->frameAvailable())
         {
             ProfilerScopeTimer timer{"Cpu"};
             GpuAttachment colorAttachment{};

@@ -436,6 +436,7 @@ public:
     u32 height() const override;
     Format format() const override;
     u32 imageCount() const override;
+    bool frameAvailable() const override;
     GpuImage* currentImage() const override;
     GpuView* currentView() const override;
 

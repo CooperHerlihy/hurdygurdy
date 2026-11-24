@@ -196,7 +196,7 @@ int main()
         Window* windows[] = {window.get()};
         std::unique_ptr<GpuCommandBuffer> cmd = gpu->beginFrame(windows);
 
-        if (window->currentView() != nullptr)
+        if (window->frameAvailable())
         {
             GpuAttachment colorAttachment{.clearColor{0.02f, 0.02f, 0.05f, 1.0f}};
             colorAttachment.image = window->currentView();

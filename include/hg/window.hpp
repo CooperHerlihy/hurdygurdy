@@ -474,7 +474,17 @@ public:
     virtual GpuSwapchain* swapchain() const = 0;
 
     /**
+     * Returns whether there is an image availabke this frame
+     */
+    bool frameAvailable() const
+    {
+        return swapchain()->frameAvailable();
+    }
+
+    /**
      * Get the current swapchain image view
+     *
+     * Note, frameAvailable must return true
      */
     GpuImage* currentImage() const
     {
@@ -483,6 +493,8 @@ public:
 
     /**
      * Get the current swapchain image view
+     *
+     * Note, frameAvailable must return true
      */
     GpuView* currentView() const
     {
@@ -824,6 +836,11 @@ public:
      * Get the current swapchain image count
      */
     u32 imageCount() const override;
+
+    /**
+     * Returns whether an image is available this frame
+     */
+    bool frameAvailable() const override;
 
     /**
      * Get the current swapchain image
