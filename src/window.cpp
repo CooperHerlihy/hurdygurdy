@@ -113,7 +113,7 @@ InputBackend InputDeviceDummy::getBackend()
     return InputBackend::none;
 }
 
-std::span<std::string_view> InputDeviceDummy::getVulkanExtensions()
+std::span<std::string_view> InputDeviceDummy::getPlatformGraphicsExtensions()
 {
     return {};
 }

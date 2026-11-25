@@ -28,22 +28,14 @@ using namespace hg;
 int main()
 {
     std::unique_ptr<InputDevice> input = InputDevice::create();
-    if (input == nullptr)
-        panic("Could not create input device: {}\n", std::string{getError()}.c_str());
-
-    std::unique_ptr<Gpu> gpu = Gpu::create(input->getVulkanExtensions());
-    if (gpu == nullptr)
-        panic("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
-
+    std::unique_ptr<Gpu> gpu = Gpu::create(input->getPlatformGraphicsExtensions());
     std::unique_ptr<Window> window = input->createWindow(gpu.get(), {});
-    if (window == nullptr)
-        panic("Could not create window: {}\n", std::string{getError()}.c_str());
     window->setTitle("Hello Hurdy Gurdy");
 
     Renderer2D renderer{gpu.get(), window->swapchainFormat()};
-
-    Camera camera{Orthographic{{{0, 0}, {1.6f, 1.0f}}}};
     Layer2D layer{};
+
+    Camera camera{Orthographic{{{0, 0}, {1.5f, 1.0f}}}};
 
     for (;;)
     {
@@ -54,7 +46,7 @@ int main()
         layer.clear();
         layer.drawRect({0.1f, 0.12f, 0.15f, 1.0f}, {Vec2{0, 0}, Vec2{1.6f, 1.0f}});
 
-        layer.drawText("Hello, Hurdy Gurdy!", {1.0f, 1.0f, 1.0f, 1.0f},
+        layer.drawText("Hello, Hurdy Gurdy!", Vec4{1.0f},
             TextBuilder2D{getDefaultFont()}
                 .setTopCenter({0.8f, 0.4f})
                 .setHeight(0.1f));
@@ -78,8 +70,6 @@ int main()
         }
         gpu->endFrame(std::move(cmd));
     }
-
-    gpu->waitIdle();
 }
 ```
 

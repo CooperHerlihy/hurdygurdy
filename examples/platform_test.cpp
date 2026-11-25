@@ -245,7 +245,7 @@ static void switchInputBackend(InputBackend backend)
             return false;
         }
 
-        gpu = Gpu::create(input->getVulkanExtensions());
+        gpu = Gpu::create(input->getPlatformGraphicsExtensions());
         if (gpu == nullptr)
         {
             input = nullptr;
@@ -334,7 +334,7 @@ int main()
         panic("Could not create input device: {}\n", std::string{getError()}.c_str());
     inputBackendName = inputBackendNameStr(input->getBackend());
 
-    gpu = Gpu::create(input->getVulkanExtensions());
+    gpu = Gpu::create(input->getPlatformGraphicsExtensions());
     if (!gpu)
         panic("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
 

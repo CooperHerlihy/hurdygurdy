@@ -10,7 +10,7 @@ int main()
     if (input == nullptr)
         panic("Could not create input device: {}\n", std::string{getError()}.c_str());
 
-    std::unique_ptr<Gpu> gpu = Gpu::create(input->getVulkanExtensions());
+    std::unique_ptr<Gpu> gpu = Gpu::create(input->getPlatformGraphicsExtensions());
     if (gpu == nullptr)
         panic("Could not initialize GPU: {}\n", std::string{getError()}.c_str());
 

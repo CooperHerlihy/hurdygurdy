@@ -41,7 +41,7 @@ public:
         return InputBackend::sdl3;
     }
 
-    std::span<std::string_view> getVulkanExtensions() override;
+    std::span<std::string_view> getPlatformGraphicsExtensions() override;
     std::span<DisplayInfo> displayInfo() override;
     void processEvents() override;
     std::span<const Event> getEvents() override;

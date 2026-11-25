@@ -1341,7 +1341,7 @@ void InputDeviceWayland::readClipboard()
     }
 }
 
-std::span<std::string_view> InputDeviceWayland::getVulkanExtensions()
+std::span<std::string_view> InputDeviceWayland::getPlatformGraphicsExtensions()
 {
     static std::string_view exts[] = {
         "VK_KHR_surface",

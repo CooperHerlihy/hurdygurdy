@@ -245,7 +245,7 @@ InputDeviceSdl3::~InputDeviceSdl3()
         SDL_INIT_EVENTS);
 }
 
-std::span<std::string_view> InputDeviceSdl3::getVulkanExtensions()
+std::span<std::string_view> InputDeviceSdl3::getPlatformGraphicsExtensions()
 {
     u32 extCount = 0;
     const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);

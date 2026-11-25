@@ -373,9 +373,9 @@ public:
     virtual InputBackend getBackend() = 0;
 
     /**
-     * Returns the Vulkan extensions needed by the platform for windowing
+     * Returns the extensions needed for windowing on the platform
      */
-    virtual std::span<std::string_view> getVulkanExtensions() = 0;
+    virtual std::span<std::string_view> getPlatformGraphicsExtensions() = 0;
 
     /**
      * Returns the display info
@@ -657,7 +657,7 @@ public:
     /**
      * Returns the Vulkan extensions needed by the platform for windowing
      */
-    std::span<std::string_view> getVulkanExtensions() override;
+    std::span<std::string_view> getPlatformGraphicsExtensions() override;
 
     /**
      * Returns the display info

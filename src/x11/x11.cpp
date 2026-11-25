@@ -498,7 +498,7 @@ InputDeviceX11::~InputDeviceX11()
         xlibFuncs.XCloseDisplay(display);
 }
 
-std::span<std::string_view> InputDeviceX11::getVulkanExtensions()
+std::span<std::string_view> InputDeviceX11::getPlatformGraphicsExtensions()
 {
     static std::string_view exts[] = {
         "VK_KHR_surface",
