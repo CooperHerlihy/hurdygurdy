@@ -2,14 +2,13 @@
 
 #include "hg/inttypes.hpp"
 #include "hg/utility.hpp"
-#include "hg/format.hpp"
+#include "hg/logging.hpp"
 #include "hg/hash.hpp"
 
 #include <span>
 #include <optional>
 #include <tuple>
 #include <variant>
-#include <limits>
 #include <memory>
 #include <string>
 #include <array>

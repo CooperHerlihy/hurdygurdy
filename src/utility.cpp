@@ -1,9 +1,9 @@
 #include "hg/utility.hpp"
-#include "hg/format.hpp"
 
+#include "hg/defer.hpp"
+#include "hg/logging.hpp"
 #include "hg/memory.hpp"
 
-#include <cstring>
 #include <string>
 #include <charconv>
 
@@ -25,41 +25,6 @@
 #endif
 
 namespace hg {
-
-thread_local static char errorData[4096];
-thread_local static u32 errorLength = 0;
-
-void setError(std::string_view error)
-{
-    u32 newLength = assertCast<u32>(std::min(error.length(), (sizeof(errorData) - 1)));
-    std::memcpy(errorData, error.data(), newLength);
-    errorData[newLength] = '\0';
-    errorLength = newLength;
-}
-
-std::string_view getError()
-{
-    return {errorData, errorLength};
-}
-
-void printError()
-{
-    std::fprintf(stderr, "HurdyGurdy Error: %.*s\n", errorLength, errorData);
-}
-
-void assertionFailed(const char* file, i32 line, const char* func, const char* cond)
-{
-#ifdef HG_LOGGING
-    std::fprintf(stderr, "HurdyGurdy Panic: Assertion failed in %s:%d %s() \"%s\"\n", file, line, func, cond);
-    printError();
-#else
-    (void)file;
-    (void)line;
-    (void)func;
-    (void)cond;
-#endif
-    std::abort();
-}
 
 bool isWhitespace(char c)
 {

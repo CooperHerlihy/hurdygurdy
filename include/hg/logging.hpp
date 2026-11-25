@@ -1,10 +1,8 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/utility.hpp"
+#include "hg/error.hpp"
 
-#include <cstdio>
-#include <cstdlib>
 #include <format>
 
 namespace hg {

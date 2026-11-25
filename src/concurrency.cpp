@@ -1,5 +1,6 @@
 #include "hg/concurrency.hpp"
 
+#include "hg/assert.hpp"
 #include "hg/memory.hpp"
 #include "hg/time.hpp"
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/assert.hpp"
 
 #include <utility>
 #include <span>
@@ -226,7 +225,6 @@ public:
      */
     T* allocate(std::size_t size)
     {
-        HG_ASSERT(arena != nullptr);
         return static_cast<T*>(arena->alloc(size * sizeof(T), alignof(T)));
     }
 

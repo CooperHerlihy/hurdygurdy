@@ -1,13 +1,11 @@
 #include "sdl_audio.hpp"
-
 #include "sdl_window.hpp"
 
-#include "internal.hpp"
-
-#include "hg/utility.hpp"
-#include "hg/format.hpp"
+#include "hg/defer.hpp"
+#include "hg/logging.hpp"
 #include "hg/memory.hpp"
 #include "hg/hash.hpp"
+#include "internal.hpp"
 
 #include <span>
 #include <string_view>

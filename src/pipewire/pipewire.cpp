@@ -1,8 +1,7 @@
 #include "pipewire_audio.hpp"
 
-#include "hg/utility.hpp"
+#include "hg/defer.hpp"
 #include "hg/dynlib.hpp"
-#include "hg/utility.hpp"
 
 extern "C" {
 void pw_init(int* argc, char** argv[]);

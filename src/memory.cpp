@@ -1,6 +1,6 @@
 #include "hg/memory.hpp"
 #include "hg/utility.hpp"
-#include "hg/format.hpp"
+#include "hg/logging.hpp"
 
 #ifdef HG_PLATFORM_WINDOWS
 #include <malloc.h>

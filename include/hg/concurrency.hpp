@@ -5,7 +5,6 @@
 #include <type_traits>
 
 #include "hg/inttypes.hpp"
-#include "hg/assert.hpp"
 
 namespace hg {
 
@@ -131,9 +130,7 @@ public:
      */
     void signal(u32 count = 1)
     {
-        [[maybe_unused]]
-        u32 prev = counter.fetch_sub(count);
-        HG_ASSERT(prev >= count);
+        counter.fetch_sub(count);
     }
 
     /**

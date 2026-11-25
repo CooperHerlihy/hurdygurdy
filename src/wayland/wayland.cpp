@@ -1,7 +1,7 @@
 #include "wayland_window.hpp"
 
 #include "internal.hpp"
-#include "hg/utility.hpp"
+#include "hg/error.hpp"
 #include "hg/dynlib.hpp"
 
 #include <string_view>

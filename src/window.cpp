@@ -1,7 +1,6 @@
 #include "hg/window.hpp"
 
-#include "hg/utility.hpp"
-#include "hg/format.hpp"
+#include "hg/logging.hpp"
 
 #if defined(HG_USE_WAYLAND)
 #include "wayland/wayland_window.hpp"

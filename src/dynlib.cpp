@@ -1,7 +1,7 @@
 #include "hg/dynlib.hpp"
 
-#include "hg/utility.hpp"
-#include "hg/format.hpp"
+#include "hg/definitions.hpp"
+#include "hg/logging.hpp"
 #include "hg/memory.hpp"
 
 namespace hg {

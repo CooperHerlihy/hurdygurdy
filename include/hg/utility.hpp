@@ -1,10 +1,8 @@
 #pragma once
 
-#include "hg/assert.hpp"
 #include "hg/inttypes.hpp"
+#include "hg/assert.hpp"
 
-#include <cstdio>
-#include <cstdlib>
 #include <bit>
 #include <utility>
 #include <optional>
@@ -14,21 +12,6 @@
 #include <span>
 
 namespace hg {
-
-/**
- * Set this thread's current error message
- */
-void setError(std::string_view error);
-
-/**
- * Get this thread's current error message
- */
-std::string_view getError();
-
-/**
- * Log this thread's current error message to stderr
- */
-void printError();
 
 /**
  * Aligns a value up to the nearest aligned value

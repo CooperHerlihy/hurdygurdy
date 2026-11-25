@@ -2,7 +2,7 @@
 
 #include "hg/gpu.hpp"
 #include "hg/inttypes.hpp"
-#include "hg/format.hpp"
+#include "hg/logging.hpp"
 #include "hg/hash.hpp"
 
 #include <array>

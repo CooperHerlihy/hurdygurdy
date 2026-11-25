@@ -96,6 +96,7 @@ elseif(HG_WINDOWS)
 endif()
 
 set(CORE_SOURCES
+    src/error.cpp
     src/utility.cpp
     src/memory.cpp
     src/concurrency.cpp
@@ -255,6 +256,8 @@ if(HG_BUILD_TESTS)
 
     add_executable(tests
         test/tests.cpp
+        test/error.cpp
+        test/assert.cpp
         test/utility.cpp
         test/memory.cpp
         test/concurrency.cpp

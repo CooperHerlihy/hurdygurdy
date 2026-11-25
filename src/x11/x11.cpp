@@ -1,7 +1,7 @@
 #include "x11_window.hpp"
 
 #include "internal.hpp"
-#include "hg/utility.hpp"
+#include "hg/error.hpp"
 #include "hg/hash.hpp"
 #include "hg/dynlib.hpp"
 

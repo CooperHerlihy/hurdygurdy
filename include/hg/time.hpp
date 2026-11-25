@@ -1,8 +1,7 @@
 #pragma once
 
 #include "hg/inttypes.hpp"
-#include "hg/utility.hpp"
-#include "hg/format.hpp"
+#include "hg/logging.hpp"
 #include "hg/hash.hpp"
 
 namespace hg {

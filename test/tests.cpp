@@ -1,7 +1,7 @@
 #include "tests.hpp"
 
+#include "hg/logging.hpp"
 #include "hg/time.hpp"
-#include "hg/format.hpp"
 #include "hg/gpu.hpp"
 
 #include "internal.hpp"
@@ -36,7 +36,7 @@ static i32 failCount = 0;
 
 int main()
 {
-    hg::internal::convertPixelFont();
+    // hg::internal::convertPixelFont();
 
     gpuOwner = Gpu::create({});
     if (gpuOwner == nullptr)

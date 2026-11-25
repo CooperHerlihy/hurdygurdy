@@ -1,6 +1,5 @@
 #include "tests.hpp"
 #include "hg/json.hpp"
-#include "hg/utility.hpp"
 
 #include <iterator>
 #include <numeric>

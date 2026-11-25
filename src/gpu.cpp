@@ -1,7 +1,7 @@
 #include "hg/gpu.hpp"
 
-#include "hg/utility.hpp"
-#include "hg/format.hpp"
+#include "hg/assert.hpp"
+#include "hg/logging.hpp"
 
 #include "vulkan/vulkan_gpu.hpp"
 

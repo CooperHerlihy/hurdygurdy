@@ -1,5 +1,6 @@
 #include "hg/serialization.hpp"
 
+#include "hg/defer.hpp"
 #include "hg/utility.hpp"
 
 #include <cstring>
