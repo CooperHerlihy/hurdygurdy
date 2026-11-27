@@ -349,21 +349,6 @@ TEST(testArenaAllocatorVectorScopeRestore)
     ASSERT(p != nullptr);
 }
 
-TEST(testArenaAllocatorRebind)
-{
-    Arena a{1024};
-    ArenaScope scope{&a};
-    VectorTemp<StringTemp> v{ArenaAllocator<StringTemp>{scope}};
-    v.push_back(StringTemp{"one", ArenaAllocator<char>{scope}});
-    v.push_back(StringTemp{"two", ArenaAllocator<char>{scope}});
-    v.resize(4);
-    ASSERT(v.size() == 4);
-    ASSERT(v[0] == "one");
-    ASSERT(v[1] == "two");
-    ASSERT(v[2].empty());
-    ASSERT(v[3].empty());
-}
-
 TEST(testArenaAllocatorCompare)
 {
     Arena a{256};

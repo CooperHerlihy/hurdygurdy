@@ -55,7 +55,7 @@ std::optional<void*> Library::loadSymbol(std::string_view name)
 std::optional<Library> Library::load(std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
 
     std::optional<Library> lib = std::make_optional<Library>();
     lib->lib = static_cast<void*>(LoadLibraryA(p.c_str()));
@@ -77,7 +77,7 @@ Library::~Library() noexcept
 std::optional<void*> Library::loadSymbol(std::string_view name)
 {
     ArenaScope scratch = getScratch();
-    string_temp n{name, scratch};
+    StringTemp n{name, scratch};
 
     std::optional<void*> fn = reinterpret_cast<void*>(GetProcAddress(reinterpret_cast<HMODULE>(lib), n.c_str()));
     if (fn == nullptr)

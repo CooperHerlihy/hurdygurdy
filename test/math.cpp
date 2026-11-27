@@ -9,22 +9,22 @@ using namespace hg;
 
 TEST(testScalarPow)
 {
-    static_assert(pow(2.0f, 0) == 1.0f);
-    static_assert(pow(2.0f, 1) == 2.0f);
-    static_assert(pow(3.0f, 2) == 9.0f);
-    static_assert(pow(0.0f, 5) == 0.0f);
-    static_assert(pow(1.0f, 100) == 1.0f);
-    static_assert(pow(-2.0f, 3) == -8.0f);
-    static_assert(pow(-2.0f, 2) == 4.0f);
-    static_assert(pow(2.0f, 10) == 1024.0f);
-    static_assert(pow(0.5f, 4) == 0.0625f);
-    static_assert(pow(1.5f, 5) == 7.59375f);
-    static_assert(pow(2.0f, 20) == 1048576.0f);
-    static_assert(pow(0.0f, 0) == 1.0f);
-    static_assert(pow(1.0f, 0) == 1.0f);
-    static_assert(pow(5.0f, 0) == 1.0f);
-    static_assert(pow(-3.0f, 0) == 1.0f);
-    static_assert(pow(0.001f, 0) == 1.0f);
+    static_assert(pow(2.0f, 0u) == 1.0f);
+    static_assert(pow(2.0f, 1u) == 2.0f);
+    static_assert(pow(3.0f, 2u) == 9.0f);
+    static_assert(pow(0.0f, 5u) == 0.0f);
+    static_assert(pow(1.0f, 100u) == 1.0f);
+    static_assert(pow(-2.0f, 3u) == -8.0f);
+    static_assert(pow(-2.0f, 2u) == 4.0f);
+    static_assert(pow(2.0f, 10u) == 1024.0f);
+    static_assert(pow(0.5f, 4u) == 0.0625f);
+    static_assert(pow(1.5f, 5u) == 7.59375f);
+    static_assert(pow(2.0f, 20u) == 1048576.0f);
+    static_assert(pow(0.0f, 0u) == 1.0f);
+    static_assert(pow(1.0f, 0u) == 1.0f);
+    static_assert(pow(5.0f, 0u) == 1.0f);
+    static_assert(pow(-3.0f, 0u) == 1.0f);
+    static_assert(pow(0.001f, 0u) == 1.0f);
 }
 
 TEST(testScalarSquare)

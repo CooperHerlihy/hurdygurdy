@@ -271,10 +271,10 @@ static bool win32PathToWide(std::string_view path, wchar_t* wPath, u64 capacity)
     return true;
 }
 
-std::optional<std::vector<byte>> loadFile(std::string_view path)
+std::optional<std::vector<byte>> binaryLoad(std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
 
     wchar_t wPath[1024]{};
     if (!win32PathToWide(p.c_str(), wPath, sizeof(wPath) / sizeof(wchar_t)))
@@ -320,10 +320,10 @@ std::optional<std::vector<byte>> loadFile(std::string_view path)
     return bin;
 }
 
-bool storeFile(std::span<const byte> bin, std::string_view path)
+bool binaryStore(std::span<const byte> bin, std::string_view path)
 {
     ArenaScope scratch = getScratch();
-    string_temp p{path, scratch};
+    StringTemp p{path, scratch};
 
     wchar_t wPath[1024]{};
     if (!win32PathToWide(p.c_str(), wPath, sizeof(wPath) / sizeof(wchar_t)))

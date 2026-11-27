@@ -132,13 +132,16 @@ set(HG_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
 | `HG_USE_WAYLAND` | Linux: `ON`, else `OFF` | Build the Wayland input backend |
 | `HG_USE_X11` | Linux: `ON`, else `OFF` | Build the X11 input backend |
 | `HG_USE_PIPEWIRE` | Linux: `ON`, else `OFF` | Build the PipeWire audio backend |
-| `HG_USE_SDL` | `OFF` | Use the SDL backend instead of the native platform backends |
+| `HG_USE_SDL` | `OFF` | Build the SDL backend (select it with `InputDevice::hintBackend`) |
 | `HG_USE_CCACHE` | `OFF` | Use ccache as the compiler launcher |
 | `HG_USE_MOLD` | `OFF` | Link with mold (non-MSVC) |
 
-If no platform backends are made available, `InputDevice::Create()` and
-`AudioDevice::Create()` will fall back to dummy implementations. On Windows,
+If no platform backends are made available, `InputDevice::create()` and
+`AudioDevice::create()` will fall back to dummy implementations. On Windows,
 Win32 is always available.
+
+When SDL is enabled, the vendored SDL is built as a shared library, and its
+DLL is copied next to the built executables so they can run.
 
 ## Building
 
@@ -160,7 +163,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 
 # Windows: open a Visual Studio 2022 x64 developer shell first, then:
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 

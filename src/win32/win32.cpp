@@ -36,112 +36,112 @@ static Button win32VirtKeyToButton(u32 vk)
 {
     switch (vk)
     {
-        case '0': return Button_0;
-        case '1': return Button_1;
-        case '2': return Button_2;
-        case '3': return Button_3;
-        case '4': return Button_4;
-        case '5': return Button_5;
-        case '6': return Button_6;
-        case '7': return Button_7;
-        case '8': return Button_8;
-        case '9': return Button_9;
-        case 'Q': return Button_q;
-        case 'W': return Button_w;
-        case 'E': return Button_e;
-        case 'R': return Button_r;
-        case 'T': return Button_t;
-        case 'Y': return Button_y;
-        case 'U': return Button_u;
-        case 'I': return Button_i;
-        case 'O': return Button_o;
-        case 'P': return Button_p;
-        case 'A': return Button_a;
-        case 'S': return Button_s;
-        case 'D': return Button_d;
-        case 'F': return Button_f;
-        case 'G': return Button_g;
-        case 'H': return Button_h;
-        case 'J': return Button_j;
-        case 'K': return Button_k;
-        case 'L': return Button_l;
-        case 'Z': return Button_z;
-        case 'X': return Button_x;
-        case 'C': return Button_c;
-        case 'V': return Button_v;
-        case 'B': return Button_b;
-        case 'N': return Button_n;
-        case 'M': return Button_m;
-        case VK_OEM_1: return Button_semicolon;
-        case VK_OEM_7: return Button_apostrophe;
-        case VK_OEM_COMMA: return Button_comma;
-        case VK_OEM_PERIOD: return Button_period;
-        case VK_OEM_3: return Button_grave;
-        case VK_OEM_4: return Button_lbracket;
-        case VK_OEM_6: return Button_rbracket;
-        case VK_OEM_PLUS: return Button_equal;
-        case VK_OEM_MINUS: return Button_minus;
-        case VK_OEM_2: return Button_slash;
-        case VK_OEM_5: return Button_backslash;
-        case VK_UP: return Button_up;
-        case VK_DOWN: return Button_down;
-        case VK_LEFT: return Button_left;
-        case VK_RIGHT: return Button_right;
-        case VK_ESCAPE: return Button_escape;
-        case VK_SPACE: return Button_space;
-        case VK_RETURN: return Button_enter;
-        case VK_BACK: return Button_backspace;
-        case VK_DELETE: return Button_kdelete;
-        case VK_INSERT: return Button_insert;
-        case VK_TAB: return Button_tab;
-        case VK_HOME: return Button_home;
-        case VK_END: return Button_end;
-        case VK_PRIOR: return Button_pageup;
-        case VK_NEXT: return Button_pagedown;
-        case VK_F1: return Button_f1;
-        case VK_F2: return Button_f2;
-        case VK_F3: return Button_f3;
-        case VK_F4: return Button_f4;
-        case VK_F5: return Button_f5;
-        case VK_F6: return Button_f6;
-        case VK_F7: return Button_f7;
-        case VK_F8: return Button_f8;
-        case VK_F9: return Button_f9;
-        case VK_F10: return Button_f10;
-        case VK_F11: return Button_f11;
-        case VK_F12: return Button_f12;
-        case VK_SNAPSHOT: return Button_printscreen;
-        case VK_APPS: return Button_context;
-        case VK_NUMPAD0: return Button_numpad0;
-        case VK_NUMPAD1: return Button_numpad1;
-        case VK_NUMPAD2: return Button_numpad2;
-        case VK_NUMPAD3: return Button_numpad3;
-        case VK_NUMPAD4: return Button_numpad4;
-        case VK_NUMPAD5: return Button_numpad5;
-        case VK_NUMPAD6: return Button_numpad6;
-        case VK_NUMPAD7: return Button_numpad7;
-        case VK_NUMPAD8: return Button_numpad8;
-        case VK_NUMPAD9: return Button_numpad9;
-        case VK_DECIMAL: return Button_numpaddecimal;
-        case VK_DIVIDE: return Button_numpaddiv;
-        case VK_MULTIPLY: return Button_numpadmul;
-        case VK_SUBTRACT: return Button_numpadminus;
-        case VK_ADD: return Button_numpadplus;
-        case VK_SEPARATOR: return Button_numpadenter;
-        case VK_LSHIFT: return Button_lshift;
-        case VK_RSHIFT: return Button_rshift;
-        case VK_LCONTROL: return Button_lctrl;
-        case VK_RCONTROL: return Button_rctrl;
-        case VK_LMENU: return Button_lalt;
-        case VK_RMENU: return Button_ralt;
-        case VK_LWIN: return Button_lsuper;
-        case VK_RWIN: return Button_rsuper;
-        case VK_CAPITAL: return Button_capslock;
-        case VK_NUMLOCK: return Button_numlock;
-        case VK_SCROLL: return Button_scrolllock;
-        case VK_PAUSE: return Button_pause;
+        case '0': return Button::b0;
+        case '1': return Button::b1;
+        case '2': return Button::b2;
+        case '3': return Button::b3;
+        case '4': return Button::b4;
+        case '5': return Button::b5;
+        case '6': return Button::b6;
+        case '7': return Button::b7;
+        case '8': return Button::b8;
+        case '9': return Button::b9;
+        case 'Q': return Button::q;
+        case 'W': return Button::w;
+        case 'E': return Button::e;
+        case 'R': return Button::r;
+        case 'T': return Button::t;
+        case 'Y': return Button::y;
+        case 'U': return Button::u;
+        case 'I': return Button::i;
+        case 'O': return Button::o;
+        case 'P': return Button::p;
+        case 'A': return Button::a;
+        case 'S': return Button::s;
+        case 'D': return Button::d;
+        case 'F': return Button::f;
+        case 'G': return Button::g;
+        case 'H': return Button::h;
+        case 'J': return Button::j;
+        case 'K': return Button::k;
+        case 'L': return Button::l;
+        case 'Z': return Button::z;
+        case 'X': return Button::x;
+        case 'C': return Button::c;
+        case 'V': return Button::v;
+        case 'B': return Button::b;
+        case 'N': return Button::n;
+        case 'M': return Button::m;
+        case VK_OEM_1: return Button::semicolon;
+        case VK_OEM_7: return Button::apostrophe;
+        case VK_OEM_COMMA: return Button::comma;
+        case VK_OEM_PERIOD: return Button::period;
+        case VK_OEM_3: return Button::grave;
+        case VK_OEM_4: return Button::lbracket;
+        case VK_OEM_6: return Button::rbracket;
+        case VK_OEM_PLUS: return Button::equal;
+        case VK_OEM_MINUS: return Button::minus;
+        case VK_OEM_2: return Button::slash;
+        case VK_OEM_5: return Button::backslash;
+        case VK_UP: return Button::up;
+        case VK_DOWN: return Button::down;
+        case VK_LEFT: return Button::left;
+        case VK_RIGHT: return Button::right;
+        case VK_ESCAPE: return Button::escape;
+        case VK_SPACE: return Button::space;
+        case VK_RETURN: return Button::enter;
+        case VK_BACK: return Button::backspace;
+        case VK_DELETE: return Button::kdelete;
+        case VK_INSERT: return Button::insert;
+        case VK_TAB: return Button::tab;
+        case VK_HOME: return Button::home;
+        case VK_END: return Button::end;
+        case VK_PRIOR: return Button::pageup;
+        case VK_NEXT: return Button::pagedown;
+        case VK_F1: return Button::f1;
+        case VK_F2: return Button::f2;
+        case VK_F3: return Button::f3;
+        case VK_F4: return Button::f4;
+        case VK_F5: return Button::f5;
+        case VK_F6: return Button::f6;
+        case VK_F7: return Button::f7;
+        case VK_F8: return Button::f8;
+        case VK_F9: return Button::f9;
+        case VK_F10: return Button::f10;
+        case VK_F11: return Button::f11;
+        case VK_F12: return Button::f12;
+        case VK_SNAPSHOT: return Button::printscreen;
+        case VK_APPS: return Button::context;
+        case VK_NUMPAD0: return Button::numpad0;
+        case VK_NUMPAD1: return Button::numpad1;
+        case VK_NUMPAD2: return Button::numpad2;
+        case VK_NUMPAD3: return Button::numpad3;
+        case VK_NUMPAD4: return Button::numpad4;
+        case VK_NUMPAD5: return Button::numpad5;
+        case VK_NUMPAD6: return Button::numpad6;
+        case VK_NUMPAD7: return Button::numpad7;
+        case VK_NUMPAD8: return Button::numpad8;
+        case VK_NUMPAD9: return Button::numpad9;
+        case VK_DECIMAL: return Button::numpaddecimal;
+        case VK_DIVIDE: return Button::numpaddiv;
+        case VK_MULTIPLY: return Button::numpadmul;
+        case VK_SUBTRACT: return Button::numpadminus;
+        case VK_ADD: return Button::numpadplus;
+        case VK_SEPARATOR: return Button::numpadenter;
+        case VK_LSHIFT: return Button::lshift;
+        case VK_RSHIFT: return Button::rshift;
+        case VK_LCONTROL: return Button::lctrl;
+        case VK_RCONTROL: return Button::rctrl;
+        case VK_LMENU: return Button::lalt;
+        case VK_RMENU: return Button::ralt;
+        case VK_LWIN: return Button::lsuper;
+        case VK_RWIN: return Button::rsuper;
+        case VK_CAPITAL: return Button::capslock;
+        case VK_NUMLOCK: return Button::numlock;
+        case VK_SCROLL: return Button::scrolllock;
+        case VK_PAUSE: return Button::pause;
     }
-    return Button_none;
+    return Button::none;
 }
 
 std::unique_ptr<InputDeviceWin32> InputDeviceWin32::create()
@@ -185,17 +185,17 @@ std::unique_ptr<InputDeviceWin32> InputDeviceWin32::create()
         return nullptr;
     }
 
-    device->cursors[CursorType_arrow] = LoadCursorW(nullptr, IDC_ARROW);
-    device->cursors[CursorType_textInput] = LoadCursorW(nullptr, IDC_IBEAM);
-    device->cursors[CursorType_resizeAll] = LoadCursorW(nullptr, IDC_SIZEALL);
-    device->cursors[CursorType_resizeNS] = LoadCursorW(nullptr, IDC_SIZENS);
-    device->cursors[CursorType_resizeEW] = LoadCursorW(nullptr, IDC_SIZEWE);
-    device->cursors[CursorType_resizeNESW] = LoadCursorW(nullptr, IDC_SIZENESW);
-    device->cursors[CursorType_resizeNWSE] = LoadCursorW(nullptr, IDC_SIZENWSE);
-    device->cursors[CursorType_hand] = LoadCursorW(nullptr, IDC_HAND);
-    device->cursors[CursorType_wait] = LoadCursorW(nullptr, IDC_WAIT);
-    device->cursors[CursorType_progress] = LoadCursorW(nullptr, IDC_APPSTARTING);
-    device->cursors[CursorType_notAllowed] = LoadCursorW(nullptr, IDC_NO);
+    device->cursors[static_cast<u32>(CursorType::arrow)] = LoadCursorW(nullptr, IDC_ARROW);
+    device->cursors[static_cast<u32>(CursorType::textInput)] = LoadCursorW(nullptr, IDC_IBEAM);
+    device->cursors[static_cast<u32>(CursorType::resizeAll)] = LoadCursorW(nullptr, IDC_SIZEALL);
+    device->cursors[static_cast<u32>(CursorType::resizeNS)] = LoadCursorW(nullptr, IDC_SIZENS);
+    device->cursors[static_cast<u32>(CursorType::resizeEW)] = LoadCursorW(nullptr, IDC_SIZEWE);
+    device->cursors[static_cast<u32>(CursorType::resizeNESW)] = LoadCursorW(nullptr, IDC_SIZENESW);
+    device->cursors[static_cast<u32>(CursorType::resizeNWSE)] = LoadCursorW(nullptr, IDC_SIZENWSE);
+    device->cursors[static_cast<u32>(CursorType::hand)] = LoadCursorW(nullptr, IDC_HAND);
+    device->cursors[static_cast<u32>(CursorType::wait)] = LoadCursorW(nullptr, IDC_WAIT);
+    device->cursors[static_cast<u32>(CursorType::progress)] = LoadCursorW(nullptr, IDC_APPSTARTING);
+    device->cursors[static_cast<u32>(CursorType::notAllowed)] = LoadCursorW(nullptr, IDC_NO);
 
     // Enumerate displays
     using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, i32, u32*, u32*);
@@ -265,7 +265,7 @@ InputDeviceWin32::~InputDeviceWin32()
         UnregisterClassW(L"HurdyGurdyWindow", hInstance);
 }
 
-std::span<std::string_view> InputDeviceWin32::getVulkanExtensions()
+std::span<std::string_view> InputDeviceWin32::getPlatformGraphicsExtensions()
 {
     static std::string_view exts[] = {
         "VK_KHR_surface",
@@ -300,7 +300,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
                 w->closed = true;
 
                 Event event{};
-                event.type = EventType_windowClosed;
+                event.type = EventType::windowClosed;
                 event.window.window = w;
                 dev->events.push_back(event);
                 w->eventQueue.push_back(event);
@@ -314,12 +314,12 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             {
                 dev->windows.remove(std::bit_cast<u64>(hwnd));
 
-                if (dev->windows.count == 0)
+                if (dev->windows.size() == 0)
                 {
                     dev->quit = true;
 
                     Event event{};
-                    event.type = EventType_quit;
+                    event.type = EventType::quit;
                     dev->events.push_back(event);
                 }
             }
@@ -332,13 +332,13 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             if (width == 0 || height == 0 || dev == nullptr)
                 return 0;
 
-            w->swap.resize(width, height);
-            w->width = width;
-            w->height = height;
+            w->swap->resize(width, height);
+            w->winWidth = width;
+            w->winHeight = height;
             w->resized = true;
 
             Event event{};
-            event.type = EventType_windowResized;
+            event.type = EventType::windowResized;
             event.window.window = w;
             event.window.width = width;
             event.window.height = height;
@@ -355,7 +355,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
                 dev->activeWindow = w;
 
                 Event event{};
-                event.type = EventType_windowFocused;
+                event.type = EventType::windowFocused;
                 event.window.window = w;
                 dev->events.push_back(event);
                 w->eventQueue.push_back(event);
@@ -372,7 +372,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
                     dev->activeWindow = nullptr;
 
                 Event event{};
-                event.type = EventType_windowUnfocused;
+                event.type = EventType::windowUnfocused;
                 event.window.window = w;
                 dev->events.push_back(event);
                 w->eventQueue.push_back(event);
@@ -393,7 +393,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             GetCursorPos(&globalPt);
 
             Event event{};
-            event.type = EventType_mouseMoved;
+            event.type = EventType::mouseMoved;
             event.mouse.delta = delta;
             event.mouse.pos = newPos;
             event.mouse.globalPos = Vec2{assertCast<f32>(globalPt.x), assertCast<f32>(globalPt.y)};
@@ -407,10 +407,10 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
                 return 0;
 
             f32 delta = assertCast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
-            dev->wheelDeltaAccum.y += delta;
+            dev->wheelDeltaAccum.y() += delta;
 
             Event event{};
-            event.type = EventType_wheelMoved;
+            event.type = EventType::wheelMoved;
             event.wheel.delta = Vec2{0.0f, delta};
             dev->events.push_back(event);
             w->eventQueue.push_back(event);
@@ -422,10 +422,10 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
                 return 0;
 
             f32 delta = assertCast<f32>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
-            dev->wheelDeltaAccum.x += delta;
+            dev->wheelDeltaAccum.x() += delta;
 
             Event event{};
-            event.type = EventType_wheelMoved;
+            event.type = EventType::wheelMoved;
             event.wheel.delta = Vec2{delta, 0.0f};
             dev->events.push_back(event);
             w->eventQueue.push_back(event);
@@ -446,32 +446,32 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
             bool pressed = msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN ||
                 msg == WM_MBUTTONDOWN || msg == WM_XBUTTONDOWN;
 
-            Button button = Button_none;
+            Button button = Button::none;
             switch (msg)
             {
                 case WM_LBUTTONDOWN:
-                case WM_LBUTTONUP: button = Button_mouse1; break;
+                case WM_LBUTTONUP: button = Button::mouse1; break;
                 case WM_RBUTTONDOWN:
-                case WM_RBUTTONUP: button = Button_mouse2; break;
+                case WM_RBUTTONUP: button = Button::mouse2; break;
                 case WM_MBUTTONDOWN:
-                case WM_MBUTTONUP: button = Button_mouse3; break;
+                case WM_MBUTTONUP: button = Button::mouse3; break;
                 case WM_XBUTTONDOWN:
                 case WM_XBUTTONUP:
                 {
                     if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-                        button = Button_mouse4;
+                        button = Button::mouse4;
                     else if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
-                        button = Button_mouse5;
+                        button = Button::mouse5;
                     break;
                 }
             }
 
-            if (button != Button_none)
+            if (button != Button::none)
             {
-                dev->isKeyDown[button] = pressed;
+                dev->isKeyDown[static_cast<u32>(button)] = pressed;
 
                 Event event{};
-                event.type = pressed ? EventType_keyPress : EventType_keyRelease;
+                event.type = pressed ? EventType::keyPress : EventType::keyRelease;
                 event.button = button;
                 dev->events.push_back(event);
                 w->eventQueue.push_back(event);
@@ -481,39 +481,47 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
         {
-            if (dev == nullptr)
-                return 0;
-
-            Button button = win32VirtKeyToButton(assertCast<u32>(wParam));
-            if (button != Button_none)
+            if (dev != nullptr)
             {
-                dev->isKeyDown[button] = true;
+                Button button = win32VirtKeyToButton(assertCast<u32>(wParam));
+                if (button != Button::none)
+                {
+                    dev->isKeyDown[static_cast<u32>(button)] = true;
 
-                Event event{};
-                event.type = EventType_keyPress;
-                event.button = button;
-                dev->events.push_back(event);
-                w->eventQueue.push_back(event);
+                    Event event{};
+                    event.type = EventType::keyPress;
+                    event.button = button;
+                    dev->events.push_back(event);
+                    w->eventQueue.push_back(event);
+                }
             }
+
+            // DefWindowProc turns system keys like Alt+F4 into WM_SYSCOMMAND
+            // (SC_CLOSE), so they must be passed through
+            if (msg == WM_SYSKEYDOWN)
+                return DefWindowProcW(hwnd, msg, wParam, lParam);
             return 0;
         }
         case WM_KEYUP:
         case WM_SYSKEYUP:
         {
-            if (dev == nullptr)
-                return 0;
-
-            Button button = win32VirtKeyToButton(assertCast<u32>(wParam));
-            if (button != Button_none)
+            if (dev != nullptr)
             {
-                dev->isKeyDown[button] = false;
+                Button button = win32VirtKeyToButton(assertCast<u32>(wParam));
+                if (button != Button::none)
+                {
+                    dev->isKeyDown[static_cast<u32>(button)] = false;
 
-                Event event{};
-                event.type = EventType_keyRelease;
-                event.button = button;
-                dev->events.push_back(event);
-                w->eventQueue.push_back(event);
+                    Event event{};
+                    event.type = EventType::keyRelease;
+                    event.button = button;
+                    dev->events.push_back(event);
+                    w->eventQueue.push_back(event);
+                }
             }
+
+            if (msg == WM_SYSKEYUP)
+                return DefWindowProcW(hwnd, msg, wParam, lParam);
             return 0;
         }
         case WM_CHAR:
@@ -546,7 +554,7 @@ LRESULT CALLBACK InputDeviceWin32::wndProc(HWND hwnd, UINT msg, WPARAM wParam, L
                     if (utf8Len > 0)
                     {
                         Event event{};
-                        event.type = EventType_text;
+                        event.type = EventType::text;
                         std::memset(event.text, 0, sizeof(event.text));
                         std::memcpy(event.text, utf8, assertCast<u64>(utf8Len) < sizeof(event.text) ? assertCast<u64>(utf8Len) : sizeof(event.text));
                         dev->events.push_back(event);
@@ -595,7 +603,7 @@ void InputDeviceWin32::processEvents()
             quit = true;
 
             Event event{};
-            event.type = EventType_quit;
+            event.type = EventType::quit;
             events.push_back(event);
             break;
         }
@@ -604,7 +612,7 @@ void InputDeviceWin32::processEvents()
     }
 }
 
-std::span<Event> InputDeviceWin32::getEvents()
+std::span<const Event> InputDeviceWin32::getEvents()
 {
     return events;
 }
@@ -614,7 +622,7 @@ bool InputDeviceWin32::wasQuit()
     return quit;
 }
 
-std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& config)
+std::unique_ptr<Window> InputDeviceWin32::createWindow(Gpu* gpu, const WindowConfig& config)
 {
     u32 width = config.width != 0 ? config.width : 800;
     u32 height = config.height != 0 ? config.height : 600;
@@ -653,8 +661,8 @@ std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& confi
 
     RECT rect{};
     GetClientRect(win->hwnd, &rect);
-    win->width = assertCast<u32>(rect.right - rect.left);
-    win->height = assertCast<u32>(rect.bottom - rect.top);
+    win->winWidth = assertCast<u32>(rect.right - rect.left);
+    win->winHeight = assertCast<u32>(rect.bottom - rect.top);
     win->focused = (GetFocus() == win->hwnd);
 
     VkWin32SurfaceCreateInfoKHR createInfo{};
@@ -663,11 +671,11 @@ std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& confi
     createInfo.hwnd = win->hwnd;
 
     auto vkCreateWin32SurfaceKHR = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(
-        internal::getVkInstanceProcAddr("vkCreateWin32SurfaceKHR"));
+        internal::getVkInstanceProcAddr(gpu, "vkCreateWin32SurfaceKHR"));
 
     VkSurfaceKHR surface;
     VkResult result = vkCreateWin32SurfaceKHR(
-        static_cast<VkInstance>(internal::getVkInstance()),
+        static_cast<VkInstance>(internal::getVkInstance(gpu)),
         &createInfo,
         nullptr,
         &surface);
@@ -678,7 +686,7 @@ std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& confi
         return nullptr;
     }
 
-    win->swap = GpuSwapchain::create(surface, win->width, win->height, config.preferredPresentMode, config.imageUsage);
+    win->swap = gpu->createSwapchain(surface, win->winWidth, win->winHeight, config.preferredPresentMode, config.imageUsage);
 
     ShowWindow(win->hwnd, SW_SHOW);
     UpdateWindow(win->hwnd);
@@ -688,17 +696,17 @@ std::unique_ptr<Window> InputDeviceWin32::createWindow(const WindowConfig& confi
 
 bool InputDeviceWin32::isButtonDown(Button button)
 {
-    return isKeyDown[button];
+    return isKeyDown[static_cast<u32>(button)];
 }
 
 bool InputDeviceWin32::wasButtonPressed(Button button)
 {
-    return !wasKeyDown[button] && isKeyDown[button];
+    return !wasKeyDown[static_cast<u32>(button)] && isKeyDown[static_cast<u32>(button)];
 }
 
 bool InputDeviceWin32::wasButtonReleased(Button button)
 {
-    return wasKeyDown[button] && !isKeyDown[button];
+    return wasKeyDown[static_cast<u32>(button)] && !isKeyDown[static_cast<u32>(button)];
 }
 
 Vec2 InputDeviceWin32::mousePos()
@@ -706,7 +714,7 @@ Vec2 InputDeviceWin32::mousePos()
     if (activeWindow != nullptr)
         return activeWindow->mouse;
 
-    if (windows.count == 1)
+    if (windows.size() == 1)
     {
         Vec2 ret{};
         windows.forEach([&](u64, WindowWin32* wd)
@@ -721,14 +729,14 @@ Vec2 InputDeviceWin32::mousePos()
 Vec2 InputDeviceWin32::mouseDelta()
 {
     if (activeWindow != nullptr)
-        return mouseDeltaAccum / assertCast<f32>(activeWindow->height);
+        return mouseDeltaAccum / assertCast<f32>(activeWindow->winHeight);
 
-    if (windows.count == 1)
+    if (windows.size() == 1)
     {
         Vec2 ret = mouseDeltaAccum;
         windows.forEach([&](u64, WindowWin32* wd)
         {
-            ret = ret / assertCast<f32>(wd->height);
+            ret = ret / assertCast<f32>(wd->winHeight);
         });
         return ret;
     }
@@ -742,9 +750,9 @@ Vec2 InputDeviceWin32::wheelDelta()
 
 void InputDeviceWin32::setCursor(CursorType type)
 {
-    if (type < CursorType_count && cursors[type] != nullptr)
+    if (type < CursorType::count && cursors[static_cast<u32>(type)] != nullptr)
     {
-        currentCursor = cursors[type];
+        currentCursor = cursors[static_cast<u32>(type)];
         SetCursor(currentCursor);
     }
 }
@@ -768,9 +776,9 @@ WindowWin32::~WindowWin32()
     }
 }
 
-GpuSwapchain& WindowWin32::swapchain() const
+GpuSwapchain* WindowWin32::swapchain() const
 {
-    return swap;
+    return swap.get();
 }
 
 void WindowWin32::setTitle(std::string_view title)
@@ -785,7 +793,7 @@ void WindowWin32::setTitle(std::string_view title)
     SetWindowTextW(hwnd, wbuf);
 }
 
-std::span<Event> WindowWin32::events() const
+std::span<const Event> WindowWin32::getEvents() const
 {
     return eventQueue;
 }
@@ -815,12 +823,14 @@ bool WindowWin32::wasResized() const
     return resized;
 }
 
-void WindowWin32::size(u32* outWidth, u32* outHeight) const
+u32 WindowWin32::width() const
 {
-    if (outWidth != nullptr)
-        *outWidth = width;
-    if (outHeight != nullptr)
-        *outHeight = height;
+    return winWidth;
+}
+
+u32 WindowWin32::height() const
+{
+    return winHeight;
 }
 
 void WindowWin32::setFullscreen(bool set)
@@ -870,9 +880,9 @@ void WindowWin32::setFullscreen(bool set)
     u32 h = assertCast<u32>(rect.bottom - rect.top);
     if (w > 0 && h > 0)
     {
-        width = w;
-        height = h;
-        swap.resize(w, h);
+        winWidth = w;
+        winHeight = h;
+        swap->resize(w, h);
     }
 }
 
@@ -883,7 +893,7 @@ Vec2 WindowWin32::mousePos() const
 
 Vec2 WindowWin32::mouseDelta() const
 {
-    return static_cast<InputDeviceWin32*>(device)->mouseDeltaAccum / assertCast<f32>(height);
+    return static_cast<InputDeviceWin32*>(device)->mouseDeltaAccum;
 }
 
 std::unique_ptr<AudioDeviceWasapi> AudioDeviceWasapi::create()

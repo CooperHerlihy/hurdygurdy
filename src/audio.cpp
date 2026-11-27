@@ -126,12 +126,12 @@ std::optional<Sound> soundLoad(std::string_view path)
         }
         HG_DEFER(drwav_free(pSampleData, NULL));
 
-        std::optional ret = std::make_optional<Sound>();
-        ret->channels = channels;
-        ret->frequency = sampleRate;
-        ret->data.resize(totalPCMFrameCount * channels);
-        std::memcpy(ret->data.data(), pSampleData, ret->data.size() * sizeof(f32));
-        return ret;
+        std::optional<Sound> loaded = std::make_optional<Sound>();
+        loaded->channels = channels;
+        loaded->frequency = sampleRate;
+        loaded->data.resize(totalPCMFrameCount * channels);
+        std::memcpy(loaded->data.data(), pSampleData, loaded->data.size() * sizeof(f32));
+        return loaded;
     }
     else if (bin->size() > 3 && memcmp("ID3", bin->data(), 3) == 0)
     {
@@ -144,12 +144,12 @@ std::optional<Sound> soundLoad(std::string_view path)
         }
         HG_DEFER(drmp3_free(pSampleData, nullptr));
 
-        std::optional ret = std::make_optional<Sound>();
-        ret->channels = config.channels;
-        ret->frequency = config.sampleRate;
-        ret->data.resize(totalPCMFrameCount * config.channels);
-        std::memcpy(ret->data.data(), pSampleData, ret->data.size() * sizeof(f32));
-        return ret;
+        std::optional<Sound> loaded = std::make_optional<Sound>();
+        loaded->channels = config.channels;
+        loaded->frequency = config.sampleRate;
+        loaded->data.resize(totalPCMFrameCount * config.channels);
+        std::memcpy(loaded->data.data(), pSampleData, loaded->data.size() * sizeof(f32));
+        return loaded;
     }
     else if (bin->size() > 4 && memcmp("fLaC", bin->data(), 4) == 0)
     {
@@ -163,12 +163,12 @@ std::optional<Sound> soundLoad(std::string_view path)
         }
         HG_DEFER(drflac_free(pSampleData, nullptr));
 
-        std::optional ret = std::make_optional<Sound>();
-        ret->channels = channels;
-        ret->frequency = sampleRate;
-        ret->data.resize(totalPCMFrameCount * channels);
-        std::memcpy(ret->data.data(), pSampleData, ret->data.size() * sizeof(f32));
-        return ret;
+        std::optional<Sound> loaded = std::make_optional<Sound>();
+        loaded->channels = channels;
+        loaded->frequency = sampleRate;
+        loaded->data.resize(totalPCMFrameCount * channels);
+        std::memcpy(loaded->data.data(), pSampleData, loaded->data.size() * sizeof(f32));
+        return loaded;
     }
 
     setError("Unknown audio file type: {}", path);

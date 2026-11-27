@@ -71,7 +71,7 @@ constexpr To assertCast(const From& from)
     }
     else if constexpr (std::is_integral_v<To>)
     {
-        if constexpr (std::numeric_limits<To>::max() < std::numeric_limits<From>::max())
+        if constexpr (static_cast<u64>(std::numeric_limits<To>::max()) < static_cast<u64>(std::numeric_limits<From>::max()))
             HG_ASSERT(from <= static_cast<From>(std::numeric_limits<To>::max()));
         if constexpr (std::is_signed_v<From> && std::is_signed_v<To>)
         {

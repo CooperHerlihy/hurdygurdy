@@ -6,6 +6,7 @@
 #include <bit>
 #include <utility>
 #include <optional>
+#include <string>
 #include <variant>
 #include <string_view>
 #include <vector>

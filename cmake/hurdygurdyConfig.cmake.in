@@ -8,4 +8,11 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/hurdygurdyTargets.cmake")
 
+# A vendored SDL target cannot be exported, so installed consumers get SDL3
+# linked through the interface here instead.
+if(@HG_USE_SDL@ AND @HG_SDL_BUILT_IN_TREE@)
+    set_property(TARGET hurdygurdy::hurdygurdy
+        APPEND PROPERTY INTERFACE_LINK_LIBRARIES SDL3::SDL3)
+endif()
+
 check_required_components(hurdygurdy)

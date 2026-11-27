@@ -89,6 +89,7 @@ TEST(testEndianReverse64SingleByte)
 struct MatchVisitor
 {
     i32 operator()(i32 v) const { return v * 3; }
+    i32 operator()(f64 v) const { return i32(v); }
     i32 operator()(const std::string& s) const { return i32(s.size()); }
 };
 

@@ -127,8 +127,11 @@ set(HG_PRIVATE_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/wayland
-    ${CMAKE_CURRENT_BINARY_DIR}
+    # The src subdirectory comes first: generated headers used to be emitted
+    # at the binary root, and stale copies there would otherwise shadow the
+    # current ones after the paths moved.
     ${CMAKE_CURRENT_BINARY_DIR}/src
+    ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends
@@ -237,7 +240,23 @@ if(HG_USE_SDL)
     # PUBLIC: consumers of the static library must link SDL3 themselves.
     # hurdygurdyConfig.cmake runs find_dependency(SDL3) for installed use.
     target_compile_definitions(hurdygurdy INTERFACE HG_USE_SDL=1)
-    target_link_libraries(hurdygurdy PUBLIC ${SDL_TARGET})
+    if(HG_SDL_BUILT_IN_TREE)
+        # A target built in this tree cannot be referenced from the install
+        # export; the package config file links SDL3 for installed consumers.
+        target_link_libraries(hurdygurdy PUBLIC $<BUILD_INTERFACE:${SDL_TARGET}>)
+    else()
+        target_link_libraries(hurdygurdy PUBLIC ${SDL_TARGET})
+    endif()
+endif()
+
+# SDL is a shared library, so executables need its DLL next to them at
+# runtime. Copy runtime DLLs into the build directory after linking.
+set(HG_SDL_RUNTIME_DLLS FALSE)
+if(HG_USE_SDL)
+    get_target_property(HG_SDL_TYPE ${SDL_TARGET} TYPE)
+    if(HG_SDL_TYPE STREQUAL "SHARED_LIBRARY")
+        set(HG_SDL_RUNTIME_DLLS TRUE)
+    endif()
 endif()
 if(HG_WINDOWS)
     target_link_libraries(hurdygurdy PRIVATE ole32 dwmapi)
@@ -300,6 +319,14 @@ if(HG_BUILD_TESTS)
         HG_LOGGING=1
         ${HG_CXX_DEFINITIONS}
     )
+    if(HG_SDL_RUNTIME_DLLS)
+        add_custom_command(TARGET tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_RUNTIME_DLLS:tests>
+                $<TARGET_FILE_DIR:tests>
+            COMMAND_EXPAND_LISTS
+        )
+    endif()
 endif()
 
 # Examples
@@ -318,6 +345,14 @@ if(HG_BUILD_EXAMPLES)
             ${HG_STRICT_FLAGS}
         )
         target_compile_definitions(${example} PRIVATE ${HG_CXX_DEFINITIONS})
+        if(HG_SDL_RUNTIME_DLLS)
+            add_custom_command(TARGET ${example} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_RUNTIME_DLLS:${example}>
+                    $<TARGET_FILE_DIR:${example}>
+                COMMAND_EXPAND_LISTS
+            )
+        endif()
     endforeach()
 endif()
 

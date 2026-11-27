@@ -2,6 +2,7 @@
 
 #include "hg/inttypes.hpp"
 
+#include <bit>
 #include <cstring>
 #include <memory>
 #include <utility>

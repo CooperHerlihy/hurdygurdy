@@ -1,5 +1,6 @@
 #include "hg/noise.hpp"
 
+#include <bit>
 #include <random>
 #include <cmath>
 
@@ -7,7 +8,7 @@ namespace hg {
 
 u32 noise(u32 seed, u32 pos)
 {
-    uint ret = (pos + seed * 725937977u + 384521713u) * 955740521u;
+    u32 ret = (pos + seed * 725937977u + 384521713u) * 955740521u;
     ret ^= ret >> 13;
     ret *= 725937977u;
     ret ^= ret >> 7;
